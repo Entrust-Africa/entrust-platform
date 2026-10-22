@@ -36,6 +36,10 @@ import type { Condition, StepDefinition } from "./types";
 //
 // Array order is execution order. It matches the id order except in phase 6, where loading
 // (STEP-104) comes before the final bill of lading (STEP-094).
+//
+// Prerequisites follow real dependencies, not phase order, so work in a later phase can start
+// before an earlier gate is signed (CAD documents go to the bank before delivery, for example).
+// Each milestone waits on the previous one, so gates lock in order and the case closes last.
 
 // Why a step differs from Entrust's specification. Shared wording for changes that repeat.
 const NARROWED_BY_NAME = "The spec marks this mandatory, but its name limits it to some cases, so it is conditional.";
@@ -506,7 +510,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-02",
-    prerequisites: [],
+    prerequisites: ["STEP-018"],
     evidence: [],
     milestone: true,
   },
@@ -766,7 +770,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-03",
-    prerequisites: [],
+    prerequisites: ["STEP-035"],
     evidence: [],
     milestone: true,
   },
@@ -1001,7 +1005,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-05",
-    prerequisites: [],
+    prerequisites: ["STEP-054"],
     evidence: [],
     milestone: true,
   },
@@ -1265,7 +1269,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-10",
-    prerequisites: [],
+    prerequisites: ["STEP-072"],
     evidence: [],
     milestone: true,
   },
@@ -1521,7 +1525,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-14",
-    prerequisites: [],
+    prerequisites: ["STEP-091"],
     evidence: [],
     milestone: true,
   },
@@ -1698,7 +1702,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-14",
-    prerequisites: ["STEP-119"],
+    prerequisites: ["STEP-048"],
     evidence: [],
     deadline: {
       description: "Repatriate the export proceeds within 90 days of the bank export permit's issue date.",
@@ -1769,7 +1773,7 @@ export const STEPS: readonly StepDefinition[] = [
     authority: null,
     scope: "shipment",
     masterControl: "MC-14",
-    prerequisites: [],
+    prerequisites: ["STEP-108"],
     evidence: [],
     milestone: true,
   },

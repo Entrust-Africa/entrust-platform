@@ -1,6 +1,7 @@
 import type {
   Condition,
   EvidenceType,
+  FactKey,
   FactDefinition,
   MasterControl,
   PhaseDefinition,
@@ -30,8 +31,11 @@ export function validateSteps(steps: readonly StepDefinition[], catalogue: Catal
   const masterControls = new Set(catalogue.masterControls.map((m) => m.id));
 
   const checkCondition = (id: string, condition: Condition): void => {
-    if ("all" in condition) return condition.all.forEach((c) => checkCondition(id, c));
-    if ("any" in condition) return condition.any.forEach((c) => checkCondition(id, c));
+    if ("all" in condition || "any" in condition) {
+      const parts = "all" in condition ? condition.all : condition.any;
+      if (parts.length === 0) errors.push(`${id}: empty ${"all" in condition ? "all" : "any"} condition`);
+      return parts.forEach((c) => checkCondition(id, c));
+    }
     if ("not" in condition) return checkCondition(id, condition.not);
     const fact = facts.get(condition.fact);
     if (!fact) return void errors.push(`${id}: condition uses unknown fact ${condition.fact}`);
@@ -81,9 +85,41 @@ export function validateSteps(steps: readonly StepDefinition[], catalogue: Catal
 
     if (step.milestone) {
       if (step.class !== "mandatory") errors.push(`${step.id}: milestone must be mandatory`);
-      if (step.prerequisites.length) errors.push(`${step.id}: milestone lists prerequisites; it waits on its whole phase`);
       const next = steps[i + 1];
       if (next && next.phase === step.phase) errors.push(`${step.id}: milestone is not the last step of its phase`);
+    }
+  }
+
+  // A step that depends on a fact must come after the step that establishes it.
+  const ancestors = new Map<string, Set<string>>();
+  const ancestorsOf = (id: string): Set<string> => {
+    const known = ancestors.get(id);
+    if (known) return known;
+    const result = new Set<string>();
+    ancestors.set(id, result);
+    for (const p of steps[position.get(id) ?? -1]?.prerequisites ?? []) {
+      result.add(p);
+      for (const a of ancestorsOf(p)) result.add(a);
+    }
+    return result;
+  };
+  const factsIn = (condition: Condition): FactKey[] =>
+    "all" in condition
+      ? condition.all.flatMap(factsIn)
+      : "any" in condition
+        ? condition.any.flatMap(factsIn)
+        : "not" in condition
+          ? factsIn(condition.not)
+          : [condition.fact];
+  for (const step of steps) {
+    const conditions = [step.appliesWhen?.condition, ...step.evidence.map((e) => e.when?.condition)].filter(
+      (c): c is Condition => c !== undefined,
+    );
+    for (const key of new Set(conditions.flatMap(factsIn))) {
+      const determinedAt = facts.get(key)?.determinedAt;
+      if (determinedAt && determinedAt !== step.id && !ancestorsOf(step.id).has(determinedAt)) {
+        errors.push(`${step.id}: uses ${key}, which is only known after ${determinedAt}, but does not wait on it`);
+      }
     }
   }
 

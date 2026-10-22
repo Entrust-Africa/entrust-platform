@@ -61,6 +61,18 @@ describe("canonical steps", () => {
     expect(changed.filter((s) => !s.correction).map((s) => s.id)).toEqual([]);
   });
 
+  it("rejects a step that uses a fact before the step that establishes it", () => {
+    const broken: StepDefinition[] = STEPS.map((s) => (s.id === "STEP-083" ? { ...s, prerequisites: ["STEP-080"] } : s));
+    expect(validateSteps(broken, catalogue)).toContain(
+      "STEP-083: uses customsChannel, which is only known after STEP-082, but does not wait on it",
+    );
+  });
+
+  it("chains the milestones so gates lock in order", () => {
+    const milestones = STEPS.filter((s) => s.milestone);
+    milestones.slice(1).forEach((m, i) => expect(m.prerequisites).toEqual([milestones[i]?.id]));
+  });
+
   it("rejects a prerequisite that comes later", () => {
     const broken: StepDefinition[] = STEPS.map((s) =>
       s.id === "STEP-002" ? { ...s, prerequisites: ["STEP-003"] } : s,

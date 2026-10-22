@@ -118,7 +118,7 @@ export interface StepDefinition {
   authority: string | null;
   scope: StepScope;
   masterControl: MasterControlId;
-  /** Steps that must be completed or not applicable first. Milestone steps leave this empty. */
+  /** Steps that must be completed or not applicable first. A milestone lists the previous milestone. */
   prerequisites: readonly StepId[];
   /** Required for conditional steps, and only allowed on them. */
   appliesWhen?: { condition: Condition; description: string };
@@ -126,7 +126,7 @@ export interface StepDefinition {
   raisedWhen?: string;
   evidence: readonly EvidenceRequirement[];
   deadline?: Deadline;
-  /** The phase's milestone sign-off. It waits on every other step in its phase. */
+  /** The phase's milestone sign-off. It also waits on every other step in its phase. */
   milestone?: true;
   /** Why this step differs from Entrust's specification, when it does. */
   correction?: string;
