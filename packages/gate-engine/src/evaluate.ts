@@ -16,27 +16,15 @@ import type {
 
 export const isDone = (status: StepStatus) => status === "completed" || status === "not_applicable";
 
-// When there is no approved, in-date record, the most advanced record speaks for the evidence type.
-const EVIDENCE_PROGRESS: readonly EvidenceStatus[] = [
-  "not_provided",
-  "expired",
-  "rejected",
-  "changes_required",
-  "submitted",
-  "under_review",
-];
-
 const day = (iso: string) => iso.slice(0, 10);
 
+// The latest record of a type decides its status, so a rejected resubmission is not hidden by an
+// older approval or review.
 function evidenceStatus(records: readonly EvidenceRecord[], asOf: string): EvidenceStatus {
-  let best: EvidenceStatus = "not_provided";
-  for (const record of records) {
-    let status = record.status;
-    if (status === "approved" && record.validUntil && day(record.validUntil) < day(asOf)) status = "expired";
-    if (status === "approved") return "approved";
-    if (EVIDENCE_PROGRESS.indexOf(status) > EVIDENCE_PROGRESS.indexOf(best)) best = status;
-  }
-  return best;
+  const latest = records.at(-1);
+  if (!latest) return "not_provided";
+  if (latest.status === "approved" && latest.validUntil && day(latest.validUntil) < day(asOf)) return "expired";
+  return latest.status;
 }
 
 function applicabilityOf(step: StepDefinition, state: CaseState): { applicability: Applicability; reason: string | null } {
@@ -71,8 +59,11 @@ export function evaluateCase(
     else if (definition.class !== "exception") warnings.push(`${id} is raised as an exception but is a ${definition.class} step.`);
   }
 
+  // A milestone waits on every other step in its phase, as well as its own prerequisites.
   const prerequisitesOf = (step: StepDefinition): readonly StepId[] =>
-    step.milestone ? definitions.filter((d) => d.phase === step.phase && d.id !== step.id).map((d) => d.id) : step.prerequisites;
+    step.milestone
+      ? [...step.prerequisites, ...definitions.filter((d) => d.phase === step.phase && d.id !== step.id).map((d) => d.id)]
+      : step.prerequisites;
 
   const memo = new Map<StepId, EvaluatedStep>();
   const visiting = new Set<StepId>();
@@ -113,7 +104,10 @@ export function evaluateCase(
     const missingEvidence = evidence.filter((e) => !e.satisfied).map((e) => e.type);
 
     let recorded = state.steps[id];
-    if (recorded?.status === "not_applicable" && !recorded.reason?.trim()) {
+    if (recorded?.status === "not_applicable" && step.milestone) {
+      stepWarnings.push("A milestone sign-off cannot be marked not applicable, so the mark is ignored.");
+      recorded = undefined;
+    } else if (recorded?.status === "not_applicable" && !recorded.reason?.trim()) {
       stepWarnings.push("Marked not applicable without a reason, so the mark is ignored.");
       recorded = undefined;
     }
@@ -171,26 +165,30 @@ export function evaluateCase(
   return { steps, phases, nextAction: nextAction(steps), warnings };
 }
 
+// A gate's outstanding work is exactly what blocks its milestone step.
 function phaseGates(steps: readonly EvaluatedStep[]): PhaseGate[] {
-  const gates: PhaseGate[] = [];
-  for (const milestone of steps.filter((s) => s.definition.milestone)) {
-    const outstanding = steps
-      .filter((s) => s.phase === milestone.phase && s.id !== milestone.id)
-      .flatMap((s) => {
-        if (s.status === "completed") {
-          return s.missingEvidence.length ? [{ stepId: s.id, reason: `Evidence not approved: ${s.missingEvidence.join(", ")}.` }] : [];
-        }
-        if (s.status === "not_applicable") return [];
-        return [{ stepId: s.id, reason: s.reason ?? `Status: ${s.status.replaceAll("_", " ")}.` }];
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  return steps
+    .filter((s) => s.definition.milestone)
+    .map((milestone) => {
+      const outstanding = milestone.blockedBy.map((id) => {
+        const s = byId.get(id);
+        const reason =
+          s?.status === "completed"
+            ? `Evidence not approved: ${s.missingEvidence.join(", ")}.`
+            : (s?.reason ?? `Status: ${s?.status.replaceAll("_", " ")}.`);
+        return { stepId: id, reason };
       });
-    const status = milestone.status === "completed" ? "locked" : outstanding.length ? "open" : "ready";
-    gates.push({ phase: milestone.phase, milestoneStep: milestone.id, status, outstanding });
-  }
-  return gates;
+      const status = milestone.status === "completed" ? "locked" : outstanding.length ? "open" : "ready";
+      return { phase: milestone.phase, milestoneStep: milestone.id, status, outstanding };
+    });
 }
 
 function nextAction(steps: readonly EvaluatedStep[]): NextAction | null {
-  const open = steps.filter((s) => !isDone(s.status) && s.status !== "blocked");
+  // Completed steps whose evidence is no longer approved still need work before their gate closes.
+  const open = steps.filter(
+    (s) => (!isDone(s.status) && s.status !== "blocked") || (s.status === "completed" && s.missingEvidence.length > 0),
+  );
   const step = open.find((s) => s.definition.class === "exception") ?? open[0];
   if (!step) return null;
   const { definition } = step;

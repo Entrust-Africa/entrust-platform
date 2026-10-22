@@ -44,13 +44,14 @@ export interface StepRecord {
 export interface EvidenceRecord {
   type: string;
   status: EvidenceStatus;
-  /** ISO date. Approved evidence counts as expired after this day. */
+  /** ISO date. Approved evidence counts as expired after this day. Set from the evidence type's validity when approved. */
   validUntil?: string | null;
 }
 
 export interface CaseState {
   facts: CaseFacts;
   steps: Partial<Record<StepId, StepRecord>>;
+  /** In the order submitted. For each type, the latest record decides its status. */
   evidence: readonly EvidenceRecord[];
   /** Exception steps raised on this case. A raised exception stays listed after it is resolved. */
   raisedExceptions: readonly StepId[];

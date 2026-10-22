@@ -144,6 +144,21 @@ describe("canonical steps through the engine", () => {
     expect(result.steps.find((s) => s.id === "STEP-094")?.blockedBy).toEqual(["STEP-104"]);
   });
 
+  it("does not close the case while earlier gates are unsigned", () => {
+    const facts: CaseFacts = {
+      ...ZEBU,
+      sourcingChannel: "ecx",
+      phytoCertificateRequired: "no",
+      healthCertificateRequired: "no",
+      customsChannel: "green",
+    };
+    const steps = Object.fromEntries(STEPS.filter((s) => !s.milestone).map((s) => [s.id, { status: "completed" as const }]));
+    const evidence = EVIDENCE_TYPES.map((e) => ({ type: e.id, status: "approved" as const }));
+    const result = evaluateCase(STEPS, { facts, steps, evidence, raisedExceptions: [] }, { asOf: "2026-10-22" });
+    expect(result.steps.find((s) => s.id === "STEP-125")?.canComplete).toBe(false);
+    expect(result.nextAction).toMatchObject({ stepId: "STEP-018", kind: "sign_off" });
+  });
+
   it("can walk the ZEBU case from STEP-001 to case closure", () => {
     const facts: CaseFacts = {
       ...ZEBU,

@@ -21,7 +21,10 @@ export function evaluateCondition(condition: Condition, facts: CaseFacts): boole
     return result === undefined ? undefined : !result;
   }
   const value = facts[condition.fact];
-  const values = (typeof value === "string" ? [value] : (value ?? [])).filter((v) => v !== "");
+  // Compared trimmed and case-insensitively, so "us" or " US" still matches "US".
+  const norm = (v: string) => v.trim().toLowerCase();
+  const values = (typeof value === "string" ? [value] : (value ?? [])).map(norm).filter((v) => v !== "");
   if (values.length === 0) return undefined;
-  return values.some((v) => condition.in.includes(v));
+  const wanted = condition.in.map(norm);
+  return values.some((v) => wanted.includes(v));
 }

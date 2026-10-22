@@ -28,7 +28,7 @@ const STEPS: StepDefinition[] = [
   { ...base, id: "STEP-004", phase: 1, name: "Handle failure", class: "exception", prerequisites: [], raisedWhen: "Something fails." },
   { ...base, id: "STEP-005", phase: 1, name: "Phase 1 sign-off", class: "mandatory", prerequisites: [], milestone: true },
   { ...base, id: "STEP-006", phase: 2, name: "Ship", class: "mandatory", prerequisites: ["STEP-003"] },
-  { ...base, id: "STEP-007", phase: 2, name: "Phase 2 sign-off", class: "mandatory", prerequisites: [], milestone: true },
+  { ...base, id: "STEP-007", phase: 2, name: "Phase 2 sign-off", class: "mandatory", prerequisites: ["STEP-005"], milestone: true },
 ];
 
 const state = (overrides: Partial<CaseState> = {}): CaseState => ({
@@ -52,6 +52,10 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition({ fact: "transportMode", in: ["sea"] }, {})).toBeUndefined();
     expect(evaluateCondition({ fact: "transportMode", in: ["sea"] }, { transportMode: "" })).toBeUndefined();
     expect(evaluateCondition({ fact: "paymentTerms", in: ["cad"] }, { paymentTerms: [] })).toBeUndefined();
+  });
+
+  it("ignores case and surrounding spaces", () => {
+    expect(evaluateCondition({ fact: "destinationCountry", in: ["US"] }, { destinationCountry: " us" })).toBe(true);
   });
 
   it("matches any value of a multi-valued fact", () => {
@@ -110,6 +114,49 @@ describe("evaluateCase", () => {
     const expired = step(permit("approved", "2026-10-21"), "STEP-003");
     expect(expired.canComplete).toBe(false);
     expect(expired.evidence[0]?.status).toBe("expired");
+  });
+
+  it("lets the latest evidence record decide", () => {
+    const facts = { transportMode: "air" } as const;
+    const done = { "STEP-001": { status: "completed" } } as const;
+    const resubmitted = run(
+      state({
+        facts,
+        steps: done,
+        evidence: [
+          { type: "bank_export_permit", status: "approved" },
+          { type: "bank_export_permit", status: "rejected" },
+        ],
+      }),
+    );
+    expect(step(resubmitted, "STEP-003").evidence[0]?.status).toBe("rejected");
+    expect(resubmitted.nextAction).toMatchObject({ stepId: "STEP-003", kind: "provide_evidence" });
+  });
+
+  it("points at a completed step whose evidence lapsed", () => {
+    const result = run(
+      state({
+        facts: { transportMode: "air" },
+        steps: { "STEP-001": { status: "completed" }, "STEP-003": { status: "completed" } },
+        evidence: [{ type: "bank_export_permit", status: "approved", validUntil: "2026-10-01" }],
+      }),
+    );
+    expect(result.phases[0]).toMatchObject({ status: "open", outstanding: [{ stepId: "STEP-003" }] });
+    expect(result.nextAction).toMatchObject({ stepId: "STEP-003", kind: "provide_evidence" });
+  });
+
+  it("never lets a milestone be marked not applicable", () => {
+    const result = run(state({ steps: { "STEP-005": { status: "not_applicable", reason: "skip" } } }));
+    expect(step(result, "STEP-005").status).not.toBe("not_applicable");
+    expect(step(result, "STEP-005").warnings).toHaveLength(1);
+  });
+
+  it("locks gates in order: a milestone waits on the previous one", () => {
+    const facts = { transportMode: "air" } as const;
+    const steps = { "STEP-001": { status: "completed" }, "STEP-003": { status: "completed" }, "STEP-006": { status: "completed" } } as const;
+    const result = run(state({ facts, steps, evidence: [{ type: "bank_export_permit", status: "approved" }] }));
+    expect(step(result, "STEP-007").blockedBy).toEqual(["STEP-005"]);
+    expect(result.phases[1]).toMatchObject({ status: "open", outstanding: [{ stepId: "STEP-005" }] });
   });
 
   it("requires a reason to mark a step not applicable", () => {
