@@ -49,12 +49,13 @@ describe("canonical steps through the engine", () => {
   });
 
   it("branches on LC, CAD and advance TT", () => {
-    const ids = ["STEP-026", "STEP-027", "STEP-028", "STEP-103", "STEP-112", "STEP-113", "STEP-114", "STEP-115"];
+    const ids = ["STEP-026", "STEP-027", "STEP-028", "STEP-103", "STEP-110", "STEP-112", "STEP-113", "STEP-114", "STEP-115"];
     expect(applying({ ...ZEBU, paymentTerms: ["lc"] }, ids)).toEqual({
       "STEP-026": "applicable",
       "STEP-027": "not_applicable",
       "STEP-028": "not_applicable",
-      "STEP-103": "not_applicable",
+      "STEP-103": "applicable",
+      "STEP-110": "applicable",
       "STEP-112": "applicable",
       "STEP-113": "applicable",
       "STEP-114": "not_applicable",
@@ -65,6 +66,7 @@ describe("canonical steps through the engine", () => {
       "STEP-027": "applicable",
       "STEP-028": "not_applicable",
       "STEP-103": "applicable",
+      "STEP-110": "applicable",
       "STEP-112": "not_applicable",
       "STEP-113": "applicable",
       "STEP-114": "applicable",
@@ -75,11 +77,21 @@ describe("canonical steps through the engine", () => {
       "STEP-027": "not_applicable",
       "STEP-028": "applicable",
       "STEP-103": "not_applicable",
+      "STEP-110": "not_applicable",
       "STEP-112": "not_applicable",
       "STEP-113": "not_applicable",
       "STEP-114": "not_applicable",
       "STEP-115": "not_applicable",
     });
+  });
+
+  it("asks for an insurance certificate only under CIF", () => {
+    const insurance = (incoterm: string) =>
+      evaluate({ ...ZEBU, incoterm })
+        .steps.find((s) => s.id === "STEP-102")
+        ?.evidence.some((e) => e.type === "insurance_certificate");
+    expect(insurance("CIF")).toBe(true);
+    expect(insurance("FOB")).toBe(false);
   });
 
   it("applies destination checks by country", () => {

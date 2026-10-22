@@ -3,6 +3,7 @@ import {
   COFFEE,
   COLD_CHAIN,
   DIRECT_SOURCED,
+  CIF,
   ECX_SOURCED,
   GRADED_COMMODITY,
   HEALTH_CERT_REQUIRED,
@@ -39,7 +40,13 @@ import type { Condition, StepDefinition } from "./types";
 // Why a step differs from Entrust's specification. Shared wording for changes that repeat.
 const NARROWED_BY_NAME = "The spec marks this mandatory, but its name limits it to some cases, so it is conditional.";
 const BANK_PERMIT = "Authorized banks issue and discharge export permits, not NBE (FXD/01/2024 Art. 7.1.1; Entrust's Q6 answer).";
-const AFTER_LOADING = "An on-board bill of lading is issued after loading (UCP 600 Art. 20), so STEP-104 comes before STEP-094.";
+const AFTER_LOADING =
+  "An on-board bill of lading is issued after loading (UCP 600 Art. 20), so STEP-104 comes before STEP-094. Named for air freight too (Entrust's Q3 answer).";
+const AIR_WORDING = "Named for air freight too, which the launch supports (Entrust's Q3 answer).";
+const FINAL_DOCUMENTS =
+  "Customs needs the commercial invoice and packing list at STEP-080, so this step issues the final versions for the bank, with the B/L number and shipped weights.";
+const BANK_PRESENTATION =
+  "With 100% advance payment there is no document presentation for payment; the permit is still reconciled and discharged at STEP-119 and STEP-121.";
 const HEALTH_CERT = "Conditional on STEP-042, like the phytosanitary steps; not every product and destination needs one.";
 
 const when = (condition: Condition, description: string) => ({ condition, description });
@@ -1108,7 +1115,7 @@ export const STEPS: readonly StepDefinition[] = [
     scope: "shipment",
     masterControl: "MC-10",
     prerequisites: ["STEP-010", "STEP-044", "STEP-048", "STEP-068", "STEP-069", "STEP-070"],
-    evidence: evidence("customs_declaration"),
+    evidence: evidence("commercial_invoice", "packing_list", "customs_declaration"),
     deadline: {
       description: "Lodge the customs declaration while the bank export permit is valid (30 days from issue).",
       starts: { afterStep: "STEP-048" },
@@ -1281,7 +1288,8 @@ export const STEPS: readonly StepDefinition[] = [
   {
     id: "STEP-093",
     phase: 6,
-    name: "B/L Data Verification against Proforma Invoice & Customs Release",
+    name: "B/L / AWB Data Verification against Proforma Invoice & Customs Release",
+    specName: "B/L Data Verification against Proforma Invoice & Customs Release",
     class: "mandatory",
     owner: "entrust",
     authority: null,
@@ -1289,6 +1297,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-12",
     prerequisites: ["STEP-092"],
     evidence: [],
+    correction: AIR_WORDING,
   },
   {
     id: "STEP-095",
@@ -1368,7 +1377,8 @@ export const STEPS: readonly StepDefinition[] = [
     scope: "shipment",
     masterControl: "MC-12",
     prerequisites: ["STEP-093"],
-    evidence: evidence("commercial_invoice"),
+    evidence: evidence("final_commercial_invoice"),
+    correction: FINAL_DOCUMENTS,
   },
   {
     id: "STEP-101",
@@ -1380,12 +1390,14 @@ export const STEPS: readonly StepDefinition[] = [
     scope: "shipment",
     masterControl: "MC-12",
     prerequisites: ["STEP-093"],
-    evidence: evidence("packing_list"),
+    evidence: evidence("final_packing_list"),
+    correction: FINAL_DOCUMENTS,
   },
   {
     id: "STEP-104",
     phase: 6,
-    name: "Vessel Loading & Departure Confirmation (ATD)",
+    name: "Vessel / Aircraft Loading & Departure Confirmation (ATD)",
+    specName: "Vessel Loading & Departure Confirmation (ATD)",
     class: "mandatory",
     owner: "sme",
     authority: "Carrier",
@@ -1398,7 +1410,8 @@ export const STEPS: readonly StepDefinition[] = [
   {
     id: "STEP-094",
     phase: 6,
-    name: "Carrier Final Bill of Lading Issuance",
+    name: "Carrier Final Bill of Lading / Air Waybill Issuance",
+    specName: "Carrier Final Bill of Lading Issuance",
     class: "mandatory",
     owner: "sme",
     authority: "Carrier",
@@ -1434,15 +1447,24 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-12",
     prerequisites: ["STEP-099"],
     evidence: [
-      ...evidence("transport_document", "commercial_invoice", "packing_list", "quality_certificate", "certificate_of_origin"),
+      ...evidence(
+        "transport_document",
+        "final_commercial_invoice",
+        "final_packing_list",
+        "quality_certificate",
+        "certificate_of_origin",
+      ),
       { type: "phytosanitary_certificate", when: when(PHYTO_REQUIRED, "A phytosanitary certificate is required") },
       { type: "health_certificate", when: when(HEALTH_CERT_REQUIRED, "A health certificate is required") },
+      { type: "insurance_certificate", when: when(CIF, "The Incoterm is CIF, so the seller insures the cargo") },
     ],
+    correction: "Adds the insurance certificate a CIF seller must provide, which the spec's document set leaves out.",
   },
   {
     id: "STEP-103",
     phase: 6,
-    name: "Courier Tracking Setup for Original Documents (if CAD)",
+    name: "Courier Tracking Setup for Original Documents (if CAD or LC)",
+    specName: "Courier Tracking Setup for Original Documents (if CAD)",
     class: "conditional",
     specClass: "mandatory",
     owner: "sme",
@@ -1450,9 +1472,9 @@ export const STEPS: readonly StepDefinition[] = [
     scope: "shipment",
     masterControl: "MC-13",
     prerequisites: ["STEP-102"],
-    appliesWhen: when(PAID_BY_CAD, "Payment is wholly or partly cash against documents"),
+    appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("courier_receipt"),
-    correction: NARROWED_BY_NAME,
+    correction: "Conditional rather than mandatory, and extended to LC: under an LC the originals also travel by courier between banks.",
   },
   {
     id: "STEP-105",
@@ -1511,25 +1533,31 @@ export const STEPS: readonly StepDefinition[] = [
     id: "STEP-109",
     phase: 7,
     name: "Bank Document Presentation Cover Letter Preparation",
-    class: "mandatory",
+    class: "conditional",
+    specClass: "mandatory",
     owner: "sme",
     authority: null,
     scope: "shipment",
     masterControl: "MC-13",
     prerequisites: ["STEP-102"],
+    appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("bank_cover_letter"),
+    correction: BANK_PRESENTATION,
   },
   {
     id: "STEP-110",
     phase: 7,
     name: "Physical / Digital Document Handoff to Commercial Bank",
-    class: "mandatory",
+    class: "conditional",
+    specClass: "mandatory",
     owner: "sme",
     authority: "Commercial bank",
     scope: "shipment",
     masterControl: "MC-13",
     prerequisites: ["STEP-109"],
+    appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("bank_presentation_receipt"),
+    correction: BANK_PRESENTATION,
   },
   {
     id: "STEP-111",

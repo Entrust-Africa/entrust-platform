@@ -124,4 +124,5 @@ export const ECX_SOURCED: Condition = { fact: "sourcingChannel", in: ["ecx"] };
 export const DIRECT_SOURCED: Condition = { fact: "sourcingChannel", in: ["direct"] };
 export const PHYTO_REQUIRED: Condition = { fact: "phytoCertificateRequired", in: ["yes"] };
 export const HEALTH_CERT_REQUIRED: Condition = { fact: "healthCertificateRequired", in: ["yes"] };
+export const CIF: Condition = { fact: "incoterm", in: ["CIF"] };
 export const RED_CHANNEL: Condition = { fact: "customsChannel", in: ["red"] };
