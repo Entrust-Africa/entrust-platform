@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { Patchwork } from "@entrust/ui";
-import { getSession } from "@/lib/session";
+import { getMe } from "@/lib/api";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata = { title: "Sign in" };
 
 export default async function SignInPage() {
-  if (await getSession()) redirect("/");
+  if (await getMe()) redirect("/");
   return (
     <main className="grid min-h-dvh lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <section className="relative flex flex-col justify-between gap-12 bg-night px-6 py-10 text-on-night sm:px-12 lg:py-14">

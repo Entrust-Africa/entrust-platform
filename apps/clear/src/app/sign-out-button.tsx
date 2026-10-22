@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { authClient } from "@entrust/auth/client";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@entrust/ui";
 
 export function SignOutButton() {

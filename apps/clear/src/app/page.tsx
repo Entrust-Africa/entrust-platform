@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, Patchwork } from "@entrust/ui";
-import { getSession } from "@/lib/session";
+import { getMe } from "@/lib/api";
 import { SignOutButton } from "./sign-out-button";
 
 export default async function HomePage() {
-  const session = await getSession();
-  if (!session) redirect("/sign-in");
+  const me = await getMe();
+  if (!me) redirect("/sign-in");
   return (
     <div className="min-h-dvh">
       <header className="border-b border-line bg-surface">
@@ -16,7 +16,7 @@ export default async function HomePage() {
             CLEAR <span className="text-product-600">Export</span>
           </p>
           <div className="flex items-center gap-3 text-sm text-ink-2">
-            <span className="hidden truncate sm:inline">{session.user.email}</span>
+            <span className="hidden truncate sm:inline">{me.email}</span>
             <SignOutButton />
           </div>
         </div>
