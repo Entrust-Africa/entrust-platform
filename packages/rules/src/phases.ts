@@ -1,7 +1,9 @@
 import type { PhaseDefinition } from "./types";
 
 // Phase names, ranges and milestones follow the detailed step list in the Technical Alignment
-// Specification, which agrees with the Operational Control Matrix. See CORRECTIONS.md (C-08).
+// Specification, which agrees with the Operational Control Matrix. The short specification's phase
+// table gives different ranges (phase 3 as 036 to 055, and so on) that would leave milestone steps
+// in the middle of a phase.
 export const PHASES: readonly PhaseDefinition[] = [
   {
     id: 1,

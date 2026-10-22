@@ -108,10 +108,10 @@ export interface StepDefinition {
   id: StepId;
   phase: PhaseId;
   name: string;
-  /** The name in Entrust's specification, when we changed it. See CORRECTIONS.md. */
+  /** The name in Entrust's specification, when we changed it. */
   specName?: string;
   class: StepClass;
-  /** The class in Entrust's specification, when we changed it. See CORRECTIONS.md. */
+  /** The class in Entrust's specification, when we changed it. */
   specClass?: StepClass;
   owner: StepOwner;
   /** The authority or outside party involved, if any. */
@@ -128,8 +128,8 @@ export interface StepDefinition {
   deadline?: Deadline;
   /** The phase's milestone sign-off. It waits on every other step in its phase. */
   milestone?: true;
-  /** Ids of entries in CORRECTIONS.md that changed this step. */
-  corrections?: readonly string[];
+  /** Why this step differs from Entrust's specification, when it does. */
+  correction?: string;
   sources?: readonly SourceRef[];
 }
 

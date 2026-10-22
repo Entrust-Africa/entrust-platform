@@ -56,9 +56,9 @@ describe("canonical steps", () => {
     }
   });
 
-  it("records the spec's wording wherever a step was changed", () => {
+  it("says why wherever a step differs from the spec", () => {
     const changed = STEPS.filter((s) => s.specName || s.specClass);
-    expect(changed.every((s) => s.corrections?.length)).toBe(true);
+    expect(changed.filter((s) => !s.correction).map((s) => s.id)).toEqual([]);
   });
 
   it("rejects a prerequisite that comes later", () => {

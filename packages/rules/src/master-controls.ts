@@ -1,8 +1,10 @@
 import type { MasterControl } from "./types";
 
 // The 14 master controls from the Operational Control Matrix. `checkpointStages` maps the pilot
-// checkpoints (CE-01-S01 to CE-06-S14) by what each checkpoint does, not by its position.
-// See CORRECTIONS.md (C-09).
+// checkpoints (CE-01-S01 to CE-06-S14) by what each checkpoint does. The spec maps them by
+// position (S06 to MC-06 and so on), which is wrong for S06 to S12: S06 is finance (MC-07), S07
+// production (MC-08), S08 packaging (MC-06), S10 container availability (MC-09), and S11 and S12
+// customs (MC-10). MC-07 is renamed from "Banking, Forex & NBE Permits": banks issue the permits.
 export const MASTER_CONTROLS: readonly MasterControl[] = [
   {
     id: "MC-01",

@@ -30,11 +30,17 @@ import type { Condition, StepDefinition } from "./types";
 //
 // Ids and names follow Entrust's Technical Alignment Specification (October 2026). The spec gives
 // only names and classes, so owners, authorities, prerequisites, conditions, evidence and master
-// controls are AfriConnect's draft for Entrust to review. Where we changed something the spec says,
-// the step carries `specName` / `specClass` and the CORRECTIONS.md entry ids.
+// controls are AfriConnect's draft. Where we changed something the spec says, the step keeps the
+// spec's wording in `specName` / `specClass` and says why in `correction`.
 //
 // Array order is execution order. It matches the id order except in phase 6, where loading
-// (STEP-104) comes before the final bill of lading (STEP-094); see C-05.
+// (STEP-104) comes before the final bill of lading (STEP-094).
+
+// Why a step differs from Entrust's specification. Shared wording for changes that repeat.
+const NARROWED_BY_NAME = "The spec marks this mandatory, but its name limits it to some cases, so it is conditional.";
+const BANK_PERMIT = "Authorized banks issue and discharge export permits, not NBE (FXD/01/2024 Art. 7.1.1; Entrust's Q6 answer).";
+const AFTER_LOADING = "An on-board bill of lading is issued after loading (UCP 600 Art. 20), so STEP-104 comes before STEP-094.";
+const HEALTH_CERT = "Conditional on STEP-042, like the phytosanitary steps; not every product and destination needs one.";
 
 const when = (condition: Condition, description: string) => ({ condition, description });
 
@@ -337,7 +343,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-07",
     prerequisites: ["STEP-010", "STEP-023"],
     evidence: evidence("minimum_price_check"),
-    corrections: ["C-03"],
+    correction: "Coffee minimum export prices are set weekly by ECTA, not NBE (Entrust's Q5 answer); no official floor was found for other products.",
     sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017],
   },
   {
@@ -365,7 +371,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-025"],
     appliesWhen: when(PAID_BY_LC, "Payment is by letter of credit"),
     evidence: evidence("letter_of_credit"),
-    corrections: ["C-07"],
+    correction: "Applies to every LC case, not only after a failure, so it is conditional rather than an exception.",
   },
   {
     id: "STEP-027",
@@ -380,7 +386,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-025"],
     appliesWhen: when(PAID_BY_CAD, "Payment is wholly or partly cash against documents"),
     evidence: evidence("collection_instruction"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-028",
@@ -395,7 +401,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-025"],
     appliesWhen: when(PAID_IN_ADVANCE, "Payment is wholly or partly an advance telegraphic transfer"),
     evidence: evidence("advance_credit_advice"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-029",
@@ -481,7 +487,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-04",
     prerequisites: ["STEP-033"],
     evidence: evidence("contract_registration"),
-    corrections: ["C-04"],
+    correction: "Coffee contracts are registered with ECTA, not NBE (Entrust's Q5 answer; registration moved from NBE in May 2025).",
     sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017],
   },
   {
@@ -538,7 +544,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-011", "STEP-019"],
     appliesWhen: when(TO_US, "The destination is the United States"),
     evidence: evidence("fda_facility_registration"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-039",
@@ -553,7 +559,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-038"],
     appliesWhen: when(TO_US, "The destination is the United States"),
     evidence: evidence("us_agent_confirmation"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-040",
@@ -568,7 +574,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-037"],
     appliesWhen: when(TO_TURKEY, "The destination is Turkey"),
     evidence: evidence("turkey_import_rules"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-041",
@@ -583,7 +589,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-037"],
     appliesWhen: when(TO_EU, "The destination is an EU member state"),
     evidence: evidence("eu_traces_check"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-042",
@@ -645,7 +651,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-07",
     prerequisites: ["STEP-015", "STEP-024", "STEP-028", "STEP-034"],
     evidence: evidence("bank_permit_application"),
-    corrections: ["C-01"],
+    correction: BANK_PERMIT,
     sources: [FXD_01_2024, ENTRUST_ANSWERS_2026_10],
   },
   {
@@ -660,7 +666,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-07",
     prerequisites: ["STEP-046"],
     evidence: [],
-    corrections: ["C-02"],
+    correction: "Exporters do not receive an FX allocation; this is the bank's review between the application (046) and the permit (048).",
     sources: [FXD_01_2024],
   },
   {
@@ -675,7 +681,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-07",
     prerequisites: ["STEP-047"],
     evidence: evidence("bank_export_permit"),
-    corrections: ["C-01"],
+    correction: BANK_PERMIT,
     sources: [FXD_01_2024, ENTRUST_ANSWERS_2026_10],
   },
   {
@@ -716,7 +722,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-042"],
     appliesWhen: when(HEALTH_CERT_REQUIRED, "A sanitary, health or free sale certificate is required (established at STEP-042)"),
     evidence: evidence("health_certificate_application"),
-    corrections: ["C-11"],
+    correction: HEALTH_CERT,
   },
   {
     id: "STEP-052",
@@ -786,7 +792,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-055"],
     appliesWhen: when(ECX_SOURCED, "The commodity is bought through ECX"),
     evidence: evidence("ecx_trade_voucher"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-057",
@@ -801,7 +807,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-055"],
     appliesWhen: when({ all: [COFFEE, DIRECT_SOURCED] }, "The product is coffee bought directly, outside ECX"),
     evidence: evidence("direct_purchase_contract"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-058",
@@ -962,7 +968,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-051", "STEP-064"],
     appliesWhen: when(HEALTH_CERT_REQUIRED, "A sanitary, health or free sale certificate is required (established at STEP-042)"),
     evidence: evidence("health_certificate"),
-    corrections: ["C-11"],
+    correction: HEALTH_CERT,
   },
   {
     id: "STEP-071",
@@ -977,7 +983,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-058"],
     raisedWhen: "A lab test, grading or inspection fails, for example on moisture or pesticide residue (FL-05).",
     evidence: evidence("non_conformance_report"),
-    corrections: ["C-10"],
+    correction: "Only applies after a lab test, grading or inspection fails (FL-05), so it is an exception step.",
   },
   {
     id: "STEP-072",
@@ -1033,7 +1039,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-074"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("equipment_release"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-076",
@@ -1048,7 +1054,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-075"],
     appliesWhen: when(COLD_CHAIN, "The cargo needs temperature control"),
     evidence: evidence("reefer_setpoint_record"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-077",
@@ -1063,7 +1069,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-075"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("equipment_interchange_receipt"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-078",
@@ -1090,7 +1096,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-078"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("dry_port_receipt"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-080",
@@ -1147,7 +1153,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-082"],
     appliesWhen: when(RED_CHANNEL, "Customs assigned the Red Channel (established at STEP-082)"),
     evidence: evidence("customs_inspection_report"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-084",
@@ -1174,7 +1180,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-079", "STEP-084"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("stuffing_report"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-086",
@@ -1189,7 +1195,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-085"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("seal_record"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-087",
@@ -1228,7 +1234,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-088"],
     appliesWhen: when(BY_SEA, "The cargo ships by sea in containers"),
     evidence: evidence("transit_document"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-090",
@@ -1336,7 +1342,7 @@ export const STEPS: readonly StepDefinition[] = [
       due: { hours: -24 },
       source: CFR_19_149_2,
     },
-    corrections: ["C-06", "C-07"],
+    correction: "Conditional on US-bound sea cargo, and moved before loading: the ISF is due 24 hours before lading (19 CFR 149.2).",
     sources: [CFR_19_149_2, ENTRUST_ANSWERS_2026_10],
   },
   {
@@ -1387,7 +1393,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-09",
     prerequisites: ["STEP-089", "STEP-093", "STEP-097"],
     evidence: evidence("departure_confirmation"),
-    corrections: ["C-05"],
+    correction: AFTER_LOADING,
   },
   {
     id: "STEP-094",
@@ -1400,7 +1406,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-09",
     prerequisites: ["STEP-104"],
     evidence: evidence("transport_document"),
-    corrections: ["C-05"],
+    correction: AFTER_LOADING,
     sources: [UCP_600],
   },
   {
@@ -1415,7 +1421,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-12",
     prerequisites: ["STEP-050", "STEP-068", "STEP-069", "STEP-070", "STEP-094", "STEP-100", "STEP-101"],
     evidence: evidence("discrepancy_audit_report"),
-    corrections: ["C-10"],
+    correction: "MC-12 is mandatory and blocks bank presentation, so the audit runs on every case rather than as an exception.",
   },
   {
     id: "STEP-102",
@@ -1446,7 +1452,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-102"],
     appliesWhen: when(PAID_BY_CAD, "Payment is wholly or partly cash against documents"),
     evidence: evidence("courier_receipt"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-105",
@@ -1557,7 +1563,7 @@ export const STEPS: readonly StepDefinition[] = [
       due: { days: 21 },
       source: UCP_600,
     },
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-113",
@@ -1572,7 +1578,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-110"],
     appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("swift_transmission_advice"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-114",
@@ -1587,7 +1593,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-113"],
     appliesWhen: when(PAID_BY_CAD, "Payment is wholly or partly cash against documents"),
     evidence: evidence("collecting_bank_acknowledgement"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-115",
@@ -1602,7 +1608,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-113", "STEP-114"],
     appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("buyer_acceptance"),
-    corrections: ["C-07"],
+    correction: NARROWED_BY_NAME,
   },
   {
     id: "STEP-116",
@@ -1652,7 +1658,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-14",
     prerequisites: ["STEP-048", "STEP-117"],
     evidence: evidence("repatriation_reconciliation"),
-    corrections: ["C-01"],
+    correction: BANK_PERMIT,
     sources: [FXD_01_2024],
   },
   {
@@ -1686,7 +1692,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-14",
     prerequisites: ["STEP-119"],
     evidence: evidence("permit_discharge"),
-    corrections: ["C-01"],
+    correction: BANK_PERMIT,
     sources: [FXD_01_2024],
   },
   {
