@@ -5,16 +5,19 @@ MIZAN come later and have no UI yet.
 
 ```
 apps/
+  api          the backend: Hono on Node.js, REST under /v1, login, OpenAPI docs at /docs
   website      entrust-africa.com: Entrust, Andinet and Bridgepoint (Next.js 16, Sanity)
-  clear        CLEAR Export (Next.js 16)
+  clear        CLEAR Export frontend (Next.js 16); talks to apps/api
 packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
-  auth         Better Auth: one login and organisation model for every platform
+  auth         Better Auth config (served by apps/api) and the browser auth client
 ```
 
 Rules that keep it extensible:
 
+- The API owns business logic, permission checks and database access. Frontends call it
+  through the typed client (`@entrust/api/client`) and never import `@entrust/db`.
 - Platforms never import from each other. Shared code goes in `packages/`.
 - One SME identity: an SME registers once (`core.sme_profile`) and appears in every platform.
 - One database, one Postgres schema per platform. Shared tables live in `core`.
@@ -35,14 +38,16 @@ sudo -u postgres createdb -O entrust entrust_platform
 cp .env.example .env            # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm install
 pnpm db:migrate
-pnpm dev                        # CLEAR on :3000, website on :6001
+pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
 ```
+
+- API docs: http://localhost:4000/docs (OpenAPI JSON at `/openapi.json`).
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).
 
-- `/sign-in` creates an account and signs in.
-- `/design` shows the design system draft.
+- CLEAR `/sign-in` creates an account and signs in (through the API).
+- CLEAR `/design` shows the design system draft.
 
 ## Database changes
 

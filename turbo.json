@@ -2,8 +2,13 @@
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
     "DATABASE_URL",
+    "API_PORT",
+    "CORS_ORIGINS",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",
+    "AUTH_COOKIE_DOMAIN",
+    "NEXT_PUBLIC_API_URL",
+    "API_URL",
     "RESEND_API_KEY",
     "CONTACT_FROM_EMAIL",
     "ADMIN_EMAIL"
