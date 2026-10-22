@@ -1,0 +1,113 @@
+/* Hallmark · studied: yes · DNA-source: image (Zemen Bank internet banking; Pan African Chamber of Commerce)
+ * genre: modern-minimal (institutional) · tone: utilitarian, trustworthy · anchor hue: Entrust green 152
+ * paper: oklch(97.6% 0.004 160) · night: oklch(19% 0.03 162) · accent: oklch(50% 0.119 153.7)
+ * fonts: Montserrat (display) + Open Sans (body) + JetBrains Mono (references)
+ */
+
+/* Tailwind scans the shared components for class names. */
+@source ".";
+
+@theme {
+  /* Surfaces: a faintly green-tinted neutral paper, white cards. */
+  --color-canvas: oklch(97.6% 0.004 160);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-2: oklch(95.5% 0.006 160);
+  --color-line: oklch(90% 0.008 160);
+  --color-line-strong: oklch(82% 0.01 160);
+
+  /* Ink: Entrust's #161b26 and two quieter steps. */
+  --color-ink: oklch(22.2% 0.023 265.6);
+  --color-ink-2: oklch(40% 0.02 262);
+  --color-ink-3: oklch(52% 0.016 262);
+
+  /* Entrust green. 500 is the brand mark (#19954f); 600 carries white text (#157642). */
+  --color-brand-50: oklch(96.5% 0.03 152);
+  --color-brand-100: oklch(92.5% 0.06 152);
+  --color-brand-500: oklch(59% 0.147 152.1);
+  --color-brand-600: oklch(50% 0.119 153.7);
+  --color-brand-700: oklch(42% 0.1 154);
+  --color-brand-900: oklch(28% 0.06 156);
+
+  /* Night: the deep green-black panel (Zemen's dark hero, in Entrust's hue). */
+  --color-night: oklch(19% 0.03 162);
+  --color-night-2: oklch(25% 0.035 162);
+  --color-on-night: oklch(96% 0.01 160);
+  --color-on-night-muted: oklch(80% 0.02 160);
+
+  /* Product accent. Each platform gets one; CLEAR is teal (from the PACC palette). */
+  --color-product: oklch(63% 0.101 183);
+  --color-product-600: oklch(52% 0.09 185);
+  --color-product-50: oklch(96% 0.025 183);
+
+  /* Patchwork: the identity band only, never for status or text. */
+  --color-patch-ochre: oklch(74.2% 0.137 79.3);
+  --color-patch-terracotta: oklch(59.3% 0.152 33.4);
+  --color-patch-teal: oklch(63% 0.101 183);
+  --color-patch-green: oklch(59% 0.147 152.1);
+
+  /* Status tones for the task, evidence and milestone dictionaries. */
+  --color-ok: oklch(46% 0.11 153.7);
+  --color-ok-50: oklch(96.5% 0.03 152);
+  --color-info: oklch(50% 0.13 250);
+  --color-info-50: oklch(96% 0.022 250);
+  --color-warn: oklch(50% 0.11 65);
+  --color-warn-50: oklch(96.5% 0.045 85);
+  --color-danger: oklch(51% 0.175 29.7);
+  --color-danger-50: oklch(96% 0.022 25);
+  --color-danger-700: oklch(45% 0.16 29.7);
+  --color-danger-900: oklch(40% 0.14 29.7);
+  --color-idle: oklch(48% 0.012 262);
+  --color-idle-50: oklch(95.5% 0.004 262);
+
+  --color-focus: oklch(50% 0.119 153.7);
+
+  --font-display: var(--font-montserrat), "Montserrat", var(--font-ethiopic), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-open-sans), "Open Sans", var(--font-ethiopic), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --text-display: 2.75rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-style: normal;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 120ms !important;
+      animation: none !important;
+    }
+  }
+}
