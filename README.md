@@ -12,6 +12,8 @@ packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
   auth         Better Auth config (served by apps/api) and the browser auth client
+  rules        CLEAR's canonical 125 steps, master controls, facts and evidence types, as data
+  gate-engine  the GATE engine: pure functions that evaluate a case against the steps
 ```
 
 Rules that keep it extensible:
