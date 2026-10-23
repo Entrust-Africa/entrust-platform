@@ -1316,9 +1316,9 @@ export const STEPS: readonly StepDefinition[] = [
     appliesWhen: when(TO_US, "The destination is the United States"),
     evidence: [],
     deadline: {
-      description: "Prior Notice must be filed and confirmed before the cargo arrives in the US.",
+      description: "Prior Notice must be filed and confirmed at least 8 hours before the cargo arrives in the US by sea (4 hours by air).",
       starts: { caseDate: "estimatedArrival" },
-      due: { hours: 0 },
+      due: { hours: -8 },
       source: CFR_21_1_279,
     },
     sources: [CFR_21_1_279, ENTRUST_ANSWERS_2026_10],
