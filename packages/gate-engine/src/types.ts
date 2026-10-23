@@ -45,9 +45,24 @@ export interface StepRecord {
 export interface EvidenceRecord {
   type: string;
   status: EvidenceStatus;
+  /** ISO date: the issue date on the document. The type's validity period runs from it. */
+  issuedOn?: string | null;
   /** ISO date. Approved evidence counts as expired after this day. Set from the evidence type's validity when approved. */
   validUntil?: string | null;
 }
+
+/** Roles in an SME organisation (#18). */
+export const SME_ROLES = ["owner", "member"] as const;
+export type SmeRole = (typeof SME_ROLES)[number];
+
+/** Roles in the Entrust organisation (#18). */
+export const ENTRUST_ROLES = ["admin", "facilitator", "reviewer"] as const;
+export type EntrustRole = (typeof ENTRUST_ROLES)[number];
+
+export type Role = SmeRole | EntrustRole;
+
+/** Who makes a change: a person with one of these roles, or CLEAR itself (timers, automated checks). */
+export type Actor = Role | "system";
 
 export interface CaseState {
   facts: CaseFacts;
