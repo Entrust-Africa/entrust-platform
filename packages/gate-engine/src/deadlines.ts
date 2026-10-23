@@ -149,6 +149,26 @@ function inputOf(events: readonly CaseEvent[], key: ClockInputKey): string | und
   return undefined;
 }
 
+/**
+ * The moment an event's date or timestamp stands for; a plain date is the start of that day in
+ * Ethiopia. Throws a RangeError unless it is an ISO date or a timestamp with an offset.
+ */
+export const parseEventTime = (value: string): Date => new Date(toMs(value));
+
+/**
+ * Check a value for one of CLOCK_INPUT_KEYS before it is recorded, and return it as the clocks read
+ * it: a date as given, the filing system in lower case. Throws a RangeError if it is not valid.
+ */
+export function checkClockInput(key: ClockInputKey, value: string): string {
+  if (key === "priorNoticeSystem") {
+    const system = value.trim().toLowerCase();
+    if (system !== "ace" && system !== "pnsi") throw new RangeError(`The filing system is "ace" or "pnsi", not "${value}".`);
+    return system;
+  }
+  toMs(value);
+  return value;
+}
+
 // ---- The rules ----
 
 export interface ClockSchedule {
@@ -281,6 +301,15 @@ export const DEADLINE_CLOCKS: readonly ClockRule[] = [
     source: CFR_21_1_279,
     refine: byModeAndSystem,
   },
+];
+
+/**
+ * Steps whose completion date starts a clock (the permit's issue date, the shipment date). They
+ * must be completed with the date the thing happened: the day it is recorded would start the clock
+ * late.
+ */
+export const CLOCK_ANCHOR_STEPS: readonly StepId[] = [
+  ...new Set(DEADLINE_CLOCKS.flatMap((r) => ("afterStep" in r.starts ? [r.starts.afterStep] : []))),
 ];
 
 function scheduleOf(rule: ClockRule, context: Pick<DeadlineInput, "facts" | "events">): ClockSchedule | undefined {

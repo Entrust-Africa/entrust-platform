@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { AppEnv } from "../app";
+import { Problem } from "../schemas/problem";
 
 const Me = z
   .object({
@@ -9,8 +10,6 @@ const Me = z
     activeOrganizationId: z.string().nullable(),
   })
   .openapi("Me");
-
-const Problem = z.object({ error: z.string() }).openapi("Problem");
 
 const route = createRoute({
   method: "get",
