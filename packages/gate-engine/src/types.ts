@@ -64,9 +64,18 @@ export type Role = SmeRole | EntrustRole;
 /** Who makes a change: a person with one of these roles, or CLEAR itself (timers, automated checks). */
 export type Actor = Role | "system";
 
+/** An open flag, as the evaluation needs it: the rule, why it was raised and the steps it holds. */
+export interface HeldFlag {
+  rule: string;
+  message: string;
+  blocks: readonly StepId[];
+}
+
 export interface CaseState {
   facts: CaseFacts;
   steps: Partial<Record<StepId, StepRecord>>;
+  /** Open flags. A step one of them holds is blocked until the flag is waived or resolved. */
+  flags?: readonly HeldFlag[];
   /** In the order submitted. For each type, the latest record decides its status. */
   evidence: readonly EvidenceRecord[];
   /** Exception steps raised on this case. A raised exception stays listed after it is resolved. */
@@ -101,6 +110,8 @@ export interface EvaluatedStep {
   derived: boolean;
   /** Prerequisites that are not complete or not applicable. */
   blockedBy: StepId[];
+  /** Open flags holding this step. */
+  heldBy: string[];
   evidence: EvidenceCheck[];
   /** Required evidence types that are not approved and in date. */
   missingEvidence: string[];

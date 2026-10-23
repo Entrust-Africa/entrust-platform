@@ -28,10 +28,12 @@ import type { CaseState } from "./types";
  *   recorded: the permit's issue date, the bill of lading's on-board date.
  * - clock_input_set: `data` is { key, value } for one of CLOCK_INPUT_KEYS. A date is an ISO date
  *   or a timestamp with an offset (2026-11-10T09:00:00+03:00); the filing system is "ace" or "pnsi".
+ *   plannedHaulage, the day the cargo is planned to leave for the dry port, runs no clock of its
+ *   own: failure rule FL-07 reads it.
  */
 export const STEP_COMPLETED = "step_completed";
 export const CLOCK_INPUT_SET = "clock_input_set";
-export const CLOCK_INPUT_KEYS = ["plannedLoading", "estimatedArrival", "lcExpiry", "priorNoticeSystem"] as const;
+export const CLOCK_INPUT_KEYS = ["plannedLoading", "estimatedArrival", "lcExpiry", "priorNoticeSystem", "plannedHaulage"] as const;
 export type ClockInputKey = (typeof CLOCK_INPUT_KEYS)[number];
 
 export interface CaseEvent {
@@ -140,7 +142,8 @@ function completedAt(events: readonly CaseEvent[], stepId: StepId): string | und
   return events.findLast((e) => e.type === STEP_COMPLETED && e.stepId === stepId)?.occurredAt;
 }
 
-function inputOf(events: readonly CaseEvent[], key: ClockInputKey): string | undefined {
+/** The latest value recorded for a clock input, or undefined if none has been. */
+export function clockInputOf(events: readonly CaseEvent[], key: ClockInputKey): string | undefined {
   for (const event of events.toReversed()) {
     const data: unknown = event.data;
     if (event.type !== CLOCK_INPUT_SET || typeof data !== "object" || data === null) continue;
@@ -203,7 +206,7 @@ export interface ClockRule {
 // UCP 600 Art. 14(c): within 21 days of shipment and not after the credit expires (Art. 6(d)(i)).
 // The earlier of the two is the deadline.
 function byLcExpiry(schedule: ClockSchedule, { events }: Pick<DeadlineInput, "events">): ClockSchedule {
-  const expiry = inputOf(events, "lcExpiry");
+  const expiry = clockInputOf(events, "lcExpiry");
   if (expiry === undefined) {
     return { ...schedule, notes: [...schedule.notes, "The LC expiry date is not recorded. The deadline moves earlier if the credit expires before the 21 days end."] };
   }
@@ -225,7 +228,7 @@ function byModeAndSystem(schedule: ClockSchedule, { facts, events }: Pick<Deadli
   const byAir = evaluateCondition({ fact: "transportMode", in: ["air"] }, facts);
   if (byAir === undefined) notes.push("The transport mode is not recorded, so the 8 hours that apply by sea are used (4 hours by air).");
 
-  const system = inputOf(events, "priorNoticeSystem")?.trim().toLowerCase();
+  const system = clockInputOf(events, "priorNoticeSystem")?.trim().toLowerCase();
   if (system !== "ace" && system !== "pnsi") {
     notes.push("The filing system is not recorded, so Prior Notice is treated as opening 15 days before arrival (30 through ABI/ACE).");
   }
@@ -316,7 +319,7 @@ function scheduleOf(rule: ClockRule, context: Pick<DeadlineInput, "facts" | "eve
   const started =
     "afterStep" in rule.starts
       ? completedAt(context.events, rule.starts.afterStep)
-      : inputOf(context.events, rule.starts.caseDate);
+      : clockInputOf(context.events, rule.starts.caseDate);
   if (started === undefined) return undefined;
   const startedAt = toMs(started);
   const due: DueDate =

@@ -136,9 +136,13 @@ export function transitionStep(step: EvaluatedStep, request: StepTransitionReque
   // The engine decided this status (waiting on prerequisites or on facts). Only marking the step
   // not applicable gets past it.
   if (step.derived && to !== "not_applicable") {
+    const why = [
+      step.blockedBy.length ? `waiting on ${step.blockedBy.join(", ")}` : null,
+      step.heldBy.length ? `held by ${step.heldBy.join(", ")}` : null,
+    ].filter(Boolean);
     throw new TransitionError(
       "precondition_failed",
-      from === "blocked" ? `${id} is waiting on ${step.blockedBy.join(", ")}.` : `Record whether ${id} applies first. ${step.reason}`,
+      from === "blocked" ? `${id} is ${why.join(" and ")}.` : `Record whether ${id} applies first. ${step.reason}`,
     );
   }
   if (from === to) throw new TransitionError("invalid_transition", `${id} is already ${label(to)}.`);
