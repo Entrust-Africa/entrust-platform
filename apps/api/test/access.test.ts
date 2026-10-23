@@ -266,6 +266,7 @@ describe("API documentation", () => {
         "/v1/clear/cases/{id}/evidence",
         "/v1/clear/cases/{id}/evidence/{evidenceId}/review",
         "/v1/clear/cases/{id}/facts",
+        "/v1/clear/cases/{id}/flags/{flagId}/waive",
         "/v1/clear/cases/{id}/steps/{stepId}/transition",
         "/v1/health",
         "/v1/me",

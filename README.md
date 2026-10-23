@@ -50,6 +50,12 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
   own organisations' cases and get 404, not 403, for anyone else's. Entrust staff are the members of
   the organisation in `ENTRUST_ORG_ID` with the role `admin`, `facilitator` or `reviewer`, and see
   every case. Every change writes to `core.audit_log` and to the case's own history (`clear.case_event`).
+- Failure rules FL-01 to FL-14 are data in `packages/rules` and are checked by the GATE engine after
+  every change to a case. A rule that fires raises a flag (`clear.case_flag`) with the exception
+  steps it lists, and holds the steps it names until an Entrust reviewer or admin waives the flag or
+  the situation clears. Rules that wait on data a case doesn't hold yet (prices, lab results,
+  document fields) are defined but dormant. Some rules fire with time alone, so the background
+  worker (#16) is meant to call `syncOpenCases` (`apps/api/src/services/flags.ts`) on a schedule.
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).

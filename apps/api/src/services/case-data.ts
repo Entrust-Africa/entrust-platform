@@ -17,6 +17,7 @@ export type CaseRow = typeof schema.exportCase.$inferSelect;
 export type StepRow = typeof schema.caseStep.$inferSelect;
 export type EvidenceRow = typeof schema.evidence.$inferSelect;
 export type EventRow = typeof schema.caseEvent.$inferSelect;
+export type FlagRow = typeof schema.caseFlag.$inferSelect;
 
 /** Everything the engine needs to evaluate a case. */
 export interface CaseData {
@@ -24,25 +25,32 @@ export interface CaseData {
   steps: StepRow[];
   /** In the order submitted. */
   evidence: EvidenceRow[];
+  /** Every flag the case has had, oldest first. */
+  flags: FlagRow[];
 }
 
-/** Loads the recorded steps and evidence of the given cases in two queries, in the order given. */
+/** Loads the recorded steps, evidence and flags of the given cases, in the order given. */
 export async function loadCaseData(db: Executor, rows: readonly CaseRow[]): Promise<CaseData[]> {
-  const data = rows.map((row): CaseData => ({ row, steps: [], evidence: [] }));
+  const data = rows.map((row): CaseData => ({ row, steps: [], evidence: [], flags: [] }));
   if (rows.length === 0) return data;
   const byId = new Map(data.map((d) => [d.row.id, d]));
   const ids = rows.map((r) => r.id);
-  const [steps, evidence] = await Promise.all([
-    db.select().from(schema.caseStep).where(inArray(schema.caseStep.caseId, ids)),
-    // Submission time, then id, so records submitted together keep a stable order.
-    db
-      .select()
-      .from(schema.evidence)
-      .where(inArray(schema.evidence.caseId, ids))
-      .orderBy(asc(schema.evidence.submittedAt), asc(schema.evidence.id)),
-  ]);
+  // One after another: this runs inside transactions, where queries share a single connection.
+  const steps = await db.select().from(schema.caseStep).where(inArray(schema.caseStep.caseId, ids));
+  // Submission time, then id, so records submitted together keep a stable order.
+  const evidence = await db
+    .select()
+    .from(schema.evidence)
+    .where(inArray(schema.evidence.caseId, ids))
+    .orderBy(asc(schema.evidence.submittedAt), asc(schema.evidence.id));
+  const flags = await db
+    .select()
+    .from(schema.caseFlag)
+    .where(inArray(schema.caseFlag.caseId, ids))
+    .orderBy(asc(schema.caseFlag.raisedAt), asc(schema.caseFlag.id));
   for (const step of steps) byId.get(step.caseId)?.steps.push(step);
   for (const item of evidence) byId.get(item.caseId)?.evidence.push(item);
+  for (const flag of flags) byId.get(flag.caseId)?.flags.push(flag);
   return data;
 }
 
@@ -82,17 +90,24 @@ export function latestEvidence(evidence: readonly EvidenceRow[], type: string): 
   return evidence.findLast((item) => item.type === type);
 }
 
-export function toCaseState({ row, steps, evidence }: CaseData): CaseState {
+export function toCaseState({ row, steps, evidence, flags }: CaseData): CaseState {
   return {
     facts: row.facts,
+    flags: flags.filter((f) => f.status === "open").map((f) => ({ rule: f.rule, message: f.message, blocks: f.blocks })),
     steps: Object.fromEntries(steps.map((s) => [s.stepId, { status: s.status, reason: s.notApplicableReason }])),
     evidence: evidence.map(evidenceRecord),
     raisedExceptions: steps.filter((s) => s.raisedAt !== null).map((s) => s.stepId),
   };
 }
 
+/** The case as it stands, with its open flags holding the steps they list. */
 export function evaluate(data: CaseData, now: Date): CaseEvaluation {
   return evaluateCase(STEPS, toCaseState(data), { asOf: now.toISOString() });
+}
+
+/** The case without its flags: what the failure rules read, so a flag can't switch off its own cause. */
+export function evaluateWithoutFlags(data: CaseData, now: Date): CaseEvaluation {
+  return evaluateCase(STEPS, { ...toCaseState(data), flags: [] }, { asOf: now.toISOString() });
 }
 
 /** The first phase whose gate is not locked, or the last phase once all are. */

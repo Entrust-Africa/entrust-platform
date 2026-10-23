@@ -1,9 +1,10 @@
-import { EVIDENCE_TYPES } from "@entrust/rules";
+import { EVIDENCE_TYPES, FAILURE_RULES } from "@entrust/rules";
 import { evidenceStatusOn, type Actor, type CaseEvaluation, type DeadlineClock } from "@entrust/gate-engine";
 import type { CaseDetailView, CaseSummaryView } from "../schemas/clear";
 import { evidenceRecord, latestEvidence, type CaseData } from "./case-data";
 
 const TYPE_NAMES = new Map(EVIDENCE_TYPES.map((t) => [t.id, t.name]));
+const RULES = new Map<string, (typeof FAILURE_RULES)[number]>(FAILURE_RULES.map((r) => [r.id, r]));
 
 export function summaryOf(data: CaseData, organizationName: string, evaluation: CaseEvaluation): CaseSummaryView {
   const { row } = data;
@@ -17,6 +18,7 @@ export function summaryOf(data: CaseData, organizationName: string, evaluation: 
     status: row.status,
     currentPhase: row.currentPhase,
     nextAction: evaluation.nextAction,
+    openFlags: data.flags.filter((f) => f.status === "open").length,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -48,6 +50,7 @@ export function detailOf(
         reason: s.reason,
         derived: s.derived,
         blockedBy: s.blockedBy,
+        heldBy: s.heldBy,
         evidence: s.evidence,
         missingEvidence: s.missingEvidence,
         canComplete: s.canComplete,
@@ -72,5 +75,20 @@ export function detailOf(
       reviewNote: item.reviewNote,
     })),
     deadlines: [...clocks],
+    flags: data.flags.toReversed().map((f) => ({
+      id: f.id,
+      rule: f.rule,
+      name: RULES.get(f.rule)?.name ?? f.rule,
+      severity: f.severity,
+      status: f.status,
+      message: f.message,
+      blocks: f.blocks,
+      raises: [...(RULES.get(f.rule)?.raises ?? [])],
+      raisedAt: f.raisedAt.toISOString(),
+      waivedAt: f.waivedAt?.toISOString() ?? null,
+      waivedByUserId: f.waivedByUserId,
+      waiveReason: f.waiveReason,
+      resolvedAt: f.resolvedAt?.toISOString() ?? null,
+    })),
   };
 }
