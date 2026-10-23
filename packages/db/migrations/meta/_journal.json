@@ -8,6 +8,13 @@
       "when": 1792684399336,
       "tag": "0000_dazzling_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792782183741,
+      "tag": "0001_clear_schema",
+      "breakpoints": true
     }
   ]
 }

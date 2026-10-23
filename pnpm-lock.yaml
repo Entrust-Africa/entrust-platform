@@ -322,6 +322,12 @@ importers:
 
   packages/db:
     dependencies:
+      '@entrust/gate-engine':
+        specifier: workspace:*
+        version: link:../gate-engine
+      '@entrust/rules':
+        specifier: workspace:*
+        version: link:../rules
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@types/pg@8.23.1)(kysely@0.29.7)(pg@8.23.1)
@@ -335,6 +341,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/gate-engine:
     dependencies:

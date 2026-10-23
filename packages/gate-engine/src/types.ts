@@ -13,7 +13,8 @@ export const TASK_STATUSES = [
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 /** What a person can record on a step: a task status, or that it is done. */
-export type RecordedStatus = TaskStatus | "completed" | "not_applicable";
+export const RECORDED_STATUSES = [...TASK_STATUSES, "completed", "not_applicable"] as const;
+export type RecordedStatus = (typeof RECORDED_STATUSES)[number];
 
 /** A step's status after evaluation. `undetermined` means a fact it depends on is not known yet. */
 export type StepStatus = RecordedStatus | "undetermined";
