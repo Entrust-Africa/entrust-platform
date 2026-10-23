@@ -1,9 +1,12 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { auth, type Session } from "@entrust/auth";
 import { health } from "./routes/health";
+import { clearCases } from "./routes/clear/cases";
 import { me } from "./routes/me";
+import { ServiceError } from "./services/errors";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -33,8 +36,16 @@ base.use("/v1/*", async (c, next) => {
 
 base.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
+// Services refuse with a ServiceError; this gives each one its status and the shared error body.
+base.onError((error, c) => {
+  if (error instanceof ServiceError) return c.json({ error: error.message, code: error.code }, error.status);
+  if (error instanceof HTTPException) return error.getResponse();
+  console.error(error);
+  return c.json({ error: "Something went wrong." }, 500);
+});
+
 // Routes are chained so the typed client (src/client.ts) sees every endpoint.
-export const app = base.route("/v1", health).route("/v1", me);
+export const app = base.route("/v1", health).route("/v1", me).route("/v1/clear", clearCases);
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",
