@@ -13,6 +13,8 @@
     "migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@entrust/gate-engine": "workspace:*",
+    "@entrust/rules": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1"
   },
