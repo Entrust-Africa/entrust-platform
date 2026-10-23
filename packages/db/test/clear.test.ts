@@ -157,3 +157,70 @@ describe("clear schema", () => {
     expect(await db.select().from(schema.caseEvent).where(eq(schema.caseEvent.caseId, caseId))).toEqual([]);
   });
 });
+
+describe("case flags", () => {
+  const flag = (caseId: string, rule = "FL-02", rest: Partial<typeof schema.caseFlag.$inferInsert> = {}) => ({
+    caseId,
+    rule,
+    severity: "critical" as const,
+    message: "The commercial terms conflict.",
+    ...rest,
+  });
+
+  it("starts open and holds the steps it lists", async () => {
+    const { id: caseId } = await insertCase();
+    const [created] = await db
+      .insert(schema.caseFlag)
+      .values(flag(caseId, "FL-02", { blocks: ["STEP-033", "STEP-035"] }))
+      .returning();
+    expect(created).toMatchObject({ status: "open", blocks: ["STEP-033", "STEP-035"], waivedAt: null, resolvedAt: null });
+  });
+
+  it("allows one active flag per rule on a case, but a new one after the last resolved", async () => {
+    const { id: caseId } = await insertCase();
+    const [first] = await db.insert(schema.caseFlag).values(flag(caseId)).returning();
+    await expect(db.insert(schema.caseFlag).values(flag(caseId))).rejects.toMatchObject({
+      cause: { code: "23505", constraint: "case_flag_active_uidx" },
+    });
+    // Another rule is fine, and so is the same rule on another case.
+    await db.insert(schema.caseFlag).values(flag(caseId, "FL-04"));
+    const other = await insertCase();
+    await db.insert(schema.caseFlag).values(flag(other.id));
+
+    await db
+      .update(schema.caseFlag)
+      .set({ status: "resolved", resolvedAt: new Date() })
+      .where(eq(schema.caseFlag.id, first!.id));
+    await db.insert(schema.caseFlag).values(flag(caseId));
+    const all = await db.select().from(schema.caseFlag).where(eq(schema.caseFlag.caseId, caseId));
+    expect(all.filter((f) => f.rule === "FL-02").map((f) => f.status).sort()).toEqual(["open", "resolved"]);
+  });
+
+  it("counts a waived flag as active", async () => {
+    const { id: caseId } = await insertCase();
+    await db
+      .insert(schema.caseFlag)
+      .values(flag(caseId, "FL-02", { status: "waived", waivedAt: new Date(), waiveReason: "Buyer confirmed in writing" }));
+    await expect(db.insert(schema.caseFlag).values(flag(caseId))).rejects.toMatchObject({ cause: { code: "23505" } });
+  });
+
+  it("refuses a waiver without a reason, and a resolved flag without a resolution time", async () => {
+    const { id: caseId } = await insertCase();
+    await expect(
+      db.insert(schema.caseFlag).values(flag(caseId, "FL-02", { status: "waived", waivedAt: new Date() })),
+    ).rejects.toMatchObject({ cause: { code: "23514", constraint: "case_flag_waiver_check" } });
+    await expect(
+      db.insert(schema.caseFlag).values(flag(caseId, "FL-02", { status: "resolved" })),
+    ).rejects.toMatchObject({ cause: { code: "23514", constraint: "case_flag_resolved_check" } });
+    await expect(
+      db.insert(schema.caseFlag).values(flag(caseId, "FL-02", { resolvedAt: new Date() })),
+    ).rejects.toMatchObject({ cause: { code: "23514", constraint: "case_flag_resolved_check" } });
+  });
+
+  it("is removed with its case", async () => {
+    const { id: caseId } = await insertCase();
+    await db.insert(schema.caseFlag).values(flag(caseId));
+    await db.delete(schema.exportCase).where(eq(schema.exportCase.id, caseId));
+    expect(await db.select().from(schema.caseFlag).where(eq(schema.caseFlag.caseId, caseId))).toEqual([]);
+  });
+});
