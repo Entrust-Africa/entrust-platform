@@ -6,7 +6,7 @@ import type { SourceRef } from "./types";
 export const FXD_01_2024: SourceRef = {
   title: "NBE Foreign Exchange Directive FXD/01/2024",
   url: "https://nbe.gov.et/files/fxd-01-2024/",
-  note: "7.1.1: authorized banks provide export permits. 7.1.6: export applications are valid for 30 days. Annex One 1.3.2: CAD proceeds repatriated within 90 days of the permit's issue date.",
+  note: "7.1.1: authorized banks provide export permits. 7.1.6: export applications are valid for 30 calendar days from the date of issue. Annex One 1.3.7(d): proceeds of every permit are repatriated within 90 days of its issue date (flowers excepted); 1.11(a): NBE may extend that for good cause. 1.3.2: CAD at sight or on acceptance, with (a) the same 90 days and (c) a cap of USD 500,000 for a single permit, which NBE may exceed case by case under (e).",
 };
 
 export const ENTRUST_ANSWERS_2026_10: SourceRef = {
@@ -28,7 +28,7 @@ export const CFR_19_149_2: SourceRef = {
 export const CFR_21_1_279: SourceRef = {
   title: "21 CFR 1.279 (Prior Notice timing)",
   url: "https://www.ecfr.gov/current/title-21/section-1.279",
-  note: "Prior Notice must be submitted and confirmed before arrival; no more than 30 days before arrival through ABI/ACE, 15 days through PNSI.",
+  note: "Prior Notice must be submitted and confirmed no less than 8 hours before arrival by water, 4 hours by air (road 2, rail 4); and no more than 30 calendar days before arrival through ABI/ACE, 15 through PNSI.",
 };
 
 export const UCP_600: SourceRef = {
