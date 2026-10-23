@@ -2,13 +2,16 @@ import { STEPS, type StepId } from "@entrust/rules";
 import { describe, expect, it } from "vitest";
 import {
   CAD_CAP_USD,
+  CLOCK_ANCHOR_STEPS,
   CLOCK_INPUT_KEYS,
   CLOCK_INPUT_SET,
   DEADLINE_CLOCKS,
   STEP_COMPLETED,
   checkCadCap,
+  checkClockInput,
   dueReminders,
   evaluateDeadlines,
+  parseEventTime,
 } from "../src";
 import type { CaseEvent, CaseFacts, ClockId, ClockInputKey, DeadlineInput } from "../src";
 
@@ -369,5 +372,32 @@ describe("clock rules against the canonical steps", () => {
       if ("afterStep" in rule.starts) expect(byId.has(rule.starts.afterStep), rule.id).toBe(true);
       else expect(CLOCK_INPUT_KEYS, rule.id).toContain(rule.starts.caseDate);
     }
+  });
+});
+
+describe("recording clock inputs", () => {
+  it("accepts dates and timestamps with an offset, and the filing system in any case", () => {
+    expect(checkClockInput("plannedLoading", "2026-11-10T09:00:00+03:00")).toBe("2026-11-10T09:00:00+03:00");
+    expect(checkClockInput("lcExpiry", "2026-12-31")).toBe("2026-12-31");
+    expect(checkClockInput("priorNoticeSystem", " ACE ")).toBe("ace");
+    expect(checkClockInput("priorNoticeSystem", "pnsi")).toBe("pnsi");
+  });
+
+  it("rejects what the clocks could not read", () => {
+    expect(() => checkClockInput("plannedLoading", "next week")).toThrow(RangeError);
+    expect(() => checkClockInput("plannedLoading", "2026-11-10T09:00:00")).toThrow(RangeError);
+    expect(() => checkClockInput("lcExpiry", "2026-02-30")).toThrow(RangeError);
+    expect(() => checkClockInput("priorNoticeSystem", "email")).toThrow(RangeError);
+  });
+
+  it("reads an event date as the start of that day in Ethiopia, or the instant given", () => {
+    expect(parseEventTime("2026-10-01").toISOString()).toBe("2026-09-30T21:00:00.000Z");
+    expect(parseEventTime("2026-10-01T10:00:00+03:00").toISOString()).toBe("2026-10-01T07:00:00.000Z");
+    expect(() => parseEventTime("2026-02-30")).toThrow(RangeError);
+    expect(() => parseEventTime("1 October")).toThrow(RangeError);
+  });
+
+  it("names the steps whose completion date starts a clock", () => {
+    expect(CLOCK_ANCHOR_STEPS).toEqual(["STEP-048", "STEP-104"]);
   });
 });
