@@ -18,13 +18,11 @@ export const isDone = (status: StepStatus) => status === "completed" || status =
 
 const day = (iso: string) => iso.slice(0, 10);
 
-// The latest record of a type decides its status, so a rejected resubmission is not hidden by an
-// older approval or review.
-function evidenceStatus(records: readonly EvidenceRecord[], asOf: string): EvidenceStatus {
-  const latest = records.at(-1);
-  if (!latest) return "not_provided";
-  if (latest.status === "approved" && latest.validUntil && day(latest.validUntil) < day(asOf)) return "expired";
-  return latest.status;
+/** A record's status on a date: approved evidence past its valid-until day counts as expired. */
+export function evidenceStatusOn(record: EvidenceRecord | undefined, asOf: string): EvidenceStatus {
+  if (!record) return "not_provided";
+  if (record.status === "approved" && record.validUntil && day(record.validUntil) < day(asOf)) return "expired";
+  return record.status;
 }
 
 function applicabilityOf(step: StepDefinition, state: CaseState): { applicability: Applicability; reason: string | null } {
@@ -89,8 +87,10 @@ export function evaluateCase(
       for (const requirement of step.evidence) {
         const required = requirement.when ? evaluateCondition(requirement.when.condition, state.facts) : true;
         if (required === false) continue;
-        const status = evidenceStatus(
-          state.evidence.filter((e) => e.type === requirement.type),
+        // The latest record of a type decides its status, so a rejected resubmission is not hidden
+        // by an older approval or review.
+        const status = evidenceStatusOn(
+          state.evidence.filter((e) => e.type === requirement.type).at(-1),
           options.asOf,
         );
         evidence.push({
