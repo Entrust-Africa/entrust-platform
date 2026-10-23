@@ -151,3 +151,38 @@ export interface MasterControl {
   /** The pilot checkpoint stages (S01 to S14 of each CE case) this control covers. */
   checkpointStages: readonly string[];
 }
+
+export const FAILURE_RULE_IDS = [
+  "FL-01", "FL-02", "FL-03", "FL-04", "FL-05", "FL-06", "FL-07",
+  "FL-08", "FL-09", "FL-10", "FL-11", "FL-12", "FL-13", "FL-14",
+] as const;
+export type FailureRuleId = (typeof FAILURE_RULE_IDS)[number];
+
+export type FlagSeverity = "critical" | "high" | "medium";
+
+/** A failure rule: a situation that raises a flag on a case and holds the steps it would carry forward. */
+export interface FailureRuleDefinition {
+  id: FailureRuleId;
+  name: string;
+  severity: FlagSeverity;
+  /**
+   * - matrix: defined in Entrust's Operational Control Matrix (FL-01 to FL-08)
+   * - proposed: ours, written from a failure point in the Six-SME Reconstruction Register, because
+   *   the specification refers to FL-01 to FL-14 but only defines eight
+   */
+  origin: "matrix" | "proposed";
+  /** The Register failure point a proposed rule comes from, such as FP-05. */
+  basis?: string;
+  /** What raises the flag, in words Entrust can check against their specification. */
+  description: string;
+  /** Exception steps raised on the case with the flag. They stay raised after the flag is resolved. */
+  raises: readonly StepId[];
+  /** Steps held while the flag is open. Waiving or resolving the flag releases them. */
+  blocks: readonly StepId[];
+  /**
+   * What the rule needs that a case does not hold yet. A rule with no check in the GATE engine is
+   * defined but dormant until that data exists; one with a check works on what it can see.
+   */
+  waitingOn?: string;
+  sources?: readonly SourceRef[];
+}
