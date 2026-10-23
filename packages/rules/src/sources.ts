@@ -35,3 +35,8 @@ export const UCP_600: SourceRef = {
   title: "ICC Uniform Customs and Practice for Documentary Credits (UCP 600)",
   note: "Art. 14(c): presentation no later than 21 calendar days after the date of shipment, and not later than the credit's expiry. Art. 20(a)(ii): a bill of lading must show the goods shipped on board.",
 };
+
+export const INCOTERMS_2020: SourceRef = {
+  title: "ICC Incoterms 2020 rules",
+  note: "FOB, CFR and CIF are for sea and inland waterway transport only. For air or other transport the ICC rules to use are FCA, CPT or CIP.",
+};

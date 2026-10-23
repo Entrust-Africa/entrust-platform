@@ -18,9 +18,10 @@ export interface CaseChange {
 /**
  * Records a change to a case in the shared audit log and in the case's history. Run it in the
  * transaction that makes the change, so neither exists without the other. All of a case's audit
- * rows use the case as the entity, so one query gives its timeline.
+ * rows use the case as the entity, so one query gives its timeline. A null user is CLEAR itself,
+ * for what it does on its own, such as raising a flag.
  */
-export async function recordChange(db: Executor, userId: string, change: CaseChange): Promise<void> {
+export async function recordChange(db: Executor, userId: string | null, change: CaseChange): Promise<void> {
   await db.insert(schema.auditLog).values({
     actorUserId: userId,
     organizationId: change.organizationId,

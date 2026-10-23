@@ -63,6 +63,8 @@ const StepState = z
     reason: z.string().nullable(),
     derived: z.boolean(),
     blockedBy: z.array(z.string()),
+    /** Failure rules whose open flags hold this step. */
+    heldBy: z.array(z.string()),
     evidence: z.array(EvidenceCheck),
     missingEvidence: z.array(z.string()),
     canComplete: z.boolean(),
@@ -126,6 +128,26 @@ const EvidenceItem = z
   })
   .openapi("EvidenceItem");
 
+const Flag = z
+  .object({
+    id: z.uuid(),
+    rule: z.string().openapi({ example: "FL-02" }),
+    name: z.string(),
+    severity: z.enum(["critical", "high", "medium"]),
+    /** Open flags hold the steps they list; waived ones are accepted by Entrust and hold nothing. */
+    status: z.enum(schema.FLAG_STATUSES),
+    message: z.string(),
+    blocks: z.array(z.string()),
+    /** Exception steps raised on the case with this flag. */
+    raises: z.array(z.string()),
+    raisedAt: Timestamp,
+    waivedAt: Timestamp.nullable(),
+    waivedByUserId: z.string().nullable(),
+    waiveReason: z.string().nullable(),
+    resolvedAt: Timestamp.nullable(),
+  })
+  .openapi("Flag");
+
 // ---- Cases ----
 
 export const CaseSummary = z
@@ -139,6 +161,8 @@ export const CaseSummary = z
     status: CaseStatus,
     currentPhase: Phase,
     nextAction: NextAction.nullable(),
+    /** Flags holding steps right now. */
+    openFlags: z.number().int(),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
@@ -151,6 +175,8 @@ export const CaseDetail = CaseSummary.extend({
   workflow: Workflow,
   evidence: z.array(EvidenceItem),
   deadlines: z.array(DeadlineClock),
+  /** Every flag the case has had, newest first. */
+  flags: z.array(Flag),
 }).openapi("CaseDetail");
 
 const CadCap = z
@@ -178,6 +204,7 @@ export const CaseList = z
 export const CaseIdParam = z.object({ id: z.uuid() });
 export const StepParam = CaseIdParam.extend({ stepId: StepId });
 export const EvidenceParam = CaseIdParam.extend({ evidenceId: z.uuid() });
+export const FlagParam = CaseIdParam.extend({ flagId: z.uuid() });
 
 export const CreateCaseBody = z
   .object({
@@ -242,6 +269,10 @@ export const ReviewEvidenceBody = z
     issuedOn: z.iso.date().optional().openapi({ description: "Records or corrects the document's issue date." }),
   })
   .openapi("ReviewEvidenceBody");
+
+export const WaiveFlagBody = z
+  .object({ reason: z.string().min(1).openapi({ description: "Why the situation is accepted. Kept with the flag and in the audit log." }) })
+  .openapi("WaiveFlagBody");
 
 export const ClockInputBody = z
   .object({

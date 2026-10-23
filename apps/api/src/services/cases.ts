@@ -6,6 +6,7 @@ import type { CaseCreatedView, CaseDetailView, CaseListView } from "../schemas/c
 import { actorFor, findCase, requireRole, type Ctx } from "./access";
 import { evaluate, loadCaseData, loadOneCaseData, organizationNames } from "./case-data";
 import { buildDetail, mutateCase } from "./detail";
+import { syncFlags } from "./flag-sync";
 import { recordChange } from "./audit";
 import { fromEngine, ServiceError } from "./errors";
 import { applyFacts, changesRecordedFact, checkFacts, sameFacts, type FactInput } from "./facts";
@@ -64,6 +65,7 @@ export async function createCase(ctx: Ctx, input: CreateCaseInput): Promise<Case
       after: { reference, facts, cadCap: cadCap && { withinCap: cadCap.withinCap, excessUsd: cadCap.excessUsd } },
       event: { type: "case_created", data: { facts, cadAmountUsd: input.cadAmountUsd ?? null } },
     });
+    await syncFlags(tx, row, ctx.now);
     return { ...(await buildDetail(tx, row, actor, ctx.now)), cadCap };
   });
 }

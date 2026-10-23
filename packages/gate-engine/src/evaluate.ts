@@ -82,6 +82,9 @@ export function evaluateCase(
       .filter((p) => !isDone(p.status) || (step.milestone && p.status === "completed" && p.missingEvidence.length > 0))
       .map((p) => p.id);
 
+    // Open flags hold a step the way an unfinished prerequisite does.
+    const held = (state.flags ?? []).filter((f) => f.blocks.includes(id));
+
     const evidence: EvidenceCheck[] = [];
     if (applicability !== "not_applicable") {
       for (const requirement of step.evidence) {
@@ -126,9 +129,15 @@ export function evaluateCase(
       status = "completed";
       if (blockedBy.length) stepWarnings.push(`Completed, but these prerequisites are no longer done: ${blockedBy.join(", ")}.`);
       if (missingEvidence.length) stepWarnings.push(`Completed, but this evidence is not approved: ${missingEvidence.join(", ")}.`);
-    } else if (blockedBy.length) {
+      if (held.length) stepWarnings.push(`Completed, but ${held.map((f) => f.rule).join(", ")} is open.`);
+    } else if (blockedBy.length || held.length) {
       status = "blocked";
-      reason = `Waiting on ${blockedBy.join(", ")}.`;
+      reason = [
+        blockedBy.length ? `Waiting on ${blockedBy.join(", ")}.` : null,
+        ...held.map((f) => `Held by ${f.rule}: ${f.message}`),
+      ]
+        .filter(Boolean)
+        .join(" ");
       derived = true;
     } else if (applicability === "undetermined") {
       status = "undetermined";
@@ -149,6 +158,7 @@ export function evaluateCase(
       reason,
       derived,
       blockedBy,
+      heldBy: held.map((f) => f.rule),
       evidence,
       missingEvidence,
       canComplete:
@@ -179,6 +189,10 @@ function phaseGates(steps: readonly EvaluatedStep[]): PhaseGate[] {
             : (s?.reason ?? `Status: ${s?.status.replaceAll("_", " ")}.`);
         return { stepId: id, reason };
       });
+      // A flag can hold the sign-off itself, which leaves no step outstanding but keeps the gate shut.
+      if (milestone.heldBy.length && milestone.status !== "completed") {
+        outstanding.push({ stepId: milestone.id, reason: milestone.reason ?? `Held by ${milestone.heldBy.join(", ")}.` });
+      }
       const status = milestone.status === "completed" ? "locked" : outstanding.length ? "open" : "ready";
       return { phase: milestone.phase, milestoneStep: milestone.id, status, outstanding };
     });

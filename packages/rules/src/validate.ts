@@ -1,6 +1,8 @@
+import { FAILURE_RULE_IDS } from "./types";
 import type {
   Condition,
   EvidenceType,
+  FailureRuleDefinition,
   FactKey,
   FactDefinition,
   MasterControl,
@@ -128,5 +130,33 @@ export function validateSteps(steps: readonly StepDefinition[], catalogue: Catal
     if (milestones.length !== 1) errors.push(`Phase ${phase.id}: has ${milestones.length} milestone steps, expected 1`);
   }
 
+  return errors;
+}
+
+/**
+ * Check the failure rules against the steps. Every rule must be defined once, and what it raises
+ * must be an exception step and what it holds an existing step.
+ */
+export function validateFailureRules(rules: readonly FailureRuleDefinition[], steps: readonly StepDefinition[]): string[] {
+  const errors: string[] = [];
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const seen = new Set<string>();
+  for (const rule of rules) {
+    if (seen.has(rule.id)) errors.push(`${rule.id}: duplicate rule`);
+    seen.add(rule.id);
+    if (rule.origin === "proposed" && !rule.basis) errors.push(`${rule.id}: a proposed rule names the failure point it comes from`);
+    if (rule.origin === "matrix" && rule.basis) errors.push(`${rule.id}: a rule from the matrix has no Register basis`);
+    for (const id of rule.raises) {
+      const step = byId.get(id);
+      if (!step) errors.push(`${rule.id}: raises unknown step ${id}`);
+      else if (step.class !== "exception") errors.push(`${rule.id}: raises ${id}, which is a ${step.class} step, not an exception step`);
+    }
+    for (const id of rule.blocks) {
+      if (!byId.has(id)) errors.push(`${rule.id}: blocks unknown step ${id}`);
+    }
+  }
+  for (const id of FAILURE_RULE_IDS) {
+    if (!seen.has(id)) errors.push(`${id}: not defined`);
+  }
   return errors;
 }

@@ -193,6 +193,53 @@ export const caseEvent = clear.table(
   (t) => [index("case_event_case_idx").on(t.caseId, t.occurredAt)],
 );
 
+/**
+ * - open: the situation holds, and the steps the flag lists are held
+ * - waived: the situation holds, but an Entrust reviewer or admin accepted it, with a reason; nothing is held
+ * - resolved: the situation cleared
+ */
+export const FLAG_STATUSES = ["open", "waived", "resolved"] as const;
+export type FlagStatus = (typeof FLAG_STATUSES)[number];
+export const FLAG_SEVERITIES = ["critical", "high", "medium"] as const;
+
+// A failure rule (FL-01 to FL-14) that fired on a case. A case has at most one active (open or
+// waived) flag per rule: when the rule stops firing the flag resolves, and if it fires again it
+// is a new flag, so the history of each occurrence stays.
+export const caseFlag = clear.table(
+  "case_flag",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => exportCase.id, { onDelete: "cascade" }),
+    // A failure rule id from @entrust/rules.
+    rule: text("rule").notNull(),
+    // The rule's severity when it fired, so a later change to the rule leaves the flag alone.
+    severity: text("severity", { enum: FLAG_SEVERITIES }).notNull(),
+    status: text("status", { enum: FLAG_STATUSES }).notNull().default("open"),
+    // Why it fired, in words.
+    message: text("message").notNull(),
+    // The steps held while the flag is open.
+    blocks: jsonb("blocks").$type<StepId[]>().notNull().default([]),
+    raisedAt: timestamp("raised_at", { withTimezone: true }).defaultNow().notNull(),
+    waivedAt: timestamp("waived_at", { withTimezone: true }),
+    waivedByUserId: text("waived_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    waiveReason: text("waive_reason"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("case_flag_case_idx").on(t.caseId, t.raisedAt),
+    uniqueIndex("case_flag_active_uidx")
+      .on(t.caseId, t.rule)
+      .where(sql`${t.status} <> 'resolved'`),
+    check(
+      "case_flag_waiver_check",
+      sql`${t.status} <> 'waived' or (${t.waiveReason} is not null and ${t.waivedAt} is not null)`,
+    ),
+    check("case_flag_resolved_check", sql`(${t.status} = 'resolved') = (${t.resolvedAt} is not null)`),
+  ],
+);
+
 export const salesContractRelations = relations(salesContract, ({ many }) => ({
   cases: many(exportCase),
 }));
@@ -205,6 +252,7 @@ export const exportCaseRelations = relations(exportCase, ({ one, many }) => ({
   steps: many(caseStep),
   evidence: many(evidence),
   events: many(caseEvent),
+  flags: many(caseFlag),
 }));
 
 export const caseStepRelations = relations(caseStep, ({ one }) => ({
@@ -218,4 +266,8 @@ export const evidenceRelations = relations(evidence, ({ one }) => ({
 export const caseEventRelations = relations(caseEvent, ({ one }) => ({
   case: one(exportCase, { fields: [caseEvent.caseId], references: [exportCase.id] }),
   evidence: one(evidence, { fields: [caseEvent.evidenceId], references: [evidence.id] }),
+}));
+
+export const caseFlagRelations = relations(caseFlag, ({ one }) => ({
+  case: one(exportCase, { fields: [caseFlag.caseId], references: [exportCase.id] }),
 }));

@@ -10,18 +10,21 @@ import {
   ClockInputBody,
   CreateCaseBody,
   EvidenceParam,
+  FlagParam,
   ListCasesQuery,
   ReviewEvidenceBody,
   StepParam,
   StepTransitionBody,
   SubmitEvidenceBody,
   UpdateFactsBody,
+  WaiveFlagBody,
 } from "../../schemas/clear";
 import { loadPrincipal, type Ctx } from "../../services/access";
 import { createCase, getCase, listCases, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
 import { ServiceError } from "../../services/errors";
 import { reviewEvidence, submitEvidence } from "../../services/evidence";
+import { waiveFlag } from "../../services/flags";
 import { transitionCaseStep } from "../../services/steps";
 
 const problem = (description: string) => ({ description, content: { "application/json": { schema: Problem } } });
@@ -146,6 +149,17 @@ const clockInputRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
 
+const waiveFlagRoute = createRoute({
+  method: "post",
+  path: "/cases/{id}/flags/{flagId}/waive",
+  tags,
+  summary: "Waive a flag",
+  description:
+    "Accepts an open flag as it is, with a reason that stays on the flag and in the audit log. The steps it held are released. Only Entrust reviewers and admins can. Flags are raised and resolved by CLEAR itself as the failure rules fire and clear; a person cannot raise or resolve one.",
+  request: { params: FlagParam, body: { required: true, content: json(WaiveFlagBody) } },
+  responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
+});
+
 export const clearCases = cases
   .openapi(createCaseRoute, async (c) => {
     const body = c.req.valid("json");
@@ -183,4 +197,9 @@ export const clearCases = cases
   .openapi(clockInputRoute, async (c) => {
     const { id } = c.req.valid("param");
     return c.json(await recordClockInput(await contextFor(c.get("user")), id, c.req.valid("json")), 200);
+  })
+  .openapi(waiveFlagRoute, async (c) => {
+    const { id, flagId } = c.req.valid("param");
+    const { reason } = c.req.valid("json");
+    return c.json(await waiveFlag(await contextFor(c.get("user")), id, flagId, reason), 200);
   });

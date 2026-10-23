@@ -13,12 +13,14 @@ import {
   type CaseRow,
 } from "./case-data";
 import type { Executor } from "./db";
+import { syncFlags } from "./flag-sync";
 import { detailOf } from "./views";
 
 /** The case as the caller sees it: facts, the workflow the engine works out, evidence and deadlines. */
 export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now: Date): Promise<CaseDetailView> {
   const data = await loadOneCaseData(db, row);
-  const [events, names] = await Promise.all([loadEvents(db, row.id), organizationNames(db, [row.organizationId])]);
+  const events = await loadEvents(db, row.id);
+  const names = await organizationNames(db, [row.organizationId]);
   return detailOf(data, names.get(row.organizationId) ?? "", actor, evaluate(data, now), deadlines(data, events, now), now);
 }
 
@@ -38,6 +40,8 @@ export function mutateCase(
 
     const [current] = await tx.select().from(schema.exportCase).where(eq(schema.exportCase.id, caseId));
     if (!current) throw new Error("The case disappeared during the change");
+    // Flags first: they hold steps, so the phase and the response must see them.
+    await syncFlags(tx, current, ctx.now);
     const evaluation = evaluate(await loadOneCaseData(tx, current), ctx.now);
     const [row] = await tx
       .update(schema.exportCase)
