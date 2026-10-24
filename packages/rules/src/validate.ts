@@ -9,6 +9,7 @@ import type {
   MasterControl,
   PhaseDefinition,
   ReconciliationDocument,
+  RulePack,
   StepDefinition,
 } from "./types";
 import { DOCUMENT_FIELD_KEYS } from "./types";
@@ -22,6 +23,20 @@ export interface Catalogue {
 
 const stepNumber = (id: string) => Number(id.slice("STEP-".length));
 
+/** What is wrong with a condition: empty groups, unknown facts, values a fact doesn't have. */
+function conditionErrors(id: string, condition: Condition, facts: ReadonlyMap<FactKey, FactDefinition>): string[] {
+  if ("all" in condition || "any" in condition) {
+    const parts = "all" in condition ? condition.all : condition.any;
+    const empty = parts.length === 0 ? [`${id}: empty ${"all" in condition ? "all" : "any"} condition`] : [];
+    return [...empty, ...parts.flatMap((c) => conditionErrors(id, c, facts))];
+  }
+  if ("not" in condition) return conditionErrors(id, condition.not, facts);
+  const fact = facts.get(condition.fact);
+  if (!fact) return [`${id}: condition uses unknown fact ${condition.fact}`];
+  const allowed = new Set(fact.options?.map((o) => o.value));
+  return fact.options ? condition.in.filter((v) => !allowed.has(v)).map((v) => `${id}: ${condition.fact} has no value "${v}"`) : [];
+}
+
 /** Check a step list for internal consistency. Returns one message per problem; empty when valid. */
 export function validateSteps(steps: readonly StepDefinition[], catalogue: Catalogue): string[] {
   const errors: string[] = [];
@@ -34,23 +49,7 @@ export function validateSteps(steps: readonly StepDefinition[], catalogue: Catal
   const facts = new Map(catalogue.facts.map((f) => [f.key, f]));
   const evidenceTypes = new Set(catalogue.evidenceTypes.map((e) => e.id));
   const masterControls = new Set(catalogue.masterControls.map((m) => m.id));
-
-  const checkCondition = (id: string, condition: Condition): void => {
-    if ("all" in condition || "any" in condition) {
-      const parts = "all" in condition ? condition.all : condition.any;
-      if (parts.length === 0) errors.push(`${id}: empty ${"all" in condition ? "all" : "any"} condition`);
-      return parts.forEach((c) => checkCondition(id, c));
-    }
-    if ("not" in condition) return checkCondition(id, condition.not);
-    const fact = facts.get(condition.fact);
-    if (!fact) return void errors.push(`${id}: condition uses unknown fact ${condition.fact}`);
-    if (fact.options) {
-      const allowed = new Set(fact.options.map((o) => o.value));
-      for (const value of condition.in) {
-        if (!allowed.has(value)) errors.push(`${id}: ${condition.fact} has no value "${value}"`);
-      }
-    }
-  };
+  const checkCondition = (id: string, condition: Condition) => errors.push(...conditionErrors(id, condition, facts));
 
   for (const [i, step] of steps.entries()) {
     const phase = catalogue.phases.find((p) => p.id === step.phase);
@@ -218,4 +217,114 @@ export function validateDocuments(
     if (!carried.has(key)) errors.push(`${key}: no document carries it`);
   }
   return errors;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const isIsoDate = (value: string) => ISO_DATE.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+const TEXT_FIELDS = ["name", "description", "action", "whyItMatters", "responsible", "trigger", "evidence", "authority"] as const;
+
+/**
+ * Check rule packs against the canonical steps and facts. Besides the shape (a version number,
+ * dates, known steps and facts), it holds the line the packs promise: a requirement presented as
+ * law cites an official source with a link, and one that isn't established says so.
+ */
+export function validateRulePacks(
+  packs: readonly RulePack[],
+  catalogue: { steps: readonly StepDefinition[]; facts: readonly FactDefinition[] },
+): string[] {
+  const errors: string[] = [];
+  const steps = new Map(catalogue.steps.map((s) => [s.id, s]));
+  const position = new Map(catalogue.steps.map((s, i) => [s.id, i]));
+  const facts = new Map(catalogue.facts.map((f) => [f.key, f]));
+  const products = new Set(facts.get("product")?.options?.map((o) => o.value));
+  const seen = new Set<string>();
+
+  for (const pack of packs) {
+    const at = `${pack.id}@${pack.version}`;
+    const fail = (message: string) => errors.push(`${at}: ${message}`);
+    if (seen.has(at)) fail("published twice");
+    seen.add(at);
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(pack.id)) fail("the id is lower-case words joined by hyphens");
+    if (!/^\d+\.\d+\.\d+$/.test(pack.version)) fail("the version is major.minor.patch");
+    if (!isIsoDate(pack.checkedOn)) fail(`checkedOn "${pack.checkedOn}" is not a date`);
+    if (!pack.name.trim() || !pack.route.trim() || !pack.changes.trim()) fail("needs a name, a route and what changed");
+    if (pack.corridor.products.length === 0 || pack.corridor.destinations.length === 0) fail("covers no corridor");
+    for (const product of pack.corridor.products) if (!products.has(product)) fail(`unknown product ${product}`);
+    for (const country of pack.corridor.destinations) if (!/^[A-Z]{2}$/.test(country)) fail(`destination ${country} is not an ISO country code`);
+    if (pack.requirements.length === 0) fail("has no requirements");
+
+    // Listed in the order their work starts, so a pack reads like the workflow.
+    const firstAt = (r: RulePack["requirements"][number]) => Math.min(...r.steps.map((s) => position.get(s) ?? Infinity));
+    pack.requirements.forEach((r, i) => {
+      const previous = pack.requirements[i - 1];
+      if (previous && firstAt(previous) > firstAt(r)) fail(`${r.code} starts before ${previous.code}, so it goes first`);
+    });
+
+    const codes = new Set<string>();
+    for (const r of pack.requirements) {
+      const id = `${at} ${r.code}`;
+      const wrong = (message: string) => errors.push(`${id}: ${message}`);
+      if (codes.has(r.code)) wrong("duplicate code");
+      codes.add(r.code);
+      if (!/^[A-Z]{2,4}-\d{2}$/.test(r.code)) wrong("the code looks like ELG-01");
+      for (const field of TEXT_FIELDS) if (!r[field].trim()) wrong(`${field} is empty`);
+      if (r.jurisdiction !== null && !/^[A-Z]{2}$/.test(r.jurisdiction)) wrong(`jurisdiction ${r.jurisdiction} is not an ISO country code`);
+
+      if (r.steps.length === 0) wrong("is on no step");
+      if (new Set(r.steps).size !== r.steps.length) wrong("lists a step twice");
+      for (const stepId of r.steps) if (!steps.has(stepId)) wrong(`unknown step ${stepId}`);
+      if (r.steps.length && r.steps.every((s) => steps.get(s)?.class === "exception")) {
+        wrong("is only on exception steps, so it would apply only once one is raised");
+      }
+      if (r.appliesWhen?.condition) errors.push(...conditionErrors(id, r.appliesWhen.condition, facts));
+      if (r.appliesWhen && !r.appliesWhen.description.trim()) wrong("appliesWhen needs a description");
+
+      // Nothing unsourced is presented as a requirement of law.
+      const linked = r.sources.filter((s) => s.url);
+      if ((r.basis === "confirmed" || r.basis === "conditional") && linked.length === 0) {
+        wrong(`a ${r.basis} requirement cites an official source with a link`);
+      }
+      if (r.basis === "conditional" && !r.appliesWhen) wrong("a conditional requirement says when it applies");
+      if (r.basis === "awaiting_verification" && r.verification.status !== "awaiting_verification") {
+        wrong("a requirement awaiting verification can't be shown as checked or verified");
+      }
+      for (const source of r.sources) {
+        if (!source.title.trim()) wrong("a source has no title");
+        if (source.url !== undefined && !source.url.startsWith("https://")) wrong(`source ${source.url} is not an https link`);
+      }
+      if (!isIsoDate(r.verification.checkedOn)) wrong(`checkedOn "${r.verification.checkedOn}" is not a date`);
+      else if (r.verification.checkedOn > pack.checkedOn) wrong("checked after the pack's own check date");
+      if (!r.verification.note.trim()) wrong("the verification note is empty");
+    }
+  }
+
+  // Each corridor has one pack, so a new case can't match two.
+  const latest = new Map<string, RulePack>();
+  for (const pack of packs) {
+    const current = latest.get(pack.id);
+    if (!current || compareVersions(pack.version, current.version) > 0) latest.set(pack.id, pack);
+  }
+  const covering = new Map<string, string>();
+  for (const pack of latest.values()) {
+    for (const product of pack.corridor.products) {
+      for (const country of pack.corridor.destinations) {
+        const key = `${product} to ${country}`;
+        const other = covering.get(key);
+        if (other) errors.push(`${pack.id} and ${other} both cover ${key}`);
+        covering.set(key, pack.id);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Orders major.minor.patch versions: negative when a is older than b. */
+export function compareVersions(a: string, b: string): number {
+  const parts = (v: string) => v.split(".").map(Number);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }

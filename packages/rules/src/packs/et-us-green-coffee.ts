@@ -1,0 +1,923 @@
+import { BY_RAIL, BY_ROAD, BY_SEA, PAID_BY_CAD, PHYTO_REQUIRED } from "../facts";
+import type { PackRequirement, RulePack, SourceRef } from "../types";
+
+// Rule pack: Ethiopian green coffee to the United States.
+//
+// Ported from the CLEAR Export simulation's pack (et-us-green-coffee-fob-djibouti 0.3.0, sources
+// checked 10 October 2026), which the 17 October 2026 demo ran on. The requirements keep the
+// simulation's codes and sit on the canonical steps where their work is done. Every source was
+// read again for this version; each requirement's note says what its sources support and what is
+// still open. A requirement that isn't established from an official source is "awaiting
+// verification" and is never presented as law.
+//
+// A published version never changes, because cases keep the version they were opened with. To
+// correct or update this pack, add a new version below (it can start from this one) and list it in
+// ET_US_GREEN_COFFEE.
+
+const CHECKED = "2026-10-24";
+
+// Sources, with what each is cited for in general. A requirement adds the articles it relies on.
+// ECTA's own website is not linked: on 10 October 2026 it was serving unrelated gambling content.
+const SRC = {
+  procl1051: {
+    title: "Coffee Quality Control and Marketing Proclamation No. 1051/2017 (FAOLEX copy)",
+    url: "https://faolex.fao.org/docs/pdf/eth183197.pdf",
+  },
+  mojEcta: {
+    title: "Ministry of Justice legal portal: Ethiopian Coffee and Tea Authority (laws and directives)",
+    url: "https://justice.gov.et/en/entity/ethiopian-coffee-and-tea-authority/",
+  },
+  dir1100: {
+    title: "ECTA Coffee Marketing and Quality Control Implementation Directive No. 1100 (Amharic, Ministry of Justice copy)",
+    url: "https://justice.gov.et/wp-content/uploads/2026/02/1100-2017-የቡና-ግብይት-እና-ጥራት-ቁጥጥር-አፈፃፀም-መመሪያ-ቁጥር-1100-2017-1.pdf",
+  },
+  dir1106: {
+    title: "ECTA Coffee Marketing and Quality Control (Amendment) Directive No. 1106/2025 (Ministry of Justice copy)",
+    url: "https://justice.gov.et/wp-content/uploads/2026/02/1106-The-Coffee-Marketing-and-Quality-Control-amendment-Directive-No.-1106-2025.pdf",
+  },
+  ectaPortal: {
+    title: "ECTA registration and compliance portal (CMIMS): stakeholder registration",
+    url: "https://cmims.ethiocta.gov.et/en/register-stakeholder",
+  },
+  gain2026: {
+    title: "USDA FAS GAIN report ET2026-0005, Ethiopia Coffee Annual (May 2026), a secondary source",
+    url: "https://apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName=Coffee+Annual_Addis+Ababa_Ethiopia_ET2026-0005",
+  },
+  nbeFxd: {
+    title: "National Bank of Ethiopia Foreign Exchange Directive FXD/01/2024",
+    url: "https://nbe.gov.et/wp-content/uploads/2024/07/FXD012024-FOREIGN-EXCHANGE-1-1.pdf",
+  },
+  nbeFxd04: {
+    title: "National Bank of Ethiopia Directive FXD/04/2026 (amendment)",
+    url: "https://nbe.gov.et/wp-content/uploads/2026/02/DIRECTIVE-NO.-FXD042026.pdf",
+  },
+  customs859: { title: "Customs Proclamation No. 859/2014 (FAOLEX copy)", url: "https://faolex.fao.org/docs/pdf/eth216442.pdf" },
+  procl1160: {
+    title: "Customs (Amendment) Proclamation No. 1160/2019 (Ministry of Justice copy)",
+    url: "https://justice.gov.et/wp-content/uploads/2025/07/1160.pdf",
+  },
+  esw: { title: "Ethiopian Electronic Single Window: trader portal", url: "https://esw.et/esw-trd/" },
+  plantReg: { title: "Plant Quarantine Regulation No. 4/1992 (FAOLEX copy)", url: "https://faolex.fao.org/docs/pdf/eth4524.pdf" },
+  eaa: { title: "Ethiopian Agricultural Authority: services", url: "https://eaa.gov.et/services/" },
+  icoRules: {
+    title: "ICO Rules on Statistics: Certificates of Origin (ICC-102-9 Rev. 5, 2022)",
+    url: "https://ico.org/documents/Key%20documents/kd-icc-102-9-r5e-rules-certificates-origin.pdf",
+  },
+  dpcsExport: {
+    title: "Djibouti Port Community System: transit procedure for export (2018)",
+    url: "https://www.dpcs.dj/TFBPCS/media/Transit%20Export_fr.pdf",
+  },
+  dpfzaNotice: {
+    title: "Djibouti Ports and Free Zones Authority: official notifications (DPCS mandatory, 19 May 2026)",
+    url: "https://dpfza.gov.dj/official-notification",
+  },
+  dpfzaForwarder: {
+    title: "Djibouti Ports and Free Zones Authority: logistics (forwarder) licence",
+    url: "https://dpfza.gov.dj/services/logistics-license",
+  },
+  sgtd: {
+    title: "SGTD Doraleh Container Terminal: circulars and notices",
+    url: "https://www.sgtd-terminal.com/circulars-and-notices/",
+  },
+  iccFob: {
+    title: "ICC Academy: Incoterms 2020, FCA or FOB?",
+    url: "https://academy.iccwbo.org/incoterms/article/incoterms-2020-fca-or-fob/",
+  },
+  fdaImport: {
+    title: "FDA: Importing Food Products into the United States",
+    url: "https://www.fda.gov/food/food-imports-exports/importing-food-products-united-states",
+  },
+  fdaFsvp: {
+    title: "FDA: FSMA Final Rule on Foreign Supplier Verification Programs (FSVP)",
+    url: "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-foreign-supplier-verification-programs-fsvp-importers-food-humans-and-animals",
+  },
+  cfrFacility: {
+    title: "21 CFR 1.225 to 1.227: food facility registration (who must register, exemptions)",
+    url: "https://www.ecfr.gov/current/title-21/part-1/subpart-H",
+  },
+  cfrRenewal: { title: "21 CFR 1.230: registration timing and biennial renewal", url: "https://www.ecfr.gov/current/title-21/section-1.230" },
+  cfrPriorNotice: { title: "21 CFR 1.276 to 1.285: prior notice of imported food", url: "https://www.ecfr.gov/current/title-21/part-1/subpart-I" },
+  cfrFsvp: {
+    title: "21 CFR 1.507 and 1.509: FSVP, food not consumed without a control; importer identification",
+    url: "https://www.ecfr.gov/current/title-21/part-1/subpart-L",
+  },
+  cfrIsf: { title: "19 CFR 149.2: Importer Security Filing timing", url: "https://www.ecfr.gov/current/title-19/section-149.2" },
+  cfrEntry: { title: "19 CFR 142.2 and 142.4: time of entry; bond required for release", url: "https://www.ecfr.gov/current/title-19/part-142" },
+  cfrBroker: { title: "19 CFR 111.2: when a customs broker licence is required", url: "https://www.ecfr.gov/current/title-19/section-111.2" },
+  cfrMarking: { title: "19 CFR part 134: country of origin marking (134.11, 134.35)", url: "https://www.ecfr.gov/current/title-19/part-134" },
+  cbpRuling: { title: "CBP ruling HQ 733563: roasting coffee is a substantial transformation", url: "https://rulings.cbp.gov/ruling/733563" },
+  cbpIsf: { title: "CBP: Importer Security Filing 10+2", url: "https://www.cbp.gov/border-security/ports-entry/cargo-security/importer-security-filing-102" },
+  hts: { title: "USITC Harmonized Tariff Schedule: 0901.11.00", url: "https://hts.usitc.gov/" },
+  frEndingTariffs: {
+    title: "Federal Register 2026-03832: Ending Certain Tariff Actions (25 February 2026)",
+    url: "https://www.federalregister.gov/d/2026-03832",
+  },
+  cfrAphisCoffee: { title: "7 CFR 319.73: coffee (APHIS foreign quarantine notices)", url: "https://www.ecfr.gov/current/title-7/part-319/subpart-O" },
+  aphis: { title: "USDA APHIS: how to import plants and plant products", url: "https://www.aphis.usda.gov/plant-imports/how-to-import" },
+  aphisManual: {
+    title: "APHIS Seeds Not for Planting Manual (2011 edition, IPPC copy)",
+    url: "https://assets.ippc.int/static/media/uploads/resources/seeds_not_for_planting.pdf",
+  },
+
+  // Found when the sources were checked again on 24 October 2026.
+  reg433: {
+    title: "Council of Ministers Regulation No. 433/2018 on coffee quality control and marketing (Amharic, Ministry of Justice copy)",
+    url: "https://justice.gov.et/wp-content/uploads/2025/02/ደንብ-ቁጥር-433-2011.pdf",
+  },
+  gain2025: {
+    title: "USDA FAS GAIN report ET2025-0014, Ethiopia Coffee Annual (June 2025), a secondary source",
+    url: "https://apps.fas.usda.gov/newgainapi/api/Report/DownloadReportByFileName?fileName=Coffee+Annual_Addis+Ababa_Ethiopia_ET2025-0014",
+  },
+  ectaGuide: {
+    title: "ECTA CMIMS stakeholder registration guide (October 2026)",
+    url: "https://cmims.ethiocta.gov.et/documents/stakeholder-registration-guide.pdf?lang=en",
+  },
+  tax983: {
+    title: "Federal Tax Administration Proclamation No. 983/2016 (Ministry of Justice)",
+    url: "https://justice.gov.et/en/law/federal-tax-administration-proclamation/",
+  },
+  tax1434: {
+    title: "Tax Administration (Amendment) Proclamation No. 1434/2026 (Ministry of Justice)",
+    url: "https://justice.gov.et/en/law/tax-administration-proclamation-amendment-proclamation-no-1434-2026/",
+  },
+  customs1425: {
+    title: "Customs (Further Amendment) Proclamation No. 1425/2026 (Ministry of Justice)",
+    url: "https://justice.gov.et/en/law/customs-proclamation-as-amended-further-amendment-no-1425-2026/",
+  },
+  plant1400: {
+    title: "Plant Protection and Quarantine Proclamation No. 1400/2026 (Ministry of Justice)",
+    url: "https://justice.gov.et/en/law/plant-protection-and-quarantine-proclamation-no-1400-2026/",
+  },
+  icoAgents: {
+    title: "ICO ED-2500/26 Rev. 1: members, certifying agents and ports (2 July 2026)",
+    url: "https://ico.org/documents/cy2025-26/ed-2500-r1e-certifying-agents-ports.pdf",
+  },
+  icoRes486: {
+    title: "ICO Resolution 486: extension of the International Coffee Agreement 2007",
+    url: "https://ico.org/documents/cy2024-25/icc-res-486e-resolution-extension-ica-2007.pdf",
+  },
+  djCustoms: {
+    title: "Djibouti Customs Code (Code des Douanes, 2011 edition), Ministry of Finance",
+    url: "https://www.ministere-finances.dj/CodeDouanes2011.pdf",
+  },
+  sgtdTariff: {
+    title: "SGTD Doraleh Container Terminal Tariff Book (2021)",
+    url: "https://www.sgtd-terminal.com/wp-content/uploads/2021/03/SGTDTariff_Book_2021.pdf",
+  },
+  dpfzaRail: { title: "Djibouti Ports and Free Zones Authority: inland transport by rail", url: "https://dpfza.gov.dj/facilities/inland-transport/rail" },
+  cfrExpired: { title: "21 CFR 1.241: failure to register and expired registrations", url: "https://www.ecfr.gov/current/title-21/section-1.241" },
+  fdaRenewal2026: {
+    title: "FDA: reminder of the biennial food facility registration renewal (29 September 2026)",
+    url: "https://www.fda.gov/food/hfp-constituent-updates/fda-reminds-food-facilities-biennial-renewal-requirements",
+  },
+  fdaEntryReview: { title: "FDA import process: entry review", url: "https://www.fda.gov/industry/fda-import-process/entry-review" },
+  fdaDetention: { title: "FDA import process: detention and hearing", url: "https://www.fda.gov/industry/fda-import-process/detention-hearing" },
+  eo14436: {
+    title: "Federal Register 2026-21599: Executive Order 14436 (duties related to Russia, waived)",
+    url: "https://www.federalregister.gov/d/2026-21599",
+  },
+} satisfies Record<string, SourceRef>;
+
+const cite = (source: SourceRef, note: string): SourceRef => ({ ...source, note });
+const checked = (note: string) => ({ status: "source_checked" as const, checkedOn: CHECKED, note });
+const awaiting = (note: string) => ({ status: "awaiting_verification" as const, checkedOn: CHECKED, note });
+
+const REQUIREMENTS: readonly PackRequirement[] = [
+  // ---- Phase 1: exporter onboarding ----
+  {
+    code: "ELG-02",
+    name: "Taxpayer registration (TIN)",
+    description:
+      "The exporting company's Taxpayer Identification Number. The tax authority issues one TIN per taxpayer for all tax laws, a business licence needs one, and ECTA's exporter registration asks for it.",
+    action: "Record the exporter's TIN.",
+    whyItMatters: "Declarations, licences and bank permits are issued against a registered taxpayer.",
+    responsible: "Exporter",
+    trigger: "Company registration.",
+    evidence: "TIN certificate.",
+    jurisdiction: "ET",
+    authority: "Ministry of Revenue (the Addis Ababa and Dire Dawa revenue bureaus for their own taxpayers)",
+    basis: "confirmed",
+    verification: checked(
+      "Proclamation 983/2016 Art. 9 (registration), 12 and 13 (the tax authority issues the TIN; one TIN per taxpayer), 14(2) and (4) (a business licence needs a TIN); Proclamation 1434/2026 Art. 2(1) names the Ministry of Revenue as the tax authority. The October 2026 CMIMS guide asks for a 10-digit TIN at exporter registration.",
+    ),
+    sources: [
+      cite(SRC.tax983, "Art. 9, 12 to 14: registration, the TIN, and the TIN for business licences."),
+      cite(SRC.tax1434, "Art. 2(1): the Ministry of Revenue is the tax authority."),
+      cite(SRC.ectaGuide, "Exporter registration asks for the TIN."),
+    ],
+    steps: ["STEP-002"],
+  },
+  {
+    code: "ELG-01",
+    name: "ECTA exporter registration: certificate of competence and trade licence",
+    description:
+      "A coffee exporter must hold a valid certificate of competence and trade licence from ECTA, applied for electronically. Since Directive 1106/2025 an exporter needs bank-certified capital of ETB 15 million (individual) or ETB 20 million (company), one year of financial activity, and its own ECTA-certified cupping laboratory. The certificate is renewed every budget year, and registration on ECTA's CMIMS portal asks for the exporter's TIN and ICO number.",
+    action:
+      "Record the exporter's valid certificate of competence and trade licence, with their expiry dates, its ECTA registration, and that the current renewal is in place.",
+    whyItMatters: "Contract registration, quality inspection and export clearance all depend on the exporter's standing with ECTA.",
+    responsible: "Exporter (ECTA reviews and approves)",
+    trigger:
+      "Before registering an export contract or presenting coffee for export inspection. The renewal runs from 1 Hidar to 30 Yekatit (about 10 November to 9 March); the next one opens around 10 November 2026.",
+    evidence: "Certificate of competence; trade or business licence; ECTA registration approval.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Coffee and Tea Authority (ECTA)",
+    basis: "confirmed",
+    verification: checked(
+      "Proclamation 1051/2017 Art. 10(1) (competence certificate and trade licence); Directive 1106/2025 §2.2 (own certified cupping lab), §2.3 (cupper experience from 0 years), §2.4 (electronic application), §2.6 (capital ETB 15m / 20m), §2.10 (renew within the renewal period; start exporting within one year); Directive 1100 Art. 23 (renewal each budget year from 1 Hidar to 30 Yekatit, with tax clearance, refused for not operating or not performing contracts). The English and Amharic texts no longer differ on cupper experience: the Amharic explanatory note gives 0 years too.",
+    ),
+    sources: [
+      cite(SRC.dir1106, "§2.2 to 2.6 and §2.8 to 2.12: licensing, cuppers, capital and renewal."),
+      cite(SRC.dir1100, "Art. 22 and 23: requirements and annual renewal."),
+      cite(SRC.procl1051, "Art. 10(1): exporter obligations."),
+      cite(SRC.ectaGuide, "Registration asks for a business licence, a certificate of competence, the TIN and the ICO number."),
+    ],
+    steps: ["STEP-003", "STEP-004"],
+  },
+
+  // ---- Phase 2: buyer and commercial terms ----
+  {
+    code: "CASE-01",
+    name: "Confirm the export transaction record",
+    description: "Confirm the purchase order details held in the case: buyer, product, value, Incoterm and payment terms.",
+    action: "Check the case record against the buyer's purchase order and upload the purchase order.",
+    whyItMatters: "Every later requirement, document and payment milestone is worked out from these transaction details.",
+    responsible: "Exporter (with the CLEAR facilitator)",
+    trigger: "Export opportunity received (purchase order).",
+    evidence: "Buyer purchase order.",
+    jurisdiction: null,
+    authority: "Exporter and buyer",
+    basis: "transaction",
+    verification: checked("Taken from the buyer's purchase order."),
+    sources: [],
+    steps: ["STEP-020"],
+  },
+  {
+    code: "PAY-01",
+    name: "Receive the advance payment",
+    description: "Where the payment terms include an advance (the pilot case: 10% advance, 90% cash against documents), the advance is the first payment milestone.",
+    action: "Record receipt of the advance, as the payment terms set it.",
+    whyItMatters: "The advance is the first payment milestone of the recorded payment terms, and the bank permit is applied for against it.",
+    responsible: "Buyer; confirmed by the exporter's bank",
+    trigger: "After the contract is confirmed, as the payment terms say.",
+    evidence: "Bank credit advice for the advance.",
+    jurisdiction: null,
+    authority: "Exporter's bank",
+    basis: "transaction",
+    verification: checked("Payment terms come from the sales contract."),
+    sources: [],
+    steps: ["STEP-028"],
+  },
+  {
+    code: "QLT-01",
+    name: "Export sales contract registration",
+    description:
+      "Export coffee sales contracts are registered before shipment and must not be registered at an under-stated price. The published law has the National Bank of Ethiopia approve the contract within 24 hours and ECTA register it within three working days; USDA reports that registration moved to ECTA on 1 May 2025, against a weekly minimum export price (STEP-024). The contract must be performed within 90 days of registration unless ECTA extends it, and the exporter gives ECTA the contract to send the pre-shipment sample.",
+    action:
+      "Register the sales contract (with ECTA, as Entrust and USDA report the current practice), check the price against the minimum export price (STEP-024), and submit the contract to ECTA for the pre-shipment sample.",
+    whyItMatters:
+      "The registered contract is the reference for the bank export permit, quality inspection and customs clearance. Not performing a registered contract blocks the exporter from new contracts.",
+    responsible: "Exporter",
+    trigger: "Contract signed: approval within 24 hours and registration within three working days under the published law.",
+    evidence: "Contract registration confirmation.",
+    jurisdiction: "ET",
+    authority: "ECTA in practice (Entrust; USDA FAS); the published law names the National Bank of Ethiopia for approval and ECTA for registration",
+    basis: "confirmed",
+    verification: awaiting(
+      "That the contract is registered is confirmed: Proclamation 1051/2017 Art. 10(4); Regulation 433/2018 Art. 11(2) (NBE approves within 24 hours, ECTA registers within three working days), 11(3) (performed within 90 days of registration), 11(7) (ECTA may extend), 11(10) (prices below the NBE average); Directive 1100 Art. 35(18), 40(3), 44(11). Open: who registers today. Only secondary sources (USDA GAIN ET2025-0014 for the move to ECTA on 1 May 2025, ET2026-0005 for the weekly minimum price) and Entrust's answer say ECTA registers them now; no primary instrument for the change was found on the Ministry of Justice portal or the NBE site.",
+    ),
+    sources: [
+      cite(SRC.procl1051, "Art. 10(4): register at NBE within 24 hours; notify ECTA within 3 working days."),
+      cite(SRC.reg433, "Art. 11(2), (3), (7) and (10): NBE approval, ECTA registration, 90-day performance, extension, price floor."),
+      cite(SRC.dir1100, "Art. 23(1), 35(18), 35(21), 40(3), 44(10) and 44(11)."),
+      cite(SRC.gain2025, "Reports contract registration moving to ECTA from 1 May 2025."),
+      cite(SRC.gain2026, "Reports ECTA's weekly minimum export price, below which contracts can't be registered."),
+    ],
+    steps: ["STEP-034"],
+  },
+
+  // ---- Phase 3: destination admissibility and licensing ----
+  {
+    code: "USE-02",
+    name: "US customs entry, tariff classification and duties",
+    description:
+      "Entry must be made within 15 calendar days of landing. Green coffee, not roasted and not decaffeinated, is HTS 0901.11.00 with a general duty rate of Free, and no additional US duty applies to Ethiopian green coffee. User fees, such as the merchandise processing fee, still apply to duty-free entries.",
+    action: "Confirm the tariff position before shipping, then the importer's entry, the HTS code used (0901.11.00 if not decaffeinated) and any duties or fees assessed.",
+    whyItMatters: "Classification and origin decide the duties. The tariff position changes and must be checked again before each shipment.",
+    responsible: "US importer of record or its broker",
+    trigger: "Before shipment (tariff position); within 15 days of landing (entry).",
+    evidence: "Tariff lookup; entry summary or broker confirmation.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP); USITC tariff schedule",
+    basis: "confirmed",
+    verification: checked(
+      "As of 24 October 2026: HTSUS 2026 Rev. 21 (in force since 9 October 2026) gives 0901.11.00 a general rate of Free, with no Chapter 99 footnote. Executive Order 14389 (Federal Register 2026-03832) ended the IEEPA reciprocal duties; the Section 122 surcharge expired at the end of 23 July 2026; the July 2026 Section 301 headings don't list Ethiopia; no Federal Register action or CBP CSMS message from 1 to 22 October touches coffee or Ethiopia. Executive Order 14436 (October 2026) sets duties tied to Russia that name no other country and are waived; watch it. CBP user fees changed on 1 October 2026. Time-sensitive: check again before each shipment.",
+    ),
+    sources: [
+      cite(SRC.hts, "Rev. 21: 0901.11.00, general rate Free."),
+      cite(SRC.frEndingTariffs, "IEEPA reciprocal duties no longer in effect."),
+      cite(SRC.eo14436, "Duties tied to Russia, waived; Ethiopia not named."),
+      cite(SRC.cfrEntry, "142.2: entry within 15 days of landing."),
+    ],
+    steps: ["STEP-036", "STEP-106"],
+  },
+  {
+    code: "USP-02",
+    name: "Importer's FSVP obligations confirmed",
+    description:
+      "The US importer must meet the Foreign Supplier Verification Program rules. For coffee beans, the importer can skip supplier evaluation and verification if it documents that the food cannot be consumed without a control (roasting); it must still be identified on each entry, by its DUNS number.",
+    action: "Get written confirmation from the buyer of how it meets its FSVP obligations (such as its documented 1.507 determination) and the FSVP importer identifier (DUNS) it will use.",
+    whyItMatters: "FSVP is the importer's obligation; an entry without the FSVP importer identification can be delayed, and food from an importer that isn't FSVP-compliant can be held (Import Alert 99-41).",
+    responsible: "US importer",
+    trigger: "Before importing the food.",
+    evidence: "Importer's written FSVP confirmation.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "confirmed",
+    verification: checked(
+      "21 CFR 1.507(a)(1) names coffee beans as a raw agricultural commodity that cannot be consumed without a control; 1.509(a) requires importer identification at entry. FDA's FSVP page (May 2026) gives DUNS as the importer identifier. Green-coffee hazards (such as ochratoxin A) were not assessed.",
+    ),
+    sources: [cite(SRC.cfrFsvp, "1.500 (importer), 1.507(a)(1), 1.509(a)."), cite(SRC.fdaFsvp, "Coffee beans as the example; DUNS as the importer identifier.")],
+    steps: ["STEP-037"],
+  },
+  {
+    code: "USP-03",
+    name: "Importer of record, customs bond and broker",
+    description:
+      "Under FOB the buyer handles the US import. Goods are not released without a customs bond, and the ISF needs a bond too: the ISF importer's, or its filing agent's. A licensed broker is optional; the importer of record stays responsible either way.",
+    action: "Confirm the importer of record, its customs bond and, if one is used, its customs broker's contact details.",
+    whyItMatters: "US filings (ISF, entry) and release depend on a bond, and the exporter needs the broker's contact for documents.",
+    responsible: "US importer",
+    trigger: "Before loading at Djibouti.",
+    evidence: "Importer of record and bond confirmation; broker details if one is used.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP)",
+    basis: "confirmed",
+    verification: checked("19 CFR 142.4 (no release without a bond), 149.5(b) (the ISF bond can be the ISF importer's or its filing agent's), 111.2(a)(2)(i) (an importer acting on its own account needs no broker licence)."),
+    sources: [
+      cite(SRC.cfrEntry, "142.4: bond required for release."),
+      cite(SRC.cfrIsf, "149.5(b): the bond for the ISF."),
+      cite(SRC.cfrBroker, "A broker is optional for an importer's own entries."),
+    ],
+    steps: ["STEP-037"],
+  },
+  {
+    code: "USP-01",
+    name: "FDA food facility registration and renewal",
+    description:
+      "A foreign facility that processes, packs or holds food for US consumption must be registered with FDA through a US agent, with a unique facility identifier (DUNS). Farms are exempt, including farm-owned hulling sites; independent dry mills and export warehouses are not. Registrations are renewed between 1 October and 31 December of every even-numbered year: one not renewed by 31 December 2026 has expired, which counts as not registered.",
+    action: "Confirm the FDA registration number of the last facility that packs or holds the coffee, that it was renewed in the current renewal window, and its US agent.",
+    whyItMatters:
+      "Prior notice for food no longer in its natural state, which milled and bagged coffee most likely is, gives the facility's registration number (or its address and why the number is missing), and food from an unregistered facility is held at the port.",
+    responsible: "Owner or operator of the Ethiopian mill or warehouse, through its US agent",
+    trigger: "Before the food is offered for import; renewal from 1 October to 31 December 2026, and every even-numbered year after.",
+    evidence: "FDA registration number and renewal confirmation; US agent confirmation.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "conditional",
+    appliesWhen: {
+      description:
+        "an Ethiopian mill or warehouse that is not an exempt farm packs or holds the coffee. If only an exempt farm does, mark STEP-038 not applicable with that reason.",
+    },
+    verification: checked(
+      "21 CFR 1.225 (who must register), 1.226 (exemptions, including farms), 1.227 (farm definition), 1.230(b) (renewal October to December of even years), 1.232(a)(2) and (c)(1) (unique facility identifier; US agent), 1.241(b) and (c) (a registration not renewed is expired and FDA cancels it); 1.276(b)(10), 1.281(a)(6)(ii) and 1.285(a) on prior notice. FDA's reminder of 29 September 2026 confirms the 2026 window (no fee) and expiry after 31 December 2026.",
+    ),
+    sources: [
+      cite(SRC.cfrFacility, "Who must register; the farm exemption."),
+      cite(SRC.cfrRenewal, "Renewal every other year, 1 October to 31 December of even-numbered years."),
+      cite(SRC.cfrExpired, "1.241(b) and (c): expired registrations."),
+      cite(SRC.fdaRenewal2026, "The 2026 renewal window and expiry after 31 December 2026."),
+      cite(SRC.cfrPriorNotice, "1.281(a)(6)(ii) and 1.285(a): the registration number in prior notice; food from an unregistered facility is held."),
+    ],
+    steps: ["STEP-038", "STEP-039"],
+  },
+  {
+    code: "USP-06",
+    name: "USDA APHIS entry conditions for green coffee",
+    description:
+      "7 CFR 319.73 prohibits unroasted coffee into Hawaii and Puerto Rico only. The best-supported reading is that commercial green coffee to mainland ports needs no permit or phytosanitary certificate and is inspected and released. Used jute or burlap bags from khapra-beetle countries are regulated, so new bags should be used.",
+    action: "Confirm with the importer or broker against the current APHIS import requirements; use new bags and don't unload in Hawaii or Puerto Rico.",
+    whyItMatters: "Decides whether a phytosanitary certificate or permit is needed for US entry (see PHY-01).",
+    responsible: "US importer or broker",
+    trigger: "Before shipment.",
+    evidence: "APHIS import requirement reference for green coffee.",
+    jurisdiction: "US",
+    authority: "USDA Animal and Plant Health Inspection Service (APHIS)",
+    basis: "awaiting_verification",
+    verification: awaiting(
+      "7 CFR 319.73-2 (unchanged since 2019) and Table 3-7 of the 2011 APHIS manual support inspect and release for mainland ports. The live APHIS ACIR record still could not be read. A proposed rule on coffee into Hawaii and Puerto Rico (Federal Register 2026-15857, August 2026) isn't final and doesn't touch mainland ports.",
+    ),
+    sources: [
+      cite(SRC.cfrAphisCoffee, "319.73-2: prohibited into Hawaii and Puerto Rico only."),
+      SRC.aphis,
+      cite(SRC.aphisManual, "Table 3-7: inspect and release (2011 edition)."),
+    ],
+    steps: ["STEP-042"],
+  },
+  {
+    code: "USP-05",
+    name: "Country-of-origin marking on bags",
+    description:
+      "Foreign articles or their containers must show the English name of the country of origin. Because roasting is a substantial transformation, the beans themselves are excepted, but the outermost containers (the bags) must be marked.",
+    action: "Confirm the bags are legibly marked with the country of origin, such as \"Product of Ethiopia\".",
+    whyItMatters: "Unmarked containers can be held at entry or incur marking duties.",
+    responsible: "Exporter (marks the bags); the US importer is liable at entry",
+    trigger: "When the lot is bagged and marked.",
+    evidence: "Photograph or description of the bag marks.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP)",
+    basis: "confirmed",
+    verification: checked("19 CFR 134.11 and 134.35(a); CBP ruling HQ 733563 (roasting coffee is a substantial transformation). A sale to a third-party roaster may change which exception applies."),
+    sources: [cite(SRC.cfrMarking, "134.11 marking; 134.35 outermost containers."), SRC.cbpRuling],
+    steps: ["STEP-043", "STEP-066"],
+  },
+  {
+    code: "QLT-02",
+    name: "ECTA export quality inspection, grading and sealing",
+    description: "Export coffee is graded on a representative sample, sealed and certified by ECTA's quality inspection and certification centres before it moves to the port.",
+    action: "Present the export lot for ECTA inspection and record the quality certificate and seal details.",
+    whyItMatters: "Only sealed, certified coffee can go on to export, and the certified grade drives the invoice and the buyer's documents.",
+    responsible: "Exporter (inspection and certification by ECTA)",
+    trigger: "Lot prepared to the national export quality standard.",
+    evidence: "ECTA export quality certificate for the lot.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Coffee and Tea Authority (ECTA)",
+    basis: "confirmed",
+    verification: checked(
+      "Proclamation 1051/2017 Art. 4 (grading and sealing on a representative sample) and Art. 18(3) (ECTA certifies export coffee); Directive 1100 Art. 29(4) (quality certificate required before dispatch; coffee moves in a sealed container). Laboratory locations, timing and fees not checked.",
+    ),
+    sources: [cite(SRC.procl1051, "Art. 4, 10(2) and 18(3)."), cite(SRC.dir1100, "Art. 29(4): certificate before dispatch, sealed container.")],
+    steps: ["STEP-045", "STEP-061", "STEP-068"],
+  },
+  {
+    code: "COM-01",
+    name: "Bank export permit",
+    description:
+      "Authorized banks issue export permits under the National Bank of Ethiopia's foreign exchange directive, which accepts advance payment and cash against documents (CAD). Export documents are submitted through the Electronic Single Window.",
+    action: "Apply to the exporter's bank for the export permit with the registered contract and invoice, and confirm with the bank how a mixed advance and CAD deal is permitted.",
+    whyItMatters:
+      "Export clearance depends on the permit. Under CAD the proceeds must be repatriated within 90 days of the permit's issue, and a single CAD permit may not exceed USD 500,000.",
+    responsible: "Exporter (permit issued by the authorized bank)",
+    trigger: "Contract registered and invoice prepared. Export applications are valid for 30 days.",
+    evidence: "Bank export permit; written undertaking to repatriate the proceeds.",
+    jurisdiction: "ET",
+    authority: "Authorized commercial bank, under National Bank of Ethiopia Directive FXD/01/2024 (as amended)",
+    basis: "confirmed",
+    verification: checked(
+      "FXD/01/2024 7.1.1 (banks issue export permits), 7.1.5 (CAD and advance payment are accepted modes), 7.1.6 (applications valid 30 days), Annex One 1.3.2 (CAD: repatriate within 90 days of the permit; limit USD 500,000). FXD/04/2026 (in force 12 February 2026) lets a third party send the advance under an agreement (Annex 1, 1.3.3(b)); FXD/05/2026 changes imports only, and no later FX directive was found up to 20 October 2026. The directive does not say how a mixed advance and CAD deal is permitted: confirm with the bank.",
+    ),
+    sources: [
+      cite(SRC.nbeFxd, "Sections 6.2, 7.1.1, 7.1.5, 7.1.6 and Annex One 1.3.2."),
+      cite(SRC.nbeFxd04, "Amendment in force 12 February 2026, including third-party advance payments."),
+    ],
+    steps: ["STEP-046", "STEP-047", "STEP-048"],
+  },
+  {
+    code: "PHY-01",
+    name: "Phytosanitary certificate",
+    description:
+      "Ethiopian law requires a phytosanitary certificate for exported plant products only if the importing country requires one, and the Ethiopian Agricultural Authority issues it. No US requirement for commercial green coffee to mainland ports was found (see USP-06), but a buyer or bank may still ask for one.",
+    action: "Request phytosanitary inspection and record the certificate.",
+    whyItMatters: "If the buyer's contract or the bank's document list names it, payment depends on it.",
+    responsible: "Exporter (certificate issued by the Ethiopian Agricultural Authority)",
+    trigger: "Required by the importing country, the buyer's contract or the bank's collection instructions.",
+    evidence: "Phytosanitary certificate.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Agricultural Authority",
+    basis: "conditional",
+    appliesWhen: {
+      condition: PHYTO_REQUIRED,
+      description: "a phytosanitary certificate is required by US rules, the buyer's contract or the bank's collection instructions (recorded at STEP-042)",
+    },
+    verification: checked(
+      "Plant Protection and Quarantine Proclamation 1400/2026 (May 2026) Art. 6(3) (a certificate when the importing country asks for one), Art. 20(13) (the Ethiopian Agricultural Authority issues phytosanitary certificates for exports), Art. 26 (Regulation 4/1992 stays in force until a new regulation replaces it). Regulation 4/1992 Art. 6(2) says the same as Art. 6(3).",
+    ),
+    sources: [
+      cite(SRC.plant1400, "Art. 6(3), 20(13) and 26."),
+      cite(SRC.plantReg, "Art. 6(2): required if the importing country requires it."),
+      cite(SRC.eaa, "Export certification services."),
+    ],
+    steps: ["STEP-049", "STEP-069"],
+  },
+  {
+    code: "COM-04",
+    name: "Coffee certificate of origin (ICO)",
+    description:
+      "Ethiopia is an exporting member of the International Coffee Agreement 2007, whose rules require every coffee export from an exporting member to be covered by a valid certificate of origin. ECTA is empowered to issue production-country certification. No US rule requiring the document for entry was found: origin is declared at US entry.",
+    action: "Get the certificate of origin for the lot and record it; check whether the buyer's document set also lists it.",
+    whyItMatters: "The export needs it, and the collection instructions may list it, so payment and clearance can be delayed without it.",
+    responsible: "Exporter",
+    trigger: "Lot certified and invoiced.",
+    evidence: "Certificate of origin.",
+    jurisdiction: "ET",
+    authority: "ECTA (Proclamation 1051/2017 Art. 18(3)); the ICO lists Ethiopia's Ministry of Agriculture as the certifying agent",
+    basis: "confirmed",
+    verification: awaiting(
+      "Confirmed: Ethiopia is an exporting member under the ICA 2007 (ICO ED-2500/26 Rev. 1, Annex I), extended to 1 February 2028 (Resolution 486), so ICO Rule 4(1) applies. Open: the ICO's list names the Ministry of Agriculture and Rural Development as Ethiopia's certifying agent, not ECTA, and lists Addis Ababa, Dire Dawa, Gambella and Asosa as ports, not Djibouti. Who issues the certificate in 2026 needs confirming with ECTA.",
+    ),
+    sources: [
+      cite(SRC.icoRules, "Rule 4(1); Rule 4(7) on issue at a port of shipment outside the origin country."),
+      cite(SRC.icoAgents, "Annex I: Ethiopia an exporting member; its certifying agent and ports."),
+      cite(SRC.icoRes486, "The ICA 2007 extended to 1 February 2028."),
+      cite(SRC.procl1051, "Art. 18(3): ECTA issues production-country certification for export coffee."),
+    ],
+    steps: ["STEP-050"],
+  },
+
+  // ---- Phase 4: sourcing, processing and quality ----
+  {
+    code: "QLT-03",
+    name: "Confirm lot quantity, grade and packaging",
+    description: "Confirm the lot's quantity and packaging from the inspected lot, and that the recorded grade and cup score match the certified lot, before the documents are prepared.",
+    action: "Record the lot quantity, certified grade and packaging in the case.",
+    whyItMatters: "The invoice, packing list, bank documents and US filings all describe the same lot, and figures that disagree cause document discrepancies.",
+    responsible: "Exporter",
+    trigger: "After quality inspection.",
+    evidence: "Inspection result and packing details.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("Part of the case record the documents are prepared from."),
+    sources: [],
+    steps: ["STEP-064", "STEP-065"],
+  },
+  {
+    code: "QLT-04",
+    name: "ICO number and bag marking",
+    description:
+      "The exporter needs an ICO number before buying export coffee, and ECTA's registration asks for it. Export bags must be marked with the ICO number, quality certificate number, coffee type, grade, crop year, destination and origin.",
+    action: "Confirm the lot's ICO number and that every bag carries the required marks.",
+    whyItMatters: "The marks link the bags to the quality certificate, the certificate of origin and the transport documents.",
+    responsible: "Exporter",
+    trigger: "When the lot is bagged and marked.",
+    evidence: "ICO number for the lot; photograph of the bag marks.",
+    jurisdiction: "ET",
+    authority: "ECTA (Directive 1100); International Coffee Organization rules",
+    basis: "confirmed",
+    verification: checked(
+      "Directive 1100 Art. 29(4) (bag marking) and Art. 35(24) to (25) (ICO number); ICO Rules 3(1) and 4(2) (identification mark on every bag), which apply to Ethiopia as an ICA 2007 member; the October 2026 CMIMS guide asks for the ICO number at registration.",
+    ),
+    sources: [
+      cite(SRC.dir1100, "Art. 29(4), 35(24) and 35(25)."),
+      cite(SRC.icoRules, "Rules 3(1) and 4(2) (identification mark on every bag) and 4(4) (mark on transport documents)."),
+      cite(SRC.ectaGuide, "Registration asks for the ICO number."),
+    ],
+    steps: ["STEP-066"],
+  },
+
+  // ---- Phase 5: logistics and customs ----
+  {
+    code: "TRN-01",
+    name: "Inland transport to Djibouti by rail",
+    description:
+      "Book the Ethio-Djibouti railway for the cleared container. The railway runs into the SGTD Doraleh container terminal, where rail-received export containers have the same cut-off as road: 24 hours before the vessel berths.",
+    action: "Book rail transport and record the booking or consignment note.",
+    whyItMatters: "Under FOB Djibouti the exporter bears transport and risk until the coffee is on board the vessel.",
+    responsible: "Exporter or freight forwarder",
+    trigger: "After export clearance, when rail is the inland mode.",
+    evidence: "Rail booking or consignment note.",
+    jurisdiction: null,
+    authority: "Ethio-Djibouti railway operator or freight forwarder",
+    basis: "transaction",
+    appliesWhen: { condition: { all: [BY_SEA, BY_RAIL] }, description: "the lot goes to Djibouti by rail" },
+    verification: awaiting(
+      "A route option of the transaction. SGTD Circular N012/2024 gives rail-received export containers the 24-hour cut-off, and DPFZA describes the rail link to the SGTD terminal. Not confirmed: how customs transit works for rail exports, which no Ethiopian, EDR or DPFZA text describes.",
+    ),
+    sources: [cite(SRC.sgtd, "Circular N012/2024: cut-off for rail-received export containers."), cite(SRC.dpfzaRail, "The railway's link to the port terminals.")],
+    steps: ["STEP-078"],
+  },
+  {
+    code: "TRN-02",
+    name: "Inland transport to Djibouti by road",
+    description: "Book road haulage for the cleared lot to the port of Djibouti.",
+    action: "Book road transport and record the transport document.",
+    whyItMatters: "Under FOB Djibouti the exporter bears transport and risk until the coffee is on board the vessel.",
+    responsible: "Exporter or freight forwarder",
+    trigger: "After export clearance, when road is the inland mode.",
+    evidence: "Road consignment note or waybill.",
+    jurisdiction: null,
+    authority: "Haulier or freight forwarder",
+    basis: "transaction",
+    appliesWhen: { condition: { all: [BY_SEA, BY_ROAD] }, description: "the lot goes to Djibouti by road" },
+    verification: awaiting("A route option of the transaction. The transit procedure is covered by TRN-03 and TRN-04."),
+    sources: [],
+    steps: ["STEP-078"],
+  },
+  {
+    code: "COM-02",
+    name: "Commercial invoice",
+    description: "Commercial invoice to the buyer for the lot, consistent with the registered contract, grade and quantity.",
+    action: "Prepare the commercial invoice from the confirmed lot details.",
+    whyItMatters: "Listed among the documents for a CAD export permit; also used for customs, the bank collection and US entry.",
+    responsible: "Exporter",
+    trigger: "Lot details confirmed.",
+    evidence: "Signed commercial invoice.",
+    jurisdiction: "ET",
+    authority: "Exporter (required by the bank under the NBE directive)",
+    basis: "confirmed",
+    verification: checked("FXD/01/2024 lists the invoice among the documents for a CAD export permit. US rules on the content of entry invoices were not checked separately."),
+    sources: [cite(SRC.nbeFxd, "Documents required for CAD export permits.")],
+    steps: ["STEP-080", "STEP-100"],
+  },
+  {
+    code: "COM-03",
+    name: "Packing list",
+    description: "Packing list for the lot: number of bags, marks, net and gross weights.",
+    action: "Prepare the packing list from the confirmed lot details.",
+    whyItMatters: "Customs, the carrier and the bank use it, and it must match the invoice.",
+    responsible: "Exporter",
+    trigger: "After the lot details are confirmed.",
+    evidence: "Packing list.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("A standard shipping document of the transaction."),
+    sources: [],
+    steps: ["STEP-080", "STEP-101"],
+  },
+  {
+    code: "CUS-01",
+    name: "Ethiopian customs export declaration and clearance",
+    description: "All export goods are subject to a goods declaration. Declarations and export documents are submitted through the Electronic Single Window (eSW).",
+    action: "Lodge the export declaration through the eSW with the supporting documents and record the clearance.",
+    whyItMatters: "Goods cannot leave Ethiopia for Djibouti without customs clearance.",
+    responsible: "Exporter or a licensed customs agent",
+    trigger: "Contract registered, quality certified, bank permit issued and shipping documents ready.",
+    evidence: "Customs export declaration and release.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Customs Commission",
+    basis: "confirmed",
+    verification: checked(
+      "Customs Proclamation 859/2014 Art. 12(1): export goods are subject to a goods declaration; the eSW portal takes customs declarations. The Further Amendment Proclamation 1425/2026 (July 2026) doesn't change the articles cited. Not verified: where clearance physically takes place (only a vendor's page names the Kality and Mojo customs offices) and the exact document list.",
+    ),
+    sources: [
+      cite(SRC.customs859, "Art. 12(1): goods declaration for export goods."),
+      cite(SRC.customs1425, "Amends other articles of 859/2014."),
+      cite(SRC.esw, "Customs declaration and permit applications for traders."),
+    ],
+    steps: ["STEP-080", "STEP-087"],
+  },
+  {
+    code: "TRN-03",
+    name: "Ethiopian export transit to Djibouti: customs seal, T1, tracking and exit certificate",
+    description:
+      "After export clearance the container moves under customs control from the inland customs station to the exit station, under a customs seal and a T1 transit document, on a carrier fitted with an electronic cargo-tracking device. ECTA's coffee seal must stay intact. Ethiopian customs issues the exit certificate once the exit checkpoint confirms the goods have left.",
+    action: "Record the container and customs seal numbers, the T1 transit document and the carrier's tracking device, then the customs exit certificate at the border.",
+    whyItMatters:
+      "The declarant and carrier are jointly liable for delivering the goods intact; a broken seal or a missing exit certificate can stop the shipment or leave the export unacquitted.",
+    responsible: "Exporter's customs agent or freight forwarder, and the carrier",
+    trigger: "Container cleared and sealed for export; dispatched by road or rail.",
+    evidence: "Container and seal numbers; T1 transit document; carrier tracking device; customs exit certificate.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Customs Commission",
+    basis: "confirmed",
+    appliesWhen: { condition: BY_SEA, description: "the cargo goes by sea, through Djibouti" },
+    verification: checked(
+      "Customs Proclamation 859/2014 Art. 16 (transit to the customs station of exit), Art. 18 (customs seals), Art. 141(4) (exit certificate); Proclamation 1160/2019 Art. 2(5), adding Art. 18(9) and (10) (anyone carrying export goods installs a cargo-tracking device); Proclamation 1051/2017 Art. 17(4) (deliver coffee without breaking the seal). Not confirmed: which customs office clears coffee, and whether a multimodal operator is mandatory for exports (press reports Directive 1140/2026 opening multimodal transport; its text wasn't found).",
+    ),
+    sources: [
+      cite(SRC.customs859, "Art. 16, 18 and 141(4)."),
+      cite(SRC.procl1160, "Art. 2(5): cargo-tracking device for carriers of export goods."),
+      cite(SRC.procl1051, "Art. 17(4): coffee delivered to the port without breaking the seal."),
+    ],
+    steps: ["STEP-086", "STEP-088", "STEP-089"],
+  },
+  {
+    code: "TRN-04",
+    name: "Djibouti export clearance and port entry: DPCS, terminal cut-off and VGM",
+    description:
+      "In Djibouti, exported goods are declared in detail by the owner or a licensed declarant and move in transit under bond. A Djibouti-licensed freight forwarder completes export clearance through the Djibouti Port Community System (DPCS), mandatory for all port, export and transit submissions since May 2026. At the Doraleh container terminal the truck must be registered, the gate needs the terminal invoice and booking ticket, the verified gross mass (VGM) must be lodged, and the container must arrive before the cut-off, 24 hours before the vessel berths.",
+    action: "Confirm the Djibouti forwarder, the DPCS export clearance, the carrier booking, the VGM certificate and the terminal invoice and booking ticket, and that the container arrives before the cut-off.",
+    whyItMatters: "A container that misses the cut-off or lacks a VGM or DPCS clearance is not loaded, so the FOB delivery can't happen.",
+    responsible: "Djibouti-licensed freight forwarder, appointed by the exporter",
+    trigger: "Container approaching Djibouti; at least 24 hours before the vessel berths.",
+    evidence: "DPCS export clearance; booking confirmation; signed VGM certificate; terminal invoice and booking ticket.",
+    jurisdiction: "DJ",
+    authority: "Djibouti Ports and Free Zones Authority; Djibouti customs; SGTD Doraleh Container Terminal",
+    basis: "confirmed",
+    verification: checked(
+      "Djibouti Customs Code (2011) Art. 88 (exports declared in detail by the owner or a licensed declarant) and Art. 127 to 138 (transit under bond); DPFZA Directive DPFZA-43-26 of 19 May 2026 (DPCS mandatory), unchanged; DPFZA forwarder licence (Djiboutian-owned forwarders); DPCS export transit procedure (2018, road); SGTD circulars (truck registration; gate documents since 15 July 2026, terminal invoices without a tax stamp; 24-hour cut-off for road and rail) and Tariff Book rule 227 (VGM). Not confirmed: amendments to the customs code since 2011.",
+    ),
+    sources: [
+      cite(SRC.djCustoms, "Art. 88 and 127 to 138: export declaration and transit under bond."),
+      cite(SRC.dpfzaNotice, "DPCS mandatory for port, export and transit submissions (19 May 2026)."),
+      cite(SRC.dpcsExport, "Export transit steps and documents (2018, road)."),
+      cite(SRC.dpfzaForwarder, "Forwarders need a DPFZA licence."),
+      cite(SRC.sgtd, "Truck registration, gate documents, cut-off."),
+      cite(SRC.sgtdTariff, "Rule 227: verified gross mass."),
+    ],
+    steps: ["STEP-089"],
+  },
+
+  // ---- Phase 6: pre-arrival and shipment ----
+  {
+    code: "USE-01",
+    name: "FDA prior notice",
+    description: "Prior notice must be submitted to FDA for all imported food; for arrival by water, no less than 8 hours before arrival at the US port.",
+    action: "Confirm the importer or broker submitted prior notice, and record the FDA confirmation number.",
+    whyItMatters: "Food without adequate prior notice may be refused admission and held at the port.",
+    responsible: "US importer or broker",
+    trigger: "Before arrival: at least 8 hours before arrival by water.",
+    evidence: "Prior notice confirmation number.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "confirmed",
+    verification: checked("21 CFR 1.277(a) (applies to all imported food), 1.278 (who may submit), 1.279(a)(4) (8 hours before arrival by water), 1.281(a)(6)(ii) (the manufacturer's registration number, for food no longer in its natural state); unchanged."),
+    sources: [cite(SRC.cfrPriorNotice, "1.277 to 1.281: scope, submitter, timing and content."), SRC.fdaImport],
+    steps: ["STEP-095", "STEP-096"],
+  },
+  {
+    code: "USP-04",
+    name: "Importer Security Filing (ISF \"10+2\")",
+    description:
+      "For ocean cargo to the US, the ISF importer files the ISF data (seller, buyer, importer of record, consignee, manufacturer or supplier, ship-to party, country of origin, HTS code) no later than 24 hours before the cargo is loaded at the foreign port, here Djibouti.",
+    action: "Send the ISF data to the importer's broker and get confirmation that the ISF was filed at least 24 hours before loading.",
+    whyItMatters: "A late or missing ISF can lead to penalties and holds, and the deadline falls before the FOB handover.",
+    responsible: "US importer or broker (the exporter supplies the data)",
+    trigger: "No later than 24 hours before loading at Djibouti.",
+    evidence: "ISF filing confirmation.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP)",
+    basis: "confirmed",
+    verification: checked("19 CFR 149.2 (data elements and 24-hour timing); containerised bagged coffee is not bulk cargo exempted under 149.4."),
+    sources: [cite(SRC.cfrIsf, "Timing: 24 hours before lading at the foreign port."), SRC.cbpIsf],
+    steps: ["STEP-097"],
+  },
+  {
+    code: "POR-01",
+    name: "FOB delivery: loaded on board at Djibouti",
+    description:
+      "Under FOB the seller completes export formalities and delivers when the goods are loaded on board the vessel the buyer nominates at the named port. ICC guidance recommends FCA rather than FOB for containerised, multimodal cargo; raise it with the exporter, though it is not a legal requirement.",
+    action: "Record proof that the lot was loaded on board the buyer's nominated vessel.",
+    whyItMatters: "This is the point of delivery and risk transfer under FOB.",
+    responsible: "Exporter (vessel nominated by the buyer)",
+    trigger: "All pre-shipment requirements resolved and the lot at the port.",
+    evidence: "Mate's receipt or proof of loading.",
+    jurisdiction: null,
+    authority: "Carrier and port",
+    basis: "transaction",
+    appliesWhen: { condition: { fact: "incoterm", in: ["FOB"] }, description: "the Incoterm is FOB" },
+    verification: checked(
+      "The Incoterm comes from the sales contract. FOB obligations are summarised from ICC guidance, and Incoterms 2020 is still ICC's current version; the full Incoterms 2020 text was not reviewed.",
+    ),
+    sources: [cite(SRC.iccFob, "FOB delivery on board; FCA recommended for containerised cargo.")],
+    steps: ["STEP-104"],
+  },
+  {
+    code: "POR-02",
+    name: "Bill of lading issued",
+    description: "The carrier issues the bill of lading for the shipment.",
+    action: "Record the bill of lading.",
+    whyItMatters: "The bill of lading is a key document for the CAD collection and for the US arrival filings.",
+    responsible: "Carrier (contracted by the buyer under FOB); the exporter collects it",
+    trigger: "After loading.",
+    evidence: "Bill of lading.",
+    jurisdiction: null,
+    authority: "Ocean carrier",
+    basis: "transaction",
+    verification: checked("A shipping document of an ocean shipment."),
+    sources: [],
+    steps: ["STEP-094"],
+  },
+  {
+    code: "POR-03",
+    name: "Shipping advice to the buyer",
+    description: "Tell the buyer about the shipment: vessel, bill of lading number, containers and documents.",
+    action: "Send the shipping advice and record the date it was sent.",
+    whyItMatters: "The buyer and its broker need the shipment details for the US filings and arrival planning.",
+    responsible: "Exporter",
+    trigger: "Bill of lading issued.",
+    evidence: "Shipping advice sent to the buyer.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("A step of the transaction."),
+    sources: [],
+    steps: ["STEP-094"],
+  },
+  {
+    code: "USE-03",
+    name: "FDA admissibility review and release",
+    description:
+      "FDA screens each food entry electronically and may release it automatically; otherwise it reviews the entry and may release it, ask for documents, examine or sample it, or detain it, with a Notice of FDA Action and the right to a hearing.",
+    action: "Record FDA's admissibility decision as the importer or broker reports it.",
+    whyItMatters: "The buyer can't take possession until the shipment is released.",
+    responsible: "US importer or broker",
+    trigger: "After entry is filed.",
+    evidence: "FDA release, or the Notice of FDA Action, reported by the broker.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "confirmed",
+    verification: checked(
+      "FDA's entry review page (January 2026): electronic screening with possible automatic release, then review, with release, a request for documents, examination or sampling, or detention. Detention gives a Notice of FDA Action and a hearing under 21 CFR 1.94.",
+    ),
+    sources: [cite(SRC.fdaEntryReview, "Screening, review and the outcomes."), cite(SRC.fdaDetention, "Detention, the notice and the hearing.")],
+    steps: ["STEP-106"],
+  },
+  {
+    code: "REV-01",
+    name: "Record the shipment outcome and discrepancies",
+    description: "Record the shipment outcome: arrival, release, quality or quantity claims and document discrepancies.",
+    action: "Record the outcome and any discrepancies.",
+    whyItMatters: "It builds the case history used to improve the next export.",
+    responsible: "Exporter (with the CLEAR facilitator)",
+    trigger: "Shipment released to the buyer.",
+    evidence: "Proof of delivery and the recorded outcome.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("A step of the transaction."),
+    sources: [],
+    steps: ["STEP-107"],
+  },
+
+  // ---- Phase 7: bank presentation, FX and closure ----
+  {
+    code: "PAY-02",
+    name: "Present the documents through the bank (CAD)",
+    description: "Present the shipping documents through the banks to collect the balance paid against documents.",
+    action: "Assemble the document set as the collection instructions list it and present it to the exporter's bank.",
+    whyItMatters: "Under CAD the buyer pays the balance to get the documents, and discrepancies delay payment.",
+    responsible: "Exporter, through its bank",
+    trigger: "Bill of lading and shipping documents available.",
+    evidence: "Bank collection schedule or proof of presentation.",
+    jurisdiction: null,
+    authority: "Exporter's bank",
+    basis: "transaction",
+    appliesWhen: { condition: PAID_BY_CAD, description: "payment is wholly or partly cash against documents" },
+    verification: checked("Payment terms come from the sales contract."),
+    sources: [],
+    steps: ["STEP-109", "STEP-110", "STEP-114"],
+  },
+  {
+    code: "PAY-03",
+    name: "Receive the balance paid against documents (CAD)",
+    description:
+      "Receipt of the balance paid against documents. Under the NBE directive, CAD proceeds must be repatriated within 90 days of the export permit's issue.",
+    action: "Record receipt of the balance and the bank's credit advice.",
+    whyItMatters: "Completes the recorded payment terms and the foreign exchange repatriation.",
+    responsible: "Buyer (pays through the collecting bank); the exporter's bank confirms",
+    trigger: "Documents presented to the buyer through the banks.",
+    evidence: "Bank credit advice for the balance.",
+    jurisdiction: null,
+    authority: "Exporter's bank",
+    basis: "transaction",
+    appliesWhen: { condition: PAID_BY_CAD, description: "payment is wholly or partly cash against documents" },
+    verification: checked("Payment terms come from the sales contract; the repatriation rule is FXD/01/2024 Annex One 1.3.2 and section 6.2."),
+    sources: [cite(SRC.nbeFxd, "Annex One 1.3.2 (90-day repatriation under CAD); 6.2 (conversion of proceeds).")],
+    steps: ["STEP-116", "STEP-117"],
+  },
+  {
+    code: "PAY-04",
+    name: "Reconcile the payments against the contract",
+    description: "Reconcile the payments received against the contract value and record any shortfall, charges or discrepancy.",
+    action: "Compare the amounts received with the contract value and record the reconciliation.",
+    whyItMatters: "Confirms the transaction was paid in full and shows bank charges or deductions.",
+    responsible: "Exporter",
+    trigger: "All payments received.",
+    evidence: "Reconciliation record.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("A step of the transaction."),
+    sources: [],
+    steps: ["STEP-118", "STEP-119"],
+  },
+  {
+    code: "REV-02",
+    name: "Lessons learned and case closure",
+    description: "Record lessons learned and close the export case.",
+    action: "Record lessons learned and close the case.",
+    whyItMatters: "Closing the loop builds the exporter's CLEAR record for its next cases.",
+    responsible: "Exporter (with the CLEAR facilitator)",
+    trigger: "Outcome recorded and payments reconciled.",
+    evidence: "Lessons learned entry.",
+    jurisdiction: null,
+    authority: "Exporter",
+    basis: "transaction",
+    verification: checked("A step of the transaction."),
+    sources: [],
+    steps: ["STEP-125"],
+  },
+];
+
+const V0_4_0: RulePack = {
+  id: "et-us-green-coffee",
+  version: "0.4.0",
+  name: "Ethiopian green coffee to the United States",
+  corridor: { products: ["green_coffee"], destinations: ["US"] },
+  route: "Ethiopia to Djibouti (port of loading) to the United States, or by air",
+  status: "draft",
+  checkedOn: CHECKED,
+  changes:
+    "First version on the canonical steps, ported from the simulation's pack 0.3.0 (sources checked 10 October 2026), with every source checked again on 24 October 2026.",
+  notes: [
+    "Draft for Entrust's review: no requirement is verified by Entrust yet.",
+    "ECTA's own website is not cited: on 10 and 24 October 2026 it was serving unrelated gambling content. ECTA law is cited from the Ministry of Justice legal portal, and exporter registration from the ECTA CMIMS portal.",
+    "Ethiopian proclamations were read from FAOLEX and Ministry of Justice copies. Amendments found on 24 October 2026 (customs 1425/2026, tax 1434/2026, plant protection 1400/2026) are cited where they touch a requirement.",
+    "Not modelled as requirements: the conversion of 50% of goods export proceeds to Birr on receipt (FXD/01/2024 6.2); the FDA labelling exemption for bulk food shipped for further processing (21 CFR 101.100(d)); foreign-owned exporters, whom Investment Board Directive 1082/2025 Art. 5 lets export raw coffee with a due-diligence report.",
+  ],
+  requirements: REQUIREMENTS,
+};
+
+/** Every published version, oldest first. */
+export const ET_US_GREEN_COFFEE: readonly RulePack[] = [V0_4_0];

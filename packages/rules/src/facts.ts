@@ -101,6 +101,16 @@ export const FACTS: readonly FactDefinition[] = [
     ],
     determinedAt: "STEP-082",
   },
+  {
+    key: "inlandTransport",
+    label: "Inland transport to the port",
+    help: "How the cargo travels from Ethiopia to the port of Djibouti: by road, or on the Ethio-Djibouti railway.",
+    options: [
+      { value: "road", label: "Road" },
+      { value: "rail", label: "Rail" },
+    ],
+    determinedAt: "STEP-073",
+  },
 ];
 
 export const EU_COUNTRIES = [
@@ -129,3 +139,5 @@ export const PHYTO_REQUIRED: Condition = { fact: "phytoCertificateRequired", in:
 export const HEALTH_CERT_REQUIRED: Condition = { fact: "healthCertificateRequired", in: ["yes"] };
 export const CIF: Condition = { fact: "incoterm", in: ["CIF"] };
 export const RED_CHANNEL: Condition = { fact: "customsChannel", in: ["red"] };
+export const BY_RAIL: Condition = { fact: "inlandTransport", in: ["rail"] };
+export const BY_ROAD: Condition = { fact: "inlandTransport", in: ["road"] };
