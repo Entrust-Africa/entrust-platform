@@ -1,5 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
 import {
+  AmendCaseBody,
   CaseCreated,
   CaseDetail,
   CaseIdParam,
@@ -20,6 +21,7 @@ import {
   UpdateFactsBody,
   WaiveFlagBody,
 } from "../../schemas/clear";
+import { amendCase } from "../../services/amendments";
 import { createCase, getCase, listCases, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
 import { recordContract } from "../../services/contracts";
@@ -72,7 +74,7 @@ const updateFactsRoute = createRoute({
   tags,
   summary: "Update a case's facts",
   description:
-    "Sets or clears facts and re-works which steps apply. After a phase gate is signed off, a fact that is already recorded can't be changed here (an amendment).",
+    "Sets or clears facts and re-works which steps apply. After a phase gate is signed off, a fact that is already recorded can't be changed here: that is an amendment (POST /cases/{id}/amendments).",
   request: { params: CaseIdParam, body: { required: true, content: json(UpdateFactsBody) } },
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
@@ -153,6 +155,17 @@ const recordDocumentFieldsRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
 
+const amendCaseRoute = createRoute({
+  method: "post",
+  path: "/cases/{id}/amendments",
+  tags,
+  summary: "Amend a case after a phase gate is signed",
+  description:
+    "Changes the case's facts, sales contract or letter of credit terms once a phase gate is signed off, which the other endpoints refuse. Entrust admins and facilitators only, with a reason. The amendment is the case's next version (v2, v3, ...) and keeps what it changed. The steps that depend on the changed fields are verified again: completed ones are reopened, the evidence they ask for goes back for review, and the sign-offs of their phases are reopened. Everything else stays as it was. The case is \"amendments pending\" until all of it is done again.",
+  request: { params: CaseIdParam, body: { required: true, content: json(AmendCaseBody) } },
+  responses: { 201: { description: "The amended case", content: json(CaseDetail) }, ...writeErrors },
+});
+
 const waiveFlagRoute = createRoute({
   method: "post",
   path: "/cases/{id}/flags/{flagId}/waive",
@@ -211,6 +224,10 @@ export const clearCases = cases
     const { id, document } = c.req.valid("param");
     const { fields } = c.req.valid("json");
     return c.json(await recordDocumentFields(await contextFor(c.get("user")), id, document, fields), 200);
+  })
+  .openapi(amendCaseRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    return c.json(await amendCase(await contextFor(c.get("user")), id, c.req.valid("json")), 201);
   })
   .openapi(waiveFlagRoute, async (c) => {
     const { id, flagId } = c.req.valid("param");

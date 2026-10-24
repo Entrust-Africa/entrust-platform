@@ -1,10 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { STEP_WORKERS, checkDocumentValue } from "@entrust/gate-engine";
+import { STEP_WORKERS, checkDocumentValue, type DocumentValues } from "@entrust/gate-engine";
 import { DOCUMENT_FIELDS, RECONCILIATION_DOCUMENTS, type DocumentFieldKey } from "@entrust/rules";
 import type { CaseDetailView, DocumentCatalogueView } from "../schemas/clear";
 import { requireRole, type Ctx } from "./access";
 import { recordChange } from "./audit";
+import type { CaseRow } from "./case-data";
+import type { Executor } from "./db";
 import { mutateCase } from "./detail";
 import { fromEngine, ServiceError } from "./errors";
 import { loadDocuments } from "./reconciliation";
@@ -28,53 +30,9 @@ export function recordDocumentFields(
 ): Promise<CaseDetailView> {
   return mutateCase(ctx, caseId, async (tx, { row, actor }) => {
     requireRole(actor, STEP_WORKERS.sme, "enter a case's document fields");
-    const document = RECONCILIATION_DOCUMENTS.find((d) => d.id === documentId);
-    if (!document) throw new ServiceError("not_found", `${documentId} is not one of the documents that are compared.`);
-
-    const problems: string[] = [];
-    const set = new Map<DocumentFieldKey, string>();
-    const clear = new Set<DocumentFieldKey>();
-    for (const [key, raw] of Object.entries(input)) {
-      const field = document.fields.find((f) => f === key);
-      if (!field) {
-        problems.push(`${FIELD_LABELS.get(key as DocumentFieldKey) ?? key} isn't a field of the ${document.name.toLowerCase()}.`);
-      } else if (raw === null || raw.trim() === "") {
-        clear.add(field);
-      } else {
-        try {
-          set.set(field, fromEngine(() => checkDocumentValue(field, raw)));
-        } catch (error) {
-          problems.push(error instanceof ServiceError ? error.message : String(error));
-        }
-      }
-    }
-    if (problems.length) throw new ServiceError("invalid", problems.join(" "));
-
-    const existing = (await loadDocuments(tx, row.id))[document.id] ?? {};
-    const changes = [...set].filter(([key, value]) => existing[key] !== value);
-    const cleared = [...clear].filter((key) => existing[key] !== undefined);
-    if (changes.length === 0 && cleared.length === 0) return;
-
-    for (const [field, value] of changes) {
-      await tx
-        .insert(schema.documentField)
-        .values({ caseId: row.id, document: document.id, field, value, enteredByUserId: ctx.principal.userId })
-        .onConflictDoUpdate({
-          target: [schema.documentField.caseId, schema.documentField.document, schema.documentField.field],
-          set: { value, enteredByUserId: ctx.principal.userId, updatedAt: ctx.now },
-        });
-    }
-    if (cleared.length) {
-      await tx
-        .delete(schema.documentField)
-        .where(
-          and(
-            eq(schema.documentField.caseId, row.id),
-            eq(schema.documentField.document, document.id),
-            inArray(schema.documentField.field, cleared),
-          ),
-        );
-    }
+    const stored = await storeDocumentFields(tx, row, { userId: ctx.principal.userId, now: ctx.now }, documentId, input);
+    if (!stored) return;
+    const { document, existing, changes, cleared } = stored;
 
     const keys = [...changes.map(([key]) => key), ...cleared];
     const pick = (values: Record<string, string | undefined>) => Object.fromEntries(keys.map((key) => [key, values[key] ?? null]));
@@ -90,6 +48,76 @@ export function recordDocumentFields(
       },
     });
   });
+}
+
+export interface StoredFields {
+  document: (typeof RECONCILIATION_DOCUMENTS)[number];
+  /** What was entered from the document before. */
+  existing: DocumentValues;
+  changes: [DocumentFieldKey, string][];
+  cleared: DocumentFieldKey[];
+}
+
+/**
+ * Checks and writes fields of one document, without the audit rows: the caller records the change.
+ * Returns null when nothing changes. Throws a ServiceError for a document that isn't compared, a field
+ * it can't carry, or a value that isn't what the field should hold.
+ */
+export async function storeDocumentFields(
+  tx: Executor,
+  row: CaseRow,
+  by: { userId: string; now: Date },
+  documentId: string,
+  input: Record<string, string | null>,
+): Promise<StoredFields | null> {
+  const document = RECONCILIATION_DOCUMENTS.find((d) => d.id === documentId);
+  if (!document) throw new ServiceError("not_found", `${documentId} is not one of the documents that are compared.`);
+
+  const problems: string[] = [];
+  const set = new Map<DocumentFieldKey, string>();
+  const clear = new Set<DocumentFieldKey>();
+  for (const [key, raw] of Object.entries(input)) {
+    const field = document.fields.find((f) => f === key);
+    if (!field) {
+      problems.push(`${FIELD_LABELS.get(key as DocumentFieldKey) ?? key} isn't a field of the ${document.name.toLowerCase()}.`);
+    } else if (raw === null || raw.trim() === "") {
+      clear.add(field);
+    } else {
+      try {
+        set.set(field, fromEngine(() => checkDocumentValue(field, raw)));
+      } catch (error) {
+        problems.push(error instanceof ServiceError ? error.message : String(error));
+      }
+    }
+  }
+  if (problems.length) throw new ServiceError("invalid", problems.join(" "));
+
+  const existing = (await loadDocuments(tx, row.id))[document.id] ?? {};
+  const changes = [...set].filter(([key, value]) => existing[key] !== value);
+  const cleared = [...clear].filter((key) => existing[key] !== undefined);
+  if (changes.length === 0 && cleared.length === 0) return null;
+
+  for (const [field, value] of changes) {
+    await tx
+      .insert(schema.documentField)
+      .values({ caseId: row.id, document: document.id, field, value, enteredByUserId: by.userId })
+      .onConflictDoUpdate({
+        target: [schema.documentField.caseId, schema.documentField.document, schema.documentField.field],
+        set: { value, enteredByUserId: by.userId, updatedAt: by.now },
+      });
+  }
+  if (cleared.length) {
+    await tx
+      .delete(schema.documentField)
+      .where(
+        and(
+          eq(schema.documentField.caseId, row.id),
+          eq(schema.documentField.document, document.id),
+          inArray(schema.documentField.field, cleared),
+        ),
+      );
+  }
+  return { document, existing, changes, cleared };
 }
 
 /** The fields and documents of the comparison, for building the forms that enter them. */

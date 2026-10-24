@@ -53,6 +53,7 @@ describe("signed out", () => {
       ["POST", `/cases/${id}/evidence/${id}/review`, {}],
       ["POST", `/cases/${id}/clock-inputs`, {}],
       ["PUT", `/cases/${id}/contract`, {}],
+      ["POST", `/cases/${id}/amendments`, {}],
       ["PUT", `/cases/${id}/documents/final_packing_list/fields`, {}],
       ["GET", "/document-fields"],
       ["GET", "/minimum-prices"],
@@ -269,6 +270,7 @@ describe("API documentation", () => {
       [
         "/v1/clear/cases",
         "/v1/clear/cases/{id}",
+        "/v1/clear/cases/{id}/amendments",
         "/v1/clear/cases/{id}/clock-inputs",
         "/v1/clear/cases/{id}/contract",
         "/v1/clear/cases/{id}/documents/{document}/fields",

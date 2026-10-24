@@ -79,6 +79,18 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
   order of a bank; and the invoice total can't exceed the permit value. When everything the case
   needs is entered and agrees, CLEAR completes STEP-099; a difference raises FL-06 and holds the
   handoff to the bank (STEP-110) until it is fixed or an Entrust reviewer waives it.
+- Amendments. Once a phase gate is signed off, a recorded fact or the sales contract can't be
+  changed directly (the endpoints refuse and say so). An Entrust admin or facilitator amends the
+  case with `POST /v1/clear/cases/{id}/amendments`, giving a reason and the facts, contract terms
+  or letter of credit terms (expiry, quantity tolerance, reference) to change. Each amendment is
+  the case's next version (v2, v3, ...) and keeps every field it changed, before and after. What it
+  sets back is worked out from the step data (`packages/gate-engine/src/amendment.ts`): the steps
+  whose conditions use a changed fact, the step that establishes it (`determinedAt`), and the steps
+  that list a contract or LC term in `relies`. The completed ones are reopened, the approved
+  evidence they ask for goes back for review, and the sign-offs of their phases are reopened;
+  everything else stays as it was. The case is "amendments pending" until all of that is done
+  again, and while it is pending a recorded fact or the contract can only change by another
+  amendment. The audit log shows each amendment, who made it and why.
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).

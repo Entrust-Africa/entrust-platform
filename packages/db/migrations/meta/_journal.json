@@ -36,6 +36,13 @@
       "when": 1792831957882,
       "tag": "0004_document_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792833295621,
+      "tag": "0005_case_amendments",
+      "breakpoints": true
     }
   ]
 }

@@ -122,7 +122,7 @@ export async function getCase(ctx: Ctx, caseId: string): Promise<CaseDetailView>
 
 /**
  * Sets or clears facts, and the engine re-works which steps apply. Once a phase gate is signed off,
- * a fact that is already recorded can't be changed here: that is an amendment (#13). Recording a
+ * a fact that is already recorded can't be changed here: that is an amendment (see amendCase). Recording a
  * fact that wasn't known yet is always fine.
  */
 export function updateFacts(ctx: Ctx, caseId: string, input: Record<string, FactInput>): Promise<CaseDetailView> {
@@ -135,11 +135,15 @@ export function updateFacts(ctx: Ctx, caseId: string, input: Record<string, Fact
 
     if (changesRecordedFact(before, change)) {
       const locked = evaluate(await loadOneCaseData(tx, row), ctx.now).phases.filter((p) => p.status === "locked");
+      const use = "an amendment: use POST /v1/clear/cases/{id}/amendments";
       if (locked.length) {
         throw new ServiceError(
           "precondition_failed",
-          `Phase ${locked.map((p) => p.phase).join(", ")} is signed off. Changing a recorded fact now is an amendment, which isn't available yet.`,
+          `Phase ${locked.map((p) => p.phase).join(", ")} is signed off. Changing a recorded fact now is ${use}.`,
         );
+      }
+      if (row.status === "amendments_pending") {
+        throw new ServiceError("precondition_failed", `An amendment is still pending. Changing a recorded fact now is ${use}.`);
       }
     }
     await tx.update(schema.exportCase).set({ facts: after }).where(eq(schema.exportCase.id, row.id));

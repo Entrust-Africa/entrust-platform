@@ -14,6 +14,7 @@ import {
 } from "./case-data";
 import type { Executor } from "./db";
 import { syncFlags } from "./flag-sync";
+import { loadAmendments, syncAmendments } from "./amendment-sync";
 import { contractView, loadContract, loadPriceCheck } from "./price-check";
 import { loadDocuments, loadReconciliation } from "./reconciliation";
 import { detailOf } from "./views";
@@ -34,15 +35,15 @@ export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now:
     actor,
     evaluation,
     deadlines(data, events, now),
-    { contract: contract && contractView(contract), minimumPrice, documents, reconciliation },
+    { contract: contract && contractView(contract), minimumPrice, documents, reconciliation, amendments: await loadAmendments(db, row.id) },
     now,
   );
 }
 
 /**
  * Runs a change to one case in a transaction. The case is locked first, so changes to it happen
- * one at a time and each sees the last. When the change is done, the case's current phase is
- * brought up to date from the engine and the updated case is returned.
+ * one at a time and each sees the last. When the change is done, the case's current phase and its
+ * status (open, or amendments pending) are brought up to date and the updated case is returned.
  */
 export function mutateCase(
   ctx: Ctx,
@@ -60,7 +61,12 @@ export function mutateCase(
     const evaluation = evaluate(await loadOneCaseData(tx, current), ctx.now);
     const [row] = await tx
       .update(schema.exportCase)
-      .set({ currentPhase: currentPhaseOf(evaluation), updatedAt: ctx.now })
+      .set({
+        currentPhase: currentPhaseOf(evaluation),
+        // "Amendments pending" while anything an amendment set back isn't done again.
+        status: await syncAmendments(tx, current, evaluation, ctx.now),
+        updatedAt: ctx.now,
+      })
       .where(eq(schema.exportCase.id, caseId))
       .returning();
     if (!row) throw new Error("The case disappeared during the change");

@@ -334,3 +334,44 @@ describe("document fields", () => {
     expect(await db.select().from(schema.documentField).where(eq(schema.documentField.caseId, caseId))).toEqual([]);
   });
 });
+
+describe("case amendments", () => {
+  const amendment = (caseId: string, rest: Partial<typeof schema.caseAmendment.$inferInsert> = {}) => ({
+    caseId,
+    version: 2,
+    reason: "The buyer changed the payment instrument",
+    changes: [{ field: "paymentTerms" as const, label: "Payment terms", before: ["cad"], after: ["lc"] }],
+    impact: { affected: ["STEP-025" as const], reopened: ["STEP-025" as const], reverify: ["STEP-025" as const], evidence: [], unlocked: [] },
+    ...rest,
+  });
+
+  it("keeps each version of a case once, with what changed and what it set back", async () => {
+    const { id: caseId } = await insertCase();
+    const [first] = await db.insert(schema.caseAmendment).values(amendment(caseId)).returning();
+    expect(first).toMatchObject({ version: 2, resolvedAt: null, changes: [{ field: "paymentTerms", before: ["cad"], after: ["lc"] }] });
+    await expect(db.insert(schema.caseAmendment).values(amendment(caseId))).rejects.toMatchObject({
+      cause: { code: "23505", constraint: "case_amendment_version_uidx" },
+    });
+    await db.insert(schema.caseAmendment).values(amendment(caseId, { version: 3 }));
+    const other = await insertCase();
+    await db.insert(schema.caseAmendment).values(amendment(other.id));
+    expect(await db.select().from(schema.caseAmendment).where(eq(schema.caseAmendment.caseId, caseId))).toHaveLength(2);
+  });
+
+  it("starts at version 2, because version 1 is the case as it was first recorded, and needs a reason", async () => {
+    const { id: caseId } = await insertCase();
+    await expect(db.insert(schema.caseAmendment).values(amendment(caseId, { version: 1 }))).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "case_amendment_version_check" },
+    });
+    await expect(db.insert(schema.caseAmendment).values(amendment(caseId, { reason: "  " }))).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "case_amendment_reason_check" },
+    });
+  });
+
+  it("is removed with its case", async () => {
+    const { id: caseId } = await insertCase();
+    await db.insert(schema.caseAmendment).values(amendment(caseId));
+    await db.delete(schema.exportCase).where(eq(schema.exportCase.id, caseId));
+    expect(await db.select().from(schema.caseAmendment).where(eq(schema.caseAmendment.caseId, caseId))).toEqual([]);
+  });
+});
