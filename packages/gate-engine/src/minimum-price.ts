@@ -10,7 +10,8 @@ export type CoffeeType = (typeof COFFEE_TYPES)[number];
 export const PRICE_UNITS = ["kg", "lb", "mt"] as const;
 export type PriceUnit = (typeof PRICE_UNITS)[number];
 
-const KG_PER_UNIT: Record<PriceUnit, number> = { kg: 1, lb: 0.45359237, mt: 1000 };
+/** Kilograms in one unit. */
+export const KG_PER_UNIT: Record<PriceUnit, number> = { kg: 1, lb: 0.45359237, mt: 1000 };
 
 /** The columns of a price table (CSV header), in the order the examples give them. */
 export const PRICE_TABLE_COLUMNS = {

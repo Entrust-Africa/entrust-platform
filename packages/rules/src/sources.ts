@@ -6,7 +6,7 @@ import type { SourceRef } from "./types";
 export const FXD_01_2024: SourceRef = {
   title: "NBE Foreign Exchange Directive FXD/01/2024",
   url: "https://nbe.gov.et/files/fxd-01-2024/",
-  note: "7.1.1: authorized banks provide export permits. 7.1.6: export applications are valid for 30 calendar days from the date of issue. Annex One 1.3.7(d): proceeds of every permit are repatriated within 90 days of its issue date (flowers excepted); 1.11(a): NBE may extend that for good cause. 1.3.2: CAD at sight or on acceptance, with (a) the same 90 days and (c) a cap of USD 500,000 for a single permit, which NBE may exceed case by case under (e).",
+  note: "7.1.1: authorized banks provide export permits. 7.1.6: export applications are valid for 30 calendar days from the date of issue. Annex One 1.3.7(d): proceeds of every permit are repatriated within 90 days of its issue date (flowers excepted); 1.11(a): NBE may extend that for good cause. 1.3.2: CAD at sight or on acceptance, with (a) the same 90 days and (c) a cap of USD 500,000 for a single permit, which NBE may exceed case by case under (e). 1.3.7(a): under a letter of credit or CAD, the bill of lading is made out to the order of a bank.",
 };
 
 export const ENTRUST_ANSWERS_2026_10: SourceRef = {
@@ -38,7 +38,7 @@ export const CFR_21_1_279: SourceRef = {
 
 export const UCP_600: SourceRef = {
   title: "ICC Uniform Customs and Practice for Documentary Credits (UCP 600)",
-  note: "Art. 14(c): presentation no later than 21 calendar days after the date of shipment, and not later than the credit's expiry. Art. 20(a)(ii): a bill of lading must show the goods shipped on board.",
+  note: "Art. 14(c): presentation no later than 21 calendar days after the date of shipment, and not later than the credit's expiry. Art. 20(a)(ii): a bill of lading must show the goods shipped on board. Art. 30(a): \"about\" or \"approximately\" allows a tolerance of 10% more or less. Art. 30(b): a tolerance of 5% more or less is allowed on the quantity of bulk goods, unless the credit states it in packing units or individual items.",
 };
 
 export const INCOTERMS_2020: SourceRef = {

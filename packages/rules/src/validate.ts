@@ -1,14 +1,17 @@
 import { FAILURE_RULE_IDS } from "./types";
 import type {
   Condition,
+  DocumentFieldDefinition,
   EvidenceType,
   FailureRuleDefinition,
   FactKey,
   FactDefinition,
   MasterControl,
   PhaseDefinition,
+  ReconciliationDocument,
   StepDefinition,
 } from "./types";
+import { DOCUMENT_FIELD_KEYS } from "./types";
 
 export interface Catalogue {
   phases: readonly PhaseDefinition[];
@@ -157,6 +160,62 @@ export function validateFailureRules(rules: readonly FailureRuleDefinition[], st
   }
   for (const id of FAILURE_RULE_IDS) {
     if (!seen.has(id)) errors.push(`${id}: not defined`);
+  }
+  return errors;
+}
+
+/**
+ * Check the document comparison data: every field is defined once, numbered 1 to 24 without gaps
+ * (ours have no number), and carried by a document; every document is a known evidence type and
+ * lists each field once; what a document requires is something it may carry.
+ */
+export function validateDocuments(
+  fields: readonly DocumentFieldDefinition[],
+  documents: readonly ReconciliationDocument[],
+  evidenceTypes: readonly EvidenceType[],
+  facts: readonly FactDefinition[],
+): string[] {
+  const errors: string[] = [];
+  const keys = new Set<string>();
+  for (const field of fields) {
+    if (keys.has(field.key)) errors.push(`${field.key}: duplicate field`);
+    keys.add(field.key);
+  }
+  for (const key of DOCUMENT_FIELD_KEYS) {
+    if (!keys.has(key)) errors.push(`${key}: not defined`);
+  }
+  const numbers = fields.flatMap((f) => (f.number === null ? [] : [f.number])).sort((a, b) => a - b);
+  if (numbers.join() !== Array.from({ length: numbers.length }, (_, i) => i + 1).join()) {
+    errors.push(`The field numbers are ${numbers.join(", ")}, expected 1 to ${numbers.length} once each`);
+  }
+
+  const evidence = new Set(evidenceTypes.map((e) => e.id));
+  const factKeys = new Map(facts.map((f) => [f.key, f]));
+  const seen = new Set<string>();
+  const carried = new Set<string>();
+  for (const document of documents) {
+    if (seen.has(document.id)) errors.push(`${document.id}: duplicate document`);
+    seen.add(document.id);
+    if (!evidence.has(document.id)) errors.push(`${document.id}: not an evidence type`);
+    const own = new Set<string>();
+    for (const key of document.fields) {
+      if (!keys.has(key)) errors.push(`${document.id}: carries unknown field ${key}`);
+      if (own.has(key)) errors.push(`${document.id}: lists ${key} twice`);
+      own.add(key);
+      carried.add(key);
+    }
+    for (const requirement of document.requires ?? []) {
+      for (const key of requirement.fields) {
+        if (!own.has(key)) errors.push(`${document.id}: requires ${key}, which it doesn't carry`);
+      }
+      const condition = requirement.when?.condition;
+      if (condition && "fact" in condition && !factKeys.has(condition.fact)) {
+        errors.push(`${document.id}: requirement uses unknown fact ${condition.fact}`);
+      }
+    }
+  }
+  for (const key of keys) {
+    if (!carried.has(key)) errors.push(`${key}: no document carries it`);
   }
   return errors;
 }

@@ -12,6 +12,7 @@ import { evaluateCondition } from "./conditions";
 import { clockInputOf, parseEventTime, type CaseEvent, type ClockId, type DeadlineClock } from "./deadlines";
 import { isDone } from "./evaluate";
 import type { MinimumPriceCheck } from "./minimum-price";
+import type { Reconciliation } from "./reconciliation";
 import type { CaseEvaluation, CaseState, EvaluatedStep, RecordedStatus } from "./types";
 
 // The checks behind the failure rules in packages/rules. Each looks at what the engine has worked
@@ -31,6 +32,8 @@ export interface FailureCheckInput {
   events: readonly CaseEvent[];
   /** The contract price against the minimum export price (checkMinimumPrice). Left out when there is nothing to check. */
   minimumPrice?: MinimumPriceCheck | null;
+  /** The shipping documents compared (reconcileDocuments). Left out until fields have been entered. */
+  reconciliation?: Reconciliation | null;
 }
 
 /** A rule that fired: what to raise, what it holds, and why. */
@@ -110,6 +113,12 @@ const CHECKS: Partial<Record<FailureRuleId, (c: Context) => Finding>> = {
     if (notice?.state === "overdue") problems.push("the Prior Notice deadline has passed and it is not filed");
     if (notice?.state === "met_late") problems.push("the Prior Notice was filed after its deadline");
     if (problems.length) return `${problems.join("; ")}.`.replace(/^./, (ch) => ch.toUpperCase());
+  },
+
+  // Only a difference fires. Fields still to be entered keep STEP-099 open instead.
+  "FL-06": (c) => {
+    const reconciliation = c.reconciliation;
+    if (reconciliation?.status === "mismatch") return reconciliation.message;
   },
 
   "FL-07": (c) => {

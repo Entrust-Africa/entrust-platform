@@ -7,12 +7,13 @@ import {
   TransitionError,
   checkFailureRules,
   checkMinimumPrice,
+  reconcileDocuments,
   evaluateCase,
   evaluateDeadlines,
   reconcileFlags,
   transitionStep,
 } from "../src";
-import type { CaseEvent, CaseFacts, CaseState, ClockInputKey, EvidenceRecord, HeldFlag, MinimumPrice, MinimumPriceCheck, RecordedStatus } from "../src";
+import type { CaseEvent, CaseFacts, CaseState, ClockInputKey, EvidenceRecord, HeldFlag, MinimumPrice, MinimumPriceCheck, Reconciliation, RecordedStatus } from "../src";
 
 const NOW = "2026-10-23T09:00:00Z";
 const US_SEA: CaseFacts = { product: "green_coffee", destinationCountry: "US", transportMode: "sea" };
@@ -31,10 +32,11 @@ interface Scenario {
   evidence?: EvidenceRecord[];
   events?: CaseEvent[];
   minimumPrice?: MinimumPriceCheck | null;
+  reconciliation?: Reconciliation | null;
   now?: string;
 }
 
-function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], minimumPrice, now = NOW }: Scenario = {}) {
+function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], minimumPrice, reconciliation, now = NOW }: Scenario = {}) {
   const state: CaseState = {
     facts,
     steps: records(steps),
@@ -43,7 +45,7 @@ function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], minimumP
   };
   const evaluation = evaluateCase(STEPS, state, { asOf: now });
   const clocks = evaluateDeadlines(STEPS, { facts, steps: state.steps, events }, { now });
-  return checkFailureRules(STEPS, { state, evaluation, clocks, events, minimumPrice }, { now });
+  return checkFailureRules(STEPS, { state, evaluation, clocks, events, minimumPrice, reconciliation }, { now });
 }
 const rulesFired = (scenario?: Scenario) => fire(scenario).map((f) => f.rule);
 const only = (rule: string, scenario?: Scenario) => fire(scenario).find((f) => f.rule === rule);
@@ -150,6 +152,30 @@ describe("FL-04 US FDA registration or Prior Notice missing", () => {
   it("is only for cargo bound for the US", () => {
     const events = [input("estimatedArrival", "2026-10-20T12:00:00Z")];
     expect(rulesFired({ facts: { ...US_SEA, destinationCountry: "DE" }, steps: { "STEP-104": "completed" }, events })).not.toContain("FL-04");
+  });
+});
+
+describe("FL-06 shipping document discrepancy", () => {
+  const compare = (invoice: string, packing: string) =>
+    reconcileDocuments({
+      facts: US_SEA,
+      documents: { final_commercial_invoice: { goodsDescription: invoice }, final_packing_list: { goodsDescription: packing } },
+    });
+
+  it("fires with the words of the comparison, and holds the handoff to the bank", () => {
+    const reconciliation = compare("Green coffee", "Roasted coffee");
+    const flag = only("FL-06", { reconciliation });
+    expect(flag).toMatchObject({ severity: "high", raises: [], blocks: ["STEP-110"], message: reconciliation.message });
+    expect(flag?.message).toMatch(/^The shipping documents don't agree on Goods description\. Goods description differs: Commercial invoice "Green coffee"; Packing list "Roasted coffee"\.$/);
+  });
+
+  it("stays quiet when the documents agree, when fields are still to be entered, and until a comparison is given", () => {
+    expect(rulesFired({ reconciliation: compare("Green coffee", "green coffee") })).not.toContain("FL-06");
+    const waiting = reconcileDocuments({ facts: US_SEA, documents: {} });
+    expect(waiting.status).toBe("waiting");
+    expect(rulesFired({ reconciliation: waiting })).not.toContain("FL-06");
+    expect(rulesFired({ reconciliation: null })).not.toContain("FL-06");
+    expect(rulesFired()).not.toContain("FL-06");
   });
 });
 
@@ -274,7 +300,7 @@ describe("the rules together", () => {
 
   it("have a check, or say what they are waiting on", () => {
     const dormant = FAILURE_RULES.filter((r) => !CHECKED_FAILURE_RULES.includes(r.id));
-    expect(dormant.map((r) => r.id)).toEqual(["FL-05", "FL-06", "FL-10", "FL-11"]);
+    expect(dormant.map((r) => r.id)).toEqual(["FL-05", "FL-10", "FL-11"]);
     for (const rule of dormant) expect(rule.waitingOn, rule.id).toBeTruthy();
     for (const id of CHECKED_FAILURE_RULES) expect(FAILURE_RULES.some((r) => r.id === id), id).toBe(true);
   });
