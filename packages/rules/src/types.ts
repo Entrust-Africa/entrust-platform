@@ -186,3 +186,75 @@ export interface FailureRuleDefinition {
   waitingOn?: string;
   sources?: readonly SourceRef[];
 }
+
+/**
+ * The 24 points of the shipping document comparison (#12), which Entrust's spec calls a "24-point
+ * check" without listing them, plus the quantity tolerance a letter of credit states.
+ */
+export const DOCUMENT_FIELD_KEYS = [
+  "exporter", "consignee", "notifyParty", "buyer", "goodsDescription", "hsCode", "quantity", "netWeight",
+  "grossWeight", "packages", "shippingMarks", "containerNumbers", "sealNumbers", "portOfLoading",
+  "portOfDischarge", "vesselOrFlight", "shippedOnBoardDate", "invoiceReference", "unitPrice", "totalValue",
+  "currency", "incotermPlace", "paymentReference", "countryOfOrigin", "quantityTolerance",
+] as const;
+export type DocumentFieldKey = (typeof DOCUMENT_FIELD_KEYS)[number];
+
+/**
+ * How a field's value is read and compared:
+ * - text: names, addresses, descriptions and marks; case, accents and punctuation don't matter
+ * - code: references; only letters and digits count
+ * - codes: a list of container or seal numbers, compared as a set
+ * - hs_code: digits, at least 6; an 8-digit national code matches its 6-digit prefix
+ * - date: an ISO date
+ * - count: a whole number
+ * - quantity: a number and a unit (19200 kg, 19.2 mt, 320 bags)
+ * - weight: a number and a weight unit (kg, lb, mt)
+ * - price: a unit price such as 6.80 USD/kg
+ * - amount: a money amount without its currency
+ * - currency: an ISO 4217 code
+ * - country: a country name or its ISO alpha-2 code
+ * - tolerance: what a letter of credit says about the quantity (a percentage, "about", "none", "not stated")
+ */
+export type DocumentFieldKind =
+  | "text" | "code" | "codes" | "hs_code" | "date" | "count" | "quantity" | "weight" | "price"
+  | "amount" | "currency" | "country" | "tolerance";
+
+export interface DocumentFieldDefinition {
+  key: DocumentFieldKey;
+  /** Its place in the 24 points, 1 to 24. Ours have none. */
+  number: number | null;
+  label: string;
+  help: string;
+  kind: DocumentFieldKind;
+  /** The quantity tolerance applies when this field is compared across documents. */
+  tolerance?: true;
+}
+
+export interface DocumentFieldRequirement {
+  fields: readonly DocumentFieldKey[];
+  /** Needed only when this holds. */
+  when?: { condition: Condition; description: string };
+}
+
+/**
+ * A document in the comparison. Its id is the evidence type, so the document and its evidence are
+ * one thing.
+ * - shipping: compared with the others on every field they share
+ * - reference: carries what the rules need to check the shipping documents against (the bank
+ *   permit's value, the letter of credit's tolerance)
+ */
+export interface ReconciliationDocument {
+  id: string;
+  name: string;
+  role: "shipping" | "reference";
+  /** Needed only when this holds. */
+  requiredWhen?: { condition: Condition; description: string };
+  /**
+   * The fields this document may carry. Not every field is on every document: whoever enters
+   * the values leaves blank what the document doesn't show, and only a field that two or more
+   * documents carry is compared.
+   */
+  fields: readonly DocumentFieldKey[];
+  /** Fields that must be entered before the comparison can come out clear. */
+  requires?: readonly DocumentFieldRequirement[];
+}

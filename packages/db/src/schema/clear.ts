@@ -251,6 +251,36 @@ export const caseEvent = clear.table(
   (t) => [index("case_event_case_idx").on(t.caseId, t.occurredAt)],
 );
 
+// A value read off a document, for the shipping document comparison (STEP-099): what the commercial
+// invoice says the quantity is, what the bill of lading says the consignee is. A person enters
+// them; there is no OCR yet. One row per case, document and field, replaced when it is corrected
+// (the change is in the audit log and the case history).
+export const documentField = clear.table(
+  "document_field",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => exportCase.id, { onDelete: "cascade" }),
+    // An evidence type id from @entrust/rules: the document the value is read from.
+    document: text("document").notNull(),
+    // A document field key from @entrust/rules.
+    field: text("field").notNull(),
+    // As the document writes it.
+    value: text("value").notNull(),
+    enteredByUserId: text("entered_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("document_field_case_uidx").on(t.caseId, t.document, t.field),
+    check("document_field_value_check", sql`btrim(${t.value}) <> ''`),
+  ],
+);
+
 /**
  * - open: the situation holds, and the steps the flag lists are held
  * - waived: the situation holds, but an Entrust reviewer or admin accepted it, with a reason; nothing is held
@@ -319,6 +349,7 @@ export const exportCaseRelations = relations(exportCase, ({ one, many }) => ({
   evidence: many(evidence),
   events: many(caseEvent),
   flags: many(caseFlag),
+  documentFields: many(documentField),
 }));
 
 export const caseStepRelations = relations(caseStep, ({ one }) => ({
@@ -332,6 +363,10 @@ export const evidenceRelations = relations(evidence, ({ one }) => ({
 export const caseEventRelations = relations(caseEvent, ({ one }) => ({
   case: one(exportCase, { fields: [caseEvent.caseId], references: [exportCase.id] }),
   evidence: one(evidence, { fields: [caseEvent.evidenceId], references: [evidence.id] }),
+}));
+
+export const documentFieldRelations = relations(documentField, ({ one }) => ({
+  case: one(exportCase, { fields: [documentField.caseId], references: [exportCase.id] }),
 }));
 
 export const caseFlagRelations = relations(caseFlag, ({ one }) => ({

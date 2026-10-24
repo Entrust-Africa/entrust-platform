@@ -53,8 +53,8 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
 - Failure rules FL-01 to FL-14 are data in `packages/rules` and are checked by the GATE engine after
   every change to a case. A rule that fires raises a flag (`clear.case_flag`) with the exception
   steps it lists, and holds the steps it names until an Entrust reviewer or admin waives the flag or
-  the situation clears. Rules that wait on data a case doesn't hold yet (lab results, document
-  fields) are defined but dormant. Some rules fire with time alone, so the background
+  the situation clears. Rules that wait on data a case doesn't hold yet (lab results, quantities, customs
+  documents) are defined but dormant. Some rules fire with time alone, so the background
   worker (#16) is meant to call `syncOpenCases` (`apps/api/src/services/flags.ts`) on a schedule.
 - Minimum export price (STEP-024, coffee only). ECTA sets a minimum export price every week and
   doesn't publish it, so an Entrust admin loads the figures as price tables, by CSV
@@ -67,6 +67,18 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
   converts units, and either completes STEP-024 (price at or above the minimum, once its
   prerequisites are done), raises FL-03 (below it), or leaves the step open with the reason, such as
   "No minimum price on file". Loading a table checks the open cases it covers again.
+- Shipping document comparison (STEP-099). Entrust's spec mentions a "24-point" check without
+  listing the points, so `packages/rules/src/documents.ts` defines them, with a matrix of which
+  documents may carry which fields (the commercial invoice, packing list, B/L or AWB, certificate
+  of origin, phytosanitary and quality certificates, plus the bank permit and letter of credit the
+  rules read). There is no OCR yet: a person enters what each document says with
+  `PUT /v1/clear/cases/{id}/documents/{document}/fields` (`GET /v1/clear/document-fields` lists the
+  fields), and values are checked as they are typed. Every field that two or more documents carry
+  must agree. The quantity and net weight get the UCP 600 tolerance (5% for bulk goods, 10% where
+  the LC says "about", or what the LC states); a B/L under an LC or CAD must be made out to the
+  order of a bank; and the invoice total can't exceed the permit value. When everything the case
+  needs is entered and agrees, CLEAR completes STEP-099; a difference raises FL-06 and holds the
+  handoff to the bank (STEP-110) until it is fixed or an Entrust reviewer waives it.
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).

@@ -29,6 +29,13 @@
       "when": 1792799507117,
       "tag": "0003_minimum_export_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792831957882,
+      "tag": "0004_document_fields",
+      "breakpoints": true
     }
   ]
 }

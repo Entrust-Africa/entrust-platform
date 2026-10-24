@@ -120,6 +120,9 @@ export const PAID_BY_LC_OR_CAD: Condition = { fact: "paymentTerms", in: ["lc", "
 export const PAID_IN_ADVANCE: Condition = { fact: "paymentTerms", in: ["advance_tt"] };
 export const COFFEE: Condition = { fact: "product", in: ["green_coffee", "roasted_coffee"] };
 export const GRADED_COMMODITY: Condition = { fact: "product", in: ["green_coffee", "oilseeds_spices"] };
+// Goods shipped loose or in bulk, which UCP 600 Art. 30(b) gives a 5% quantity tolerance. Roasted
+// coffee, fresh produce and processed food are sold in packs, whose count has to match.
+export const BULK_GOODS: Condition = GRADED_COMMODITY;
 export const ECX_SOURCED: Condition = { fact: "sourcingChannel", in: ["ecx"] };
 export const DIRECT_SOURCED: Condition = { fact: "sourcingChannel", in: ["direct"] };
 export const PHYTO_REQUIRED: Condition = { fact: "phytoCertificateRequired", in: ["yes"] };

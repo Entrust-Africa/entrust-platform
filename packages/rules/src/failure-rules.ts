@@ -65,11 +65,11 @@ export const FAILURE_RULES: readonly FailureRuleDefinition[] = [
     name: "Shipping document discrepancy",
     severity: "high",
     origin: "matrix",
-    description: "The shipping documents disagree with each other on a field they share.",
+    description:
+      "The shipping documents disagree with each other on a field they share, the quantity is outside the tolerance, a bill of lading under an LC or CAD is not made out to the order of a bank, or the invoice total is above the bank permit value. It compares what a person entered from each document (STEP-099), and holds the handoff to the bank until the difference is fixed or an Entrust reviewer waives it.",
     raises: [],
     blocks: ["STEP-110"],
-    waitingOn: "The field-by-field comparison of the shipping documents (#12).",
-    sources: [UCP_600],
+    sources: [UCP_600, FXD_01_2024],
   },
   {
     id: "FL-07",
@@ -123,7 +123,7 @@ export const FAILURE_RULES: readonly FailureRuleDefinition[] = [
     description: "The value, quantity or HS code on the customs documents differs from the bank permit or the invoice.",
     raises: [],
     blocks: ["STEP-081"],
-    waitingOn: "Value, quantity and HS code recorded on the customs documents, the bank permit and the invoice (#12).",
+    waitingOn: "Value, quantity and HS code recorded on the customs declaration, which is not one of the compared documents yet. The invoice and the bank permit are (FL-06, #12).",
   },
   {
     id: "FL-12",
@@ -134,7 +134,7 @@ export const FAILURE_RULES: readonly FailureRuleDefinition[] = [
     description: "The documents reached the bank after the LC presentation deadline.",
     raises: [],
     blocks: ["STEP-125"],
-    waitingOn: "Whether the transport document is made out to the right party for the payment term (#12).",
+    waitingOn: "Documents sent to the wrong party for the payment term. The bill of lading's consignee is checked by FL-06 (#12), not here.",
     sources: [UCP_600],
   },
   {

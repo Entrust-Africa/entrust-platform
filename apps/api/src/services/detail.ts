@@ -15,6 +15,7 @@ import {
 import type { Executor } from "./db";
 import { syncFlags } from "./flag-sync";
 import { contractView, loadContract, loadPriceCheck } from "./price-check";
+import { loadDocuments, loadReconciliation } from "./reconciliation";
 import { detailOf } from "./views";
 
 /** The case as the caller sees it: facts, the workflow the engine works out, evidence and deadlines. */
@@ -25,13 +26,15 @@ export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now:
   const evaluation = evaluate(data, now);
   const contract = await loadContract(db, row);
   const minimumPrice = await loadPriceCheck(db, row, evaluation);
+  const documents = await loadDocuments(db, row.id);
+  const reconciliation = await loadReconciliation(db, row, evaluation, documents);
   return detailOf(
     data,
     names.get(row.organizationId) ?? "",
     actor,
     evaluation,
     deadlines(data, events, now),
-    { contract: contract && contractView(contract), minimumPrice },
+    { contract: contract && contractView(contract), minimumPrice, documents, reconciliation },
     now,
   );
 }

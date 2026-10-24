@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { schema } from "@entrust/db";
+import { DOCUMENT_FIELD_KEYS } from "@entrust/rules";
 import {
   CLOCK_INPUT_KEYS,
   COFFEE_TYPES,
@@ -229,6 +230,91 @@ export const PriceTableCreated = PriceTableDetail.extend({
 export const PriceTableList = z.object({ items: z.array(PriceTableSummary) }).openapi("PriceTableList");
 export { PriceTableDetail };
 
+// ---- Shipping documents ----
+
+const DocumentFieldKey = z.enum(DOCUMENT_FIELD_KEYS);
+const DocumentRole = z.enum(["shipping", "reference"]);
+
+const ReconciliationMismatch = z
+  .object({
+    field: DocumentFieldKey,
+    label: z.string(),
+    /** differs: the documents give different values. outside_tolerance: quantities too far apart. rule: a bank-side rule is broken. */
+    kind: z.enum(["differs", "outside_tolerance", "rule"]),
+    documents: z.array(z.object({ document: z.string(), name: z.string(), value: z.string() })),
+    message: z.string(),
+  })
+  .openapi("ReconciliationMismatch");
+
+const Reconciliation = z
+  .object({
+    /**
+     * waiting: documents or fields are still to be entered. mismatch: at least one difference,
+     * which raises FL-06. clear: all entered and in agreement, which completes STEP-099.
+     */
+    status: z.enum(["waiting", "mismatch", "clear"]),
+    message: z.string(),
+    mismatches: z.array(ReconciliationMismatch),
+    /** Documents the case needs that aren't complete. */
+    missing: z.array(
+      z.object({
+        document: z.string(),
+        name: z.string(),
+        /** True when nothing has been entered from it. */
+        empty: z.boolean(),
+        fields: z.array(DocumentFieldKey),
+      }),
+    ),
+    /** How many fields were compared, because two or more documents carry them. */
+    compared: z.number().int(),
+    /** The quantity tolerance in use (UCP 600 Art. 30) and where it comes from. */
+    tolerance: z.object({ percent: z.number(), basis: z.string() }),
+    /** Things left out of the comparison, such as quantities in different units. */
+    notes: z.array(z.string()),
+  })
+  .openapi("Reconciliation");
+
+const CaseDocument = z
+  .object({
+    /** The evidence type id of the document. */
+    document: z.string().openapi({ example: "final_commercial_invoice" }),
+    name: z.string(),
+    role: DocumentRole,
+    /** Whether this case needs the document in the comparison. */
+    required: z.boolean(),
+    /** What has been entered from it, by field key. */
+    fields: z.record(z.string(), z.string()),
+  })
+  .openapi("CaseDocument");
+
+export const DocumentCatalogue = z
+  .object({
+    fields: z.array(
+      z.object({
+        key: DocumentFieldKey,
+        /** Its place in the 24 points, or null for the quantity tolerance the letter of credit states. */
+        number: z.number().int().nullable(),
+        label: z.string(),
+        help: z.string(),
+        kind: z.string(),
+        /** The quantity tolerance applies when the field is compared. */
+        tolerance: z.boolean(),
+      }),
+    ),
+    documents: z.array(
+      z.object({
+        document: z.string(),
+        name: z.string(),
+        role: DocumentRole,
+        requiredWhen: z.string().nullable(),
+        /** The fields the document may carry. A field it doesn't show is left blank. */
+        fields: z.array(DocumentFieldKey),
+        requires: z.array(z.object({ fields: z.array(DocumentFieldKey), when: z.string().nullable() })),
+      }),
+    ),
+  })
+  .openapi("DocumentCatalogue");
+
 // ---- Cases ----
 
 export const CaseSummary = z
@@ -262,6 +348,10 @@ export const CaseDetail = CaseSummary.extend({
   contract: Contract.nullable(),
   /** The contract price against ECTA's minimum export price. Null where STEP-024 doesn't apply (not coffee). */
   minimumPrice: MinimumPriceCheck.nullable(),
+  /** The documents in the shipping document comparison, with what has been entered from each. */
+  documents: z.array(CaseDocument),
+  /** The documents compared (STEP-099). Null when a person marked that step not applicable. */
+  reconciliation: Reconciliation.nullable(),
 }).openapi("CaseDetail");
 
 const CadCap = z
@@ -399,6 +489,19 @@ export const UploadPriceCsvBody = z
   .openapi("UploadPriceCsvBody");
 
 export const PriceTableParam = z.object({ id: z.uuid() });
+export const DocumentParam = CaseIdParam.extend({
+  document: z.string().openapi({ description: "The document's evidence type id.", example: "final_commercial_invoice" }),
+});
+
+export const DocumentFieldsBody = z
+  .object({
+    fields: z.record(z.string(), z.union([z.string(), z.null()])).openapi({
+      description:
+        "Field keys and what the document says. A null or blank value clears the field. Fields not listed are left alone. Leave blank what the document doesn't show.",
+      example: { quantity: "19200 kg", totalValue: "130560.00", currency: "USD" },
+    }),
+  })
+  .openapi("DocumentFieldsBody");
 
 export const RecordContractBody = z
   .object({
@@ -431,3 +534,6 @@ export type MinimumPriceCheckView = z.infer<typeof MinimumPriceCheck>;
 export type PriceTableSummaryView = z.infer<typeof PriceTableSummary>;
 export type PriceTableDetailView = z.infer<typeof PriceTableDetail>;
 export type PriceTableCreatedView = z.infer<typeof PriceTableCreated>;
+export type ReconciliationView = z.infer<typeof Reconciliation>;
+export type CaseDocumentView = z.infer<typeof CaseDocument>;
+export type DocumentCatalogueView = z.infer<typeof DocumentCatalogue>;
