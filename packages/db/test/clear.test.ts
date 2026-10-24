@@ -298,3 +298,39 @@ describe("minimum export prices", () => {
     expect(await db.select().from(schema.minimumPrice).where(eq(schema.minimumPrice.tableId, id))).toEqual([]);
   });
 });
+
+describe("document fields", () => {
+  const field = (caseId: string, rest: Partial<typeof schema.documentField.$inferInsert> = {}) => ({
+    caseId,
+    document: "final_commercial_invoice",
+    field: "quantity",
+    value: "19200 kg",
+    ...rest,
+  });
+
+  it("keeps one value per case, document and field, and the same field on another document", async () => {
+    const { id: caseId } = await insertCase();
+    await db.insert(schema.documentField).values(field(caseId));
+    await expect(db.insert(schema.documentField).values(field(caseId, { value: "19300 kg" }))).rejects.toMatchObject({
+      cause: { code: "23505", constraint: "document_field_case_uidx" },
+    });
+    await db.insert(schema.documentField).values([field(caseId, { document: "final_packing_list" }), field(caseId, { field: "netWeight" })]);
+    const other = await insertCase();
+    await db.insert(schema.documentField).values(field(other.id));
+    expect(await db.select().from(schema.documentField).where(eq(schema.documentField.caseId, caseId))).toHaveLength(3);
+  });
+
+  it("refuses a blank value", async () => {
+    const { id: caseId } = await insertCase();
+    await expect(db.insert(schema.documentField).values(field(caseId, { value: "  " }))).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "document_field_value_check" },
+    });
+  });
+
+  it("is removed with its case", async () => {
+    const { id: caseId } = await insertCase();
+    await db.insert(schema.documentField).values(field(caseId));
+    await db.delete(schema.exportCase).where(eq(schema.exportCase.id, caseId));
+    expect(await db.select().from(schema.documentField).where(eq(schema.documentField.caseId, caseId))).toEqual([]);
+  });
+});
