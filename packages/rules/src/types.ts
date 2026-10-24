@@ -104,6 +104,22 @@ export interface Deadline {
   source: SourceRef;
 }
 
+/**
+ * Contract and letter of credit data, besides the case facts, that can be amended after a phase
+ * gate is signed. The steps that rely on each one say so in `relies`.
+ */
+export const CONTRACT_FIELDS = [
+  "contract.number", "contract.buyerName", "contract.contractDate", "contract.unitPrice",
+  "contract.coffeeType", "contract.grade", "contract.origin",
+] as const;
+export type ContractField = (typeof CONTRACT_FIELDS)[number];
+
+export const LC_FIELDS = ["lc.expiry", "lc.quantityTolerance", "lc.reference"] as const;
+export type LcField = (typeof LC_FIELDS)[number];
+
+/** Anything an amendment can change: a case fact, a contract term or a letter of credit term. */
+export type AmendableField = FactKey | ContractField | LcField;
+
 export interface StepDefinition {
   id: StepId;
   phase: PhaseId;
@@ -125,6 +141,12 @@ export interface StepDefinition {
   /** Required for exception steps: what raises it. */
   raisedWhen?: string;
   evidence: readonly EvidenceRequirement[];
+  /**
+   * Contract or letter of credit data the step relies on. When one of them is amended after a gate
+   * is signed, the step is verified again. Case facts need no listing: the step's conditions and
+   * the fact's `determinedAt` already say which steps use them.
+   */
+  relies?: readonly (ContractField | LcField)[];
   deadline?: Deadline;
   /** The phase's milestone sign-off. It also waits on every other step in its phase. */
   milestone?: true;

@@ -306,6 +306,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-02",
     prerequisites: ["STEP-019"],
     evidence: evidence("sales_contract"),
+    relies: ["contract.number", "contract.buyerName", "contract.contractDate", "contract.unitPrice", "contract.coffeeType", "contract.grade", "contract.origin"],
   },
   {
     id: "STEP-021",
@@ -318,6 +319,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-02",
     prerequisites: ["STEP-020"],
     evidence: evidence("proforma_invoice"),
+    relies: ["contract.buyerName", "contract.unitPrice", "contract.coffeeType", "contract.grade", "contract.origin"],
   },
   {
     id: "STEP-022",
@@ -342,6 +344,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-02",
     prerequisites: ["STEP-021"],
     evidence: [],
+    relies: ["contract.unitPrice"],
   },
   {
     id: "STEP-024",
@@ -357,6 +360,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-010", "STEP-023"],
     appliesWhen: when(COFFEE, "The product is coffee, which has a weekly minimum export price from ECTA"),
     evidence: evidence("minimum_price_check"),
+    relies: ["contract.contractDate", "contract.unitPrice", "contract.coffeeType", "contract.grade", "contract.origin"],
     correction:
       "Coffee minimum export prices are set weekly by ECTA, not NBE (Entrust's Q5 answer). No official floor was found for other products, so the step applies to coffee only unless a rule pack says otherwise.",
     sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017, USDA_FAS_COFFEE_ANNUAL_2025],
@@ -386,6 +390,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-025"],
     appliesWhen: when(PAID_BY_LC, "Payment is by letter of credit"),
     evidence: evidence("letter_of_credit"),
+    relies: ["lc.expiry", "lc.quantityTolerance", "lc.reference"],
     correction: "Applies to every LC case, not only after a failure, so it is conditional rather than an exception.",
   },
   {
@@ -502,6 +507,7 @@ export const STEPS: readonly StepDefinition[] = [
     masterControl: "MC-04",
     prerequisites: ["STEP-033"],
     evidence: evidence("contract_registration"),
+    relies: ["contract.number", "contract.buyerName", "contract.contractDate", "contract.unitPrice", "contract.coffeeType", "contract.grade", "contract.origin"],
     correction: "Coffee contracts are registered with ECTA, not NBE (Entrust's Q5 answer; registration moved from NBE in May 2025).",
     sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017],
   },
@@ -1550,6 +1556,7 @@ export const STEPS: readonly StepDefinition[] = [
     prerequisites: ["STEP-102"],
     appliesWhen: when(PAID_BY_LC_OR_CAD, "Payment is by letter of credit or cash against documents"),
     evidence: evidence("bank_cover_letter"),
+    relies: ["lc.reference"],
     correction: BANK_PRESENTATION,
   },
   {
