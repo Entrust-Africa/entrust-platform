@@ -315,6 +315,39 @@ export const DocumentCatalogue = z
   })
   .openapi("DocumentCatalogue");
 
+// ---- Amendments ----
+
+const Amendment = z
+  .object({
+    /** The case's version after this amendment. Version 1 is the case as it was first recorded. */
+    version: z.number().int().openapi({ example: 2 }),
+    reason: z.string(),
+    /** The fields it changed. */
+    changes: z.array(
+      z.object({
+        field: z.string().openapi({ example: "contract.unitPrice" }),
+        label: z.string(),
+        before: z.unknown(),
+        after: z.unknown(),
+      }),
+    ),
+    /** Steps that depend on what changed and still apply. */
+    affectedSteps: z.array(z.string()),
+    /** Completed steps that were reopened. */
+    reopenedSteps: z.array(z.string()),
+    /** Everything to be done again for the amendment to be complete: reopened steps, steps it made applicable, reopened gates. */
+    reverifySteps: z.array(z.string()),
+    /** Evidence types that were approved and went back for review. Other evidence stayed approved. */
+    evidenceSentBack: z.array(z.string()),
+    /** Milestone sign-offs that were reopened. */
+    reopenedGates: z.array(z.string()),
+    madeByUserId: z.string().nullable(),
+    madeAt: Timestamp,
+    resolvedAt: Timestamp.nullable(),
+    status: z.enum(["pending", "complete"]),
+  })
+  .openapi("Amendment");
+
 // ---- Cases ----
 
 export const CaseSummary = z
@@ -352,6 +385,10 @@ export const CaseDetail = CaseSummary.extend({
   documents: z.array(CaseDocument),
   /** The documents compared (STEP-099). Null when a person marked that step not applicable. */
   reconciliation: Reconciliation.nullable(),
+  /** 1 until the case is amended; each amendment after a gate is signed is the next version. */
+  version: z.number().int(),
+  /** Every amendment, newest first. */
+  amendments: z.array(Amendment),
 }).openapi("CaseDetail");
 
 const CadCap = z
@@ -488,6 +525,39 @@ export const UploadPriceCsvBody = z
   })
   .openapi("UploadPriceCsvBody");
 
+export const AmendCaseBody = z
+  .object({
+    reason: z.string().openapi({ description: "Why the case is amended. Kept with the amendment and in the audit log.", example: "The buyer raised the price in writing" }),
+    facts: z
+      .record(z.string(), z.union([FactValue, z.null()]))
+      .optional()
+      .openapi({ description: "Facts to set; a null value clears one." }),
+    contract: z
+      .object({
+        number: z.string().optional(),
+        buyerName: z.string().optional(),
+        contractDate: z.iso.date().optional(),
+        unitPrice: z
+          .object({ amount: z.number().positive(), currency: z.string().regex(/^[A-Za-z]{3}$/), per: PriceUnit })
+          .nullable()
+          .optional(),
+        coffeeType: CoffeeType.nullable().optional(),
+        grade: z.string().max(20).nullable().optional(),
+        origin: z.string().nullable().optional(),
+      })
+      .optional()
+      .openapi({ description: "Contract terms to change. Anything left out keeps its value." }),
+    lc: z
+      .object({
+        expiry: z.string().optional().openapi({ description: "A date, or a timestamp with an offset.", example: "2026-12-31" }),
+        quantityTolerance: z.string().nullable().optional(),
+        reference: z.string().nullable().optional(),
+      })
+      .optional()
+      .openapi({ description: "Letter of credit terms to change. Anything left out keeps its value." }),
+  })
+  .openapi("AmendCaseBody");
+
 export const PriceTableParam = z.object({ id: z.uuid() });
 export const DocumentParam = CaseIdParam.extend({
   document: z.string().openapi({ description: "The document's evidence type id.", example: "final_commercial_invoice" }),
@@ -537,3 +607,4 @@ export type PriceTableCreatedView = z.infer<typeof PriceTableCreated>;
 export type ReconciliationView = z.infer<typeof Reconciliation>;
 export type CaseDocumentView = z.infer<typeof CaseDocument>;
 export type DocumentCatalogueView = z.infer<typeof DocumentCatalogue>;
+export type AmendmentView = z.infer<typeof Amendment>;

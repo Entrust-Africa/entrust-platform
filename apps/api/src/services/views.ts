@@ -12,6 +12,7 @@ import {
   type StepStatus,
 } from "@entrust/gate-engine";
 import type { CaseDetailView, CaseSummaryView, ContractView } from "../schemas/clear";
+import type { AmendmentRow } from "./amendment-sync";
 import { evidenceRecord, latestEvidence, type CaseData } from "./case-data";
 
 const TYPE_NAMES = new Map(EVIDENCE_TYPES.map((t) => [t.id, t.name]));
@@ -42,6 +43,8 @@ export interface ChecksView {
   /** What has been entered from each document, by document id. */
   documents: Readonly<Record<string, DocumentValues>>;
   reconciliation: Reconciliation | null;
+  /** The case's amendments, oldest first. */
+  amendments: readonly AmendmentRow[];
 }
 
 export function detailOf(
@@ -105,6 +108,21 @@ export function detailOf(
       fields: { ...checks.documents[d.id] },
     })),
     reconciliation: checks.reconciliation,
+    version: Math.max(1, ...checks.amendments.map((a) => a.version)),
+    amendments: checks.amendments.toReversed().map((a) => ({
+      version: a.version,
+      reason: a.reason,
+      changes: a.changes,
+      affectedSteps: a.impact.affected,
+      reopenedSteps: a.impact.reopened,
+      reverifySteps: a.impact.reverify,
+      evidenceSentBack: a.impact.evidence,
+      reopenedGates: a.impact.unlocked,
+      madeByUserId: a.madeByUserId,
+      madeAt: a.createdAt.toISOString(),
+      resolvedAt: a.resolvedAt?.toISOString() ?? null,
+      status: a.resolvedAt ? ("complete" as const) : ("pending" as const),
+    })),
     contract: checks.contract,
     minimumPrice: checks.minimumPrice && {
       status: checks.minimumPrice.status,
