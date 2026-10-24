@@ -164,7 +164,6 @@
     max-width: 100%;
     height: auto;
   }
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap');
 /* === UNIFIED TYPOGRAPHY SYSTEM FOR CONSISTENCY === */
 /* Unified heading styles */
 h1, .main-title, .entrust-section-title, .entrust-home-title, .andinet-section-title, .andinet-hero-title, .gateway-hm-title {
