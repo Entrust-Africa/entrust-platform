@@ -17,9 +17,10 @@ import { syncFlags } from "./flag-sync";
 import { loadAmendments, syncAmendments } from "./amendment-sync";
 import { contractView, loadContract, loadPriceCheck } from "./price-check";
 import { loadDocuments, loadReconciliation } from "./reconciliation";
+import { caseRulePackView, rulePackUpdate } from "./rule-packs";
 import { detailOf } from "./views";
 
-/** The case as the caller sees it: facts, the workflow the engine works out, evidence and deadlines. */
+/** The case as the caller sees it: facts, the workflow the engine works out, evidence, deadlines and its rule pack. */
 export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now: Date): Promise<CaseDetailView> {
   const data = await loadOneCaseData(db, row);
   const events = await loadEvents(db, row.id);
@@ -35,7 +36,15 @@ export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now:
     actor,
     evaluation,
     deadlines(data, events, now),
-    { contract: contract && contractView(contract), minimumPrice, documents, reconciliation, amendments: await loadAmendments(db, row.id) },
+    {
+      contract: contract && contractView(contract),
+      minimumPrice,
+      documents,
+      reconciliation,
+      amendments: await loadAmendments(db, row.id),
+      rulePack: caseRulePackView(row, evaluation),
+      rulePackUpdate: rulePackUpdate(row),
+    },
     now,
   );
 }

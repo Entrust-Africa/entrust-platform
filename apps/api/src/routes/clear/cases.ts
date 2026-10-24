@@ -13,6 +13,7 @@ import {
   EvidenceParam,
   FlagParam,
   ListCasesQuery,
+  ReevaluateRulePackBody,
   RecordContractBody,
   ReviewEvidenceBody,
   StepParam,
@@ -22,7 +23,7 @@ import {
   WaiveFlagBody,
 } from "../../schemas/clear";
 import { amendCase } from "../../services/amendments";
-import { createCase, getCase, listCases, updateFacts } from "../../services/cases";
+import { createCase, getCase, listCases, reevaluateRulePack, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
 import { recordContract } from "../../services/contracts";
 import { documentCatalogue, recordDocumentFields } from "../../services/documents";
@@ -63,7 +64,7 @@ const getCaseRoute = createRoute({
   tags,
   summary: "View a case",
   description:
-    "The case with its workflow state worked out by the GATE engine (each step's status, what blocks it, the phase gates and the next action), its evidence and its deadline clocks.",
+    "The case with its workflow state worked out by the GATE engine (each step's status, what blocks it, the phase gates and the next action), its evidence, its deadline clocks, and its rule pack's requirements with their status.",
   request: { params: CaseIdParam },
   responses: { 200: { description: "The case", content: json(CaseDetail) }, ...readErrors },
 });
@@ -177,6 +178,17 @@ const waiveFlagRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
 
+const reevaluateRulePackRoute = createRoute({
+  method: "post",
+  path: "/cases/{id}/rule-pack",
+  tags,
+  summary: "Re-evaluate a case's rule pack",
+  description:
+    "A case keeps the rule pack version it was opened with, so a newer version changes nothing on it until this is called. It moves the case to the newest pack for its product and destination: a newer version of its pack, the pack that covers it after its product or destination changed, or none when no pack does. The case detail's rulePackUpdate says beforehand what the move adds, removes and changes. Steps and evidence are untouched. Entrust admins and facilitators only, with a reason, which the audit log keeps.",
+  request: { params: CaseIdParam, body: { required: true, content: json(ReevaluateRulePackBody) } },
+  responses: { 200: { description: "The case on its new pack", content: json(CaseDetail) }, ...writeErrors },
+});
+
 export const clearCases = cases
   .openapi(createCaseRoute, async (c) => {
     const body = c.req.valid("json");
@@ -233,4 +245,8 @@ export const clearCases = cases
     const { id, flagId } = c.req.valid("param");
     const { reason } = c.req.valid("json");
     return c.json(await waiveFlag(await contextFor(c.get("user")), id, flagId, reason), 200);
+  })
+  .openapi(reevaluateRulePackRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    return c.json(await reevaluateRulePack(await contextFor(c.get("user")), id, c.req.valid("json")), 200);
   });

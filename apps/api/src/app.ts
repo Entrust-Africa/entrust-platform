@@ -6,6 +6,7 @@ import { auth, type Session } from "@entrust/auth";
 import { health } from "./routes/health";
 import { clearCases } from "./routes/clear/cases";
 import { clearMinimumPrices } from "./routes/clear/minimum-prices";
+import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
 
@@ -50,7 +51,8 @@ export const app = base
   .route("/v1", health)
   .route("/v1", me)
   .route("/v1/clear", clearCases)
-  .route("/v1/clear", clearMinimumPrices);
+  .route("/v1/clear", clearMinimumPrices)
+  .route("/v1/clear", clearRulePacks);
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",

@@ -12,7 +12,7 @@ packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
   auth         Better Auth config (served by apps/api) and the browser auth client
-  rules        CLEAR's canonical 125 steps, master controls, facts and evidence types, as data
+  rules        CLEAR's canonical 125 steps, master controls, facts, evidence types and rule packs, as data
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
 ```
 
@@ -91,6 +91,19 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
   everything else stays as it was. The case is "amendments pending" until all of that is done
   again, and while it is pending a recorded fact or the contract can only change by another
   amendment. The audit log shows each amendment, who made it and why.
+- Rule packs. A pack is one corridor's requirements (product and destination), as data in
+  `packages/rules/src/packs`: what each asks, who acts, its basis (confirmed or conditional law,
+  awaiting verification, or a transaction term), its sources with links, the day they were checked,
+  and the canonical steps it sits on. A requirement's status on a case is read from those steps.
+  Nothing is presented as law without an official source: the packs are validated when the package
+  loads, and a requirement that isn't established is labelled awaiting verification. The first pack
+  is green coffee to the US (`et-us-green-coffee` 0.4.0), ported from the simulation and checked
+  again on 24 October 2026. A case keeps the version it was opened with (`rule_pack_id`,
+  `rule_pack_version`), so publishing a new version changes no open case: the case detail shows
+  what the newer version would change (`rulePackUpdate`), and an Entrust admin or facilitator moves
+  the case with `POST /v1/clear/cases/{id}/rule-pack` and a reason. A published version is never
+  edited (`packages/rules/test/rule-packs.test.ts` holds each one's hash); a correction is a new
+  version in the same file. `GET /v1/clear/rule-packs` lists the versions.
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).
