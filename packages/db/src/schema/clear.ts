@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { COFFEE_TYPES, EVIDENCE_STATUSES, PRICE_UNITS, RECORDED_STATUSES, type CaseFacts } from "@entrust/gate-engine";
+import { COFFEE_TYPES, EVIDENCE_STATUSES, PRICE_UNITS, RECORDED_STATUSES, type CaseFacts, type FieldChange } from "@entrust/gate-engine";
 import type { PhaseId, StepId } from "@entrust/rules";
 import { organization, user } from "./auth";
 
@@ -281,6 +281,46 @@ export const documentField = clear.table(
   ],
 );
 
+/** What an amendment set back, as stored with it. */
+export interface AmendmentImpact {
+  /** Steps that depend on what changed and still apply. */
+  affected: StepId[];
+  /** Completed steps among them, which were reopened. */
+  reopened: StepId[];
+  /** What has to be done again before the amendment is complete: reopened steps, newly applicable ones, reopened gates. */
+  reverify: StepId[];
+  /** Evidence types sent back for review, if they were approved. */
+  evidence: string[];
+  /** Milestone sign-offs that were reopened. */
+  unlocked: StepId[];
+}
+
+// A change to a case's facts, contract or letter of credit after a phase gate was signed. Version 1
+// is the case as it was first recorded; each amendment is the next version and keeps the fields it
+// changed, before and after, and why. An amendment is pending until everything it set back is done
+// again (resolved_at), and the case is "amendments pending" while any is.
+export const caseAmendment = clear.table(
+  "case_amendment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => exportCase.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    reason: text("reason").notNull(),
+    changes: jsonb("changes").$type<FieldChange[]>().notNull(),
+    impact: jsonb("impact").$type<AmendmentImpact>().notNull(),
+    madeByUserId: text("made_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("case_amendment_version_uidx").on(t.caseId, t.version),
+    check("case_amendment_version_check", sql`${t.version} >= 2`),
+    check("case_amendment_reason_check", sql`btrim(${t.reason}) <> ''`),
+  ],
+);
+
 /**
  * - open: the situation holds, and the steps the flag lists are held
  * - waived: the situation holds, but an Entrust reviewer or admin accepted it, with a reason; nothing is held
@@ -350,6 +390,7 @@ export const exportCaseRelations = relations(exportCase, ({ one, many }) => ({
   events: many(caseEvent),
   flags: many(caseFlag),
   documentFields: many(documentField),
+  amendments: many(caseAmendment),
 }));
 
 export const caseStepRelations = relations(caseStep, ({ one }) => ({
@@ -363,6 +404,10 @@ export const evidenceRelations = relations(evidence, ({ one }) => ({
 export const caseEventRelations = relations(caseEvent, ({ one }) => ({
   case: one(exportCase, { fields: [caseEvent.caseId], references: [exportCase.id] }),
   evidence: one(evidence, { fields: [caseEvent.evidenceId], references: [evidence.id] }),
+}));
+
+export const caseAmendmentRelations = relations(caseAmendment, ({ one }) => ({
+  case: one(exportCase, { fields: [caseAmendment.caseId], references: [exportCase.id] }),
 }));
 
 export const documentFieldRelations = relations(documentField, ({ one }) => ({
