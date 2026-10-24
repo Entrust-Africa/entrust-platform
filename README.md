@@ -53,9 +53,20 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
 - Failure rules FL-01 to FL-14 are data in `packages/rules` and are checked by the GATE engine after
   every change to a case. A rule that fires raises a flag (`clear.case_flag`) with the exception
   steps it lists, and holds the steps it names until an Entrust reviewer or admin waives the flag or
-  the situation clears. Rules that wait on data a case doesn't hold yet (prices, lab results,
-  document fields) are defined but dormant. Some rules fire with time alone, so the background
+  the situation clears. Rules that wait on data a case doesn't hold yet (lab results, document
+  fields) are defined but dormant. Some rules fire with time alone, so the background
   worker (#16) is meant to call `syncOpenCases` (`apps/api/src/services/flags.ts`) on a schedule.
+- Minimum export price (STEP-024, coffee only). ECTA sets a minimum export price every week and
+  doesn't publish it, so an Entrust admin loads the figures as price tables, by CSV
+  (`POST /v1/clear/minimum-prices/csv`) or typed in (`POST /v1/clear/minimum-prices`). A CSV has one
+  row per price and the header `effective_from,effective_to,coffee_type,grade,origin,unit,min_price`
+  (`origin` is optional, columns can come in any order, `unit` is `USD/kg` or `USD/lb`, both dates are
+  included). Every table is kept; where two cover the same day the latest one decides. The SME (or
+  Entrust) records the contract with `PUT /v1/clear/cases/{id}/contract`: its date, unit price,
+  coffee type, grade and optional origin. The check takes the price in force on the contract date,
+  converts units, and either completes STEP-024 (price at or above the minimum, once its
+  prerequisites are done), raises FL-03 (below it), or leaves the step open with the reason, such as
+  "No minimum price on file". Loading a table checks the open cases it covers again.
 
 To use Neon instead of local Postgres, put its pooled connection string in `DATABASE_URL`.
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).

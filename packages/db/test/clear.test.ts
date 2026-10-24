@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -20,6 +20,9 @@ const FACTS = { product: "green_coffee", destinationCountry: "US" } as const;
 
 async function clean() {
   await db.delete(schema.exportCase).where(eq(schema.exportCase.organizationId, ORG));
+  await db.delete(schema.salesContract).where(eq(schema.salesContract.organizationId, ORG));
+  // Price tables are shared, so only the ones these tests labelled are removed.
+  await db.delete(schema.minimumPriceTable).where(like(schema.minimumPriceTable.label, `${ORG}%`));
   await db
     .delete(schema.caseReferenceCounter)
     .where(inArray(schema.caseReferenceCounter.country, COUNTRIES));
@@ -222,5 +225,76 @@ describe("case flags", () => {
     await db.insert(schema.caseFlag).values(flag(caseId));
     await db.delete(schema.exportCase).where(eq(schema.exportCase.id, caseId));
     expect(await db.select().from(schema.caseFlag).where(eq(schema.caseFlag.caseId, caseId))).toEqual([]);
+  });
+});
+
+describe("sales contract prices", () => {
+  const contract = (rest: Partial<typeof schema.salesContract.$inferInsert> = {}) => ({
+    organizationId: ORG,
+    number: "PO-1",
+    buyerName: "Buyer GmbH",
+    contractDate: "2026-10-22",
+    ...rest,
+  });
+
+  it("holds a contract with no price, or with all three parts of one", async () => {
+    await db.insert(schema.salesContract).values(contract());
+    const [priced] = await db
+      .insert(schema.salesContract)
+      .values(contract({ unitPrice: "6.61", priceCurrency: "USD", priceUnit: "kg", coffeeType: "washed", grade: "1", origin: "Yirgacheffe" }))
+      .returning();
+    expect(priced).toMatchObject({ unitPrice: "6.6100", priceCurrency: "USD", priceUnit: "kg", coffeeType: "washed", grade: "1" });
+  });
+
+  it("refuses a price that is missing its currency or unit, or isn't above zero", async () => {
+    const refused = { cause: { code: "23514", constraint: "sales_contract_unit_price_check" } };
+    await expect(db.insert(schema.salesContract).values(contract({ unitPrice: "6.61" }))).rejects.toMatchObject(refused);
+    await expect(db.insert(schema.salesContract).values(contract({ priceCurrency: "USD", priceUnit: "kg" }))).rejects.toMatchObject(refused);
+    await expect(
+      db.insert(schema.salesContract).values(contract({ unitPrice: "0", priceCurrency: "USD", priceUnit: "kg" })),
+    ).rejects.toMatchObject(refused);
+  });
+});
+
+describe("minimum export prices", () => {
+  const table = async () => {
+    const [created] = await db.insert(schema.minimumPriceTable).values({ source: "manual", label: `${ORG} table` }).returning();
+    return created!;
+  };
+  const price = (tableId: string, rest: Partial<typeof schema.minimumPrice.$inferInsert> = {}) => ({
+    tableId,
+    effectiveFrom: "2026-10-20",
+    effectiveTo: "2026-10-26",
+    coffeeType: "washed" as const,
+    grade: "1",
+    currency: "USD",
+    unit: "kg" as const,
+    minPrice: "6.61",
+    ...rest,
+  });
+
+  it("keeps a table's prices, with the origin left empty for every origin", async () => {
+    const { id } = await table();
+    const rows = await db.insert(schema.minimumPrice).values([price(id), price(id, { grade: "2", origin: "Yirgacheffe", minPrice: "6.2500" })]).returning();
+    expect(rows).toMatchObject([{ origin: null, minPrice: "6.6100" }, { origin: "Yirgacheffe", minPrice: "6.2500" }]);
+  });
+
+  it("refuses an end date before the start date, and a price that isn't above zero", async () => {
+    const { id } = await table();
+    await expect(db.insert(schema.minimumPrice).values(price(id, { effectiveTo: "2026-10-19" }))).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "minimum_price_dates_check" },
+    });
+    await expect(db.insert(schema.minimumPrice).values(price(id, { minPrice: "0" }))).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "minimum_price_amount_check" },
+    });
+    // A one-day price is fine: both ends are included.
+    await db.insert(schema.minimumPrice).values(price(id, { effectiveTo: "2026-10-20" }));
+  });
+
+  it("removes a table's prices with it", async () => {
+    const { id } = await table();
+    await db.insert(schema.minimumPrice).values(price(id));
+    await db.delete(schema.minimumPriceTable).where(eq(schema.minimumPriceTable.id, id));
+    expect(await db.select().from(schema.minimumPrice).where(eq(schema.minimumPrice.tableId, id))).toEqual([]);
   });
 });

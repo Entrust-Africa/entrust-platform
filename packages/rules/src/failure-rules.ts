@@ -1,4 +1,4 @@
-import { CFR_21_1_279, FXD_01_2024, INCOTERMS_2020, UCP_600 } from "./sources";
+import { CFR_21_1_279, FXD_01_2024, INCOTERMS_2020, UCP_600, USDA_FAS_COFFEE_ANNUAL_2025 } from "./sources";
 import type { FailureRuleDefinition } from "./types";
 
 // The failure rules. FL-01 to FL-08 are Entrust's, from the Operational Control Matrix; FL-09 to
@@ -33,10 +33,11 @@ export const FAILURE_RULES: readonly FailureRuleDefinition[] = [
     name: "Price below the minimum export price",
     severity: "high",
     origin: "matrix",
-    description: "The contract unit price is below the minimum export price in force on the contract date.",
+    description:
+      "The contract unit price is below the minimum export price in force on the contract date. Coffee only: ECTA sets the floor weekly, and an Entrust admin loads the figures. With no price on file for the contract date the rule stays quiet and STEP-024 stays open instead.",
     raises: ["STEP-029"],
     blocks: ["STEP-033", "STEP-035"],
-    waitingOn: "The contract's unit price and the minimum export price table (#11).",
+    sources: [USDA_FAS_COFFEE_ANNUAL_2025],
   },
   {
     id: "FL-04",

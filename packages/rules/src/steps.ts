@@ -24,6 +24,7 @@ import {
   FXD_01_2024,
   PROCLAMATION_1051_2017,
   UCP_600,
+  USDA_FAS_COFFEE_ANNUAL_2025,
 } from "./sources";
 import type { Condition, StepDefinition } from "./types";
 
@@ -347,15 +348,18 @@ export const STEPS: readonly StepDefinition[] = [
     phase: 2,
     name: "Minimum Export Price Cross-Check (ECTA Weekly Price for Coffee)",
     specName: "NBE Minimum Export Price Floor Benchmark Cross-Check",
-    class: "mandatory",
+    class: "conditional",
+    specClass: "mandatory",
     owner: "system",
     authority: "ECTA (coffee)",
     scope: "shipment",
     masterControl: "MC-07",
     prerequisites: ["STEP-010", "STEP-023"],
+    appliesWhen: when(COFFEE, "The product is coffee, which has a weekly minimum export price from ECTA"),
     evidence: evidence("minimum_price_check"),
-    correction: "Coffee minimum export prices are set weekly by ECTA, not NBE (Entrust's Q5 answer); no official floor was found for other products.",
-    sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017],
+    correction:
+      "Coffee minimum export prices are set weekly by ECTA, not NBE (Entrust's Q5 answer). No official floor was found for other products, so the step applies to coffee only unless a rule pack says otherwise.",
+    sources: [ENTRUST_ANSWERS_2026_10, PROCLAMATION_1051_2017, USDA_FAS_COFFEE_ANNUAL_2025],
   },
   {
     id: "STEP-025",

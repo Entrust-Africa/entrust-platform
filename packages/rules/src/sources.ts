@@ -19,6 +19,11 @@ export const PROCLAMATION_1051_2017: SourceRef = {
   note: "Art. 10(4) originally required contract registration at NBE. USDA FAS reports registration moved to ECTA from 1 May 2025, and that ECTA sets the weekly minimum export price for coffee.",
 };
 
+export const USDA_FAS_COFFEE_ANNUAL_2025: SourceRef = {
+  title: "USDA FAS, Ethiopia Coffee Annual (June 2025)",
+  note: "ECTA sets a minimum export price for coffee every week. It isn't published online, so an Entrust admin loads the weekly figures into CLEAR.",
+};
+
 export const CFR_19_149_2: SourceRef = {
   title: "19 CFR 149.2 (Importer Security Filing)",
   url: "https://www.ecfr.gov/current/title-19/section-149.2",

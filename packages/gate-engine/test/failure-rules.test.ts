@@ -6,12 +6,13 @@ import {
   STEP_COMPLETED,
   TransitionError,
   checkFailureRules,
+  checkMinimumPrice,
   evaluateCase,
   evaluateDeadlines,
   reconcileFlags,
   transitionStep,
 } from "../src";
-import type { CaseEvent, CaseFacts, CaseState, ClockInputKey, EvidenceRecord, HeldFlag, RecordedStatus } from "../src";
+import type { CaseEvent, CaseFacts, CaseState, ClockInputKey, EvidenceRecord, HeldFlag, MinimumPrice, MinimumPriceCheck, RecordedStatus } from "../src";
 
 const NOW = "2026-10-23T09:00:00Z";
 const US_SEA: CaseFacts = { product: "green_coffee", destinationCountry: "US", transportMode: "sea" };
@@ -29,10 +30,11 @@ interface Scenario {
   steps?: Partial<Record<StepId, RecordedStatus>>;
   evidence?: EvidenceRecord[];
   events?: CaseEvent[];
+  minimumPrice?: MinimumPriceCheck | null;
   now?: string;
 }
 
-function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], now = NOW }: Scenario = {}) {
+function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], minimumPrice, now = NOW }: Scenario = {}) {
   const state: CaseState = {
     facts,
     steps: records(steps),
@@ -41,7 +43,7 @@ function fire({ facts = US_SEA, steps = {}, evidence = [], events = [], now = NO
   };
   const evaluation = evaluateCase(STEPS, state, { asOf: now });
   const clocks = evaluateDeadlines(STEPS, { facts, steps: state.steps, events }, { now });
-  return checkFailureRules(STEPS, { state, evaluation, clocks, events }, { now });
+  return checkFailureRules(STEPS, { state, evaluation, clocks, events, minimumPrice }, { now });
 }
 const rulesFired = (scenario?: Scenario) => fire(scenario).map((f) => f.rule);
 const only = (rule: string, scenario?: Scenario) => fire(scenario).find((f) => f.rule === rule);
@@ -88,6 +90,41 @@ describe("FL-02 commercial term conflict", () => {
     const both = only("FL-02", { facts: { ...US_SEA, transportMode: "air", incoterm: "cif", paymentTerms: ["lc", "cad"] } });
     expect(both?.message).toMatch(/both recorded as the payment instrument; CIF is an Incoterm for sea/);
     expect(rulesFired({ facts: { product: "green_coffee", destinationCountry: "US" } })).not.toContain("FL-02");
+  });
+});
+
+describe("FL-03 price below the minimum export price", () => {
+  const checkOf = (amount: number, rest: Partial<MinimumPrice> = {}) =>
+    checkMinimumPrice(
+      { contractDate: "2026-10-22", unitPrice: { amount, currency: "USD", unit: "kg" }, coffeeType: "washed", grade: "1", origin: null },
+      [
+        {
+          id: "p1", tableId: "t1", recordedAt: "2026-10-19T08:00:00Z", effectiveFrom: "2026-10-20", effectiveTo: "2026-10-26",
+          coffeeType: "washed", grade: "1", origin: null, currency: "USD", unit: "kg", minPrice: 6.61, ...rest,
+        },
+      ],
+    );
+
+  it("fires with the words of the check when the price is below the floor", () => {
+    const minimumPrice = checkOf(5.9);
+    const flag = only("FL-03", { minimumPrice });
+    expect(flag).toMatchObject({ severity: "high", raises: ["STEP-029"], blocks: ["STEP-033", "STEP-035"], message: minimumPrice.message });
+    expect(flag?.message).toMatch(/^The contract price of 5\.90 USD\/kg is below the minimum export price of 6\.61 USD\/kg/);
+  });
+
+  it("stays quiet for a price at the floor, and when the check can't tell", () => {
+    expect(rulesFired({ minimumPrice: checkOf(6.61) })).not.toContain("FL-03");
+    expect(rulesFired({ minimumPrice: checkOf(5.9, { effectiveFrom: "2026-11-01", effectiveTo: "2026-11-07" }) })).not.toContain("FL-03"); // no price on file
+    expect(rulesFired({ minimumPrice: checkOf(5.9, { currency: "EUR" }) })).not.toContain("FL-03"); // different currency
+    expect(rulesFired({ minimumPrice: checkMinimumPrice(null, []) })).not.toContain("FL-03");
+    expect(rulesFired({ minimumPrice: null })).not.toContain("FL-03");
+    expect(rulesFired()).not.toContain("FL-03");
+  });
+
+  it("is for coffee: it stays quiet where STEP-024 doesn't apply, and keeps firing once the step is done", () => {
+    const minimumPrice = checkOf(5.9);
+    expect(rulesFired({ facts: { ...US_SEA, product: "fresh_produce" }, minimumPrice })).not.toContain("FL-03");
+    expect(rulesFired({ steps: { "STEP-024": "completed" }, minimumPrice })).toContain("FL-03"); // still wrong after the step is done
   });
 });
 
@@ -237,7 +274,7 @@ describe("the rules together", () => {
 
   it("have a check, or say what they are waiting on", () => {
     const dormant = FAILURE_RULES.filter((r) => !CHECKED_FAILURE_RULES.includes(r.id));
-    expect(dormant.map((r) => r.id)).toEqual(["FL-03", "FL-05", "FL-06", "FL-10", "FL-11"]);
+    expect(dormant.map((r) => r.id)).toEqual(["FL-05", "FL-06", "FL-10", "FL-11"]);
     for (const rule of dormant) expect(rule.waitingOn, rule.id).toBeTruthy();
     for (const id of CHECKED_FAILURE_RULES) expect(FAILURE_RULES.some((r) => r.id === id), id).toBe(true);
   });

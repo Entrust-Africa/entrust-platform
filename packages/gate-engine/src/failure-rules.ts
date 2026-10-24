@@ -11,6 +11,7 @@ import {
 import { evaluateCondition } from "./conditions";
 import { clockInputOf, parseEventTime, type CaseEvent, type ClockId, type DeadlineClock } from "./deadlines";
 import { isDone } from "./evaluate";
+import type { MinimumPriceCheck } from "./minimum-price";
 import type { CaseEvaluation, CaseState, EvaluatedStep, RecordedStatus } from "./types";
 
 // The checks behind the failure rules in packages/rules. Each looks at what the engine has worked
@@ -28,6 +29,8 @@ export interface FailureCheckInput {
   clocks: readonly DeadlineClock[];
   /** The case's history, which the deadline clocks and the date-based rules read. */
   events: readonly CaseEvent[];
+  /** The contract price against the minimum export price (checkMinimumPrice). Left out when there is nothing to check. */
+  minimumPrice?: MinimumPriceCheck | null;
 }
 
 /** A rule that fired: what to raise, what it holds, and why. */
@@ -87,6 +90,14 @@ const CHECKS: Partial<Record<FailureRuleId, (c: Context) => Finding>> = {
       problems.push(`${String(c.state.facts.incoterm).toUpperCase()} is an Incoterm for sea transport, but the cargo goes by air`);
     }
     if (problems.length) return `The commercial terms conflict: ${problems.join("; ")}.`;
+  },
+
+  // Only a price that is below the floor fires. With no price on file, or a contract that isn't
+  // recorded yet, the check can't tell, and STEP-024 stays open instead of the case being flagged.
+  "FL-03": (c) => {
+    const price = c.minimumPrice;
+    const step = c.step("STEP-024");
+    if (price?.status === "below" && step && step.status !== "not_applicable") return price.message;
   },
 
   "FL-04": (c) => {

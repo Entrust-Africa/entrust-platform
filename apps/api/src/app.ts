@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { auth, type Session } from "@entrust/auth";
 import { health } from "./routes/health";
 import { clearCases } from "./routes/clear/cases";
+import { clearMinimumPrices } from "./routes/clear/minimum-prices";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
 
@@ -45,7 +46,11 @@ base.onError((error, c) => {
 });
 
 // Routes are chained so the typed client (src/client.ts) sees every endpoint.
-export const app = base.route("/v1", health).route("/v1", me).route("/v1/clear", clearCases);
+export const app = base
+  .route("/v1", health)
+  .route("/v1", me)
+  .route("/v1/clear", clearCases)
+  .route("/v1/clear", clearMinimumPrices);
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",

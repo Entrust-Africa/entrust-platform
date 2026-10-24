@@ -1,6 +1,13 @@
 import { z } from "@hono/zod-openapi";
 import { schema } from "@entrust/db";
-import { CLOCK_INPUT_KEYS, EVIDENCE_STATUSES, RECORDED_STATUSES } from "@entrust/gate-engine";
+import {
+  CLOCK_INPUT_KEYS,
+  COFFEE_TYPES,
+  EVIDENCE_STATUSES,
+  MAX_PRICE_ROWS,
+  PRICE_UNITS,
+  RECORDED_STATUSES,
+} from "@entrust/gate-engine";
 
 // What the CLEAR case endpoints take and give. The services build these shapes, so the OpenAPI
 // document, the typed client and the code can't drift apart.
@@ -148,6 +155,80 @@ const Flag = z
   })
   .openapi("Flag");
 
+// ---- Contract and minimum export prices ----
+
+const CoffeeType = z.enum(COFFEE_TYPES);
+const PriceUnit = z.enum(PRICE_UNITS);
+
+const Contract = z
+  .object({
+    number: z.string(),
+    buyerName: z.string(),
+    contractDate: z.string().openapi({ example: "2026-10-22" }),
+    unitPrice: z
+      .object({ amount: z.number(), currency: z.string().openapi({ example: "USD" }), per: PriceUnit })
+      .nullable(),
+    coffeeType: CoffeeType.nullable(),
+    grade: z.string().nullable(),
+    origin: z.string().nullable(),
+  })
+  .openapi("Contract");
+
+const MinimumPrice = z
+  .object({
+    id: z.uuid(),
+    tableId: z.uuid(),
+    effectiveFrom: z.string().openapi({ example: "2026-10-20" }),
+    effectiveTo: z.string().openapi({ example: "2026-10-26" }),
+    coffeeType: CoffeeType,
+    grade: z.string().openapi({ example: "1" }),
+    /** Null applies to every origin. */
+    origin: z.string().nullable(),
+    currency: z.string().openapi({ example: "USD" }),
+    unit: PriceUnit,
+    minPrice: z.number().openapi({ example: 6.61 }),
+  })
+  .openapi("MinimumPrice");
+
+const MinimumPriceCheck = z
+  .object({
+    /**
+     * waiting: the contract's price, coffee type or grade isn't recorded yet. no_price: no table has
+     * a price for the contract date, so STEP-024 stays open. not_comparable: different currencies.
+     * met: at or above the minimum. below: under the minimum, which raises FL-03.
+     */
+    status: z.enum(["waiting", "no_price", "not_comparable", "met", "below"]),
+    message: z.string(),
+    /** The minimum export price in force on the contract date, when a table gives one. */
+    minimum: MinimumPrice.nullable(),
+    /** The contract price in the minimum's unit, when the two could be compared. */
+    contractPrice: z.number().nullable(),
+  })
+  .openapi("MinimumPriceCheck");
+
+const PriceTableSummary = z
+  .object({
+    id: z.uuid(),
+    source: z.enum(schema.PRICE_TABLE_SOURCES),
+    label: z.string().nullable(),
+    createdAt: Timestamp,
+    createdByUserId: z.string().nullable(),
+    priceCount: z.number().int(),
+    effectiveFrom: z.string().nullable(),
+    effectiveTo: z.string().nullable(),
+  })
+  .openapi("PriceTableSummary");
+
+const PriceTableDetail = PriceTableSummary.extend({ prices: z.array(MinimumPrice) }).openapi("PriceTable");
+
+export const PriceTableCreated = PriceTableDetail.extend({
+  /** Open cases whose contract the new prices cover, which were checked again. */
+  casesRechecked: z.number().int(),
+}).openapi("PriceTableCreated");
+
+export const PriceTableList = z.object({ items: z.array(PriceTableSummary) }).openapi("PriceTableList");
+export { PriceTableDetail };
+
 // ---- Cases ----
 
 export const CaseSummary = z
@@ -177,6 +258,10 @@ export const CaseDetail = CaseSummary.extend({
   deadlines: z.array(DeadlineClock),
   /** Every flag the case has had, newest first. */
   flags: z.array(Flag),
+  /** The sales contract, once recorded. */
+  contract: Contract.nullable(),
+  /** The contract price against ECTA's minimum export price. Null where STEP-024 doesn't apply (not coffee). */
+  minimumPrice: MinimumPriceCheck.nullable(),
 }).openapi("CaseDetail");
 
 const CadCap = z
@@ -285,7 +370,64 @@ export const ClockInputBody = z
   })
   .openapi("ClockInputBody");
 
+const PriceRowInput = z.object({
+  effectiveFrom: z.string().openapi({ example: "2026-10-20" }),
+  effectiveTo: z.string().openapi({ example: "2026-10-26" }),
+  coffeeType: z.string().openapi({ description: "washed or unwashed", example: "washed" }),
+  grade: z.string().openapi({ example: "1" }),
+  origin: z.string().nullable().optional().openapi({ description: "Leave out to apply to every origin.", example: "Yirgacheffe" }),
+  unit: z.string().openapi({ description: "Currency and unit: USD/kg or USD/lb (USD/mt also works).", example: "USD/kg" }),
+  minPrice: z.union([z.number(), z.string()]).openapi({ description: "At most 4 decimals.", example: 6.61 }),
+});
+
+export const RecordPriceTableBody = z
+  .object({
+    label: z.string().optional().openapi({ description: "A note kept with the table, such as the week it is for." }),
+    prices: z.array(PriceRowInput).max(MAX_PRICE_ROWS),
+  })
+  .openapi("RecordPriceTableBody");
+
+export const UploadPriceCsvBody = z
+  .object({
+    csv: z.string().openapi({
+      description:
+        "The text of a CSV file with the header effective_from,effective_to,coffee_type,grade,origin,unit,min_price (origin is optional, columns can be in any order) and one row per price.",
+      example: "effective_from,effective_to,coffee_type,grade,origin,unit,min_price\n2026-10-20,2026-10-26,washed,1,Yirgacheffe,USD/kg,6.61",
+    }),
+    label: z.string().optional().openapi({ description: "A note kept with the table, such as the file name." }),
+  })
+  .openapi("UploadPriceCsvBody");
+
+export const PriceTableParam = z.object({ id: z.uuid() });
+
+export const RecordContractBody = z
+  .object({
+    number: z.string().openapi({ description: "The contract or purchase order number.", example: "PO-2026-114" }),
+    buyerName: z.string(),
+    contractDate: z.iso.date().openapi({ description: "The minimum export price in force on this day applies." }),
+    unitPrice: z
+      .object({
+        amount: z.number().positive().openapi({ example: 6.8 }),
+        currency: z.string().regex(/^[A-Za-z]{3}$/).openapi({ example: "USD" }),
+        per: PriceUnit,
+      })
+      .nullable()
+      .optional(),
+    coffeeType: CoffeeType.nullable().optional(),
+    grade: z.string().max(20).nullable().optional().openapi({ example: "1" }),
+    origin: z.string().nullable().optional().openapi({ example: "Yirgacheffe" }),
+  })
+  .openapi("RecordContractBody", {
+    description:
+      "Replaces the case's contract terms: anything left out is cleared. The minimum export price check needs the unit price, coffee type and grade.",
+  });
+
 export type CaseSummaryView = z.infer<typeof CaseSummary>;
 export type CaseDetailView = z.infer<typeof CaseDetail>;
 export type CaseCreatedView = z.infer<typeof CaseCreated>;
 export type CaseListView = z.infer<typeof CaseList>;
+export type ContractView = z.infer<typeof Contract>;
+export type MinimumPriceCheckView = z.infer<typeof MinimumPriceCheck>;
+export type PriceTableSummaryView = z.infer<typeof PriceTableSummary>;
+export type PriceTableDetailView = z.infer<typeof PriceTableDetail>;
+export type PriceTableCreatedView = z.infer<typeof PriceTableCreated>;

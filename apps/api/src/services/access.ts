@@ -75,3 +75,10 @@ export function requireRole(actor: Actor, allowed: readonly Actor[], doing: stri
     throw new ServiceError("forbidden", `Your role (${actor}) can't ${doing}.`);
   }
 }
+
+/** Throws unless the caller is Entrust staff in one of the given roles. */
+export function requireStaff(principal: Principal, allowed: readonly EntrustRole[], doing: string): void {
+  if (!principal.staffRole || !allowed.includes(principal.staffRole)) {
+    throw new ServiceError("forbidden", `Only Entrust ${allowed.join(" or ")} can ${doing}.`);
+  }
+}
