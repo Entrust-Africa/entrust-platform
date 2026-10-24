@@ -5,6 +5,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgSchema,
   primaryKey,
   smallint,
@@ -13,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { EVIDENCE_STATUSES, RECORDED_STATUSES, type CaseFacts } from "@entrust/gate-engine";
+import { COFFEE_TYPES, EVIDENCE_STATUSES, PRICE_UNITS, RECORDED_STATUSES, type CaseFacts } from "@entrust/gate-engine";
 import type { PhaseId, StepId } from "@entrust/rules";
 import { organization, user } from "./auth";
 
@@ -42,13 +43,70 @@ export const salesContract = clear.table(
     number: text("number").notNull(),
     buyerName: text("buyer_name").notNull(),
     contractDate: date("contract_date", { mode: "string" }).notNull(),
+    // The unit price as the parties wrote it, such as 6.61 USD per kg. All three are set or none.
+    unitPrice: numeric("unit_price", { precision: 14, scale: 4 }),
+    priceCurrency: text("price_currency"),
+    priceUnit: text("price_unit", { enum: PRICE_UNITS }),
+    // What the contract sells, for the minimum export price check (coffee).
+    coffeeType: text("coffee_type", { enum: COFFEE_TYPES }),
+    grade: text("grade"),
+    origin: text("origin"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (t) => [index("sales_contract_org_idx").on(t.organizationId)],
+  (t) => [
+    index("sales_contract_org_idx").on(t.organizationId),
+    check(
+      "sales_contract_unit_price_check",
+      sql`(${t.unitPrice} is null) = (${t.priceCurrency} is null) and (${t.unitPrice} is null) = (${t.priceUnit} is null) and (${t.unitPrice} is null or ${t.unitPrice} > 0)`,
+    ),
+  ],
+);
+
+/**
+ * - csv: uploaded as a file
+ * - manual: typed in
+ */
+export const PRICE_TABLE_SOURCES = ["csv", "manual"] as const;
+
+// One upload or one manual entry of ECTA's weekly minimum export prices. Tables are never edited
+// or deleted: a corrected table is a new one, and the latest table that covers a day decides.
+export const minimumPriceTable = clear.table("minimum_price_table", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  source: text("source", { enum: PRICE_TABLE_SOURCES }).notNull(),
+  // The file name, or a note the admin gave.
+  label: text("label"),
+  createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// One price: a minimum for a coffee, valid from effective_from to effective_to, both days included.
+export const minimumPrice = clear.table(
+  "minimum_price",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tableId: uuid("table_id")
+      .notNull()
+      .references(() => minimumPriceTable.id, { onDelete: "cascade" }),
+    effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+    effectiveTo: date("effective_to", { mode: "string" }).notNull(),
+    coffeeType: text("coffee_type", { enum: COFFEE_TYPES }).notNull(),
+    grade: text("grade").notNull(),
+    // Null applies to every origin.
+    origin: text("origin"),
+    currency: text("currency").notNull(),
+    unit: text("unit", { enum: PRICE_UNITS }).notNull(),
+    minPrice: numeric("min_price", { precision: 14, scale: 4 }).notNull(),
+  },
+  (t) => [
+    index("minimum_price_lookup_idx").on(t.coffeeType, t.effectiveFrom, t.effectiveTo),
+    index("minimum_price_table_idx").on(t.tableId),
+    check("minimum_price_dates_check", sql`${t.effectiveTo} >= ${t.effectiveFrom}`),
+    check("minimum_price_amount_check", sql`${t.minPrice} > 0`),
+  ],
 );
 
 // The last case number handed out per origin country and year. It only goes up, so a
@@ -242,6 +300,14 @@ export const caseFlag = clear.table(
 
 export const salesContractRelations = relations(salesContract, ({ many }) => ({
   cases: many(exportCase),
+}));
+
+export const minimumPriceTableRelations = relations(minimumPriceTable, ({ many }) => ({
+  prices: many(minimumPrice),
+}));
+
+export const minimumPriceRelations = relations(minimumPrice, ({ one }) => ({
+  table: one(minimumPriceTable, { fields: [minimumPrice.tableId], references: [minimumPriceTable.id] }),
 }));
 
 export const exportCaseRelations = relations(exportCase, ({ one, many }) => ({
