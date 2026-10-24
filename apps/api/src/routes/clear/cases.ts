@@ -6,6 +6,9 @@ import {
   CaseList,
   ClockInputBody,
   CreateCaseBody,
+  DocumentCatalogue,
+  DocumentFieldsBody,
+  DocumentParam,
   EvidenceParam,
   FlagParam,
   ListCasesQuery,
@@ -20,6 +23,7 @@ import {
 import { createCase, getCase, listCases, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
 import { recordContract } from "../../services/contracts";
+import { documentCatalogue, recordDocumentFields } from "../../services/documents";
 import { reviewEvidence, submitEvidence } from "../../services/evidence";
 import { waiveFlag } from "../../services/flags";
 import { transitionCaseStep } from "../../services/steps";
@@ -128,6 +132,27 @@ const recordContractRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
 
+const documentCatalogueRoute = createRoute({
+  method: "get",
+  path: "/document-fields",
+  tags,
+  summary: "List the fields of the shipping document comparison",
+  description:
+    "The 24 points compared across the shipping documents (and the quantity tolerance an LC states), and which documents may carry which fields. Use it to build the forms that enter them.",
+  responses: { 200: { description: "The fields and documents", content: json(DocumentCatalogue) }, ...listErrors },
+});
+
+const recordDocumentFieldsRoute = createRoute({
+  method: "put",
+  path: "/cases/{id}/documents/{document}/fields",
+  tags,
+  summary: "Enter what a document says",
+  description:
+    "Sets, or clears, fields read off one document: the commercial invoice, packing list, bill of lading or air waybill, certificate of origin, phytosanitary or quality certificate, plus the bank export permit and the letter of credit the rules read. Values are checked as they are typed (dates, weights with their units). Every field that two or more documents carry is then compared: agreement, with the quantity inside its UCP 600 tolerance, completes STEP-099; a difference raises FL-06 and holds the handoff to the bank until it is fixed or an Entrust reviewer waives it.",
+  request: { params: DocumentParam, body: { required: true, content: json(DocumentFieldsBody) } },
+  responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
+});
+
 const waiveFlagRoute = createRoute({
   method: "post",
   path: "/cases/{id}/flags/{flagId}/waive",
@@ -180,6 +205,12 @@ export const clearCases = cases
   .openapi(recordContractRoute, async (c) => {
     const { id } = c.req.valid("param");
     return c.json(await recordContract(await contextFor(c.get("user")), id, c.req.valid("json")), 200);
+  })
+  .openapi(documentCatalogueRoute, async (c) => c.json(documentCatalogue(), 200))
+  .openapi(recordDocumentFieldsRoute, async (c) => {
+    const { id, document } = c.req.valid("param");
+    const { fields } = c.req.valid("json");
+    return c.json(await recordDocumentFields(await contextFor(c.get("user")), id, document, fields), 200);
   })
   .openapi(waiveFlagRoute, async (c) => {
     const { id, flagId } = c.req.valid("param");

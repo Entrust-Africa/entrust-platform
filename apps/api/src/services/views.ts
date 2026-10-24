@@ -1,5 +1,16 @@
-import { EVIDENCE_TYPES, FAILURE_RULES } from "@entrust/rules";
-import { evidenceStatusOn, isDone, type Actor, type CaseEvaluation, type DeadlineClock, type MinimumPriceCheck } from "@entrust/gate-engine";
+import { EVIDENCE_TYPES, FAILURE_RULES, RECONCILIATION_DOCUMENTS } from "@entrust/rules";
+import {
+  evidenceStatusOn,
+  isDocumentRequired,
+  isDone,
+  type Actor,
+  type CaseEvaluation,
+  type DeadlineClock,
+  type DocumentValues,
+  type MinimumPriceCheck,
+  type Reconciliation,
+  type StepStatus,
+} from "@entrust/gate-engine";
 import type { CaseDetailView, CaseSummaryView, ContractView } from "../schemas/clear";
 import { evidenceRecord, latestEvidence, type CaseData } from "./case-data";
 
@@ -24,10 +35,13 @@ export function summaryOf(data: CaseData, organizationName: string, evaluation: 
   };
 }
 
-/** What the case detail shows besides the engine's workflow: the contract and its price check. */
-export interface PriceView {
+/** What the case detail shows besides the engine's workflow: the contract, the documents, and their checks. */
+export interface ChecksView {
   contract: ContractView | null;
   minimumPrice: MinimumPriceCheck | null;
+  /** What has been entered from each document, by document id. */
+  documents: Readonly<Record<string, DocumentValues>>;
+  reconciliation: Reconciliation | null;
 }
 
 export function detailOf(
@@ -36,7 +50,7 @@ export function detailOf(
   actor: Actor,
   evaluation: CaseEvaluation,
   clocks: readonly DeadlineClock[],
-  price: PriceView,
+  checks: ChecksView,
   now: Date,
 ): CaseDetailView {
   return {
@@ -61,11 +75,8 @@ export function detailOf(
         evidence: s.evidence,
         missingEvidence: s.missingEvidence,
         canComplete: s.canComplete,
-        // While STEP-024 is open, the check says why: no price on file, a price below the floor.
-        warnings:
-          s.id === "STEP-024" && price.minimumPrice && price.minimumPrice.status !== "met" && !isDone(s.status)
-            ? [...s.warnings, price.minimumPrice.message]
-            : s.warnings,
+        // While an automatic check is open, it says why: no price on file, a document that differs.
+        warnings: [...s.warnings, ...openCheckMessage(s.id, s.status, checks)],
       })),
       phases: evaluation.phases,
       nextAction: evaluation.nextAction,
@@ -86,23 +97,31 @@ export function detailOf(
       reviewNote: item.reviewNote,
     })),
     deadlines: [...clocks],
-    contract: price.contract,
-    minimumPrice: price.minimumPrice && {
-      status: price.minimumPrice.status,
-      message: price.minimumPrice.message,
-      minimum: price.minimumPrice.minimum && {
-        id: price.minimumPrice.minimum.id,
-        tableId: price.minimumPrice.minimum.tableId,
-        effectiveFrom: price.minimumPrice.minimum.effectiveFrom,
-        effectiveTo: price.minimumPrice.minimum.effectiveTo,
-        coffeeType: price.minimumPrice.minimum.coffeeType,
-        grade: price.minimumPrice.minimum.grade,
-        origin: price.minimumPrice.minimum.origin,
-        currency: price.minimumPrice.minimum.currency,
-        unit: price.minimumPrice.minimum.unit,
-        minPrice: price.minimumPrice.minimum.minPrice,
+    documents: RECONCILIATION_DOCUMENTS.map((d) => ({
+      document: d.id,
+      name: d.name,
+      role: d.role,
+      required: isDocumentRequired(d, data.row.facts),
+      fields: { ...checks.documents[d.id] },
+    })),
+    reconciliation: checks.reconciliation,
+    contract: checks.contract,
+    minimumPrice: checks.minimumPrice && {
+      status: checks.minimumPrice.status,
+      message: checks.minimumPrice.message,
+      minimum: checks.minimumPrice.minimum && {
+        id: checks.minimumPrice.minimum.id,
+        tableId: checks.minimumPrice.minimum.tableId,
+        effectiveFrom: checks.minimumPrice.minimum.effectiveFrom,
+        effectiveTo: checks.minimumPrice.minimum.effectiveTo,
+        coffeeType: checks.minimumPrice.minimum.coffeeType,
+        grade: checks.minimumPrice.minimum.grade,
+        origin: checks.minimumPrice.minimum.origin,
+        currency: checks.minimumPrice.minimum.currency,
+        unit: checks.minimumPrice.minimum.unit,
+        minPrice: checks.minimumPrice.minimum.minPrice,
       },
-      contractPrice: price.minimumPrice.contractPrice,
+      contractPrice: checks.minimumPrice.contractPrice,
     },
     flags: data.flags.toReversed().map((f) => ({
       id: f.id,
@@ -120,4 +139,12 @@ export function detailOf(
       resolvedAt: f.resolvedAt?.toISOString() ?? null,
     })),
   };
+}
+
+/** What an automatic check found, for the step it belongs to while the step is open. */
+function openCheckMessage(stepId: string, status: StepStatus, checks: ChecksView): string[] {
+  if (isDone(status)) return [];
+  if (stepId === "STEP-024" && checks.minimumPrice && checks.minimumPrice.status !== "met") return [checks.minimumPrice.message];
+  if (stepId === "STEP-099" && checks.reconciliation && checks.reconciliation.status !== "clear") return [checks.reconciliation.message];
+  return [];
 }

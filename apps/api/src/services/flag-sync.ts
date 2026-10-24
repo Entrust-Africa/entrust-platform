@@ -14,6 +14,7 @@ import {
 } from "./case-data";
 import type { Executor } from "./db";
 import { syncPriceCheck } from "./price-check";
+import { syncReconciliation } from "./reconciliation";
 
 export interface FlagSync {
   raised: number;
@@ -26,14 +27,15 @@ export interface FlagSync {
  * resolves. Run it in the transaction that changed the case, with the case locked. CLEAR does this
  * itself, so the audit rows have no user.
  *
- * The minimum export price check (STEP-024) runs first: it may complete that step, and the rules
- * read the case after that.
+ * The automatic checks run first: the minimum export price check (STEP-024) and the shipping
+ * document comparison (STEP-099) may complete their steps, and the rules read the case after that.
  *
  * The rules read the case as it would be without its flags. Otherwise a flag holding a step would
  * change the step's status, switch its own cause off, resolve, and raise again.
  */
 export async function syncFlags(tx: Executor, row: CaseRow, now: Date): Promise<FlagSync> {
   const minimumPrice = await syncPriceCheck(tx, row, now);
+  const reconciliation = await syncReconciliation(tx, row, now);
   const data = await loadOneCaseData(tx, row);
   const events = await loadEvents(tx, row.id);
   const input = deadlineInput(data, events);
@@ -45,6 +47,7 @@ export async function syncFlags(tx: Executor, row: CaseRow, now: Date): Promise<
       clocks: deadlines(data, events, now),
       events: input.events,
       minimumPrice,
+      reconciliation,
     },
     { now: now.toISOString() },
   );
