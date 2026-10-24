@@ -7,4 +7,5 @@ export * from "./sources";
 export { FACTS, EU_COUNTRIES, BULK_GOODS } from "./facts";
 export { STEPS } from "./steps";
 export { FAILURE_RULES } from "./failure-rules";
-export { validateDocuments, validateFailureRules, validateSteps, type Catalogue } from "./validate";
+export { compareVersions, validateDocuments, validateFailureRules, validateRulePacks, validateSteps, type Catalogue } from "./validate";
+export { RULE_PACKS, findRulePack, latestRulePack, packChanges, type PackChanges } from "./rule-packs";

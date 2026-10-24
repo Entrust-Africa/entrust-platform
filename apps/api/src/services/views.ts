@@ -11,7 +11,7 @@ import {
   type Reconciliation,
   type StepStatus,
 } from "@entrust/gate-engine";
-import type { CaseDetailView, CaseSummaryView, ContractView } from "../schemas/clear";
+import type { CaseDetailView, CaseRulePackView, CaseSummaryView, ContractView, RulePackUpdateView } from "../schemas/clear";
 import type { AmendmentRow } from "./amendment-sync";
 import { evidenceRecord, latestEvidence, type CaseData } from "./case-data";
 
@@ -45,6 +45,8 @@ export interface ChecksView {
   reconciliation: Reconciliation | null;
   /** The case's amendments, oldest first. */
   amendments: readonly AmendmentRow[];
+  rulePack: CaseRulePackView | null;
+  rulePackUpdate: RulePackUpdateView | null;
 }
 
 export function detailOf(
@@ -141,6 +143,8 @@ export function detailOf(
       },
       contractPrice: checks.minimumPrice.contractPrice,
     },
+    rulePack: checks.rulePack,
+    rulePackUpdate: checks.rulePackUpdate,
     flags: data.flags.toReversed().map((f) => ({
       id: f.id,
       rule: f.rule,

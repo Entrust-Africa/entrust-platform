@@ -34,7 +34,7 @@ export const Facts = z
   .record(z.string(), FactValue)
   .openapi("Facts", {
     description:
-      "Case facts by key: product, destinationCountry, transportMode, coldChain, paymentTerms (a list), incoterm, sourcingChannel, phytoCertificateRequired, healthCertificateRequired, customsChannel.",
+      "Case facts by key: product, destinationCountry, transportMode, coldChain, paymentTerms (a list), incoterm, sourcingChannel, phytoCertificateRequired, healthCertificateRequired, customsChannel, inlandTransport.",
     example: { product: "green_coffee", destinationCountry: "US", paymentTerms: ["advance_tt", "cad"] },
   });
 
@@ -58,6 +58,8 @@ const EvidenceCheck = z
   })
   .openapi("EvidenceCheck");
 
+const StepStatus = z.enum([...RECORDED_STATUSES, "undetermined"]);
+
 const StepState = z
   .object({
     id: z.string(),
@@ -67,7 +69,7 @@ const StepState = z
     milestone: z.boolean(),
     owner: Owner,
     applicability: z.enum(["applicable", "not_applicable", "undetermined"]),
-    status: z.enum([...RECORDED_STATUSES, "undetermined"]),
+    status: StepStatus,
     reason: z.string().nullable(),
     derived: z.boolean(),
     blockedBy: z.array(z.string()),
@@ -348,6 +350,99 @@ const Amendment = z
   })
   .openapi("Amendment");
 
+// ---- Rule packs ----
+
+const PackRequirement = z
+  .object({
+    code: z.string().openapi({ example: "USP-04" }),
+    name: z.string(),
+    description: z.string(),
+    /** What has to be done. */
+    action: z.string(),
+    whyItMatters: z.string(),
+    responsible: z.string(),
+    /** When it comes due. */
+    trigger: z.string(),
+    /** What shows it is done, in words. */
+    evidence: z.string(),
+    /** ISO country code of the country whose rule it is (EU for EU law); null for a transaction term. */
+    jurisdiction: z.string().nullable(),
+    authority: z.string(),
+    /**
+     * confirmed and conditional requirements are requirements of law and cite an official source.
+     * awaiting_verification: not established yet, never presented as law. transaction: from the
+     * deal's terms or the way it is carried out.
+     */
+    basis: z.enum(["confirmed", "conditional", "awaiting_verification", "transaction"]),
+    /** When it applies, if not always. */
+    appliesWhen: z.string().nullable(),
+    verification: z
+      .object({
+        /** verified: approved by Entrust. source_checked: the sources were read. awaiting_verification: the note says what is open. */
+        status: z.enum(["verified", "source_checked", "awaiting_verification"]),
+        /** The day its sources were last read. */
+        checkedOn: z.string().openapi({ example: "2026-10-24" }),
+        note: z.string(),
+      })
+      .openapi("RequirementVerification"),
+    sources: z.array(Source),
+    /** The canonical steps where the work is done. */
+    steps: z.array(z.string()),
+  })
+  .openapi("PackRequirement");
+
+const RulePackSummary = z
+  .object({
+    id: z.string().openapi({ example: "et-us-green-coffee" }),
+    version: z.string().openapi({ example: "0.4.0" }),
+    name: z.string(),
+    /** The cases it covers: Ethiopian exports of these products to these countries. */
+    corridor: z.object({ products: z.array(z.string()), destinations: z.array(z.string()) }),
+    route: z.string(),
+    /** draft until Entrust approves it. */
+    status: z.enum(["draft", "approved"]),
+    /** The day the sources were last checked for this version. */
+    checkedOn: z.string(),
+    /** What this version changed from the one before. */
+    changes: z.string(),
+    notes: z.array(z.string()),
+    /** True for the newest version of its pack, which new cases get. */
+    latest: z.boolean(),
+  })
+  .openapi("RulePackSummary");
+
+export const RulePackDetail = RulePackSummary.extend({ requirements: z.array(PackRequirement) }).openapi("RulePack");
+export const RulePackList = z.object({ items: z.array(RulePackSummary) }).openapi("RulePackList");
+
+const CaseRequirement = PackRequirement.extend({
+  /**
+   * not_applicable: its condition doesn't hold or none of its steps apply. undetermined: it depends
+   * on a fact not recorded yet. blocked: its remaining steps wait on others. open: some of its work
+   * can be done now. met: every step of it that applies is completed.
+   */
+  status: z.enum(["not_applicable", "undetermined", "blocked", "open", "met"]),
+  reason: z.string().nullable(),
+  steps: z.array(z.object({ id: z.string(), status: StepStatus })),
+}).openapi("CaseRequirement");
+
+const CaseRulePack = RulePackSummary.extend({
+  /** False once the case's product or destination has changed so that the pack no longer covers it. */
+  coversCase: z.boolean(),
+  requirements: z.array(CaseRequirement),
+}).openapi("CaseRulePack");
+
+const RulePackUpdate = z
+  .object({
+    /** The pack the case would move to. Null when no pack covers the case any more. */
+    id: z.string().nullable(),
+    version: z.string().nullable(),
+    /** Requirement codes the move adds, removes or changes. */
+    added: z.array(z.string()),
+    removed: z.array(z.string()),
+    changed: z.array(z.string()),
+  })
+  .openapi("RulePackUpdate");
+
 // ---- Cases ----
 
 export const CaseSummary = z
@@ -389,6 +484,13 @@ export const CaseDetail = CaseSummary.extend({
   version: z.number().int(),
   /** Every amendment, newest first. */
   amendments: z.array(Amendment),
+  /**
+   * The rule pack version the case was opened with, or moved to on purpose, with each requirement's
+   * status on the case. Null when no pack covered its product and destination.
+   */
+  rulePack: CaseRulePack.nullable(),
+  /** What re-evaluating the case's rule pack would move it to. Null when it is on the newest pack for its corridor. */
+  rulePackUpdate: RulePackUpdate.nullable(),
 }).openapi("CaseDetail");
 
 const CadCap = z
@@ -559,6 +661,13 @@ export const AmendCaseBody = z
   .openapi("AmendCaseBody");
 
 export const PriceTableParam = z.object({ id: z.uuid() });
+export const RulePackParam = z.object({ id: z.string(), version: z.string() });
+
+export const ReevaluateRulePackBody = z
+  .object({
+    reason: z.string().openapi({ description: "Why the case moves to another version. Kept in the audit log.", example: "Sources re-checked after the US tariff change" }),
+  })
+  .openapi("ReevaluateRulePackBody");
 export const DocumentParam = CaseIdParam.extend({
   document: z.string().openapi({ description: "The document's evidence type id.", example: "final_commercial_invoice" }),
 });
@@ -608,3 +717,7 @@ export type ReconciliationView = z.infer<typeof Reconciliation>;
 export type CaseDocumentView = z.infer<typeof CaseDocument>;
 export type DocumentCatalogueView = z.infer<typeof DocumentCatalogue>;
 export type AmendmentView = z.infer<typeof Amendment>;
+export type RulePackSummaryView = z.infer<typeof RulePackSummary>;
+export type RulePackDetailView = z.infer<typeof RulePackDetail>;
+export type CaseRulePackView = z.infer<typeof CaseRulePack>;
+export type RulePackUpdateView = z.infer<typeof RulePackUpdate>;

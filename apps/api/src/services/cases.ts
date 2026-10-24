@@ -10,6 +10,7 @@ import { syncFlags } from "./flag-sync";
 import { recordChange } from "./audit";
 import { fromEngine, ServiceError } from "./errors";
 import { applyFacts, changesRecordedFact, checkFacts, sameFacts, type FactInput } from "./facts";
+import { currentPack, pinnedPack, rulePackUpdate } from "./rule-packs";
 import { summaryOf } from "./views";
 
 export interface CreateCaseInput {
@@ -52,9 +53,19 @@ export async function createCase(ctx: Ctx, input: CreateCaseInput): Promise<Case
       country: profile?.country ?? "ET",
       year: ctx.now.getUTCFullYear(),
     });
+    // The case keeps the newest pack for its corridor as it stands now; later versions don't move it.
+    const pack = currentPack({ product: facts.product as string, destinationCountry: facts.destinationCountry as string });
+    const rulePack = pack && { id: pack.id, version: pack.version };
     const [row] = await tx
       .insert(schema.exportCase)
-      .values({ reference, organizationId, facts, createdByUserId: ctx.principal.userId })
+      .values({
+        reference,
+        organizationId,
+        facts,
+        rulePackId: rulePack?.id ?? null,
+        rulePackVersion: rulePack?.version ?? null,
+        createdByUserId: ctx.principal.userId,
+      })
       .returning();
     if (!row) throw new Error("The case was not created");
 
@@ -62,8 +73,8 @@ export async function createCase(ctx: Ctx, input: CreateCaseInput): Promise<Case
       caseId: row.id,
       organizationId,
       action: "case.created",
-      after: { reference, facts, cadCap: cadCap && { withinCap: cadCap.withinCap, excessUsd: cadCap.excessUsd } },
-      event: { type: "case_created", data: { facts, cadAmountUsd: input.cadAmountUsd ?? null } },
+      after: { reference, facts, rulePack, cadCap: cadCap && { withinCap: cadCap.withinCap, excessUsd: cadCap.excessUsd } },
+      event: { type: "case_created", data: { facts, rulePack, cadAmountUsd: input.cadAmountUsd ?? null } },
     });
     await syncFlags(tx, row, ctx.now);
     return { ...(await buildDetail(tx, row, actor, ctx.now)), cadCap };
@@ -154,6 +165,48 @@ export function updateFacts(ctx: Ctx, caseId: string, input: Record<string, Fact
       before,
       after,
       event: { type: "facts_updated", data: { set: change.set, cleared: change.clear } },
+    });
+  });
+}
+
+/**
+ * Moves a case to the newest pack for its product and destination: a newer version of its pack,
+ * the pack that covers it after its product or destination changed, or none if no pack does.
+ * Entrust admins and facilitators only, with a reason. The steps and evidence are untouched; only
+ * the requirements the case is checked against change.
+ */
+export function reevaluateRulePack(ctx: Ctx, caseId: string, input: { reason: string }): Promise<CaseDetailView> {
+  return mutateCase(ctx, caseId, async (tx, { row, actor }) => {
+    requireRole(actor, ["admin", "facilitator"], "move a case to another rule pack version");
+    const reason = input.reason.trim();
+    if (!reason) throw new ServiceError("invalid", "Give the reason for moving the case to another rule pack version.");
+    if (row.status === "closed" || row.status === "cancelled") {
+      throw new ServiceError("precondition_failed", `The case is ${row.status}, so it keeps the rule pack it had.`);
+    }
+    const update = rulePackUpdate(row);
+    if (!update) {
+      const pack = pinnedPack(row);
+      throw new ServiceError(
+        "invalid_transition",
+        pack
+          ? `The case is already on ${pack.id} ${pack.version}, the newest pack for ${row.product} to ${row.destinationCountry}.`
+          : `No rule pack covers ${row.product} to ${row.destinationCountry} yet.`,
+      );
+    }
+    await tx
+      .update(schema.exportCase)
+      .set({ rulePackId: update.id, rulePackVersion: update.version })
+      .where(eq(schema.exportCase.id, row.id));
+    const before = row.rulePackId ? { id: row.rulePackId, version: row.rulePackVersion } : null;
+    const after = update.id ? { id: update.id, version: update.version } : null;
+    await recordChange(tx, ctx.principal.userId, {
+      caseId: row.id,
+      organizationId: row.organizationId,
+      action: "case.rule_pack_changed",
+      before,
+      after: { rulePack: after, added: update.added, removed: update.removed, changed: update.changed },
+      reason,
+      event: { type: "rule_pack_changed", data: { before, after, reason } },
     });
   });
 }

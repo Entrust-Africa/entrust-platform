@@ -43,7 +43,8 @@ export type FactKey =
   | "sourcingChannel"
   | "phytoCertificateRequired"
   | "healthCertificateRequired"
-  | "customsChannel";
+  | "customsChannel"
+  | "inlandTransport";
 
 /**
  * Applicability condition over case facts.
@@ -279,4 +280,80 @@ export interface ReconciliationDocument {
   fields: readonly DocumentFieldKey[];
   /** Fields that must be entered before the comparison can come out clear. */
   requires?: readonly DocumentFieldRequirement[];
+}
+
+/**
+ * How firmly a rule pack requirement is established. Only confirmed and conditional requirements
+ * are presented as requirements of law, and both cite an official source.
+ * - confirmed: an official source that was read says so
+ * - conditional: an official source says so, for the cases `appliesWhen` describes
+ * - awaiting_verification: not established from an official source yet; shown for review, never as law
+ * - transaction: comes from the deal's terms or the way it is carried out, not from law
+ */
+export type RequirementBasis = "confirmed" | "conditional" | "awaiting_verification" | "transaction";
+
+/**
+ * Where a requirement stands as a rule, apart from any case's progress on it.
+ * - verified: Entrust reviewed and approved it
+ * - source_checked: the sources were read and support it
+ * - awaiting_verification: something is still open, and the note says what
+ */
+export type VerificationStatus = "verified" | "source_checked" | "awaiting_verification";
+
+/** One requirement of a corridor, on the canonical steps where its work is done. */
+export interface PackRequirement {
+  /** Stable from one version to the next, so a new version can say what changed. */
+  code: string;
+  name: string;
+  description: string;
+  /** What has to be done. */
+  action: string;
+  whyItMatters: string;
+  responsible: string;
+  /** When it comes due. */
+  trigger: string;
+  /** What shows it is done, in words. The steps say which evidence types they ask for. */
+  evidence: string;
+  /** ISO 3166-1 alpha-2 code of the country whose rule it is (EU for EU law); null for a transaction term. */
+  jurisdiction: string | null;
+  authority: string;
+  basis: RequirementBasis;
+  /**
+   * When it applies, if not always. Required for conditional requirements. Without a condition the
+   * steps decide, or a person marks them not applicable with the reason.
+   */
+  appliesWhen?: { condition?: Condition; description: string };
+  /** The day its sources were last read, and what they support or leave open. */
+  verification: { status: VerificationStatus; checkedOn: string; note: string };
+  sources: readonly SourceRef[];
+  /** The canonical steps where the work is done. It is met when all of them that apply are completed. */
+  steps: readonly StepId[];
+}
+
+/** draft until Entrust approves the pack's content. */
+export type RulePackStatus = "draft" | "approved";
+
+/**
+ * A corridor's requirements, as one version. A case keeps the version it was opened with, so a
+ * published version never changes: a correction is a new version.
+ */
+export interface RulePack {
+  id: string;
+  /** major.minor.patch */
+  version: string;
+  name: string;
+  /**
+   * The cases it covers, by the product and destination facts. Every CLEAR case is an Ethiopian
+   * export (the canonical steps are Ethiopia's), so the origin isn't matched.
+   */
+  corridor: { products: readonly string[]; destinations: readonly string[] };
+  route: string;
+  status: RulePackStatus;
+  /** The day the sources were last re-checked for this version. */
+  checkedOn: string;
+  /** What this version changed from the one before. */
+  changes: string;
+  /** Caveats that apply to the whole pack. */
+  notes: readonly string[];
+  requirements: readonly PackRequirement[];
 }
