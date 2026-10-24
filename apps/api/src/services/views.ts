@@ -1,6 +1,6 @@
 import { EVIDENCE_TYPES, FAILURE_RULES } from "@entrust/rules";
-import { evidenceStatusOn, type Actor, type CaseEvaluation, type DeadlineClock } from "@entrust/gate-engine";
-import type { CaseDetailView, CaseSummaryView } from "../schemas/clear";
+import { evidenceStatusOn, isDone, type Actor, type CaseEvaluation, type DeadlineClock, type MinimumPriceCheck } from "@entrust/gate-engine";
+import type { CaseDetailView, CaseSummaryView, ContractView } from "../schemas/clear";
 import { evidenceRecord, latestEvidence, type CaseData } from "./case-data";
 
 const TYPE_NAMES = new Map(EVIDENCE_TYPES.map((t) => [t.id, t.name]));
@@ -24,12 +24,19 @@ export function summaryOf(data: CaseData, organizationName: string, evaluation: 
   };
 }
 
+/** What the case detail shows besides the engine's workflow: the contract and its price check. */
+export interface PriceView {
+  contract: ContractView | null;
+  minimumPrice: MinimumPriceCheck | null;
+}
+
 export function detailOf(
   data: CaseData,
   organizationName: string,
   actor: Actor,
   evaluation: CaseEvaluation,
   clocks: readonly DeadlineClock[],
+  price: PriceView,
   now: Date,
 ): CaseDetailView {
   return {
@@ -54,7 +61,11 @@ export function detailOf(
         evidence: s.evidence,
         missingEvidence: s.missingEvidence,
         canComplete: s.canComplete,
-        warnings: s.warnings,
+        // While STEP-024 is open, the check says why: no price on file, a price below the floor.
+        warnings:
+          s.id === "STEP-024" && price.minimumPrice && price.minimumPrice.status !== "met" && !isDone(s.status)
+            ? [...s.warnings, price.minimumPrice.message]
+            : s.warnings,
       })),
       phases: evaluation.phases,
       nextAction: evaluation.nextAction,
@@ -75,6 +86,24 @@ export function detailOf(
       reviewNote: item.reviewNote,
     })),
     deadlines: [...clocks],
+    contract: price.contract,
+    minimumPrice: price.minimumPrice && {
+      status: price.minimumPrice.status,
+      message: price.minimumPrice.message,
+      minimum: price.minimumPrice.minimum && {
+        id: price.minimumPrice.minimum.id,
+        tableId: price.minimumPrice.minimum.tableId,
+        effectiveFrom: price.minimumPrice.minimum.effectiveFrom,
+        effectiveTo: price.minimumPrice.minimum.effectiveTo,
+        coffeeType: price.minimumPrice.minimum.coffeeType,
+        grade: price.minimumPrice.minimum.grade,
+        origin: price.minimumPrice.minimum.origin,
+        currency: price.minimumPrice.minimum.currency,
+        unit: price.minimumPrice.minimum.unit,
+        minPrice: price.minimumPrice.minimum.minPrice,
+      },
+      contractPrice: price.minimumPrice.contractPrice,
+    },
     flags: data.flags.toReversed().map((f) => ({
       id: f.id,
       rule: f.rule,

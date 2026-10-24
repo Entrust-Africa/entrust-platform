@@ -52,6 +52,11 @@ describe("signed out", () => {
       ["POST", `/cases/${id}/evidence`, {}],
       ["POST", `/cases/${id}/evidence/${id}/review`, {}],
       ["POST", `/cases/${id}/clock-inputs`, {}],
+      ["PUT", `/cases/${id}/contract`, {}],
+      ["GET", "/minimum-prices"],
+      ["GET", `/minimum-prices/${id}`],
+      ["POST", "/minimum-prices", {}],
+      ["POST", "/minimum-prices/csv", {}],
     ] as const) {
       const res = await call(null, method, path, body);
       expect([method, path, res.status, res.body.code]).toEqual([method, path, 401, "unauthenticated"]);
@@ -263,11 +268,15 @@ describe("API documentation", () => {
         "/v1/clear/cases",
         "/v1/clear/cases/{id}",
         "/v1/clear/cases/{id}/clock-inputs",
+        "/v1/clear/cases/{id}/contract",
         "/v1/clear/cases/{id}/evidence",
         "/v1/clear/cases/{id}/evidence/{evidenceId}/review",
         "/v1/clear/cases/{id}/facts",
         "/v1/clear/cases/{id}/flags/{flagId}/waive",
         "/v1/clear/cases/{id}/steps/{stepId}/transition",
+        "/v1/clear/minimum-prices",
+        "/v1/clear/minimum-prices/csv",
+        "/v1/clear/minimum-prices/{id}",
         "/v1/health",
         "/v1/me",
       ].sort(),

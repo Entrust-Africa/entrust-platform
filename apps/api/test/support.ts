@@ -8,7 +8,7 @@ import { app } from "../src/app";
 // Everything the tests create is named with PREFIX and removed afterwards. Cases take their
 // references from a country no real exporter has (QZ is reserved for user assignment), so they
 // never use up numbers from the real sequence.
-const PREFIX = "test-api-";
+export const PREFIX = "test-api-";
 export const COUNTRY = "QZ";
 const RUN = randomUUID().slice(0, 8);
 
@@ -64,7 +64,18 @@ export async function cleanup() {
     // Audit rows would otherwise outlive the organisation with their link set to null.
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
     await db.delete(schema.exportCase).where(inArray(schema.exportCase.organizationId, ids));
+    await db.delete(schema.salesContract).where(inArray(schema.salesContract.organizationId, ids));
     await db.delete(schema.organization).where(inArray(schema.organization.id, ids));
+  }
+  // Price tables belong to no organisation and are shared, so only the ones the tests labelled go.
+  const tables = await db
+    .select({ id: schema.minimumPriceTable.id })
+    .from(schema.minimumPriceTable)
+    .where(like(schema.minimumPriceTable.label, `${PREFIX}%`));
+  if (tables.length) {
+    const tableIds = tables.map((t) => t.id);
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, tableIds));
+    await db.delete(schema.minimumPriceTable).where(inArray(schema.minimumPriceTable.id, tableIds));
   }
   await db.delete(schema.user).where(like(schema.user.email, `${PREFIX}%`));
   await db.delete(schema.caseReferenceCounter).where(eq(schema.caseReferenceCounter.country, COUNTRY));

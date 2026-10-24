@@ -1,7 +1,4 @@
-import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { getDb } from "@entrust/db";
-import type { AppEnv } from "../../app";
-import { Problem } from "../../schemas/problem";
+import { createRoute } from "@hono/zod-openapi";
 import {
   CaseCreated,
   CaseDetail,
@@ -12,6 +9,7 @@ import {
   EvidenceParam,
   FlagParam,
   ListCasesQuery,
+  RecordContractBody,
   ReviewEvidenceBody,
   StepParam,
   StepTransitionBody,
@@ -19,47 +17,17 @@ import {
   UpdateFactsBody,
   WaiveFlagBody,
 } from "../../schemas/clear";
-import { loadPrincipal, type Ctx } from "../../services/access";
 import { createCase, getCase, listCases, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
-import { ServiceError } from "../../services/errors";
+import { recordContract } from "../../services/contracts";
 import { reviewEvidence, submitEvidence } from "../../services/evidence";
 import { waiveFlag } from "../../services/flags";
 import { transitionCaseStep } from "../../services/steps";
-
-const problem = (description: string) => ({ description, content: { "application/json": { schema: Problem } } });
-const json = <T extends object>(schema: T) => ({ "application/json": { schema } });
-
-const listErrors = { 400: problem("The request is malformed"), 401: problem("Not signed in") };
-const readErrors = { ...listErrors, 404: problem("No such case, or it belongs to another organisation") };
-const writeErrors = {
-  ...readErrors,
-  403: problem("The caller can see the case but their role can't make this change"),
-  409: problem("The status can't go there from where it is"),
-  422: problem("The values aren't allowed, or the change isn't possible yet"),
-};
+import { clearRouter, contextFor, json, listErrors, readErrors, writeErrors } from "./shared";
 
 const tags = ["CLEAR cases"];
 
-const cases = new OpenAPIHono<AppEnv>({
-  defaultHook: (result, c) => {
-    if (result.success) return;
-    const error = result.error.issues.map((i) => `${i.path.join(".") || "request"}: ${i.message}`).join("; ");
-    return c.json({ error, code: "invalid" as const }, 400);
-  },
-});
-
-// Signed in before anything else, so a stranger learns nothing from validation errors.
-cases.use("*", async (c, next) => {
-  if (!c.get("user")) throw new ServiceError("unauthenticated", "Not signed in.");
-  await next();
-});
-
-async function contextFor(user: { id: string } | null): Promise<Ctx> {
-  if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
-  const db = getDb();
-  return { db, principal: await loadPrincipal(db, user.id), now: new Date() };
-}
+const cases = clearRouter();
 
 const createCaseRoute = createRoute({
   method: "post",
@@ -149,6 +117,17 @@ const clockInputRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
 });
 
+const recordContractRoute = createRoute({
+  method: "put",
+  path: "/cases/{id}/contract",
+  tags,
+  summary: "Record the sales contract",
+  description:
+    "Records the buyer, the contract date and, for the minimum export price check, the unit price and what is sold (coffee type, grade, origin). The terms replace any recorded before, so send them all. For coffee, this runs the check: a price at or above the minimum export price in force on the contract date completes STEP-024, no price on file leaves it open, and a price below the floor raises FL-03.",
+  request: { params: CaseIdParam, body: { required: true, content: json(RecordContractBody) } },
+  responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writeErrors },
+});
+
 const waiveFlagRoute = createRoute({
   method: "post",
   path: "/cases/{id}/flags/{flagId}/waive",
@@ -197,6 +176,10 @@ export const clearCases = cases
   .openapi(clockInputRoute, async (c) => {
     const { id } = c.req.valid("param");
     return c.json(await recordClockInput(await contextFor(c.get("user")), id, c.req.valid("json")), 200);
+  })
+  .openapi(recordContractRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    return c.json(await recordContract(await contextFor(c.get("user")), id, c.req.valid("json")), 200);
   })
   .openapi(waiveFlagRoute, async (c) => {
     const { id, flagId } = c.req.valid("param");

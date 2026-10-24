@@ -1,17 +1,10 @@
-import { schema } from "@entrust/db";
-import {
-  CLOCK_ANCHOR_STEPS,
-  STEP_COMPLETED,
-  parseEventTime,
-  transitionStep,
-  type RecordedStatus,
-} from "@entrust/gate-engine";
+import { CLOCK_ANCHOR_STEPS, parseEventTime, transitionStep, type RecordedStatus } from "@entrust/gate-engine";
 import type { CaseDetailView } from "../schemas/clear";
 import type { Ctx } from "./access";
-import { recordChange } from "./audit";
 import { evaluate, loadOneCaseData } from "./case-data";
 import { mutateCase } from "./detail";
 import { fromEngine, ServiceError } from "./errors";
+import { writeStepTransition } from "./step-record";
 
 export interface StepTransitionInput {
   to: RecordedStatus;
@@ -52,28 +45,6 @@ export function transitionCaseStep(
       );
     }
 
-    const { status, reason } = transition.record;
-    await tx
-      .insert(schema.caseStep)
-      .values({ caseId: row.id, stepId: step.id, status, notApplicableReason: reason ?? null })
-      .onConflictDoUpdate({
-        target: [schema.caseStep.caseId, schema.caseStep.stepId],
-        set: { status, notApplicableReason: reason ?? null, updatedAt: ctx.now },
-      });
-
-    await recordChange(tx, ctx.principal.userId, {
-      caseId: row.id,
-      organizationId: row.organizationId,
-      action: `step.${transition.action}`,
-      before: { stepId: step.id, status: transition.from },
-      after: { stepId: step.id, status, reason: reason ?? null },
-      reason,
-      event: {
-        type: completing ? STEP_COMPLETED : "step_status_changed",
-        stepId: step.id,
-        data: { action: transition.action, from: transition.from, to: status },
-        occurredAt,
-      },
-    });
+    await writeStepTransition(tx, row, step, transition, { userId: ctx.principal.userId, now: ctx.now, occurredAt });
   });
 }
