@@ -43,6 +43,13 @@
       "when": 1792833295621,
       "tag": "0005_case_amendments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792834000000,
+      "tag": "0006_organization_management",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { clearMinimumPrices } from "./routes/clear/minimum-prices";
 import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
+import { organizations } from "./routes/organizations";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -50,6 +51,7 @@ base.onError((error, c) => {
 export const app = base
   .route("/v1", health)
   .route("/v1", me)
+  .route("/v1", organizations)
   .route("/v1/clear", clearCases)
   .route("/v1/clear", clearMinimumPrices)
   .route("/v1/clear", clearRulePacks);
