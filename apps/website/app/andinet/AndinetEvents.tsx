@@ -24,22 +24,34 @@ import Image from "next/image";
 import Link from "next/link";
 import { getEvents } from "../lib/getEvents";
 
-type UnifiedEvent = any;
-
 export const revalidate = 60;
 
 interface Event {
   _id: string;
   title: string;
+  description?: string;
   slug: { current: string };
   startDate: string;
   endDate: string;
   location: string;
-  image: string;
-  link: string;
-  ctaText: string;
+  image?: string;
+  link?: string;
+  ctaText?: string;
+  category?: string;
 }
 
+interface UnifiedEvent {
+  _id: string;
+  title: string;
+  description: string;
+  location: string;
+  date: string;
+  time?: string;
+  category: string;
+  image?: string;
+  ctaText: string;
+  link: string;
+}
 
 
 const highlightItems = [
@@ -66,7 +78,7 @@ export default async function AndinetEvents() {
   const events = await getEvents();
   // Map and enrich events with category and time (mocked for now)
   const now = new Date();
-  const unifiedEvents = events.map((event: any) => ({
+  const unifiedEvents = events.map((event: Event): UnifiedEvent => ({
     _id: event._id,
     title: event.title,
     description: event.description || "Event details coming soon.",
@@ -191,5 +203,4 @@ export default async function AndinetEvents() {
     </div>
   );
 }
-
 

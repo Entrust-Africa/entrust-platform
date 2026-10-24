@@ -68,8 +68,7 @@ function linkMatches(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function EcosystemNav() {
-  const pathname = usePathname();
+function EcosystemNavContent({ pathname }: { pathname: string }) {
 
   const [open, setOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -108,11 +107,6 @@ export default function EcosystemNav() {
     (platform === "andinet" || platform === "afri-bridge"
       ? "h-5 sm:h-6"
       : "h-5 sm:h-6") + (isGatewayHome ? " gateway-logo-transparent" : "");
-
-  useEffect(() => {
-    setOpen(false);
-    setSwitcherOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -284,4 +278,10 @@ export default function EcosystemNav() {
       ) : null}
     </header>
   );
+}
+
+export default function EcosystemNav() {
+  const pathname = usePathname();
+
+  return <EcosystemNavContent key={pathname} pathname={pathname} />;
 }

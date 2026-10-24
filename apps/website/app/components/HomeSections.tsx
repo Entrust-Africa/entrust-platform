@@ -87,11 +87,11 @@ export function TestimonialsSection() {
         <h2 className="home-section-title">Testimonials</h2>
         <div className="home-testimonials-list">
           <blockquote className="home-testimonial">
-            "Entrust Africa helped us scale our business and connect with new partners."
+            &quot;Entrust Africa helped us scale our business and connect with new partners.&quot;
             <footer>– SME Founder</footer>
           </blockquote>
           <blockquote className="home-testimonial">
-            "The community and events are top-notch. Highly recommended!"
+            &quot;The community and events are top-notch. Highly recommended!&quot;
             <footer>– Community Member</footer>
           </blockquote>
         </div>
