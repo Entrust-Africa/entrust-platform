@@ -13,9 +13,13 @@ test("a user can sign up, sign out, sign in, and is redirected when signed out",
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: "Export cases" })).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page).toHaveURL(/\/check-email\?/);
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+
+  // The CI environment logs verification emails instead of delivering them. The
+  // auth configuration does not require verification before sign-in, so continue
+  // the auth smoke test from the sign-in screen after asserting the handoff.
+  await page.goto("/sign-in");
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
