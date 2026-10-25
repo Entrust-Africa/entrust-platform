@@ -1,4 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+if (existsSync(".env")) {
+  process.loadEnvFile(".env");
+}
+
+const systemChromium = "/usr/bin/chromium";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -12,6 +19,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"],
+    launchOptions: {
+      executablePath:
+        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
+        (existsSync(systemChromium) && !process.env.CI ? systemChromium : undefined),
+    },
   },
   outputDir: "test-results",
 });

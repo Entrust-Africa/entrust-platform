@@ -14,8 +14,10 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@entrust/db": "workspace:*",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
+    "drizzle-orm": "^0.45.4",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2"
   }
