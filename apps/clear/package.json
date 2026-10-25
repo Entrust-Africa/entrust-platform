@@ -12,6 +12,8 @@
   "dependencies": {
     "@entrust/api": "workspace:*",
     "@entrust/auth": "workspace:*",
+    "@entrust/gate-engine": "workspace:*",
+    "@entrust/rules": "workspace:*",
     "@entrust/ui": "workspace:*",
     "next": "^16.4.2",
     "react": "^19.3.1",
