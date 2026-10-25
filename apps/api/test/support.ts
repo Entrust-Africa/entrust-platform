@@ -103,6 +103,20 @@ export async function call(user: TestUser | null, method: string, path: string, 
   return { status: response.status, body: (await response.json()) as Json };
 }
 
+/** Calls the API under /v1 in-process, as `user` (or signed out). */
+export async function callV1(user: TestUser | null, method: string, path: string, body?: unknown) {
+  const response = await app.request(`/v1${path}`, {
+    method,
+    headers: {
+      ...(user ? { cookie: user.cookie } : {}),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      origin: "http://localhost:3000",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Json };
+}
+
 export const FACTS = { product: "green_coffee", destinationCountry: "US", transportMode: "sea" };
 
 // ---- Putting a case in a state that would take dozens of calls to reach ----
