@@ -1,0 +1,320 @@
+import { HEALTH_CERT_REQUIRED } from "../facts";
+import type { PackRequirement, RulePack } from "../types";
+import {
+  CERTIFICATE_OF_ORIGIN,
+  CHECKED,
+  ETHIOPIAN_EXPORT,
+  TRADE_LICENCE,
+  US_FACILITY,
+  US_FSVP,
+  US_IMPORTER,
+  US_ISF,
+  US_PREVENTIVE_CONTROLS,
+  US_PRIOR_NOTICE,
+  US_RELEASE,
+  awaiting,
+  checked,
+  cite,
+  inWorkflowOrder,
+} from "./common";
+import { ET, US } from "./sources";
+
+// Rule pack: processed food made in Ethiopia to the United States, researched on 24 and 25
+// October 2026: packaged foods such as spice blends (berbere, mitmita), shiro, teff and injera
+// products, honey, snacks and sauces.
+//
+// A published version never changes: add a new version below and list it in ET_US_PROCESSED_FOOD.
+
+const ETHIOPIA: readonly PackRequirement[] = [
+  {
+    code: "CASE-02",
+    name: "The product: ingredients and processing state",
+    description:
+      "Processed food covers many products. Record each product's ingredients and processing state: they decide its HS code (USE-02), the allergens to declare (USP-09), and whether FDA's rules for acidified or low-acid canned food apply (USP-11), which turns on the pH, the water activity and the container.",
+    action: "Record the product's recipe, its processing and packing, and, for a wet product such as a sauce or paste, its pH and water activity.",
+    whyItMatters: "The US rules that apply to a processed food depend on what it is made of and how it is processed.",
+    responsible: "Exporter (the manufacturer), with the CLEAR facilitator",
+    trigger: "When the product is identified.",
+    evidence: "Product specification: ingredients, processing, packing; pH and water activity results where relevant.",
+    jurisdiction: null,
+    authority: "Entrust (the pack's scope)",
+    basis: "transaction",
+    verification: checked("The pack's scope: what the product is decides which of its requirements apply."),
+    sources: [],
+    steps: ["STEP-005", "STEP-006"],
+  },
+  {
+    code: "ELG-06",
+    name: "EFDA registration and certificates of competence",
+    description:
+      "A food manufacturer that sells in more than one region or abroad registers its plant with EFDA and gets a certificate of competence, scoring at least 85% against the technical requirements. No one may export food without EFDA's food exporter certificate of competence, issued after an inspection of the premises by at least two inspectors and renewed under the directive. Food made only for export needs no EFDA product registration, unless it is also sold in Ethiopia. Food for export must be safe and within the residue limits.",
+    action: "Record the manufacturer's EFDA registration and certificate of competence, the exporter's EFDA certificate, and their renewals.",
+    whyItMatters: "EFDA's export health certificate rests on them, and exporting food without the certificate is an offence.",
+    responsible: "Exporter and manufacturer (EFDA inspects and certifies)",
+    trigger: "Before the first export; renewal as the directives set.",
+    evidence: "EFDA certificates of competence (manufacturing and export).",
+    jurisdiction: "ET",
+    authority: "Ethiopian Food and Drug Authority (EFDA)",
+    basis: "confirmed",
+    verification: checked(
+      "Proclamation 1112/2019 Art. 4(2), 5(6), 6(1) to (3), 7(5) and 9; Directive 358/2013 Art. 2(1), 4 and 5 (manufacturers trading across regions or abroad; 85%); Directive 357/2013 Art. 5(1) and (3) (no food export without the certificate; the inspection) and 10 (renewal); Directive 360/2013 Art. 3 (product registration is for the domestic market). Directives 357 and 358 were issued under the repealed Proclamation 661/2009 and apply where consistent with 1112/2019 (Art. 70(3)). Entrust's answer named MoTRI and EFDA: MoTRI or the regional bureau issues the business licence (ELG-03). Open: whether a manufacturer exporting its own products also needs the exporter certificate.",
+    ),
+    sources: [
+      cite(ET.food1112, "Art. 4 to 9 and 70."),
+      cite(ET.efda358, "Art. 2, 4 and 5: manufacturers."),
+      cite(ET.efda357, "Art. 5 and 10: food exporters."),
+      cite(ET.efda360, "Art. 3: product registration is for the domestic market."),
+    ],
+    steps: ["STEP-004", "STEP-011"],
+  },
+  {
+    code: "PAY-06",
+    name: "Injera: letter of credit or advance payment only",
+    description: "Under the NBE directive, injera may be exported only against a letter of credit or advance payment, not cash against documents or consignment.",
+    action: "Agree a letter of credit or advance payment with the buyer.",
+    whyItMatters: "The bank won't issue an export permit for injera on other payment terms.",
+    responsible: "Exporter",
+    trigger: "When the payment terms are agreed.",
+    evidence: "Sales contract payment terms.",
+    jurisdiction: "ET",
+    authority: "National Bank of Ethiopia; the exporter's bank",
+    basis: "conditional",
+    appliesWhen: { description: "the product is injera" },
+    verification: checked("FXD/01/2024 Annex One 1.4.1: exports of chat, livestock and injera only with letters of credit and advance payment."),
+    sources: [cite(ET.nbeFxd, "Annex One 1.4.1.")],
+    steps: ["STEP-025"],
+  },
+  {
+    code: "QLT-11",
+    name: "Compulsory Ethiopian standards and labelling",
+    description:
+      "Food and its packaging must meet Ethiopian standards, and food under a compulsory Ethiopian Standard carries the mandatory mark and a current conformity certificate; MoTRI issues the permit for such products before they leave the country and may refuse it for goods that don't comply. Prepacked food carries a label in Amharic or English that isn't misleading and declares allergens; the compulsory labelling standards are CES 73:2013, CES 348:2023 and CES 349:2023.",
+    action: "Check whether the product falls under a compulsory Ethiopian Standard, and record its conformity certificate and MoTRI's permit if it does.",
+    whyItMatters: "MoTRI can stop an export that doesn't meet a compulsory standard.",
+    responsible: "Exporter (certificate from a recognised conformity assessment body)",
+    trigger: "Before export.",
+    evidence: "Conformity certificate and MoTRI permit, where a compulsory standard applies.",
+    jurisdiction: "ET",
+    authority: "Ministry of Trade and Regional Integration (MoTRI); Ethiopian Food and Drug Authority (EFDA)",
+    basis: "confirmed",
+    verification: awaiting(
+      "Proclamation 1112/2019 Art. 5(3) and (7), 53 and 54(e); Proclamation 1343/2024 Art. 25(3), 30(2)(c) and (d), 31 and 36(1)(c); the 2025 compulsory standards catalogue (CES 73:2013, 348:2023 and 349:2023, and product standards such as edible oils, fortified flour and juices). Open: how MoTRI applies the export permit to processed food in practice, and whether a label in the destination's language replaces the Amharic or English one for export-only packs. ECAE's site couldn't be reached.",
+    ),
+    sources: [
+      cite(ET.food1112, "Art. 5, 53 and 54."),
+      cite(ET.standards1343, "Art. 25, 30, 31 and 36."),
+      cite(ET.compulsoryStandards, "The compulsory standards, labelling among them."),
+    ],
+    steps: ["STEP-044", "STEP-068"],
+  },
+  {
+    code: "HLT-01",
+    name: "EFDA export health certificate",
+    description:
+      "EFDA issues an export health certificate on request, one per consignment, at its entry and exit offices, after checking the exporter's certificate of competence and that the food is in standard packaging with full labelling. It states the food and its quantity, the invoice number and that the food is fit for human consumption. EFDA also issues free sale and GMP certificates. The US doesn't require a health certificate for these foods; a buyer may.",
+    action: "Apply to EFDA for the certificate on the Electronic Single Window and record it.",
+    whyItMatters: "Where the buyer or the bank lists it, payment depends on it.",
+    responsible: "Exporter (certificate issued by EFDA)",
+    trigger: "Consignment packed, before it leaves Ethiopia.",
+    evidence: "EFDA export health certificate.",
+    jurisdiction: "ET",
+    authority: "Ethiopian Food and Drug Authority (EFDA)",
+    basis: "conditional",
+    appliesWhen: { condition: HEALTH_CERT_REQUIRED, description: "the buyer or the bank asks for a health certificate (recorded at STEP-042)" },
+    verification: checked(
+      "Proclamation 1112/2019 Art. 4(7) and 10(5) (on request); Directive 357/2013 Art. 26 (one consignment; what it states; a phytosanitary certificate first for fruit, vegetables and cereals); Regulation 370/2015 Art. 3(7) and (14) (inspection fees; free sale and GMP certificates). The eSW lists EFDA's health certificate and free sale certificate forms. Open: the fees and turnaround, and whether a free sale certificate needs the product registered for Ethiopia.",
+    ),
+    sources: [
+      cite(ET.food1112, "Art. 4(7) and 10(5)."),
+      cite(ET.efda357, "Art. 26: the export health certificate."),
+      cite(ET.efdaFees, "Art. 3: the certificates and their fees."),
+      cite(ET.eswForms, "EFDA's certificate forms on the eSW."),
+    ],
+    steps: ["STEP-051", "STEP-070"],
+  },
+  CERTIFICATE_OF_ORIGIN,
+];
+
+const US_SIDE: readonly PackRequirement[] = [
+  {
+    code: "USE-02",
+    name: "US tariff classification and duty",
+    description:
+      "The duty depends on the HTS heading: a spice mixture such as berbere is 0910.91.00 (1.9%), natural honey 0409.00.00 (1.9 cents a kilogram), sauces and mixed condiments 2103.90.90 (6.4%), food preparations not elsewhere specified 2106.90, and breads such as injera 1905.90. A seasoning with substantial non-spice ingredients leaves heading 0910 for 2103.90.90. Ethiopia has no AGOA or GSP preference, and no additional US duty applies to Ethiopian food. Entry is made within 15 days of landing.",
+    action: "Classify each product, confirm its rate before shipping, and consider a binding ruling for a product that could fall under two headings.",
+    whyItMatters: "Classification decides the duty and whether the packs must be marked with the country of origin (USP-05).",
+    responsible: "US importer of record or its broker",
+    trigger: "Before shipment (classification); within 15 days of landing (entry).",
+    evidence: "Tariff lookup or ruling; entry summary or broker confirmation.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP); USITC tariff schedule",
+    basis: "confirmed",
+    verification: checked(
+      "HTSUS 2026 Revision 21: 0910.91.00 1.9%, 0409.00.00 1.9 cents/kg, 2103.90.90 6.4%; CBP rulings N327895 (Ethiopian berbere in 0910.91.00) and NY B88084 (berbere, mitmita and kolo, 2106.90); General Notes 4 and 16 (no GSP; Ethiopia not an AGOA beneficiary since 1 January 2022). The additional-duty position of the coffee pack holds (IEEPA duties ended, Section 122 expired, EO 14436 waived). Rates for headings 1905, 2106 and 1106 weren't read line by line. Time-sensitive: check again before each shipment.",
+    ),
+    sources: [
+      cite(US.hts, "Rev. 21: the headings named."),
+      cite(US.cbpBerbere, "Ethiopian berbere: 0910.91.00."),
+      cite(US.cbpMitmita, "Berbere, mitmita and kolo from Ethiopia."),
+      cite(US.htsGeneralNotes, "General Notes 4 (GSP) and 16 (AGOA beneficiaries)."),
+      cite(US.agoaEthiopia, "Ethiopia's AGOA designation ended on 1 January 2022."),
+      cite(US.cfrEntry, "142.2: entry within 15 days of landing."),
+    ],
+    steps: ["STEP-036", "STEP-106"],
+  },
+  {
+    code: "USP-07",
+    name: "FDA import alerts",
+    description:
+      "An FDA import alert lets FDA detain every shipment of a listed firm's product without examining it. Ethiopian firms are on Import Alert 99-19 for Salmonella (berbere, mitmita, shiro and pepper mixes among them) and on 99-39 for misbranding. Other alerts that catch processed foods: 99-22 (undeclared major allergens), 99-37 and 99-36 (acidified and low-acid canned foods without a filed process or process information), 45-02 (illegal colours, which can't be reconditioned), 99-42 (heavy metals, with LAAF-accredited testing from 23 October 2026) and 36-04 (honey with unsafe drug residues).",
+    action: "Check the exporter and the manufacturer against the import alerts before contracting; for a listed firm, arrange the laboratory evidence for release in advance.",
+    whyItMatters: "A listed firm's shipments are held until evidence clears them, and the importer's FSVP weighs the history (USP-02).",
+    responsible: "Exporter, with the US importer",
+    trigger: "Before the contract; every shipment of a listed firm.",
+    evidence: "Import alert check; laboratory reports where needed.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "confirmed",
+    verification: awaiting(
+      "FDA's Ethiopia page lists Ethiopian firms on 99-19 and 99-39 only; 99-19 (published 20 October 2026) lists Ethiopian berbere, mitmita, pepper mixes and shiro, 2009 to 2019. 99-37 holds low-acid and acidified foods without a filed scheduled process; 99-42 requires LAAF testing of toxic elements from 23 October 2026; 45-02 (23 October 2026): illegal colours can't be reconditioned. FDA's list of alerts shows 99-22 (undeclared allergens, 13 October 2026), 99-36 and 36-04 (honey, 2 October 2026). Open: the Ethiopian entries on 99-39 (the page was too large to read).",
+    ),
+    sources: [
+      cite(US.alertsEthiopia, "Only 99-19 and 99-39 name Ethiopian firms."),
+      cite(US.alertSalmonella, "Ethiopian Red List entries."),
+      cite(US.alertMisbranding, "Misbranding."),
+      cite(US.alertNoProcess, "No filed scheduled process."),
+      cite(US.alertsList, "99-22, 99-36 and 36-04."),
+      cite(US.alertColours, "Illegal colours."),
+      cite(US.alertHeavyMetals, "Heavy metals; LAAF testing from 23 October 2026."),
+      cite(US.laaf, "The LAAF programme."),
+    ],
+    steps: ["STEP-037", "STEP-060"],
+  },
+  US_FSVP,
+  US_IMPORTER,
+  US_FACILITY,
+  US_PREVENTIVE_CONTROLS,
+  {
+    code: "USP-11",
+    name: "Acidified and low-acid canned foods: FCE registration and process filing",
+    description:
+      "A shelf-stable food in a hermetically sealed container (can, sealed jar, retort pouch) with a water activity above 0.85 is a low-acid canned food when its pH is above 4.6, or an acidified food when acid brings a low-acid food to pH 4.6 or below (pickled peppers, many shelf-stable pepper pastes and sauces). Its processor registers the plant with FDA on Form 2541 (the FCE number) before any offer for import, files a scheduled process for each product and container size (the SID) before packing it, and works under a supervisor trained at an FDA-approved school. FDA checks the FCE and SID at entry and detains products without a match. Dry foods (water activity 0.85 or below: spice powders, shiro, teff flour, dried injera, honey), naturally acid foods, jams and refrigerated foods aren't covered.",
+    action: "Have a process authority test the product's pH and water activity; if it is acidified or low-acid canned, record the FCE number and the SID for each product and container size.",
+    whyItMatters: "Shipments without a matching FCE and SID are detained, and the products are listed on Import Alert 99-37.",
+    responsible: "Exporter (the processor), through its process authority",
+    trigger: "Before the first shipment of each product and container size.",
+    evidence: "Process authority letter; FCE number and SIDs.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "conditional",
+    appliesWhen: {
+      description:
+        "the product is shelf-stable, in a hermetically sealed container, with a water activity above 0.85, and either low-acid (pH above 4.6) or acidified to pH 4.6 or below",
+    },
+    verification: checked(
+      "21 CFR 108.25 (acidified foods: registration on Form 2541, before import for foreign processors; process filing on 2541e) and 108.35 (low-acid canned foods: 2541d, 2541f or 2541g), 113.3 and 114.3 (definitions and exclusions); FDA Compliance Program 7303.070 (FCE and SID checked at entry; detention when missing or mismatched); Import Alert 99-37. Parts 108, 113 and 114 were last amended in 2016.",
+    ),
+    sources: [
+      cite(US.cfrAcidified, "108.25: acidified foods."),
+      cite(US.cfrLowAcid, "108.35: low-acid canned foods."),
+      cite(US.cfrLowAcidDefinitions, "113.3: definitions."),
+      cite(US.cfrAcidDefinitions, "114.3: definitions and exclusions."),
+      cite(US.fdaCanningProgram, "The FCE and SID checked at entry."),
+      cite(US.alertNoProcess, "Detention without a filed process."),
+    ],
+    steps: ["STEP-006", "STEP-038"],
+  },
+  {
+    code: "USP-12",
+    name: "Colours and food additives",
+    description:
+      "Every colour must be listed by FDA for its use, and certified colours must come from FDA-certified batches; an unlisted or uncertified colour makes the food adulterated, and it can't be reconditioned. Other added substances must be approved food additives or generally recognized as safe; spices such as paprika and black cumin are. FD&C Red No. 3 is revoked for food from 15 January 2027. Irradiated spices are allowed up to 30 kGy, labelled with the radura.",
+    action: "Check every colour and additive in the recipe against FDA's lists, and record the treatment of any irradiated or fumigated ingredient.",
+    whyItMatters: "Illegal colours are one of the commonest reasons spice products are refused, and they can't be fixed after shipment.",
+    responsible: "Exporter (the manufacturer)",
+    trigger: "When the recipe is set.",
+    evidence: "Recipe checked against FDA's colour and additive listings.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "confirmed",
+    verification: checked(
+      "21 CFR part 73 subpart A (colours exempt from certification, paprika and paprika oleoresin among them), 182.10 (spices generally recognized as safe, Nigella sativa and capsicum among them) and 179.26 (irradiation up to 30 kGy; labelling); Federal Register 2026-15920 (Red No. 3 revoked from 15 January 2027; the stay lifted 5 August 2026); Import Alert 45-02. Not read: EPA pesticide tolerances (40 CFR part 180), and fumigation with ethylene oxide.",
+    ),
+    sources: [
+      cite(US.cfrColours, "Colours exempt from certification."),
+      cite(US.cfrSpicesGras, "182.10: spices generally recognized as safe."),
+      cite(US.cfrIrradiation, "179.26: irradiation."),
+      cite(US.frRedNo3, "Red No. 3 revoked from 15 January 2027."),
+      cite(US.alertColours, "Illegal colours can't be reconditioned."),
+    ],
+    steps: ["STEP-006"],
+  },
+  {
+    code: "USP-09",
+    name: "US food labelling",
+    description:
+      "Food packed for US consumers carries, in English: the common name on the front panel, the net quantity in ounces and pounds (metric optional), the ingredients by weight, the name and place of business of the manufacturer, packer or distributor, a Nutrition Facts panel unless an exemption applies (insignificant nutrients, small packages, or a small business's low-volume products notified to FDA), and the nine major allergens, sesame among them since 2023, in a \"Contains\" statement or the ingredient list. If any statement is in Amharic, all the required statements must be repeated in Amharic. Food shipped in bulk to a US processor or packer under a written agreement doesn't need these labels.",
+    action: "Check the label against FDA's rules before printing, or for bulk, record the processing agreement with the US customer.",
+    whyItMatters: "Misbranded food, and food with an undeclared allergen, is refused admission (Import Alerts 99-39 and 99-22).",
+    responsible: "Exporter (the manufacturer), with the US importer",
+    trigger: "Before the packaging is printed.",
+    evidence: "Approved label artwork, or the bulk processing agreement.",
+    jurisdiction: "US",
+    authority: "US Food and Drug Administration (FDA)",
+    basis: "conditional",
+    appliesWhen: { description: "the food is packed for sale to consumers (bulk for a US processor or packer under a written agreement is exempt)" },
+    verification: checked(
+      "21 CFR 101.3, 101.4, 101.5, 101.7, 101.9 (nutrition labelling; exemptions in (j)(4), (j)(13) and (j)(18)), 101.15(c) (English; statements repeated in any other language used), 101.22 (colours and preservatives) and 101.100(d) (bulk for further processing: a signed agreement kept for 2 years); 21 U.S.C. 321(qq) and 343(w) (allergens; sesame from 1 January 2023). Open: whether a bulk shipment must still declare allergens; FDA's proposed front-of-package nutrition rule isn't in force.",
+    ),
+    sources: [
+      cite(US.cfrLabelling, "101.3 to 101.22."),
+      cite(US.cfrNutrition, "101.9: nutrition labelling and its exemptions."),
+      cite(US.cfrBulkExemption, "101.100(d): bulk for further processing."),
+      cite(US.uscAllergens, "321(qq): the major food allergens."),
+      cite(US.uscMisbranding, "343(w): allergen declaration."),
+      cite(US.fdaAllergens, "Sesame from 1 January 2023."),
+    ],
+    steps: ["STEP-043"],
+  },
+  {
+    code: "USP-05",
+    name: "Country-of-origin marking",
+    description:
+      "Processed food must be marked with the English name of the country of origin, such as \"Product of Ethiopia\", on the retail pack, or on the outermost container for bulk. Spices of HTS headings 0904, 0909 and 0910, berbere and mitmita among them, and their containers are exempt.",
+    action: "Put \"Product of Ethiopia\" on the packs, unless the importer confirms the spice exemption applies.",
+    whyItMatters: "Unmarked goods are held at entry or charged marking duties.",
+    responsible: "Exporter (marks the packs); the US importer is liable at entry",
+    trigger: "When the packaging is printed.",
+    evidence: "Photograph of the pack marks.",
+    jurisdiction: "US",
+    authority: "US Customs and Border Protection (CBP)",
+    basis: "confirmed",
+    verification: checked("19 CFR 134.11 and 134.35; 19 U.S.C. 1304(g) (the spice exemption, containers included); CBP ruling N327895 (Ethiopian berbere and its container need no marking)."),
+    sources: [cite(US.cfrMarking, "134.11 and 134.35."), cite(US.uscMarking, "1304(g): spices."), cite(US.cbpBerbere, "Ethiopian berbere: no marking needed.")],
+    steps: ["STEP-043", "STEP-066"],
+  },
+  US_PRIOR_NOTICE,
+  US_ISF,
+  US_RELEASE,
+];
+
+const V0_1_0: RulePack = {
+  id: "et-us-processed-food",
+  version: "0.1.0",
+  name: "Ethiopian processed food to the United States",
+  corridor: { products: ["processed_food"], destinations: ["US"] },
+  route: "Ethiopia to Djibouti (port of loading) to the United States, or by air",
+  status: "draft",
+  checkedOn: CHECKED,
+  changes: "First version, researched on 24 and 25 October 2026.",
+  notes: [
+    "Draft for Entrust's review: no requirement is verified by Entrust yet.",
+    "Processed food is a broad category: what a product is made of decides which requirements apply (CASE-02). Products with a plant component may also have APHIS conditions, which weren't researched here.",
+    "Not applicable: FDA's food traceability rule (none of these foods is on its list, and FDA won't enforce it before 20 July 2028).",
+    "Not modelled: EPA pesticide tolerances for ingredients (40 CFR part 180); honey's drug residue checks beyond Import Alert 36-04.",
+  ],
+  requirements: inWorkflowOrder([...ETHIOPIAN_EXPORT, TRADE_LICENCE, ...ETHIOPIA, ...US_SIDE]),
+};
+
+/** Every published version, oldest first. */
+export const ET_US_PROCESSED_FOOD: readonly RulePack[] = [V0_1_0];

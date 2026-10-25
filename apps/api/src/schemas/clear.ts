@@ -365,7 +365,7 @@ const PackRequirement = z
     trigger: z.string(),
     /** What shows it is done, in words. */
     evidence: z.string(),
-    /** ISO country code of the country whose rule it is (EU for EU law); null for a transaction term. */
+    /** ISO country code of the country whose rule it is (EU for EU law, GCC for Gulf Cooperation Council law); null for a transaction term. */
     jurisdiction: z.string().nullable(),
     authority: z.string(),
     /**

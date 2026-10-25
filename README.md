@@ -96,9 +96,15 @@ pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
   awaiting verification, or a transaction term), its sources with links, the day they were checked,
   and the canonical steps it sits on. A requirement's status on a case is read from those steps.
   Nothing is presented as law without an official source: the packs are validated when the package
-  loads, and a requirement that isn't established is labelled awaiting verification. The first pack
-  is green coffee to the US (`et-us-green-coffee` 0.4.0), ported from the simulation and checked
-  again on 24 October 2026. A case keeps the version it was opened with (`rule_pack_id`,
+  loads, and a requirement that isn't established is labelled awaiting verification. The launch
+  corridors each have a pack: green coffee to the US (`et-us-green-coffee` 0.4.0, ported from the
+  simulation), green and roasted coffee to the EU, black cumin and paprika to Türkiye and to the US,
+  Hass avocado to the EU and to the six GCC states, and processed food to the US (each 0.1.0,
+  researched on 24 and 25 October 2026). A pack covers a product category (the case's product
+  fact); the spice, avocado and processed food packs say in CASE-02 which products they were
+  researched for. The requirements every Ethiopian
+  export shares, and the sources, are in `packs/common.ts` and `packs/sources.ts`, so a change to
+  one of them changes every pack that lists it. A case keeps the version it was opened with (`rule_pack_id`,
   `rule_pack_version`), so publishing a new version changes no open case: the case detail shows
   what the newer version would change (`rulePackUpdate`), and an Entrust admin or facilitator moves
   the case with `POST /v1/clear/cases/{id}/rule-pack` and a reason. A published version is never

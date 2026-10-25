@@ -17,6 +17,12 @@ const errorsFor = (...packs: RulePack[]) => validateRulePacks(packs, catalogue);
 // when a version is published.
 const PUBLISHED: Record<string, string> = {
   "et-us-green-coffee@0.4.0": "463105a6b68d60dc8e753ca3c0e035b2e592ccbfbd22b82fb0a808a222be97d3",
+  "et-eu-coffee@0.1.0": "18478f98c129a3f8ed34d103aa59e2bb27b935a0c43a21c237b125f2cdf208eb",
+  "et-tr-spices@0.1.0": "7b22d1ad22675fc1103fe8fabc3849cf295eb85726efb045c32cd0311a97655f",
+  "et-us-spices@0.1.0": "13fd93cf74dc4c1bc95774066abcbb466beceb8cae8ecb1e9a8b21c16cf7c901",
+  "et-eu-avocado@0.1.0": "b277c1fa4a813d10a1dacd28337c5cd985b1878022dd2047ce15e7f9ae92b925",
+  "et-gcc-avocado@0.1.0": "600d267f3fcbe772677ffdb5123f3b85413e90fd7c65fb6a2ae7c0964445a29e",
+  "et-us-processed-food@0.1.0": "e3f91eb2041dcb62d3203a986249322f8ffcd6d9bd0e7e6c02fbe27edf58db2d",
 };
 
 describe("rule packs", () => {
@@ -47,11 +53,24 @@ describe("rule packs", () => {
     expect(latestRulePack("green_coffee", "US")?.version).toBe("0.4.0");
     expect(latestRulePack("green_coffee", " us ")?.id).toBe("et-us-green-coffee");
     expect(latestRulePack("roasted_coffee", "US")).toBeUndefined();
-    expect(latestRulePack("green_coffee", "DE")).toBeUndefined();
+    expect(latestRulePack("green_coffee", "JP")).toBeUndefined();
     expect(latestRulePack("green_coffee", undefined)).toBeUndefined();
     // Versions of one pack may cover the same corridor; two different packs may not.
     expect(errorsFor(pack, newer)).toEqual([]);
     expect(errorsFor(pack, { ...pack, id: "other-coffee" })).toEqual(["other-coffee and et-us-green-coffee both cover green_coffee to US"]);
+  });
+
+  it("cover the launch corridors", () => {
+    const covering = (product: string, destination: string) => latestRulePack(product, destination)?.id;
+    expect(covering("green_coffee", "US")).toBe("et-us-green-coffee");
+    expect(covering("green_coffee", "DE")).toBe("et-eu-coffee");
+    expect(covering("roasted_coffee", "FR")).toBe("et-eu-coffee");
+    expect(covering("oilseeds_spices", "TR")).toBe("et-tr-spices");
+    expect(covering("oilseeds_spices", "US")).toBe("et-us-spices");
+    expect(covering("fresh_produce", "NL")).toBe("et-eu-avocado");
+    expect(["SA", "AE", "QA", "KW", "BH", "OM"].map((c) => covering("fresh_produce", c))).toEqual(Array(6).fill("et-gcc-avocado"));
+    expect(covering("processed_food", "US")).toBe("et-us-processed-food");
+    expect(covering("fresh_produce", "US")).toBeUndefined();
   });
 
   it("says what a new version changes, by requirement code", () => {
@@ -80,6 +99,14 @@ describe("rule pack validation", () => {
     ]);
   });
 
+  it("refuses a requirement that can't apply to any case the pack covers", () => {
+    const at = "et-us-green-coffee@0.4.0";
+    // STEP-041 is the EU's check, and this pack covers the US.
+    expect(errorsFor(withRequirement("USP-02", { steps: ["STEP-041"] }))).toContain(`${at} USP-02: never applies to a case this pack covers`);
+    const toTurkey = { condition: { fact: "destinationCountry" as const, in: ["TR"] }, description: "the destination is Türkiye" };
+    expect(errorsFor(withRequirement("USP-04", { appliesWhen: toTurkey }))).toEqual([`${at} USP-04: never applies to a case this pack covers`]);
+  });
+
   it("keeps a requirement awaiting verification labelled as such", () => {
     const usp06 = pack.requirements.find((r) => r.code === "USP-06")!;
     expect(errorsFor(withRequirement("USP-06", { verification: { ...usp06.verification, status: "source_checked" } }))).toEqual([
@@ -103,6 +130,8 @@ describe("rule pack validation", () => {
     ]);
     expect(errorsFor(withRequirement("USP-04", { steps: ["STEP-002"] }))).toContain(`${at}: USP-04 starts before USE-01, so it goes first`);
     expect(errorsFor({ ...pack, version: "1.0" })).toContain("et-us-green-coffee@1.0: the version is major.minor.patch");
+    expect(errorsFor(withRequirement("USP-04", { jurisdiction: "GCC" }))).toEqual([]);
+    expect(errorsFor(withRequirement("USP-04", { jurisdiction: "Gulf" }))).toEqual([`${at} USP-04: jurisdiction Gulf is not an ISO country code`]);
     expect(errorsFor(pack, pack)).toContain(`${at}: published twice`);
   });
 });

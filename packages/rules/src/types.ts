@@ -314,7 +314,10 @@ export interface PackRequirement {
   trigger: string;
   /** What shows it is done, in words. The steps say which evidence types they ask for. */
   evidence: string;
-  /** ISO 3166-1 alpha-2 code of the country whose rule it is (EU for EU law); null for a transaction term. */
+  /**
+   * ISO 3166-1 alpha-2 code of the country whose rule it is (EU for EU law, GCC for the Gulf
+   * Cooperation Council's common law and standards); null for a transaction term.
+   */
   jurisdiction: string | null;
   authority: string;
   basis: RequirementBasis;

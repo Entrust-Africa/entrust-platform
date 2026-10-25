@@ -37,6 +37,22 @@ function conditionErrors(id: string, condition: Condition, facts: ReadonlyMap<Fa
   return fact.options ? condition.in.filter((v) => !allowed.has(v)).map((v) => `${id}: ${condition.fact} has no value "${v}"`) : [];
 }
 
+/** A condition's value from the facts given, or undefined while a fact it needs isn't given. */
+function holds(condition: Condition, facts: Partial<Record<FactKey, string>>): boolean | undefined {
+  if ("not" in condition) {
+    const value = holds(condition.not, facts);
+    return value === undefined ? undefined : !value;
+  }
+  if ("all" in condition || "any" in condition) {
+    const values = ("all" in condition ? condition.all : condition.any).map((c) => holds(c, facts));
+    const decisive = "all" in condition ? false : true;
+    if (values.includes(decisive)) return decisive;
+    return values.includes(undefined) ? undefined : !decisive;
+  }
+  const value = facts[condition.fact];
+  return value === undefined ? undefined : condition.in.includes(value);
+}
+
 /** Check a step list for internal consistency. Returns one message per problem; empty when valid. */
 export function validateSteps(steps: readonly StepDefinition[], catalogue: Catalogue): string[] {
   const errors: string[] = [];
@@ -252,6 +268,9 @@ export function validateRulePacks(
     for (const product of pack.corridor.products) if (!products.has(product)) fail(`unknown product ${product}`);
     for (const country of pack.corridor.destinations) if (!/^[A-Z]{2}$/.test(country)) fail(`destination ${country} is not an ISO country code`);
     if (pack.requirements.length === 0) fail("has no requirements");
+    const corridors = pack.corridor.products.flatMap((product) =>
+      pack.corridor.destinations.map((destinationCountry) => ({ product, destinationCountry })),
+    );
 
     // Listed in the order their work starts, so a pack reads like the workflow.
     const firstAt = (r: RulePack["requirements"][number]) => Math.min(...r.steps.map((s) => position.get(s) ?? Infinity));
@@ -268,7 +287,7 @@ export function validateRulePacks(
       codes.add(r.code);
       if (!/^[A-Z]{2,4}-\d{2}$/.test(r.code)) wrong("the code looks like ELG-01");
       for (const field of TEXT_FIELDS) if (!r[field].trim()) wrong(`${field} is empty`);
-      if (r.jurisdiction !== null && !/^[A-Z]{2}$/.test(r.jurisdiction)) wrong(`jurisdiction ${r.jurisdiction} is not an ISO country code`);
+      if (r.jurisdiction !== null && !/^([A-Z]{2}|GCC)$/.test(r.jurisdiction)) wrong(`jurisdiction ${r.jurisdiction} is not an ISO country code`);
 
       if (r.steps.length === 0) wrong("is on no step");
       if (new Set(r.steps).size !== r.steps.length) wrong("lists a step twice");
@@ -277,6 +296,13 @@ export function validateRulePacks(
         wrong("is only on exception steps, so it would apply only once one is raised");
       }
       if (r.appliesWhen?.condition) errors.push(...conditionErrors(id, r.appliesWhen.condition, facts));
+      // It has to be able to apply to some case the pack covers: not only on steps for another
+      // destination, say, or under a condition the corridor rules out.
+      const possible = (c: Condition | undefined, corridor: Partial<Record<FactKey, string>>) => !c || holds(c, corridor) !== false;
+      const applies = corridors.some(
+        (c) => possible(r.appliesWhen?.condition, c) && r.steps.some((s) => steps.has(s) && possible(steps.get(s)?.appliesWhen?.condition, c)),
+      );
+      if (r.steps.length && r.steps.every((s) => steps.has(s)) && !applies) wrong("never applies to a case this pack covers");
       if (r.appliesWhen && !r.appliesWhen.description.trim()) wrong("appliesWhen needs a description");
 
       // Nothing unsourced is presented as a requirement of law.
