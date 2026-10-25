@@ -62,11 +62,11 @@ export const EnqueueJobResponse = z
 
 export const JobStatusParams = z
   .object({
-    queue: z.string().openapi({
+    queue: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/).openapi({
       description: "Queue name of the job",
       example: "send-email",
     }),
-    jobId: z.string().openapi({
+    jobId: z.string().min(1).max(128).openapi({
       description: "Job ID",
       example: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     }),

@@ -12,10 +12,13 @@ let startPromise: Promise<PgBoss> | null = null;
 
 export function resolveDatabaseUrl(): string {
   if (!process.env.DATABASE_URL) {
-    try {
-      process.loadEnvFile("../../.env");
-    } catch {
-      // Fall back if file is missing
+    for (const envPath of [".env", "../../.env", "../../../.env"]) {
+      try {
+        process.loadEnvFile(envPath);
+        if (process.env.DATABASE_URL) break;
+      } catch {
+        // Fall back if file is missing
+      }
     }
   }
   const url = process.env.DATABASE_URL || "postgres://entrust:entrust@localhost:5432/entrust_platform";

@@ -19,20 +19,27 @@ async function main() {
 
   // Register worker for SEND_EMAIL
   await boss.work(JOB_NAMES.SEND_EMAIL, async (jobs: any) => {
-    const job = Array.isArray(jobs) ? jobs[0] : jobs;
-    if (!job) return;
-    console.info(`[worker] Processing send-email job: ${job.id}`);
-    const result = await handleSendEmail(job.data);
-    console.info(`[worker] Completed send-email job: ${job.id}`);
-    return result;
+    const list = Array.isArray(jobs) ? jobs : [jobs];
+    let lastResult: any = null;
+    for (const job of list) {
+      if (!job) continue;
+      console.info(`[worker] Processing send-email job: ${job.id}`);
+      lastResult = await handleSendEmail(job.data);
+      console.info(`[worker] Completed send-email job: ${job.id}`);
+    }
+    return lastResult;
   });
 
   // Register worker for TEST_FAIL
   await boss.work(JOB_NAMES.TEST_FAIL, async (jobs: any) => {
-    const job = Array.isArray(jobs) ? jobs[0] : jobs;
-    if (!job) return;
-    console.info(`[worker] Processing test-fail job: ${job.id}`);
-    return await handleTestFail(job.data);
+    const list = Array.isArray(jobs) ? jobs : [jobs];
+    let lastResult: any = null;
+    for (const job of list) {
+      if (!job) continue;
+      console.info(`[worker] Processing test-fail job: ${job.id}`);
+      lastResult = await handleTestFail(job.data);
+    }
+    return lastResult;
   });
 
   console.info("[worker] All background job handlers registered and ready.");
