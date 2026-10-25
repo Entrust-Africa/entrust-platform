@@ -70,6 +70,7 @@ export async function cleanup() {
   if (ids.length) {
     // Audit rows would otherwise outlive the organisation with their link set to null.
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
+    await db.delete(schema.file).where(inArray(schema.file.organizationId, ids));
     await db.delete(schema.exportCase).where(inArray(schema.exportCase.organizationId, ids));
     await db.delete(schema.salesContract).where(inArray(schema.salesContract.organizationId, ids));
     await db.delete(schema.organization).where(inArray(schema.organization.id, ids));
