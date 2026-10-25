@@ -334,10 +334,6 @@ p, .entrust-page-lead, .entrust-home-section-copy, .entrust-story-copy, .entrust
 
 /* === DESIGN TOKENS: FONT SCALE & SPACING SYSTEM === */
 :root {
-  /* Font families */
-  --font-heading: 'Montserrat', system-ui, sans-serif;
-  --font-body: 'Open Sans', system-ui, sans-serif;
-
   /* Font scale (8px grid, responsive with clamp) */
   --font-size-h1: clamp(2.5rem, 6vw, 3.5rem); /* 40–56px */
   --font-size-h2: clamp(2rem, 4vw, 2.5rem);   /* 32–40px */
@@ -803,14 +799,14 @@ button:focus-visible, a:focus-visible {
 }
 /* === Global Font and Typography === */
 html {
-  font-family: 'Montserrat', 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
   font-size: 18px;
   color: #18181b;
   background: #fff;
 }
 
 body {
-  font-family: 'Open Sans', 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-body), var(--font-heading), Arial, sans-serif;
   font-size: 1.08rem;
   color: #18181b;
   background: #fff;
@@ -831,14 +827,14 @@ body {
 /* Remove extra font styles and unify */
 
 html {
-  font-family: 'Montserrat', 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-heading), var(--font-body), Arial, sans-serif;
   font-size: 18px;
   color: #18181b;
   background: #fff;
 }
 
 body {
-  font-family: 'Open Sans', 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-body), var(--font-heading), Arial, sans-serif;
   font-size: 18px;
   color: #18181b;
   background: #fff;
@@ -1012,7 +1008,7 @@ body {
   margin-bottom: 1.25rem;
 }
 .afri-bridge-hero-card-modern .afri-bridge-hero-title {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 2rem;
   font-weight: 700;
   color: #1f7fe5;
@@ -1058,7 +1054,7 @@ body {
   transition: box-shadow 0.2s, transform 0.2s;
   cursor: pointer;
   color: #18181b;
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1.08rem;
   box-sizing: border-box;
 }
@@ -1135,14 +1131,14 @@ body {
   font-weight: 700;
   color: #18181b;
   margin-bottom: 0.5rem;
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
 }
 .platform-card p {
   font-size: 1.08rem;
   color: #444;
   line-height: 1.6;
   margin-bottom: 1.2rem;
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
 }
 .platform-card .inline-block {
   margin-top: 0.5rem;
@@ -1186,14 +1182,14 @@ body {
 }
 
 html {
-  font-family: 'Montserrat', 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-heading), var(--font-body), Arial, sans-serif;
   font-size: 18px;
   color: var(--color-text-primary);
   background: var(--color-white);
 }
 
 body {
-  font-family: 'Open Sans', 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-body), var(--font-heading), Arial, sans-serif;
   font-size: 16px;
   color: var(--color-text-primary);
   background: var(--color-white);
@@ -1202,7 +1198,7 @@ body {
 }
 
 h1 {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 40px;
   font-weight: 700;
   color: var(--color-text-primary);
@@ -1279,14 +1275,14 @@ section {
 }
 
 h2, .programs h2, .gateway-card h3 {
-  font-family: 'Montserrat', sans-serif;
+  font-family: var(--font-heading), sans-serif;
   font-weight: 700;
   color: #222;
   margin-bottom: 16px;
 }
 
 p, .programs p, .gateway-card p {
-  font-family: 'Open Sans', sans-serif;
+  font-family: var(--font-body), sans-serif;
   color: #444;
   margin-bottom: 12px;
   /* removed stray closing brace */
@@ -1360,7 +1356,7 @@ p, .programs p, .gateway-card p {
   box-shadow: 0 6px 24px #bbf7d0;
 }
 .gateway-card .gateway-title {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #18181b;
@@ -1368,7 +1364,7 @@ p, .programs p, .gateway-card p {
   text-align: center;
 }
 .gateway-card .gateway-desc {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1.05rem;
   font-weight: 400;
   color: #222;
@@ -1393,7 +1389,7 @@ p, .programs p, .gateway-card p {
   border-radius: 10px;
   background: #16a34a;
   color: white;
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1rem;
   font-weight: 600;
   border: none;
@@ -1419,7 +1415,7 @@ p, .programs p, .gateway-card p {
 }
 /* === HOMEPAGE-SPECIFIC UI REFINEMENTS === */
 .gateway-page {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   background: #fff;
   color: #18181b;
 }
@@ -1444,7 +1440,7 @@ p, .programs p, .gateway-card p {
 }
 
 .gateway-page h1, .gateway-page .h1 {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 2.5rem;
   font-weight: 700;
   line-height: 1.22;
@@ -1452,14 +1448,14 @@ p, .programs p, .gateway-card p {
   letter-spacing: -0.01em;
 }
 .gateway-page h2, .gateway-page .h2 {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 2rem;
   font-weight: 700;
   line-height: 1.22;
   margin-bottom: 1.25rem;
 }
 .gateway-page p, .gateway-page .body {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1.125rem;
   font-weight: 400;
   line-height: 1.7;
@@ -1496,14 +1492,14 @@ p, .programs p, .gateway-card p {
   border: 1.5px solid rgba(0,0,0,0.07);
 }
 .gateway-page .platform-title {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #18181b;
   margin-bottom: 0.25rem;
 }
 .gateway-page .platform-tagline {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1.05rem;
   font-weight: 400;
   color: #222;
@@ -1513,7 +1509,7 @@ p, .programs p, .gateway-card p {
   line-height: 1.6;
 }
 .gateway-page .explore-btn {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1rem;
   font-weight: 600;
   border-radius: 0.75rem;
@@ -1536,20 +1532,20 @@ p, .programs p, .gateway-card p {
 .gateway-page .shadow-md { box-shadow: 0 4px 24px 0 rgba(0,0,0,0.04); }
 .gateway-page .shadow-2xl { box-shadow: 0 20px 40px rgba(22,163,74,0.08), 0 2px 8px rgba(0,0,0,0.03); }
 .gateway-page .transition-section { transition: all 0.6s cubic-bezier(0.4,0,0.2,1); }
-.gateway-page .font-montserrat { font-family: 'Montserrat', Arial, sans-serif !important; }
-.gateway-page .font-opensans { font-family: 'Open Sans', Arial, sans-serif !important; }
+.gateway-page .font-montserrat { font-family: var(--font-heading), Arial, sans-serif !important; }
+.gateway-page .font-opensans { font-family: var(--font-body), Arial, sans-serif !important; }
 
 /* === HOMEPAGE-SPECIFIC UI REFINEMENTS === */
 /* === Entrust Africa Global Typography & Spacing System === */
 html {
   font-size: 16px;
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   color: #18181b;
   background: #fff;
 }
 
 body {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.6;
@@ -1561,10 +1557,10 @@ body {
 
 /* Font utility classes */
 .font-montserrat {
-  font-family: 'Montserrat', Arial, sans-serif !important;
+  font-family: var(--font-heading), Arial, sans-serif !important;
 }
 .font-opensans {
-  font-family: 'Open Sans', Arial, sans-serif !important;
+  font-family: var(--font-body), Arial, sans-serif !important;
 }
 
 /* === Spacing Utilities === */
@@ -1591,7 +1587,7 @@ body {
 
 /* === Button, Card, and Section Consistency === */
 .btn, .btn-primary, .btn-secondary, .btn-outline {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-weight: 600;
   border-radius: 0.75rem;
   box-shadow: 0 2px 8px rgba(22,163,74,0.08);
@@ -1682,7 +1678,7 @@ body {
 
 /* Gateway Card Typography */
 .card-gateway .platform-title {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: #111;
@@ -1690,7 +1686,7 @@ body {
   margin-bottom: 0.25rem;
 }
 .card-gateway .platform-tagline {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
   font-size: 1.05rem;
   font-weight: 400;
   color: #222;
@@ -1700,7 +1696,7 @@ body {
   line-height: 1.6;
 }
 .card-gateway .explore-btn {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 1rem;
   font-weight: 600;
   border-radius: 0.75rem;
@@ -1726,10 +1722,10 @@ body {
 /* ...existing code... */
 /* Font utility classes */
 .font-montserrat {
-  font-family: 'Montserrat', Arial, sans-serif;
+  font-family: var(--font-heading), Arial, sans-serif;
 }
 .font-opensans {
-  font-family: 'Open Sans', Arial, sans-serif;
+  font-family: var(--font-body), Arial, sans-serif;
 }
 
 
@@ -1968,8 +1964,6 @@ body {
   --space-section: clamp(3rem, 5vw, 5rem);
   --space-card: clamp(1.2rem, 2vw, 1.7rem);
   --radius-card: 1.1rem;
-  --font-heading: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-body: 'Open Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   /* Platform brand accents (Entrust / Andinet / Afri-Bridge) */
   --brand-entrust: #19954f;
   --brand-entrust-hover: #157642;

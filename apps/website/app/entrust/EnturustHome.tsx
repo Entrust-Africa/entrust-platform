@@ -188,7 +188,7 @@ export default function EntrustHome() {
       {/* --- Testimonials Section --- */}
       <section className="entrust-home-section entrust-home-testimonials-section" style={{ background: '#f9fafb', padding: '4rem 0', marginTop: '2.5rem' }}>
         <div className="entrust-home-shell" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 1.5rem' }}>
-          <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '2.2rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '2.2rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
             What SMEs Say About Our Programs
           </h2>
           <div style={{
@@ -205,7 +205,7 @@ export default function EntrustHome() {
             <TestimonialCard quote="The training helped us structure our pricing and costs." category="SME" context="SME Export Training" />
             <TestimonialCard quote="We are now preparing to export for the first time." category="SME" context="SME Export Training" />
           </div>
-          <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
             Client Feedback
           </h2>
           <div style={{

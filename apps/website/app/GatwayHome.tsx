@@ -214,7 +214,7 @@ export default function Gateway() {
       </SectionContainer>
       <SectionContainer className="gateway-hm-section gateway-shell-balanced gateway-shell-right-offset px-0" style={{ marginTop: '2.5rem', marginBottom: '2.5rem' }}>
         <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 1.5rem' }}>
-          <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '2.2rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '2.2rem', textAlign: 'center', letterSpacing: '-0.01em' }}>
             Trusted by SMEs and Organizations Across Africa
           </h2>
           <div style={{

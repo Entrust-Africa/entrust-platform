@@ -69,10 +69,17 @@ function linkMatches(pathname: string, href: string): boolean {
 }
 
 function EcosystemNavContent({ pathname }: { pathname: string }) {
-
+  const [previousPathname, setPreviousPathname] = useState(pathname);
   const [open, setOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement | null>(null);
+
+  if (pathname !== previousPathname) {
+    setPreviousPathname(pathname);
+    setOpen(false);
+    setSwitcherOpen(false);
+  }
+
   const platform = activePlatform(pathname);
   const currentLinks = platform ? SECTION_LINKS[platform] : [];
   const otherPlatforms = PLATFORMS.filter((item) => item.id !== platform);
@@ -91,10 +98,6 @@ function EcosystemNavContent({ pathname }: { pathname: string }) {
     logoSrc = "/src/assets/afri-bridge-logo.jpeg";
     logoAlt = "Afri-bridge logo";
   }
-  /** Same destinations on every platform (ecosystem-wide, not Andinet-only). */
-  const quickJoinHref = "/community";
-  const quickEventsHref = "/events";
-  const quickPartnerHref = "/partners";
   const themeClass =
     platform === "andinet"
       ? "theme-andinet"
@@ -283,5 +286,5 @@ function EcosystemNavContent({ pathname }: { pathname: string }) {
 export default function EcosystemNav() {
   const pathname = usePathname();
 
-  return <EcosystemNavContent key={pathname} pathname={pathname} />;
+  return <EcosystemNavContent pathname={pathname} />;
 }
