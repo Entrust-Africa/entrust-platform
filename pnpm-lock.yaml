@@ -251,6 +251,12 @@ importers:
       '@entrust/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@entrust/gate-engine':
+        specifier: workspace:*
+        version: link:../../packages/gate-engine
+      '@entrust/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@entrust/ui':
         specifier: workspace:*
         version: link:../../packages/ui
