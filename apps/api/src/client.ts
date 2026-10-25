@@ -14,3 +14,14 @@ export function createApiClient(baseUrl: string, init?: RequestInit) {
 }
 
 export type { AppType };
+
+// The shapes the CLEAR endpoints return, for apps that pass them between components.
+export type {
+  AmendmentView,
+  CaseDetailView,
+  CaseRulePackView,
+  CaseSummaryView,
+  ContractView,
+  MinimumPriceCheckView,
+  RulePackUpdateView,
+} from "./schemas/clear";

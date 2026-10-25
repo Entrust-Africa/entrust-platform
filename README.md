@@ -115,6 +115,12 @@ To use Neon instead of local Postgres, put its pooled connection string in `DATA
 The website reads its own `apps/website/.env` (see `apps/website/.env.example`).
 
 - CLEAR `/sign-in` creates an account and signs in (through the API).
+- CLEAR `/` lists the cases the signed-in user can see, `/cases/new` opens one, and `/cases/{id}` is
+  the case workspace: its phases and gates, steps, evidence, flags, facts, contract, deadlines and
+  rule pack requirements. Every change is a Server Action that calls the API as the visitor, so the
+  API decides what they may do; the pages only choose which controls to show, from the GATE
+  engine's transition tables (`apps/clear/src/lib/catalogue.ts`). A user who isn't in an
+  organisation yet can't open a case: organisations are managed in #18.
 - CLEAR `/design` shows the design system draft.
 
 ## Database changes
