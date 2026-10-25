@@ -44,7 +44,11 @@ async function allocateSmeId() {
 
 const createOrganization = z.object({
   name: z.string().trim().min(1).max(160),
-  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers, and hyphens (e.g. 'my-company').")
+    .max(80),
   legalName: z.string().trim().min(1).max(200),
   tin: z.string().trim().max(80).optional(),
   country: z.string().trim().length(2).default("ET"),
@@ -65,18 +69,36 @@ export const organizations = new Hono<AppEnv>()
       .where(eq(schema.member.userId, user.id));
     return c.json({ organizations: rows });
   })
-  .post("/organizations", zValidator("json", createOrganization), async (c) => {
-    const user = requireUser(c);
-    const body = c.req.valid("json");
-    const db = getDb();
-    const id = crypto.randomUUID();
-    const smeId = await allocateSmeId();
-    await db.insert(schema.organization).values({ id, name: body.name, slug: body.slug, createdAt: new Date(), metadata: JSON.stringify({ kind: "sme" }) });
-    await db.insert(schema.member).values({ id: crypto.randomUUID(), organizationId: id, userId: user.id, role: "owner", createdAt: new Date() });
-    await db.insert(schema.smeProfile).values({ organizationId: id, smeId, legalName: body.legalName, tin: body.tin ?? null, country: body.country });
-    await db.insert(schema.platformAccess).values({ organizationId: id, platform: "clear", grantedBy: user.id });
-    return c.json({ id, smeId }, 201);
-  })
+  .post(
+    "/organizations",
+    zValidator("json", createOrganization, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const body = c.req.valid("json");
+      const db = getDb();
+      const existing = await db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.slug, body.slug));
+      if (existing[0]) throw new ServiceError("invalid", "An organisation with that slug already exists.");
+      const id = crypto.randomUUID();
+      const smeId = await allocateSmeId();
+      await db.transaction(async (tx) => {
+        await tx.insert(schema.organization).values({ id, name: body.name, slug: body.slug, createdAt: new Date(), metadata: JSON.stringify({ kind: "sme" }) });
+        await tx.insert(schema.member).values({ id: crypto.randomUUID(), organizationId: id, userId: user.id, role: "owner", createdAt: new Date() });
+        await tx.insert(schema.smeProfile).values({ organizationId: id, smeId, legalName: body.legalName, tin: body.tin ?? null, country: body.country });
+        await tx.insert(schema.platformAccess).values({ organizationId: id, platform: "clear", grantedBy: user.id });
+      });
+      return c.json({ id, smeId }, 201);
+    },
+  )
   .get("/organizations/:organizationId/members", async (c) => {
     const user = requireUser(c);
     const organizationId = c.req.param("organizationId");
