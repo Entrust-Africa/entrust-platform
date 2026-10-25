@@ -131,6 +131,19 @@ describe("Files API", () => {
         expect(res.body.storageKey).toContain(w.orgA);
       }
     });
+
+    it("sanitizes filenames against directory traversal attacks", async () => {
+      const res = await callV1(w.memberA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "../../../etc/passwd.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 1024,
+        sha256: dummySha256,
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.storageKey).not.toContain("..");
+      expect(res.body.storageKey).toMatch(/^orgs\/[^/]+\/[^/]+\/passwd\.pdf$/);
+    });
   });
 
   describe("Two-Phase Upload and Finalisation", () => {

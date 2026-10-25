@@ -121,17 +121,23 @@ class R2StorageProvider implements StorageProvider {
     storageKey: string,
     contentType: string,
     sizeBytes: number,
+    sha256: string,
   ): Promise<PresignedUploadResult> {
+    const base64Sha = Buffer.from(sha256, "hex").toString("base64");
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: storageKey,
       ContentType: contentType,
       ContentLength: sizeBytes,
+      ChecksumSHA256: base64Sha,
     });
     const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn: 3600 });
     return {
       uploadUrl,
-      headers: { "Content-Type": contentType },
+      headers: {
+        "Content-Type": contentType,
+        "x-amz-checksum-sha256": base64Sha,
+      },
     };
   }
 
@@ -140,10 +146,11 @@ class R2StorageProvider implements StorageProvider {
     originalName: string,
     expiresInSeconds: number,
   ): Promise<string> {
+    const sanitizedName = originalName.replace(/["\r\n\\]/g, "_");
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: storageKey,
-      ResponseContentDisposition: `inline; filename="${encodeURIComponent(originalName)}"`,
+      ResponseContentDisposition: `inline; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(originalName)}`,
     });
     return getSignedUrl(this.s3, command, { expiresIn: expiresInSeconds });
   }
@@ -151,11 +158,13 @@ class R2StorageProvider implements StorageProvider {
   async verifyUploadedObject(
     storageKey: string,
     expectedSizeBytes: number,
+    expectedSha256: string,
   ): Promise<void> {
     try {
       const command = new HeadObjectCommand({
         Bucket: this.bucket,
         Key: storageKey,
+        ChecksumMode: "ENABLED",
       });
       const response = await this.s3.send(command);
       if (response.ContentLength !== expectedSizeBytes) {
@@ -163,6 +172,15 @@ class R2StorageProvider implements StorageProvider {
           "invalid",
           `File size mismatch: storage reported ${response.ContentLength} bytes, expected ${expectedSizeBytes} bytes.`,
         );
+      }
+      if (response.ChecksumSHA256) {
+        const expectedBase64 = Buffer.from(expectedSha256, "hex").toString("base64");
+        if (response.ChecksumSHA256 !== expectedBase64) {
+          throw new ServiceError(
+            "invalid",
+            `Checksum mismatch: storage reported ${response.ChecksumSHA256}, expected ${expectedBase64}.`,
+          );
+        }
       }
     } catch (err: any) {
       if (err instanceof ServiceError) throw err;
@@ -175,7 +193,11 @@ class R2StorageProvider implements StorageProvider {
 }
 
 function getSecretKey(): string {
-  return process.env.BETTER_AUTH_SECRET || "entrust-internal-file-upload-secret";
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("BETTER_AUTH_SECRET is required to sign upload tokens in production.");
+  }
+  return secret || "entrust-internal-file-upload-secret";
 }
 
 /** Signs an upload token with HMAC SHA-256 so client cannot tamper with parameters during finalise. */

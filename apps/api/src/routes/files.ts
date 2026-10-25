@@ -147,7 +147,8 @@ export const files = router
     }
 
     const fileId = randomUUID();
-    const cleanName = body.originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const basename = body.originalName.split(/[/\\]/).pop() ?? "file";
+    const cleanName = basename.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/^\.+/, "") || "file";
     const storageKey = `orgs/${body.organizationId}/${fileId}/${cleanName}`;
 
     const storage = getStorageProvider();
