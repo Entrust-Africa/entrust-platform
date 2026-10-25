@@ -29,6 +29,15 @@ export function SignInForm() {
           });
     setPending(false);
     if (result.error) {
+      if (
+        mode === "sign-in" &&
+        (result.error.status === 403 ||
+          result.error.code === "EMAIL_NOT_VERIFIED" ||
+          result.error.message?.toLowerCase().includes("not verified"))
+      ) {
+        setError("Please verify your email address before signing in. Check your inbox for the link.");
+        return;
+      }
       setError(
         mode === "sign-in"
           ? "That email and password don't match. Check them and try again."
