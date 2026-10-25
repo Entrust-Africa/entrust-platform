@@ -12,7 +12,7 @@ export default function PartnersSection() {
   return (
     <section className="partners-section" style={{ background: "#fff", padding: "3.5rem 0" }}>
       <div className="partners-container" style={{ maxWidth: 900, margin: "0 auto", padding: "0 1.5rem" }}>
-        <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2.1rem', color: '#18181b', marginBottom: '1.5rem', textAlign: 'center' }}>
+        <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2.1rem', color: '#18181b', marginBottom: '1.5rem', textAlign: 'center' }}>
           Our Partners
         </h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2.2rem', justifyContent: 'center', alignItems: 'center' }}>

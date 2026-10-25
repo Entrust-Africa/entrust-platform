@@ -38,7 +38,7 @@ export default function EntrustAbout() {
 
       {/* CTA block after About section */}
       <section style={{ width: '100%', background: '#f6fef9', padding: '2.5rem 0', marginTop: '0', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'Montserrat, var(--font-heading), system-ui, sans-serif', fontWeight: 700, fontSize: '2rem', marginBottom: '1.2rem', color: '#19954f' }}>Ready to connect?</h2>
+        <h2 style={{ fontFamily: 'var(--font-heading), system-ui, sans-serif', fontWeight: 700, fontSize: '2rem', marginBottom: '1.2rem', color: '#19954f' }}>Ready to connect?</h2>
         <Link
           href="/community"
           className="ea-btn ea-btn-primary"

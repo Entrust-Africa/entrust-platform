@@ -11,6 +11,9 @@
     "NEXT_PUBLIC_API_URL",
     "API_URL",
     "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "EMAIL_MODE",
+    "CLEAR_APP_URL",
     "CONTACT_FROM_EMAIL",
     "ADMIN_EMAIL"
   ],

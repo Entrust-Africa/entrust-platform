@@ -2,13 +2,14 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
-import { auth, type Session } from "@entrust/auth";
+import { auth, APIError, type Session } from "@entrust/auth";
 import { health } from "./routes/health";
 import { clearCases } from "./routes/clear/cases";
 import { clearMinimumPrices } from "./routes/clear/minimum-prices";
 import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
+import { organizations } from "./routes/organizations";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -41,6 +42,7 @@ base.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 // Services refuse with a ServiceError; this gives each one its status and the shared error body.
 base.onError((error, c) => {
   if (error instanceof ServiceError) return c.json({ error: error.message, code: error.code }, error.status);
+  if (error instanceof APIError) return c.json({ error: error.message, code: "invalid" }, (error.statusCode || 400) as any);
   if (error instanceof HTTPException) return error.getResponse();
   console.error(error);
   return c.json({ error: "Something went wrong." }, 500);
@@ -50,6 +52,7 @@ base.onError((error, c) => {
 export const app = base
   .route("/v1", health)
   .route("/v1", me)
+  .route("/v1", organizations)
   .route("/v1/clear", clearCases)
   .route("/v1/clear", clearMinimumPrices)
   .route("/v1/clear", clearRulePacks);

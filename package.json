@@ -10,10 +10,14 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "db:generate": "pnpm --filter @entrust/db generate",
-    "db:migrate": "pnpm --filter @entrust/db migrate"
+    "db:migrate": "pnpm --filter @entrust/db migrate",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@entrust/db": "workspace:*",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
+    "drizzle-orm": "^0.45.4",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2"
   }

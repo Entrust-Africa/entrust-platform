@@ -21,9 +21,23 @@ export function SignInForm() {
     const result =
       mode === "sign-in"
         ? await authClient.signIn.email({ email, password })
-        : await authClient.signUp.email({ email, password, name: String(form.get("name")) });
+        : await authClient.signUp.email({
+            email,
+            password,
+            name: String(form.get("name")),
+            callbackURL: `${window.location.origin}/email-verified`,
+          });
     setPending(false);
     if (result.error) {
+      if (
+        mode === "sign-in" &&
+        (result.error.status === 403 ||
+          result.error.code === "EMAIL_NOT_VERIFIED" ||
+          result.error.message?.toLowerCase().includes("not verified"))
+      ) {
+        setError("Please verify your email address before signing in. Check your inbox for the link.");
+        return;
+      }
       setError(
         mode === "sign-in"
           ? "That email and password don't match. Check them and try again."
@@ -31,7 +45,7 @@ export function SignInForm() {
       );
       return;
     }
-    router.replace("/");
+    router.replace(mode === "sign-up" ? `/check-email?email=${encodeURIComponent(email)}` : "/");
     router.refresh();
   }
 
@@ -75,6 +89,11 @@ export function SignInForm() {
           {mode === "sign-in" ? "Create an account" : "Sign in"}
         </button>
       </p>
+      {mode === "sign-in" && (
+        <a className="mt-4 block text-sm font-semibold text-brand-600 underline-offset-4 hover:underline" href="/forgot-password">
+          Forgot your password?
+        </a>
+      )}
     </div>
   );
 }

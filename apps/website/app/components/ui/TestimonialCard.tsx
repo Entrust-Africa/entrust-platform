@@ -39,7 +39,7 @@ export default function TestimonialCard({ quote, category, context, company }: T
       }}
     >
       <span style={{ fontSize: 38, color: "#16a34a", marginBottom: 10, lineHeight: 1 }}>&ldquo;</span>
-      <p style={{ fontFamily: "Open Sans, Arial, sans-serif", fontSize: "1.13rem", color: "#19954f", fontStyle: "italic", marginBottom: 18, marginTop: 0, textAlign: "center", lineHeight: 1.6 }}>
+      <p style={{ fontFamily: "var(--font-body), Arial, sans-serif", fontSize: "1.13rem", color: "#19954f", fontStyle: "italic", marginBottom: 18, marginTop: 0, textAlign: "center", lineHeight: 1.6 }}>
         {quote}
       </p>
       <div style={{ marginTop: "auto", width: "100%" }}>
@@ -47,7 +47,7 @@ export default function TestimonialCard({ quote, category, context, company }: T
           <div style={{ fontWeight: 700, color: "#18181b", fontSize: "1.08rem", marginBottom: 8, textAlign: "center" }}>{context}</div>
         )}
         {company && (
-          <div style={{ fontFamily: "Montserrat, Arial, sans-serif", color: "#555", fontWeight: 600, fontSize: "1rem", marginTop: 4, textAlign: "center" }}>{company}</div>
+          <div style={{ fontFamily: "var(--font-heading), Arial, sans-serif", color: "#555", fontWeight: 600, fontSize: "1rem", marginTop: 4, textAlign: "center" }}>{company}</div>
         )}
         {/* Placeholder for logo */}
         <div style={{ height: 28, marginTop: 8 }}>

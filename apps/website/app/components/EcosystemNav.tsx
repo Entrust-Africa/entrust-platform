@@ -68,12 +68,18 @@ function linkMatches(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function EcosystemNav() {
-  const pathname = usePathname();
-
+function EcosystemNavContent({ pathname }: { pathname: string }) {
+  const [previousPathname, setPreviousPathname] = useState(pathname);
   const [open, setOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement | null>(null);
+
+  if (pathname !== previousPathname) {
+    setPreviousPathname(pathname);
+    setOpen(false);
+    setSwitcherOpen(false);
+  }
+
   const platform = activePlatform(pathname);
   const currentLinks = platform ? SECTION_LINKS[platform] : [];
   const otherPlatforms = PLATFORMS.filter((item) => item.id !== platform);
@@ -92,10 +98,6 @@ export default function EcosystemNav() {
     logoSrc = "/src/assets/afri-bridge-logo.jpeg";
     logoAlt = "Afri-bridge logo";
   }
-  /** Same destinations on every platform (ecosystem-wide, not Andinet-only). */
-  const quickJoinHref = "/community";
-  const quickEventsHref = "/events";
-  const quickPartnerHref = "/partners";
   const themeClass =
     platform === "andinet"
       ? "theme-andinet"
@@ -108,11 +110,6 @@ export default function EcosystemNav() {
     (platform === "andinet" || platform === "afri-bridge"
       ? "h-5 sm:h-6"
       : "h-5 sm:h-6") + (isGatewayHome ? " gateway-logo-transparent" : "");
-
-  useEffect(() => {
-    setOpen(false);
-    setSwitcherOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -284,4 +281,10 @@ export default function EcosystemNav() {
       ) : null}
     </header>
   );
+}
+
+export default function EcosystemNav() {
+  const pathname = usePathname();
+
+  return <EcosystemNavContent pathname={pathname} />;
 }

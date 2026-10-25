@@ -19,10 +19,17 @@ export interface TestUser {
   cookie: string;
 }
 
-/** Signs a user up through Better Auth and keeps the session cookie it sets. */
+/** Signs a user up through Better Auth, verifies them, and keeps the session cookie it sets. */
 export async function signUp(name: string): Promise<TestUser> {
-  const { headers, response } = await auth.api.signUpEmail({
-    body: { name, email: `${PREFIX}${RUN}-${name}@example.test`, password: "correct-horse-battery" },
+  const email = `${PREFIX}${RUN}-${name}@example.test`;
+  const password = "correct-horse-battery";
+  const res = await auth.api.signUpEmail({
+    body: { name, email, password },
+  });
+  const userId = res.user.id;
+  await db.update(schema.user).set({ emailVerified: true }).where(eq(schema.user.id, userId));
+  const { headers } = await auth.api.signInEmail({
+    body: { email, password },
     returnHeaders: true,
   });
   const cookie = headers
@@ -31,8 +38,8 @@ export async function signUp(name: string): Promise<TestUser> {
     .join("; ");
   // Better Auth drops a session once it has expired. Tests move the clock forward, so the session
   // has to outlast them.
-  await db.update(schema.session).set({ expiresAt: new Date("2100-01-01") }).where(eq(schema.session.userId, response.user.id));
-  return { id: response.user.id, cookie };
+  await db.update(schema.session).set({ expiresAt: new Date("2100-01-01") }).where(eq(schema.session.userId, userId));
+  return { id: userId, cookie };
 }
 
 /** An organisation with its members. `smeProfile` gives it the QZ country so cases get QZ references. */
@@ -90,6 +97,20 @@ export async function call(user: TestUser | null, method: string, path: string, 
     headers: {
       ...(user ? { cookie: user.cookie } : {}),
       ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Json };
+}
+
+/** Calls the API under /v1 in-process, as `user` (or signed out). */
+export async function callV1(user: TestUser | null, method: string, path: string, body?: unknown) {
+  const response = await app.request(`/v1${path}`, {
+    method,
+    headers: {
+      ...(user ? { cookie: user.cookie } : {}),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      origin: "http://localhost:3000",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

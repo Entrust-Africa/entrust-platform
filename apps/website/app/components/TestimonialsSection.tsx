@@ -29,7 +29,7 @@ export default function TestimonialsSection() {
     <section className="testimonials-section" style={{ background: "#f9fafb", padding: "4rem 0" }}>
       <div className="testimonials-container" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 1.5rem" }}>
         {/* SME Testimonials */}
-        <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>SME Testimonials</h2>
+        <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>SME Testimonials</h2>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -64,10 +64,10 @@ export default function TestimonialsSection() {
               }}
             >
               <span style={{ fontSize: 38, color: '#16a34a', marginBottom: 10, lineHeight: 1 }}>&ldquo;</span>
-              <p style={{ fontFamily: 'Open Sans, Arial, sans-serif', fontSize: '1.13rem', color: '#19954f', fontStyle: 'italic', marginBottom: 18, marginTop: 0, textAlign: 'center', lineHeight: 1.6 }}>
+              <p style={{ fontFamily: 'var(--font-body), Arial, sans-serif', fontSize: '1.13rem', color: '#19954f', fontStyle: 'italic', marginBottom: 18, marginTop: 0, textAlign: 'center', lineHeight: 1.6 }}>
                 {t.quote}
               </p>
-              <div style={{ fontFamily: 'Montserrat, Arial, sans-serif', color: '#555', fontWeight: 600, fontSize: '1rem', marginTop: 'auto', textAlign: 'center' }}>{t.company}</div>
+              <div style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', color: '#555', fontWeight: 600, fontSize: '1rem', marginTop: 'auto', textAlign: 'center' }}>{t.company}</div>
               {/* Placeholder for logo */}
               <div style={{ height: 28, marginTop: 8 }}>
                 {/* <img src="/path/to/logo.png" alt="Company Logo" style={{ maxHeight: 28 }} /> */}
@@ -77,7 +77,7 @@ export default function TestimonialsSection() {
         </div>
 
         {/* Client Testimonials */}
-        <h2 style={{ fontFamily: 'Montserrat, Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>Client Testimonials</h2>
+        <h2 style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', fontWeight: 800, fontSize: '2rem', color: '#15803d', marginBottom: '1.5rem', textAlign: 'center', letterSpacing: '-0.01em' }}>Client Testimonials</h2>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
@@ -112,10 +112,10 @@ export default function TestimonialsSection() {
             >
               <div style={{ fontWeight: 700, color: '#18181b', fontSize: '1.08rem', marginBottom: 8, textAlign: 'center' }}>{t.context}</div>
               <span style={{ fontSize: 38, color: '#16a34a', marginBottom: 10, lineHeight: 1 }}>&ldquo;</span>
-              <p style={{ fontFamily: 'Open Sans, Arial, sans-serif', fontSize: '1.13rem', color: '#19954f', fontStyle: 'italic', marginBottom: 18, marginTop: 0, textAlign: 'center', lineHeight: 1.6 }}>
+              <p style={{ fontFamily: 'var(--font-body), Arial, sans-serif', fontSize: '1.13rem', color: '#19954f', fontStyle: 'italic', marginBottom: 18, marginTop: 0, textAlign: 'center', lineHeight: 1.6 }}>
                 {t.quote}
               </p>
-              <div style={{ fontFamily: 'Montserrat, Arial, sans-serif', color: '#555', fontWeight: 600, fontSize: '1rem', marginTop: 'auto', textAlign: 'center' }}>{t.company}</div>
+              <div style={{ fontFamily: 'var(--font-heading), Arial, sans-serif', color: '#555', fontWeight: 600, fontSize: '1rem', marginTop: 'auto', textAlign: 'center' }}>{t.company}</div>
               {/* Placeholder for logo */}
               <div style={{ height: 28, marginTop: 8 }}>
                 {/* <img src="/path/to/logo.png" alt="Company Logo" style={{ maxHeight: 28 }} /> */}

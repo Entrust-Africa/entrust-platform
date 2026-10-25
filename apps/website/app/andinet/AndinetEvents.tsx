@@ -22,24 +22,6 @@ const secondEventImages = [
 ];
 import Image from "next/image";
 import Link from "next/link";
-import { getEvents } from "../lib/getEvents";
-
-type UnifiedEvent = any;
-
-export const revalidate = 60;
-
-interface Event {
-  _id: string;
-  title: string;
-  slug: { current: string };
-  startDate: string;
-  endDate: string;
-  location: string;
-  image: string;
-  link: string;
-  ctaText: string;
-}
-
 
 
 const highlightItems = [
@@ -62,26 +44,7 @@ const highlightItems = [
 ];
 
 
-export default async function AndinetEvents() {
-  const events = await getEvents();
-  // Map and enrich events with category and time (mocked for now)
-  const now = new Date();
-  const unifiedEvents = events.map((event: any) => ({
-    _id: event._id,
-    title: event.title,
-    description: event.description || "Event details coming soon.",
-    location: event.location,
-    date: event.startDate ? new Date(event.startDate).toLocaleDateString() : "",
-    time: event.startDate ? new Date(event.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-    category: event.category || "Business", // TODO: Replace with real category
-    image: event.image,
-    ctaText: event.ctaText || "Register Now",
-    link: event.link || "#",
-  })) as UnifiedEvent[];
-
-  const upcomingEvents = unifiedEvents.filter(e => new Date(e.date) >= now);
-  const pastEvents = unifiedEvents.filter(e => new Date(e.date) < now);
-
+export default function AndinetEvents() {
   return (
     <div className="andinet-events-page">
       <section className="andinet-events-shell andinet-events-hero">
@@ -191,5 +154,3 @@ export default async function AndinetEvents() {
     </div>
   );
 }
-
-
