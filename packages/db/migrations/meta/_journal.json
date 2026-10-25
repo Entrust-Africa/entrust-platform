@@ -50,6 +50,13 @@
       "when": 1792834000000,
       "tag": "0006_organization_management",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792924296806,
+      "tag": "0007_file_storage",
+      "breakpoints": true
     }
   ]
 }

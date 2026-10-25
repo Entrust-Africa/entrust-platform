@@ -1,4 +1,4 @@
-import { index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { core, organization, user } from "./auth";
 
 // Platforms that run on the shared core. TRADE and MIZAN have no UI yet.
@@ -60,5 +60,37 @@ export const auditLog = core.table(
   (t) => [
     index("audit_log_entity_idx").on(t.entityType, t.entityId),
     index("audit_log_org_idx").on(t.organizationId, t.occurredAt),
+  ],
+);
+
+export const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+] as const;
+export type AllowedFileType = (typeof ALLOWED_FILE_TYPES)[number];
+export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+// Generic file storage for all platforms (CLEAR, TRADE, MIZAN).
+export const file = core.table(
+  "file",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    uploaderUserId: text("uploader_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    storageKey: text("storage_key").notNull().unique(),
+    originalName: text("original_name").notNull(),
+    contentType: text("content_type", { enum: ALLOWED_FILE_TYPES }).notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("file_org_idx").on(t.organizationId),
+    index("file_uploader_idx").on(t.uploaderUserId),
   ],
 );
