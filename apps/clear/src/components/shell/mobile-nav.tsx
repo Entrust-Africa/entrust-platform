@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { Patchwork } from "@entrust/ui";
@@ -91,13 +92,20 @@ export function MobileNav({ user }: MobileNavProps) {
             <div className="relative z-10 flex h-dvh w-full max-w-xs flex-col justify-between bg-surface shadow-2xl">
               <div className="flex flex-col overflow-y-auto">
                 <Patchwork />
-                <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface px-5">
+                <div className="flex h-16 shrink-0 items-center justify-between border-b border-line bg-surface px-5">
                   <Link
                     href="/"
                     onClick={() => setIsOpen(false)}
-                    className="font-display text-base font-extrabold tracking-tight text-ink"
+                    aria-label="CLEAR Export"
+                    className="flex items-center transition-opacity hover:opacity-90"
                   >
-                    CLEAR <span className="text-product-600">Export</span>
+                    <Image
+                      src="/logo.jpg"
+                      alt="CLEAR Export"
+                      width={48}
+                      height={48}
+                      className="size-12 rounded-md object-contain"
+                    />
                   </Link>
                   <button
                     type="button"

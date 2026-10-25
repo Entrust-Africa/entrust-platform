@@ -10,6 +10,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variab
 export const metadata: Metadata = {
   title: { default: "CLEAR Export", template: "%s · CLEAR Export" },
   description: "Export compliance workflow for Ethiopian SMEs, by Entrust Africa.",
+  icons: { icon: "/logo.jpg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
