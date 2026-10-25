@@ -2,9 +2,7 @@
   "name": "entrust-platform",
   "private": true,
   "packageManager": "pnpm@12.14.0",
-  "engines": {
-    "node": ">=24"
-  },
+  "engines": { "node": ">=24" },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
