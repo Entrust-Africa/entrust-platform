@@ -8,12 +8,16 @@
     "./client": "./src/client.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@entrust/db": "workspace:*",
     "@entrust/notify": "workspace:*",
     "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
   }
 }

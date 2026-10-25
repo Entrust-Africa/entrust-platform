@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins";
 import { getDb, schema } from "@entrust/db";
 import { sendEmail } from "@entrust/notify";
 import { InvitationEmail, PasswordResetEmail, VerificationEmail } from "@entrust/notify/templates";
+import { getClearAppUrl } from "./url";
 
 // Origins allowed to call the API with cookies, e.g. the CLEAR app and the website.
 const trustedOrigins = (process.env.CORS_ORIGINS ?? "")
@@ -48,7 +49,7 @@ export const auth = betterAuth({
   plugins: [
     organization({
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
-        const clearUrl = process.env.CLEAR_APP_URL ?? "http://localhost:3000";
+        const clearUrl = getClearAppUrl();
         await sendEmail({
           to: invitation.email,
           subject: `Invitation to join ${organization.name} on Entrust`,
