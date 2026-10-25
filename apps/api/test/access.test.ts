@@ -287,6 +287,9 @@ describe("API documentation", () => {
         "/v1/clear/rule-packs",
         "/v1/clear/rule-packs/{id}/versions/{version}",
         "/v1/health",
+        "/v1/jobs/test-email",
+        "/v1/jobs/test-fail",
+        "/v1/jobs/{queue}/{jobId}",
         "/v1/me",
       ].sort(),
     );

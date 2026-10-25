@@ -17,6 +17,7 @@
     "@entrust/auth": "workspace:*",
     "@entrust/db": "workspace:*",
     "@entrust/gate-engine": "workspace:*",
+    "@entrust/jobs": "workspace:*",
     "@entrust/notify": "workspace:*",
     "@entrust/rules": "workspace:*",
     "@hono/node-server": "^2.1.5",
