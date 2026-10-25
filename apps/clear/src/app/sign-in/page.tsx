@@ -5,8 +5,11 @@ import { SignInForm } from "./sign-in-form";
 
 export const metadata = { title: "Sign in" };
 
-export default async function SignInPage() {
-  if (await getMe()) redirect("/");
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ invitationId?: string }> }) {
+  const { invitationId } = await searchParams;
+  if (await getMe()) {
+    redirect(invitationId ? `/accept-invitation?id=${encodeURIComponent(invitationId)}` : "/");
+  }
   return (
     <main className="grid min-h-dvh lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <section className="relative flex flex-col justify-between gap-12 bg-night px-6 py-10 text-on-night sm:px-12 lg:py-14">

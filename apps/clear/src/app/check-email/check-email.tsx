@@ -26,7 +26,10 @@ export function CheckEmail({ email }: { email: string }) {
           Resend verification email
         </Button>
         <div className="mt-6 border-t border-line pt-4">
-          <a href="/sign-in" className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline">
+          <a
+            href={invitationId ? `/sign-in?invitationId=${encodeURIComponent(invitationId)}` : "/sign-in"}
+            className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline"
+          >
             Return to sign in
           </a>
         </div>
