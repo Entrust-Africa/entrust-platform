@@ -1,3 +1,4 @@
+import * as React from "react";
 import { EmailButton, EmailLayout, EmailParagraph } from "./layout";
 
 export function VerificationEmail({ url }: { url: string }) {

@@ -1,5 +1,6 @@
 import { Body, Container, Head, Heading, Html, Link, Preview, Section, Text } from "@react-email/components";
 import { emailTheme } from "@entrust/ui";
+import * as React from "react";
 import type { ReactNode } from "react";
 
 export const { colors } = emailTheme;

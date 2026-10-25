@@ -1,3 +1,4 @@
+import * as React from "react";
 import { EmailButton, EmailLayout, EmailParagraph } from "./layout";
 
 export function PasswordResetEmail({ url }: { url: string }) {

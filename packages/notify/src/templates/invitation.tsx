@@ -1,3 +1,4 @@
+import * as React from "react";
 import { EmailButton, EmailLayout, EmailParagraph } from "./layout";
 
 export function InvitationEmail({ organizationName, inviterName, role, url }: { organizationName: string; inviterName: string; role: string; url: string }) {

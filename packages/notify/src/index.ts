@@ -16,12 +16,23 @@ function hasUsableKey(value: string | undefined): value is string {
   return Boolean(normalized && !normalized.includes("your-") && !normalized.includes("placeholder"));
 }
 
+export function hasUsableFrom(value: string | undefined): value is string {
+  const normalized = value?.trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      !normalized.includes("onboarding@resend.dev") &&
+      !normalized.includes("your-") &&
+      !normalized.includes("placeholder") &&
+      !normalized.includes("example.com"),
+  );
+}
+
 let resend: Resend | undefined;
 
 function emailConfig() {
   const mode = process.env.EMAIL_MODE ?? (process.env.NODE_ENV === "production" ? "send" : "log");
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? "Entrust <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM?.trim() || (mode === "log" ? "Entrust <onboarding@resend.dev>" : undefined);
   if (mode !== "log" && mode !== "send") throw new Error("EMAIL_MODE must be either log or send.");
   return { mode, apiKey, from };
 }
@@ -44,9 +55,15 @@ export async function sendEmail(input: EmailInput): Promise<{ id: string | null;
   }
 
   if (!hasUsableKey(apiKey)) throw new Error("RESEND_API_KEY must be configured when EMAIL_MODE=send.");
+  const resolvedFrom = input.from ?? from;
+  if (!hasUsableFrom(resolvedFrom)) {
+    throw new Error(
+      "EMAIL_FROM must be configured with a verified domain (not onboarding@resend.dev) when EMAIL_MODE=send.",
+    );
+  }
   resend ??= new Resend(apiKey);
   const result = await resend.emails.send({
-    from: input.from ?? from,
+    from: resolvedFrom,
     to: recipients,
     subject: input.subject,
     html,
