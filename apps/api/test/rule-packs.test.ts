@@ -42,7 +42,7 @@ describe("rule packs on cases", () => {
   });
 
   it("opens a case with no pack when none covers its corridor", async () => {
-    const created = await openCase({ ...FACTS, destinationCountry: "DE" });
+    const created = await openCase({ ...FACTS, destinationCountry: "JP" });
     expect(created.rulePack).toBeNull();
     expect(created.rulePackUpdate).toBeNull();
   });
@@ -106,10 +106,10 @@ describe("rule packs on cases", () => {
 
   it("moves a case off its pack when its corridor changes, and onto one when a pack covers it", async () => {
     const opened = await openCase();
-    const toGermany = await call(w.owner, "PATCH", `/cases/${opened.id}/facts`, { facts: { destinationCountry: "DE" } });
-    expect(toGermany.body.rulePack.coversCase).toBe(false);
-    expect(toGermany.body.rulePackUpdate).toMatchObject({ id: null, version: null, added: [] });
-    expect(toGermany.body.rulePackUpdate.removed).toHaveLength(35);
+    const toJapan = await call(w.owner, "PATCH", `/cases/${opened.id}/facts`, { facts: { destinationCountry: "JP" } });
+    expect(toJapan.body.rulePack.coversCase).toBe(false);
+    expect(toJapan.body.rulePackUpdate).toMatchObject({ id: null, version: null, added: [] });
+    expect(toJapan.body.rulePackUpdate.removed).toHaveLength(35);
     const detached = await reevaluate(w.admin, opened.id);
     expect(detached.status, JSON.stringify(detached.body)).toBe(200);
     expect(detached.body.rulePack).toBeNull();
@@ -117,6 +117,18 @@ describe("rule packs on cases", () => {
     const back = await call(w.owner, "PATCH", `/cases/${opened.id}/facts`, { facts: { destinationCountry: "US" } });
     expect(back.body.rulePackUpdate).toMatchObject({ id: "et-us-green-coffee", version: "0.4.0", removed: [] });
     expect((await reevaluate(w.admin, opened.id)).body.rulePack.version).toBe("0.4.0");
+  });
+
+  it("offers the pack for a case's new corridor", async () => {
+    const opened = await openCase();
+    const toGermany = await call(w.owner, "PATCH", `/cases/${opened.id}/facts`, { facts: { destinationCountry: "DE" } });
+    expect(toGermany.body.rulePack).toMatchObject({ id: "et-us-green-coffee", coversCase: false });
+    expect(toGermany.body.rulePackUpdate).toMatchObject({ id: "et-eu-coffee", version: "0.1.0" });
+    const moved = await reevaluate(w.facilitator, opened.id, "The buyer moved the order to Hamburg");
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(moved.body.rulePack).toMatchObject({ id: "et-eu-coffee", version: "0.1.0", coversCase: true, latest: true });
+    expect(requirement(moved.body, "EUP-01")).toMatchObject({ basis: "conditional", jurisdiction: "EU" });
+    expect(requirement(moved.body, "ELG-08").status).toBe("not_applicable");
   });
 
   it("refuses a re-evaluation that isn't needed or allowed", async () => {
@@ -128,8 +140,8 @@ describe("rule packs on cases", () => {
     expect(already.status).toBe(409);
     expect(already.body.error).toBe("The case is already on et-us-green-coffee 0.4.0, the newest pack for green_coffee to US.");
 
-    const uncovered = await openCase({ ...FACTS, destinationCountry: "DE" });
-    expect((await reevaluate(w.admin, uncovered.id)).body.error).toBe("No rule pack covers green_coffee to DE yet.");
+    const uncovered = await openCase({ ...FACTS, destinationCountry: "JP" });
+    expect((await reevaluate(w.admin, uncovered.id)).body.error).toBe("No rule pack covers green_coffee to JP yet.");
 
     await db.update(schema.exportCase).set({ status: "closed" }).where(eq(schema.exportCase.id, opened.id));
     expect((await reevaluate(w.admin, opened.id)).status).toBe(422);
@@ -140,7 +152,16 @@ describe("rule pack endpoints", () => {
   it("lists every published version and shows one", async () => {
     const list = await call(w.owner, "GET", "/rule-packs");
     expect(list.status).toBe(200);
-    expect(list.body.items).toEqual([expect.objectContaining({ id: "et-us-green-coffee", version: "0.4.0", latest: true })]);
+    expect(list.body.items.map((p: Json) => `${p.id}@${p.version}`)).toEqual([
+      "et-eu-avocado@0.1.0",
+      "et-eu-coffee@0.1.0",
+      "et-gcc-avocado@0.1.0",
+      "et-tr-spices@0.1.0",
+      "et-us-green-coffee@0.4.0",
+      "et-us-processed-food@0.1.0",
+      "et-us-spices@0.1.0",
+    ]);
+    expect(list.body.items.every((p: Json) => p.latest)).toBe(true);
 
     const pack = await call(w.owner, "GET", "/rule-packs/et-us-green-coffee/versions/0.4.0");
     expect(pack.status).toBe(200);

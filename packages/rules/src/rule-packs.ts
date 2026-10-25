@@ -1,5 +1,11 @@
 import { FACTS } from "./facts";
+import { ET_EU_AVOCADO } from "./packs/et-eu-avocado";
+import { ET_EU_COFFEE } from "./packs/et-eu-coffee";
+import { ET_GCC_AVOCADO } from "./packs/et-gcc-avocado";
+import { ET_TR_SPICES } from "./packs/et-tr-spices";
 import { ET_US_GREEN_COFFEE } from "./packs/et-us-green-coffee";
+import { ET_US_PROCESSED_FOOD } from "./packs/et-us-processed-food";
+import { ET_US_SPICES } from "./packs/et-us-spices";
 import { STEPS } from "./steps";
 import type { RulePack } from "./types";
 import { compareVersions, validateRulePacks } from "./validate";
@@ -7,7 +13,15 @@ import { compareVersions, validateRulePacks } from "./validate";
 // Every published version of every rule pack. A case keeps the version it was opened with, so a
 // version stays here after a newer one is published, and test/rule-packs.test.ts fails if a
 // published one is edited.
-export const RULE_PACKS: readonly RulePack[] = [...ET_US_GREEN_COFFEE];
+export const RULE_PACKS: readonly RulePack[] = [
+  ...ET_US_GREEN_COFFEE,
+  ...ET_EU_COFFEE,
+  ...ET_TR_SPICES,
+  ...ET_US_SPICES,
+  ...ET_EU_AVOCADO,
+  ...ET_GCC_AVOCADO,
+  ...ET_US_PROCESSED_FOOD,
+];
 
 // A pack that doesn't validate never reaches a case: loading the package fails instead.
 const errors = validateRulePacks(RULE_PACKS, { steps: STEPS, facts: FACTS });
