@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@entrust/ui";
 import { authClient } from "@/lib/auth-client";
 
-export function CheckEmail({ email }: { email: string }) {
+export function CheckEmail({ email, invitationId }: { email: string; invitationId?: string }) {
   const [message, setMessage] = useState("Check your inbox for a verification link.");
   const [pending, setPending] = useState(false);
 
