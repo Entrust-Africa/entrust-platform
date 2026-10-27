@@ -7,3 +7,4 @@ try {
 }
 process.env.BETTER_AUTH_SECRET ||= "api-tests-only-secret-0123456789abcdef";
 process.env.BETTER_AUTH_URL ||= "http://localhost:4000";
+process.env.FILE_STORAGE ||= "memory";
