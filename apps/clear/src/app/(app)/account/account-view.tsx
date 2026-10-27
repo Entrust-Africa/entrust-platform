@@ -2,24 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, KeyRound, LogOut, Shield, User } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { authClient } from "@/lib/auth-client";
-
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  activeOrganizationId?: string | null;
-}
+import type { UserProfile } from "@/lib/types";
+import { useSignOut } from "@/lib/use-sign-out";
 
 export function AccountView({ user }: { user: UserProfile }) {
-  const router = useRouter();
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
   const [resetPending, setResetPending] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
 
+  const { signOut, signingOut, signOutError } = useSignOut();
   const { data: activeOrg } = authClient.useActiveOrganization();
 
   async function handleResetPassword() {
@@ -32,24 +26,16 @@ export function AccountView({ user }: { user: UserProfile }) {
       });
       if (result.error) {
         setResetMessage(result.error.message ?? "Could not request a password reset.");
+        setResetSuccess(false);
       } else {
         setResetMessage("A password reset link has been sent to your email.");
+        setResetSuccess(true);
       }
     } catch {
       setResetMessage("Could not send password reset email. Please try again.");
+      setResetSuccess(false);
     } finally {
       setResetPending(false);
-    }
-  }
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    try {
-      await authClient.signOut();
-      router.replace("/sign-in");
-      router.refresh();
-    } finally {
-      setSigningOut(false);
     }
   }
 
@@ -88,7 +74,7 @@ export function AccountView({ user }: { user: UserProfile }) {
             </div>
             <div>
               <dt className="text-xs font-semibold text-ink-3">User ID</dt>
-              <dd className="mt-0.5 font-mono text-xs text-ink-2">{user.id}</dd>
+              <dd className="mt-0.5 font-mono text-xs text-ink-3">{user.id}</dd>
             </div>
           </dl>
         </Card>
@@ -96,40 +82,47 @@ export function AccountView({ user }: { user: UserProfile }) {
         {/* Organisation Card */}
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-product-50 text-product-600">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <Building2 className="size-5" aria-hidden="true" />
             </div>
             <div>
               <h2 className="font-display text-lg font-bold">Organisation</h2>
-              <p className="text-xs text-ink-3">Current workspace association</p>
+              <p className="text-xs text-ink-3">Your current active organisation context</p>
             </div>
           </div>
 
           <div className="mt-6">
             {activeOrg ? (
-              <div className="rounded-lg border border-line bg-surface-2 p-4">
-                <p className="font-semibold text-ink">{activeOrg.name}</p>
-                <p className="mt-0.5 text-xs text-ink-3">Slug: {activeOrg.slug}</p>
+              <div className="rounded-md border border-line bg-canvas p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-ink">{activeOrg.name}</p>
+                    <p className="text-xs text-ink-3">{activeOrg.slug}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600">
+                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                    Active
+                  </span>
+                </div>
               </div>
             ) : (
-              <div className="rounded-lg border border-line bg-surface-2 p-4">
-                <p className="text-sm text-ink-2">No active organisation currently selected.</p>
+              <div className="rounded-md border border-line bg-canvas p-4 text-xs text-ink-3">
+                No active organisation selected.
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 flex items-center justify-between">
               <Link
                 href="/organizations"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
               >
-                <span>Manage organisations</span>
-                <span aria-hidden="true">→</span>
+                Manage all organisations →
               </Link>
             </div>
           </div>
         </Card>
 
-        {/* Security & Password Card */}
+        {/* Security & Authentication Controls */}
         <Card className="p-6 md:col-span-2">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
@@ -146,7 +139,10 @@ export function AccountView({ user }: { user: UserProfile }) {
               <p className="text-sm font-semibold text-ink">Change password</p>
               <p className="mt-0.5 text-xs text-ink-3">We will send a password reset link to your email address.</p>
               {resetMessage && (
-                <p className="mt-2 text-xs font-medium text-brand-600" role="status">
+                <p
+                  className={`mt-2 text-xs font-medium ${resetSuccess ? "text-brand-600" : "text-danger"}`}
+                  role={resetSuccess ? "status" : "alert"}
+                >
                   {resetMessage}
                 </p>
               )}
@@ -166,12 +162,17 @@ export function AccountView({ user }: { user: UserProfile }) {
             <div>
               <p className="text-sm font-semibold text-ink">Sign out</p>
               <p className="mt-0.5 text-xs text-ink-3">Terminate your active session on this browser.</p>
+              {signOutError && (
+                <p className="mt-2 text-xs font-medium text-danger" role="alert">
+                  {signOutError}
+                </p>
+              )}
             </div>
             <Button
               variant="danger"
               size="sm"
               loading={signingOut}
-              onClick={() => void handleSignOut()}
+              onClick={() => void signOut()}
             >
               <LogOut className="size-3.5 mr-1.5" aria-hidden="true" />
               Sign out

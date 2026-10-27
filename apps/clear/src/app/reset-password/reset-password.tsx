@@ -44,9 +44,9 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
           <p className="mt-2 text-sm text-ink-2">Create a strong password with at least 8 characters.</p>
 
           {!token ? (
-            <div className="mt-6 rounded-md bg-danger-50 p-4 text-sm text-danger">
-              <p className="font-semibold">Missing reset token</p>
-              <p className="mt-1">This password reset link is invalid or has expired.</p>
+            <div className="mt-6 rounded-md bg-danger-50 p-4 text-sm text-danger" role="alert">
+              <p className="font-semibold">This reset link is invalid or has expired</p>
+              <p className="mt-1">Please request a new link to reset your account password.</p>
               <div className="mt-3">
                 <Link
                   href="/forgot-password"
@@ -81,7 +81,7 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
             </form>
           )}
 
-          {message && (
+          {token && message && (
             <p className="mt-4 text-sm font-medium text-danger" role="alert">
               {message}
             </p>
