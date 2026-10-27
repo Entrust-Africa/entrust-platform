@@ -841,7 +841,7 @@
           "name": "uploader_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "storage_key": {
           "name": "storage_key",
@@ -939,7 +939,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

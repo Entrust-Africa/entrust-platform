@@ -79,9 +79,7 @@ export const file = core.table(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    uploaderUserId: text("uploader_user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+    uploaderUserId: text("uploader_user_id").references(() => user.id, { onDelete: "set null" }),
     storageKey: text("storage_key").notNull().unique(),
     originalName: text("original_name").notNull(),
     contentType: text("content_type", { enum: ALLOWED_FILE_TYPES }).notNull(),
