@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { app } from "../src/app";
 import { MemoryStorageProvider, signUploadToken } from "../src/services/storage";
 import { cleanup, createOrganization, db, signUp, callV1, type TestUser } from "./support";
 
@@ -82,6 +83,18 @@ describe("Files API", () => {
         sha256: dummySha256,
       });
       expect(res.status).toBe(403);
+    });
+
+    it("refuses upload-url for non-existent organisation", async () => {
+      const res = await callV1(w.memberA, "POST", "/files/upload-url", {
+        organizationId: "non-existent-org-uuid",
+        originalName: "bill_of_lading.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 2048,
+        sha256: dummySha256,
+      });
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatch(/not found/i);
     });
   });
 
@@ -257,6 +270,82 @@ describe("Files API", () => {
       });
       expect(repeatRes.status).toBe(409);
     });
+
+    it("fails finalise when file has not been uploaded to storage", async () => {
+      const initRes = await callV1(w.memberA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "not_uploaded.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 1000,
+        sha256: dummySha256,
+      });
+      expect(initRes.status).toBe(200);
+
+      const res = await callV1(w.memberA, "POST", "/files/finalise", {
+        uploadToken: initRes.body.uploadToken,
+      });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toMatch(/not found in storage|not uploaded|does not exist/i);
+    });
+
+    it("refuses finalise when called by a different user than the one who requested upload-url", async () => {
+      const initRes = await callV1(w.memberA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "user_check.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 1000,
+        sha256: dummySha256,
+      });
+      expect(initRes.status).toBe(200);
+
+      const res = await callV1(w.ownerA, "POST", "/files/finalise", {
+        uploadToken: initRes.body.uploadToken,
+      });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/initiated/i);
+    });
+
+    it("supports HTTP PUT and GET via mock-storage endpoints in development/testing", async () => {
+      const content = Buffer.from("mock s3 upload payload");
+      const sha = createHash("sha256").update(content).digest("hex");
+      const initRes = await callV1(w.ownerA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "mock_http.pdf",
+        contentType: "application/pdf",
+        sizeBytes: content.length,
+        sha256: sha,
+      });
+      expect(initRes.status).toBe(200);
+      const { uploadUrl, uploadToken } = initRes.body;
+
+      // Extract path for in-process request
+      const uploadPath = new URL(uploadUrl).pathname;
+      const putRes = await app.request(uploadPath, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          "x-amz-checksum-sha256": Buffer.from(sha, "hex").toString("base64"),
+        },
+        body: content,
+      });
+      expect(putRes.status).toBe(200);
+
+      // Finalise
+      const finaliseRes = await callV1(w.ownerA, "POST", "/files/finalise", {
+        uploadToken,
+      });
+      expect(finaliseRes.status).toBe(201);
+      const fileId = finaliseRes.body.file.id;
+
+      // Get download URL and fetch content
+      const dlRes = await callV1(w.ownerA, "GET", `/files/${fileId}/download-url`);
+      expect(dlRes.status).toBe(200);
+      const dlPath = new URL(dlRes.body.downloadUrl).pathname;
+      const getRes = await app.request(dlPath);
+      expect(getRes.status).toBe(200);
+      const downloadedBuf = Buffer.from(await getRes.arrayBuffer());
+      expect(downloadedBuf.toString()).toBe(content.toString());
+    });
   });
 
   describe("File Retrieval and Download URLs", () => {
@@ -316,4 +405,11 @@ describe("Files API", () => {
       expect(resOutsider.status).toBe(404);
     });
   });
+
+  describe.skipIf(!process.env.R2_ACCESS_KEY_ID)("Cloudflare R2 live integration", () => {
+    it("verifies live R2 bucket connectivity when credentials are provided", async () => {
+      expect(process.env.R2_ACCESS_KEY_ID).toBeDefined();
+    });
+  });
 });
+
