@@ -56,7 +56,7 @@ export const FileRecord = z
   .object({
     id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     organizationId: z.string().openapi({ example: "org_123" }),
-    uploaderUserId: z.string().openapi({ example: "user_456" }),
+    uploaderUserId: z.string().nullable().openapi({ example: "user_456" }),
     storageKey: z.string().openapi({ example: "orgs/org_123/550e8400-e29b-41d4-a716-446655440000/invoice.pdf" }),
     originalName: z.string().openapi({ example: "invoice.pdf" }),
     contentType: z.string().openapi({ example: "application/pdf" }),
