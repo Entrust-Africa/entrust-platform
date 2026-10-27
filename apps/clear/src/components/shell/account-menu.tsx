@@ -2,17 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@entrust/ui";
-import { authClient } from "@/lib/auth-client";
-
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  activeOrganizationId?: string | null;
-}
+import type { UserProfile } from "@/lib/types";
+import { useSignOut } from "@/lib/use-sign-out";
 
 interface AccountMenuProps {
   user: UserProfile;
@@ -34,10 +27,11 @@ function getInitials(name?: string, email?: string): string {
 }
 
 export function AccountMenu({ user, className }: AccountMenuProps) {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const { signOut, signingOut, signOutError } = useSignOut();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -51,36 +45,35 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && isOpen) {
-        setIsOpen(false);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    try {
-      await authClient.signOut();
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Escape" && isOpen) {
+      event.stopPropagation();
+      event.preventDefault();
       setIsOpen(false);
-      router.replace("/sign-in");
-      router.refresh();
-    } finally {
-      setSigningOut(false);
+      triggerRef.current?.focus();
+    }
+  }
+
+  function handleBlur(event: React.FocusEvent<HTMLDivElement>) {
+    if (!menuRef.current?.contains(event.relatedTarget as Node)) {
+      setIsOpen(false);
     }
   }
 
   const initials = getInitials(user.name, user.email);
 
   return (
-    <div ref={menuRef} className={cn("relative inline-block text-left", className)}>
+    <div
+      ref={menuRef}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+      className={cn("relative inline-block text-left", className)}
+    >
       <button
+        ref={triggerRef}
         type="button"
-        aria-haspopup="menu"
         aria-expanded={isOpen}
+        aria-controls="account-menu-popover"
         aria-label="Account menu"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
@@ -95,7 +88,7 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
         >
           {initials}
         </span>
-        <span className="hidden max-w-[120px] truncate sm:inline">{user.name || user.email}</span>
+        <span className="hidden max-w-[120px] truncate lg:inline">{user.name || user.email}</span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 text-ink-3 transition-transform duration-150", isOpen && "rotate-180")}
           aria-hidden="true"
@@ -104,8 +97,7 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
 
       {isOpen && (
         <div
-          role="menu"
-          aria-orientation="vertical"
+          id="account-menu-popover"
           className="absolute right-0 z-50 mt-1.5 w-60 origin-top-right rounded-lg border border-line bg-surface p-1 shadow-lg ring-1 ring-black/5"
         >
           <div className="border-b border-line px-3 py-2.5">
@@ -116,7 +108,6 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
           <div className="py-1">
             <Link
               href="/account"
-              role="menuitem"
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-ink-2 hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-500"
             >
@@ -125,7 +116,6 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
             </Link>
             <Link
               href="/organizations"
-              role="menuitem"
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-ink-2 hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-500"
             >
@@ -135,14 +125,18 @@ export function AccountMenu({ user, className }: AccountMenuProps) {
           </div>
 
           <div className="border-t border-line pt-1">
+            {signOutError && (
+              <p className="px-3 py-1 text-xs text-danger" role="alert">
+                {signOutError}
+              </p>
+            )}
             <button
               type="button"
-              role="menuitem"
               disabled={signingOut}
-              onClick={() => void handleSignOut()}
-              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold text-danger hover:bg-danger-50 focus-visible:outline-2 focus-visible:outline-brand-500"
+              onClick={() => void signOut(() => setIsOpen(false))}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-xs font-medium text-danger hover:bg-danger-50 focus-visible:outline-2 focus-visible:outline-brand-500"
             >
-              <LogOut className="size-3.5 text-danger" aria-hidden="true" />
+              <LogOut className="size-3.5" aria-hidden="true" />
               <span>{signingOut ? "Signing out..." : "Sign out"}</span>
             </button>
           </div>
