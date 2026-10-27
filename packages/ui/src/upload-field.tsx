@@ -2,6 +2,7 @@
 
 import {
   useState,
+  useEffect,
   useRef,
   useId,
   useCallback,
@@ -30,13 +31,131 @@ export interface UploadFieldProps {
   value?: UploadedFileValue | null;
   status?: "idle" | "uploading" | "success" | "error";
   progress?: number;
-  uploadFn?: (file: File, onProgress: (pct: number) => void) => Promise<UploadedFileValue | void>;
+  uploadFn?: (file: File, onProgress: (pct: number) => void) => Promise<UploadedFileValue>;
   onFileSelect?: (file: File) => void;
   onUploadSuccess?: (result: UploadedFileValue) => void;
   onUploadError?: (error: Error) => void;
   onClear?: () => void;
   id?: string;
   className?: string;
+}
+
+export interface UploadFileOptions {
+  apiUrl?: string;
+  organizationId: string;
+  onProgress?: (pct: number) => void;
+  fetchFn?: typeof fetch;
+}
+
+/**
+ * Client helper to perform the full 3-step file upload sequence:
+ * 1. Calculate SHA-256 checksum in browser
+ * 2. POST /v1/files/upload-url to get presigned upload URL and signed token
+ * 3. PUT file bytes to presigned URL with required headers (reporting progress)
+ * 4. POST /v1/files/finalise to verify and record the file in DB
+ */
+export async function uploadFile(
+  file: File,
+  options: UploadFileOptions,
+): Promise<UploadedFileValue> {
+  const fetchFn =
+    options.fetchFn ?? (typeof fetch !== "undefined" ? fetch.bind(globalThis) : undefined);
+  if (!fetchFn) {
+    throw new Error("fetch is not available");
+  }
+  const apiUrl = options.apiUrl ?? "";
+
+  // 1. Calculate SHA-256 hex hash
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const sha256 = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  // 2. Request presigned upload URL
+  const uploadUrlRes = await fetchFn(`${apiUrl}/v1/files/upload-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      organizationId: options.organizationId,
+      originalName: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+      sha256,
+    }),
+  });
+
+  if (!uploadUrlRes.ok) {
+    const errBody = (await uploadUrlRes.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errBody.error ?? `Failed to get upload URL: ${uploadUrlRes.statusText}`);
+  }
+
+  const { uploadUrl, uploadToken, headers } = (await uploadUrlRes.json()) as {
+    uploadUrl: string;
+    uploadToken: string;
+    headers: Record<string, string>;
+  };
+
+  // 3. Upload file bytes to uploadUrl with required headers, reporting progress
+  await new Promise<void>((resolve, reject) => {
+    if (typeof XMLHttpRequest !== "undefined") {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      if (headers) {
+        for (const [key, val] of Object.entries(headers)) {
+          xhr.setRequestHeader(key, String(val));
+        }
+      }
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable && options.onProgress) {
+          options.onProgress((evt.loaded / evt.total) * 100);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error during file upload"));
+      xhr.send(file);
+    } else {
+      fetchFn(uploadUrl, {
+        method: "PUT",
+        headers: headers ?? {},
+        body: file,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`Upload failed with status ${res.status}`);
+          options.onProgress?.(100);
+          resolve();
+        })
+        .catch(reject);
+    }
+  });
+
+  // 4. Finalise upload
+  const finaliseRes = await fetchFn(`${apiUrl}/v1/files/finalise`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadToken }),
+  });
+
+  if (!finaliseRes.ok) {
+    const errBody = (await finaliseRes.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errBody.error ?? `Failed to finalise upload: ${finaliseRes.statusText}`);
+  }
+
+  const { file: finalisedFile } = (await finaliseRes.json()) as {
+    file: { id: string; originalName: string; sizeBytes: number; contentType: string };
+  };
+
+  return {
+    id: finalisedFile.id,
+    name: finalisedFile.originalName,
+    size: finalisedFile.sizeBytes,
+    contentType: finalisedFile.contentType,
+  };
 }
 
 const DEFAULT_ACCEPT = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
@@ -81,6 +200,16 @@ export function UploadField({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
+  // Sync internal state when external value changes
+  useEffect(() => {
+    if (value) {
+      setInternalStatus("success");
+      setInternalError(null);
+    } else if (!selectedFile) {
+      setInternalStatus("idle");
+    }
+  }, [value, selectedFile]);
+
   const status = controlledStatus ?? internalStatus;
   const progress = controlledProgress ?? internalProgress;
   const displayError = externalError || internalError;
@@ -106,7 +235,10 @@ export function UploadField({
         const fileType = file.type.toLowerCase();
 
         const matches = acceptedTokens.some(
-          (token) => token === fileType || token === fileExt || (token.endsWith("/*") && fileType.startsWith(token.slice(0, -1))),
+          (token) =>
+            token === fileType ||
+            token === fileExt ||
+            (token.endsWith("/*") && fileType.startsWith(token.slice(0, -1))),
         );
 
         if (!matches) {
@@ -135,16 +267,7 @@ export function UploadField({
         });
         setInternalStatus("success");
         setInternalProgress(100);
-        if (result) {
-          onUploadSuccess?.(result);
-        } else {
-          onUploadSuccess?.({
-            id: "",
-            name: file.name,
-            size: file.size,
-            contentType: file.type,
-          });
-        }
+        onUploadSuccess?.(result);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
         setInternalStatus("error");
@@ -229,12 +352,13 @@ export function UploadField({
         {label}
       </label>
 
-      {/* Hidden native input */}
+      {/* Hidden native input removed from tab order */}
       <input
         ref={fileInputRef}
         id={fieldId}
         type="file"
         accept={accept}
+        tabIndex={-1}
         disabled={disabled || status === "uploading"}
         onChange={handleInputChange}
         className="sr-only"
@@ -246,8 +370,8 @@ export function UploadField({
 
       {/* Dropzone container */}
       <div
-        role="button"
-        tabIndex={disabled || status === "uploading" ? -1 : 0}
+        role={status === "idle" ? "button" : undefined}
+        tabIndex={disabled || status !== "idle" ? -1 : 0}
         onClick={status === "idle" ? triggerBrowse : undefined}
         onKeyDown={status === "idle" ? handleKeyDown : undefined}
         onDragOver={handleDragOver}
@@ -256,7 +380,9 @@ export function UploadField({
         className={cn(
           "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors duration-150 ease-out",
           disabled && "cursor-not-allowed bg-surface-2 opacity-60",
-          !disabled && status === "idle" && "cursor-pointer hover:border-brand-600 hover:bg-brand-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25",
+          !disabled &&
+            status === "idle" &&
+            "cursor-pointer hover:border-brand-600 hover:bg-brand-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25",
           isDragOver && "border-brand-600 bg-brand-50/40",
           status === "uploading" && "border-line-strong bg-surface",
           status === "success" && "border-ok/40 bg-ok-50/20",
@@ -287,7 +413,9 @@ export function UploadField({
                 <FileText className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink">{fileName ?? "Uploading file..."}</p>
+                <p className="truncate text-sm font-medium text-ink">
+                  {fileName ?? "Uploading file..."}
+                </p>
                 {fileSize ? (
                   <p className="text-xs text-ink-3">{formatBytes(fileSize)}</p>
                 ) : null}
@@ -317,7 +445,9 @@ export function UploadField({
                 <CheckCircle2 className="size-5" />
               </div>
               <div className="min-w-0 flex-1 truncate">
-                <p className="truncate text-sm font-medium text-ink">{fileName ?? "Uploaded file"}</p>
+                <p className="truncate text-sm font-medium text-ink">
+                  {fileName ?? "Uploaded file"}
+                </p>
                 {fileSize ? (
                   <p className="text-xs text-ink-3">{formatBytes(fileSize)}</p>
                 ) : null}
