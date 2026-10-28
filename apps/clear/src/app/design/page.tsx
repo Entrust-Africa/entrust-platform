@@ -1,7 +1,29 @@
-import { Button, Card, Field, Patchwork, StatusBadge, cn } from "@entrust/ui";
-import { EVIDENCE_STATUSES, PHASES, TASK_STATUSES } from "@/lib/statuses";
+"use client";
 
-export const metadata = { title: "Design system" };
+import * as React from "react";
+import {
+  Button,
+  Card,
+  CaseHeader,
+  EmptyState,
+  EvidenceItem,
+  Field,
+  FlagBanner,
+  GateSummaryCard,
+  Patchwork,
+  PhaseStepper,
+  StatusBadge,
+  StepRow,
+  cn,
+  PHASES,
+  CASE_STATUSES,
+  TASK_STATUSES,
+  EVIDENCE_STATUSES,
+  STEP_STATUSES,
+  GATE_STATUSES,
+  FLAG_SEVERITIES,
+  FLAG_STATUSES,
+} from "@entrust/ui";
 
 const swatches: { group: string; items: { name: string; className: string; value: string }[] }[] = [
   {
@@ -36,10 +58,20 @@ const swatches: { group: string; items: { name: string; className: string; value
   },
 ];
 
-function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  note,
+  children,
+}: {
+  id?: string;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="border-t border-line py-10">
-      <h2 className="font-display text-xl font-bold">{title}</h2>
+    <section id={id} className="border-t border-line py-10">
+      <h2 className="font-display text-xl font-bold text-ink">{title}</h2>
       {note && <p className="mt-1 max-w-2xl text-sm text-ink-2">{note}</p>}
       <div className="mt-6">{children}</div>
     </section>
@@ -47,34 +79,466 @@ function Section({ title, note, children }: { title: string; note?: string; chil
 }
 
 export default function DesignPage() {
-  const currentPhase = 3;
+  const [selectedPhase, setSelectedPhase] = React.useState<number>(3);
+
+  // 7 phases with sample progression states
+  const phaseList = PHASES.map((p) => {
+    let state: "done" | "current" | "upcoming" | "locked" = "upcoming";
+    if (p.n < selectedPhase) state = "done";
+    else if (p.n === selectedPhase) state = "current";
+    else if (p.n >= 6) state = "locked";
+    return {
+      n: p.n,
+      title: p.title,
+      steps: `Steps ${p.steps}`,
+      state,
+    };
+  });
+
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh bg-canvas text-ink">
       <header className="bg-night text-on-night">
         <div className="mx-auto max-w-6xl px-6 pt-12 pb-10">
           <p className="font-display text-xs font-bold tracking-[0.18em] text-on-night-muted uppercase">
-            Entrust design system · draft 0.1
+            Entrust design system · Workflow Components (#20)
           </p>
           <h1 className="mt-4 max-w-3xl font-display text-4xl font-extrabold leading-tight sm:text-display">
-            One look for every Entrust platform.
+            Workflow components for case screens.
           </h1>
           <p className="mt-4 max-w-2xl text-on-night-muted">
-            Entrust&apos;s green, Montserrat and Open Sans, with the dark sign-in panel from the Zemen
-            Bank reference and the pan-African colour band from the Chamber of Commerce reference.
-            CLEAR adds its own teal accent.
+            Presentational, typed components living in <code className="text-white font-mono">packages/ui</code>:
+            Phase stepper, Step row, Evidence item, Gate summary card, Case header, and Flag banner,
+            featuring empty, loading, and error states.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="on-night" size="lg">
-              Primary on dark
+            <Button variant="on-night" size="lg" onClick={() => window.scrollTo({ top: 600, behavior: "smooth" })}>
+              Explore components ↓
             </Button>
-            <Button size="lg">Start a case</Button>
           </div>
         </div>
         <Patchwork />
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 pb-20">
-        <Section title="Colour" note="Every colour is a named token in packages/ui/src/styles.css. The colour band is decorative and never carries meaning.">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-24 space-y-4">
+        {/* ========================================================= */}
+        {/* 1. Case Header */}
+        {/* ========================================================= */}
+        <Section
+          id="case-header"
+          title="1. Case Header"
+          note="Reference code, exporter → buyer trade relationship, product, commercial terms, and status badge."
+        >
+          <div className="space-y-6">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Live Case Header</p>
+              <CaseHeader
+                reference="CLR-ET-2026-000145"
+                exporterName="ZEBU Coffee Exporters"
+                buyerName="Artisan Coffee Roasters USA"
+                product="Green Coffee (Specialty Grade 1 Washed)"
+                terms="FOB Djibouti · 10% Advance, 90% CAD · US$60,873.43"
+                status={CASE_STATUSES.open}
+                actionSlot={
+                  <Button variant="secondary" size="sm">
+                    Download dossier
+                  </Button>
+                }
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <CaseHeader loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <CaseHeader error="Failed to fetch case header details. Please refresh." />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 2. Phase Stepper */}
+        {/* ========================================================= */}
+        <Section
+          id="phase-stepper"
+          title="2. Phase Stepper"
+          note="7 export phases with done, current, upcoming, and locked states. Interactive: click any phase to update."
+        >
+          <div className="space-y-6">
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-3">
+                  Interactive Stepper (Active: Phase {selectedPhase})
+                </p>
+                <span className="text-xs text-brand-600 font-medium">Click a phase to change state</span>
+              </div>
+              <PhaseStepper
+                phases={phaseList}
+                currentPhase={selectedPhase}
+                onSelectPhase={(n) => setSelectedPhase(n)}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <PhaseStepper loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Phases)</p>
+              <PhaseStepper phases={[]} />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <PhaseStepper
+                error="Unable to load phase sequence from engine."
+                onRetry={() => setSelectedPhase(3)}
+              />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 3. Step Row */}
+        {/* ========================================================= */}
+        <Section
+          id="step-row"
+          title="3. Step Row"
+          note="Compliance step items showing step code, title, owner, task status, due dates, blocked reasons, and action slots."
+        >
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-3">Step States</p>
+
+            {/* In Progress */}
+            <StepRow
+              stepCode="STEP-046"
+              name="Submit export permit application to commercial bank"
+              owner="Bank, recorded by SME"
+              taskStatus={TASK_STATUSES.in_progress}
+              dueDate="28 Oct 2026"
+              actionSlot={<Button size="sm">Record submission</Button>}
+            />
+
+            {/* Blocked */}
+            <StepRow
+              stepCode="STEP-049"
+              name="National Bank of Ethiopia FX registration"
+              owner="SME"
+              taskStatus={TASK_STATUSES.blocked}
+              blockedReason="Blocked: Awaiting commercial bank verification of deposit prior to permit clearance."
+              actionSlot={
+                <Button variant="secondary" size="sm">
+                  Resolve
+                </Button>
+              }
+            />
+
+            {/* Overdue */}
+            <StepRow
+              stepCode="STEP-033"
+              name="Destination phytosanitary import permit pre-check"
+              owner="Entrust"
+              taskStatus={TASK_STATUSES.awaiting_sme}
+              dueDate="24 Oct 2026"
+              isOverdue
+              actionSlot={<Button size="sm">Submit now</Button>}
+            />
+
+            {/* Completed */}
+            <StepRow
+              stepCode="STEP-004"
+              name="Commercial contract execution and buyer terms verification"
+              owner="SME"
+              taskStatus={STEP_STATUSES.completed}
+              dueDate="20 Oct 2026"
+            />
+
+            {/* Not Applicable */}
+            <StepRow
+              stepCode="STEP-062"
+              name="Roasted coffee moisture migration certificate"
+              owner="Entrust"
+              taskStatus={STEP_STATUSES.not_applicable}
+              notApplicableReason="Applies only to roasted or ground coffee consignments. Consignment is raw green coffee."
+            />
+
+            <div className="pt-2">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <StepRow loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Steps in Phase)</p>
+              <EmptyState
+                title="No compliance steps configured"
+                description="This phase currently has no active steps assigned to your export profile."
+                actionSlot={<Button variant="secondary" size="sm">Configure rule pack</Button>}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <StepRow error="Could not retrieve step definition." />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 4. Evidence Item */}
+        {/* ========================================================= */}
+        <Section
+          id="evidence-item"
+          title="4. Evidence Item"
+          note="Document upload slots showing document type, verification status, file downloads, reviewer feedback, and action slots."
+        >
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-3">Evidence States</p>
+
+            {/* Approved File */}
+            <EvidenceItem
+              documentType="Commercial Invoice (Signed & Stamped)"
+              status={EVIDENCE_STATUSES.approved}
+              issuedOn="12 Oct 2026"
+              validUntil="12 Nov 2026"
+              file={{
+                name: "commercial-invoice-inv-2026-004.pdf",
+                sizeBytes: 1540000,
+                url: "#",
+                uploadedAt: "22 Oct 2026 at 14:15",
+              }}
+            />
+
+            {/* Under Review */}
+            <EvidenceItem
+              documentType="Export Permit (Form NBE-EP)"
+              status={EVIDENCE_STATUSES.under_review}
+              file={{
+                name: "permit-application-scan.pdf",
+                sizeBytes: 2840000,
+                url: "#",
+                uploadedAt: "Today at 09:30",
+              }}
+            />
+
+            {/* Changes Required with Reviewer Note */}
+            <EvidenceItem
+              documentType="Phytosanitary Certificate (ECTA)"
+              status={EVIDENCE_STATUSES.changes_required}
+              file={{
+                name: "phytosanitary-cert-draft.pdf",
+                sizeBytes: 980000,
+                url: "#",
+                uploadedAt: "Yesterday at 17:00",
+              }}
+              reviewerNote="The consignment net weight on line 4 (18,400 kg) does not reconcile with the bill of lading manifest (19,200 kg). Please request an amended certificate from the authority."
+              actionSlot={<Button size="sm">Upload replacement</Button>}
+            />
+
+            {/* Not Provided */}
+            <EvidenceItem
+              documentType="Certificate of Origin (Chamber of Commerce)"
+              status={EVIDENCE_STATUSES.not_provided}
+              actionSlot={<Button size="sm">Upload evidence</Button>}
+            />
+
+            <div className="pt-2">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <EvidenceItem loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Evidence Uploaded)</p>
+              <EmptyState
+                title="No documents uploaded"
+                description="Upload supporting trade documentation to satisfy phase gate requirements."
+                actionSlot={<Button size="sm">Upload document</Button>}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <EvidenceItem error="Failed to verify evidence file integrity." />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 5. Gate Summary Card */}
+        {/* ========================================================= */}
+        <Section
+          id="gate-summary"
+          title="5. Gate Summary Card"
+          note="Milestone gate tracker calculating completed steps, listing remaining blockers, and providing sign-off slots."
+        >
+          <div className="space-y-6">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">In Progress Gate with Remaining Items</p>
+              <GateSummaryCard
+                phaseNumber={3}
+                phaseTitle="Destination admissibility & regulatory licensing"
+                gateStatus="open"
+                completedSteps={14}
+                totalSteps={18}
+                remainingItems={[
+                  { title: "Submit export permit application to commercial bank (STEP-046)" },
+                  { title: "National Bank of Ethiopia FX approval (STEP-049)" },
+                  { title: "Upload amended Phytosanitary Certificate" },
+                ]}
+                signOffSlot={
+                  <Button variant="secondary" size="sm" disabled>
+                    Sign off phase
+                  </Button>
+                }
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Ready to Sign Off Gate</p>
+              <GateSummaryCard
+                phaseNumber={2}
+                phaseTitle="Buyer contracting & commercial terms"
+                gateStatus="ready"
+                completedSteps={17}
+                totalSteps={17}
+                signOffSlot={<Button size="sm">Sign off Milestone Gate 2</Button>}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Locked / Signed Off Gate</p>
+              <GateSummaryCard
+                phaseNumber={1}
+                phaseTitle="Exporter onboarding & product identity"
+                gateStatus="locked"
+                completedSteps={18}
+                totalSteps={18}
+                lockedDetails={{
+                  signedBy: "Minase Fikadu (Entrust Facilitator)",
+                  signedAt: "22 Oct 2026, 16:30 EAT",
+                }}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <GateSummaryCard loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <GateSummaryCard error="Failed to calculate gate closure eligibility." />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 6. Flag Banner */}
+        {/* ========================================================= */}
+        <Section
+          id="flag-banner"
+          title="6. Flag Banner"
+          note="Failure rule flags and compliance alerts categorized by severity (critical, high, medium) and status."
+        >
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-3">Flag Severities & States</p>
+
+            {/* Critical Severity */}
+            <FlagBanner
+              code="FL-02"
+              title="Destination port regulatory trade sanction"
+              severity="critical"
+              status="open"
+              description="Consignment delivery destination is subject to mandatory regulatory trade sanctions under Council Regulation (EU) 2026/89. Case processing cannot proceed until resolved."
+              actionSlot={
+                <Button variant="secondary" size="sm">
+                  Resolve exception
+                </Button>
+              }
+            />
+
+            {/* High Severity */}
+            <FlagBanner
+              code="STEP-024"
+              title="Declared contract price falls below National Coffee MEP"
+              severity="high"
+              status="open"
+              description="Declared FOB unit value ($2.85/lb) is below Ethiopian Coffee & Tea Authority minimum export price threshold ($3.10/lb) for Grade 1 Washed Yirgacheffe."
+              actionSlot={
+                <Button variant="secondary" size="sm">
+                  Record MEP justification
+                </Button>
+              }
+            />
+
+            {/* Medium Severity */}
+            <FlagBanner
+              code="FL-07"
+              title="FX repatriation settlement deadline within 14 days"
+              severity="medium"
+              status="open"
+              description="National Bank of Ethiopia requires repatriation receipt reconciliation within 28 days of bill of lading issuance."
+            />
+
+            {/* Resolved Flag */}
+            <FlagBanner
+              code="FL-05"
+              title="Alternative port routing clearance exception"
+              severity="high"
+              status="resolved"
+              description="Exception approved by Entrust Facilitator on 23 Oct 2026. Routing via Berbera accepted."
+            />
+
+            {/* Waived Flag */}
+            <FlagBanner
+              code="FL-01"
+              title="Preliminary moisture certificate waiver"
+              severity="medium"
+              status="waived"
+              description="Waived: Sourcing verified under direct cooperative traceability protocol."
+            />
+
+            <div className="pt-2">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
+              <FlagBanner loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Active Flags)</p>
+              <EmptyState
+                title="No active compliance flags"
+                description="All compliance rules passed. No regulatory warnings or trade sanctions detected."
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
+              <FlagBanner error="Failed to retrieve compliance flags for this case." />
+            </div>
+          </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 7. Empty State Primitive */}
+        {/* ========================================================= */}
+        <Section
+          id="empty-state"
+          title="7. Empty State Primitive"
+          note="Shared reusable empty state container for workflow lists, evidence tables, and flag panels."
+        >
+          <EmptyState
+            title="No records found"
+            description="Try adjusting your filters or search criteria."
+            actionSlot={<Button variant="secondary" size="sm">Reset filters</Button>}
+          />
+        </Section>
+
+        {/* ========================================================= */}
+        {/* Foundations: Colours & Typography (Preserved) */}
+        {/* ========================================================= */}
+        <Section title="Design Foundations · Colour" note="Every colour is a named token in packages/ui/src/styles.css.">
           <div className="grid gap-8 md:grid-cols-3">
             {swatches.map((g) => (
               <div key={g.group}>
@@ -95,7 +559,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="Montserrat for headings, Open Sans for reading, a monospace face for references and codes. Noto Sans Ethiopic covers Amharic.">
+        <Section title="Design Foundations · Type" note="Montserrat for headings, Open Sans for reading, a monospace face for references and codes. Noto Sans Ethiopic covers Amharic.">
           <div className="flex flex-col gap-5">
             <p className="font-display text-display font-extrabold">Display 44</p>
             <p className="font-display text-3xl font-bold">Page heading 30</p>
@@ -109,7 +573,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Buttons" note="Sentence-case labels in the app. Hover, focus and press are live; try them with the mouse and the Tab key.">
+        <Section title="Design Foundations · Buttons" note="Sentence-case labels in the app. Hover, focus and press are live; try them with the mouse and the Tab key.">
           <div className="flex flex-col gap-4">
             {(["primary", "secondary", "ghost", "danger"] as const).map((v) => (
               <div key={v} className="flex flex-wrap items-center gap-3">
@@ -129,7 +593,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Fields">
+        <Section title="Design Foundations · Fields">
           <div className="grid max-w-3xl gap-6 sm:grid-cols-2">
             <Field label="Buyer name" placeholder="As on the purchase order" />
             <Field label="Contract value (USD)" hint="Matches the pro-forma invoice." inputMode="decimal" />
@@ -138,8 +602,8 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Statuses" note="The task and evidence dictionaries from the Operational Control Matrix. The label always states the status; colour only supports it.">
-          <div className="grid gap-8 md:grid-cols-2">
+        <Section title="Design Foundations · Statuses" note="The task, evidence, step, gate, and compliance dictionaries. The label always states the status; colour only supports it.">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             <div>
               <h3 className="text-sm font-semibold text-ink-2">Task</h3>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -160,10 +624,50 @@ export default function DesignPage() {
                 ))}
               </div>
             </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Step</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(STEP_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Gate</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(GATE_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Flag Severity</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(FLAG_SEVERITIES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Flag Status</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(FLAG_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
           </div>
         </Section>
 
-        <Section title="Case card" note="How a case will read on the case list. Example data only.">
+        <Section title="Design Foundations · Case card" note="How a case will read on the case list. Example data only.">
           <Card className="max-w-3xl overflow-hidden">
             <div className="flex flex-wrap items-start justify-between gap-4 p-6">
               <div className="min-w-0">
@@ -182,7 +686,7 @@ export default function DesignPage() {
                   title={`Phase ${p.n}: ${p.title}`}
                   className={cn(
                     "h-1.5 rounded-full",
-                    p.n < currentPhase ? "bg-ok" : p.n === currentPhase ? "bg-product" : "bg-line",
+                    p.n < selectedPhase ? "bg-ok" : p.n === selectedPhase ? "bg-product" : "bg-line",
                   )}
                 />
               ))}
@@ -195,35 +699,6 @@ export default function DesignPage() {
               <Button size="sm">Open case</Button>
             </div>
           </Card>
-        </Section>
-
-        <Section title="Phases" note="The seven phases Entrust confirmed. Each ends in a milestone gate.">
-          <ol className="flex max-w-3xl flex-col">
-            {PHASES.map((p) => {
-              const state = p.n < currentPhase ? "done" : p.n === currentPhase ? "current" : "upcoming";
-              return (
-                <li key={p.n} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <span
-                      className={cn(
-                        "grid size-8 shrink-0 place-items-center rounded-full font-display text-sm font-bold",
-                        state === "done" && "bg-ok text-white",
-                        state === "current" && "bg-product-600 text-white",
-                        state === "upcoming" && "bg-surface text-ink-3 ring-1 ring-line-strong ring-inset",
-                      )}
-                    >
-                      {p.n}
-                    </span>
-                    {p.n < PHASES.length && <span className="w-px grow bg-line-strong" />}
-                  </div>
-                  <div className="min-w-0 pb-6">
-                    <p className="font-semibold">{p.title}</p>
-                    <p className="font-mono text-xs text-ink-3">Steps {p.steps}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
         </Section>
       </main>
     </div>
