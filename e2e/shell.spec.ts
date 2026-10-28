@@ -32,7 +32,9 @@ test.describe("CLEAR app shell and navigation (#19)", () => {
     // Reset password with missing token
     await page.goto("/reset-password");
     await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
-    await expect(page.getByRole("alert")).toContainText("This reset link is invalid or has expired");
+    await expect(
+      page.getByRole("alert").filter({ hasText: "This reset link is invalid or has expired" }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "← Return to sign in" })).toBeVisible();
 
     const resetScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);

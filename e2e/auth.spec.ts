@@ -53,6 +53,6 @@ test("a user can sign up, is blocked when unverified, verifies email, and can si
 
   // 7. Sign out and confirm redirection
   await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 });
