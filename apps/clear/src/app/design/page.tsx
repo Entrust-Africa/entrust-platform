@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CaseHeader,
+  EmptyState,
   EvidenceItem,
   Field,
   FlagBanner,
@@ -19,6 +20,9 @@ import {
   TASK_STATUSES,
   EVIDENCE_STATUSES,
   STEP_STATUSES,
+  GATE_STATUSES,
+  FLAG_SEVERITIES,
+  FLAG_STATUSES,
 } from "@entrust/ui";
 
 const swatches: { group: string; items: { name: string; className: string; value: string }[] }[] = [
@@ -183,6 +187,11 @@ export default function DesignPage() {
             </div>
 
             <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Phases)</p>
+              <PhaseStepper phases={[]} />
+            </div>
+
+            <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
               <PhaseStepper
                 error="Unable to load phase sequence from engine."
@@ -262,6 +271,15 @@ export default function DesignPage() {
             </div>
 
             <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Steps in Phase)</p>
+              <EmptyState
+                title="No compliance steps configured"
+                description="This phase currently has no active steps assigned to your export profile."
+                actionSlot={<Button variant="secondary" size="sm">Configure rule pack</Button>}
+              />
+            </div>
+
+            <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
               <StepRow error="Could not retrieve step definition." />
             </div>
@@ -283,6 +301,8 @@ export default function DesignPage() {
             <EvidenceItem
               documentType="Commercial Invoice (Signed & Stamped)"
               status={EVIDENCE_STATUSES.approved}
+              issuedOn="12 Oct 2026"
+              validUntil="12 Nov 2026"
               file={{
                 name: "commercial-invoice-inv-2026-004.pdf",
                 sizeBytes: 1540000,
@@ -327,6 +347,15 @@ export default function DesignPage() {
             <div className="pt-2">
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Loading State (Skeleton)</p>
               <EvidenceItem loading />
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Evidence Uploaded)</p>
+              <EmptyState
+                title="No documents uploaded"
+                description="Upload supporting trade documentation to satisfy phase gate requirements."
+                actionSlot={<Button size="sm">Upload document</Button>}
+              />
             </div>
 
             <div>
@@ -477,10 +506,33 @@ export default function DesignPage() {
             </div>
 
             <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Empty State (No Active Flags)</p>
+              <EmptyState
+                title="No active compliance flags"
+                description="All compliance rules passed. No regulatory warnings or trade sanctions detected."
+              />
+            </div>
+
+            <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-3">Error State</p>
               <FlagBanner error="Failed to retrieve compliance flags for this case." />
             </div>
           </div>
+        </Section>
+
+        {/* ========================================================= */}
+        {/* 7. Empty State Primitive */}
+        {/* ========================================================= */}
+        <Section
+          id="empty-state"
+          title="7. Empty State Primitive"
+          note="Shared reusable empty state container for workflow lists, evidence tables, and flag panels."
+        >
+          <EmptyState
+            title="No records found"
+            description="Try adjusting your filters or search criteria."
+            actionSlot={<Button variant="secondary" size="sm">Reset filters</Button>}
+          />
         </Section>
 
         {/* ========================================================= */}
@@ -505,6 +557,148 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
+        </Section>
+
+        <Section title="Design Foundations · Type" note="Montserrat for headings, Open Sans for reading, a monospace face for references and codes. Noto Sans Ethiopic covers Amharic.">
+          <div className="flex flex-col gap-5">
+            <p className="font-display text-display font-extrabold">Display 44</p>
+            <p className="font-display text-3xl font-bold">Page heading 30</p>
+            <p className="font-display text-xl font-bold">Section heading 20</p>
+            <p className="max-w-prose text-base leading-relaxed text-ink-2">
+              Body 16. The NBE export permit is valid for 30 days. Proceeds must reach the bank
+              within 90 days of the permit date.
+            </p>
+            <p className="font-sans text-base">ኢትዮጵያ · ቡና ወደ ውጭ መላክ</p>
+            <p className="font-mono text-sm">CLR-ET-2026-000145 · HS 0901.11 · STEP-024</p>
+          </div>
+        </Section>
+
+        <Section title="Design Foundations · Buttons" note="Sentence-case labels in the app. Hover, focus and press are live; try them with the mouse and the Tab key.">
+          <div className="flex flex-col gap-4">
+            {(["primary", "secondary", "ghost", "danger"] as const).map((v) => (
+              <div key={v} className="flex flex-wrap items-center gap-3">
+                <span className="w-24 font-mono text-xs text-ink-3">{v}</span>
+                <Button variant={v}>Approve evidence</Button>
+                <Button variant={v} disabled>
+                  Disabled
+                </Button>
+                <Button variant={v} loading>
+                  Saving
+                </Button>
+                <Button variant={v} size="sm">
+                  Small
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Design Foundations · Fields">
+          <div className="grid max-w-3xl gap-6 sm:grid-cols-2">
+            <Field label="Buyer name" placeholder="As on the purchase order" />
+            <Field label="Contract value (USD)" hint="Matches the pro-forma invoice." inputMode="decimal" />
+            <Field label="Incoterm named place" defaultValue="FOB Addis Ababa" error="FOB needs a sea port. Use FCA Addis Ababa or FOB Djibouti." />
+            <Field label="NBE permit number" disabled defaultValue="Issued by the bank" />
+          </div>
+        </Section>
+
+        <Section title="Design Foundations · Statuses" note="The task, evidence, step, gate, and compliance dictionaries. The label always states the status; colour only supports it.">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Task</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(TASK_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Evidence</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(EVIDENCE_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Step</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(STEP_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Gate</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(GATE_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Flag Severity</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(FLAG_SEVERITIES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-2">Flag Status</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.values(FLAG_STATUSES).map((s) => (
+                  <StatusBadge key={s.label} tone={s.tone}>
+                    {s.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Design Foundations · Case card" note="How a case will read on the case list. Example data only.">
+          <Card className="max-w-3xl overflow-hidden">
+            <div className="flex flex-wrap items-start justify-between gap-4 p-6">
+              <div className="min-w-0">
+                <p className="font-mono text-xs text-ink-3">CLR-ET-2026-000145 · Example</p>
+                <h3 className="mt-1 font-display text-lg font-bold">ZEBU Coffee → Artisan Coffee USA</h3>
+                <p className="mt-1 text-sm text-ink-2">
+                  Green coffee · FOB Djibouti · 10% advance, 90% CAD · US$60,873.43
+                </p>
+              </div>
+              <StatusBadge tone="warn">Awaiting bank</StatusBadge>
+            </div>
+            <ol className="grid grid-cols-7 gap-1 px-6" aria-label="Phases">
+              {PHASES.map((p) => (
+                <li
+                  key={p.n}
+                  title={`Phase ${p.n}: ${p.title}`}
+                  className={cn(
+                    "h-1.5 rounded-full",
+                    p.n < selectedPhase ? "bg-ok" : p.n === selectedPhase ? "bg-product" : "bg-line",
+                  )}
+                />
+              ))}
+            </ol>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-2 px-6 py-4 mt-5">
+              <p className="min-w-0 text-sm">
+                <span className="font-semibold">Phase 3 · next:</span> submit the export permit
+                application to the bank (STEP-046)
+              </p>
+              <Button size="sm">Open case</Button>
+            </div>
+          </Card>
         </Section>
       </main>
     </div>
