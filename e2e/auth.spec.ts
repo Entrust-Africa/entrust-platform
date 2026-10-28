@@ -52,6 +52,7 @@ test("a user can sign up, is blocked when unverified, verifies email, and can si
   await expect(page.getByRole("heading", { name: "Export cases" })).toBeVisible();
 
   // 7. Sign out and confirm redirection
+  await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 });

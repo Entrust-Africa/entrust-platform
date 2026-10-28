@@ -11,6 +11,7 @@ import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
 import { organizations } from "./routes/organizations";
 import { jobs } from "./routes/jobs";
+import { files } from "./routes/files";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -55,6 +56,7 @@ export const app = base
   .route("/v1", me)
   .route("/v1", organizations)
   .route("/v1", jobs)
+  .route("/v1", files)
   .route("/v1/clear", clearCases)
   .route("/v1/clear", clearMinimumPrices)
   .route("/v1/clear", clearRulePacks);

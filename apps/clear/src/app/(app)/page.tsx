@@ -2,7 +2,7 @@ import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Card, StatusBadge, cn } from "@entrust/ui";
-import { serverApi } from "@/lib/api";
+import { getMe, serverApi } from "@/lib/api";
 import { countryName, productLabel, readable } from "@/lib/catalogue";
 import { CASE_STATUSES, NEXT_ACTIONS, PHASES } from "@/lib/statuses";
 import { SelectField } from "./cases/inputs";
@@ -22,8 +22,15 @@ export default async function CasesPage({
   const phase = PHASES.some((p) => String(p.n) === params.phase) ? params.phase : undefined;
   const page = Math.max(1, Math.floor(Number(params.page)) || 1);
 
-  const res = await (await serverApi()).v1.clear.cases.$get({
-    query: { status, phase, limit: String(PAGE_SIZE), offset: String((page - 1) * PAGE_SIZE) },
+  const [me, api] = await Promise.all([getMe(), serverApi()]);
+  const res = await api.v1.clear.cases.$get({
+    query: {
+      status,
+      phase,
+      organizationId: me?.activeOrganizationId ?? undefined,
+      limit: String(PAGE_SIZE),
+      offset: String((page - 1) * PAGE_SIZE),
+    },
   });
   if (res.status === 401) redirect("/sign-in");
   if (!res.ok) throw new Error(`The case list didn't load (${res.status}).`);
