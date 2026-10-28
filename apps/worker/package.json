@@ -5,21 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
-    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "tsdown",
+    "start": "node --env-file-if-exists=../../.env dist/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@entrust/db": "workspace:*",
     "@entrust/jobs": "workspace:*",
     "@entrust/notify": "workspace:*",
-    "@entrust/ui": "workspace:*",
-    "pg-boss": "^12.38.0",
     "react": "^19.3.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
+    "tsdown": "^0.23.1",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }

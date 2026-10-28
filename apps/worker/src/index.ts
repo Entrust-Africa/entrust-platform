@@ -1,6 +1,50 @@
-import { createBoss, JOB_NAMES } from "@entrust/jobs";
+import {
+  createBoss,
+  JOB_NAMES,
+  type JobDefinitions,
+  type JobName,
+  type PgBoss,
+} from "@entrust/jobs";
 import { handleSendEmail } from "./handlers/send-email";
 import { handleTestFail } from "./handlers/test-fail";
+
+export type JobHandler<T> = (data: T, job: any) => Promise<any>;
+
+export const WORKER_HANDLERS: {
+  [K in JobName]: JobHandler<JobDefinitions[K]>;
+} = {
+  [JOB_NAMES.SEND_EMAIL]: handleSendEmail,
+  [JOB_NAMES.TEST_FAIL]: handleTestFail,
+};
+
+/**
+ * Registers all typed job handlers on the provided PgBoss instance.
+ * Ensures queues exist and logs failures with job metadata before rethrowing.
+ */
+export async function registerHandlers(boss: PgBoss): Promise<void> {
+  for (const [queueName, handler] of Object.entries(WORKER_HANDLERS)) {
+    await boss.createQueue(queueName);
+    await boss.work(queueName, async (jobs: any) => {
+      const list = Array.isArray(jobs) ? jobs : [jobs];
+      let lastResult: any = null;
+      for (const job of list) {
+        if (!job) continue;
+        console.info(`[worker] Processing ${queueName} job: ${job.id}`);
+        try {
+          lastResult = await handler(job.data, job);
+          console.info(`[worker] Completed ${queueName} job: ${job.id}`);
+        } catch (err) {
+          console.error(
+            `[worker] Job execution failed: queue=${queueName} id=${job.id} retryCount=${job.retryCount ?? 0}:`,
+            err,
+          );
+          throw err;
+        }
+      }
+      return lastResult;
+    });
+  }
+}
 
 async function main() {
   console.info("[worker] Starting Entrust background worker...");
@@ -13,35 +57,7 @@ async function main() {
   await boss.start();
   console.info("[worker] Connected to PostgreSQL and pg-boss initialized.");
 
-  // Ensure queues exist
-  await boss.createQueue(JOB_NAMES.SEND_EMAIL);
-  await boss.createQueue(JOB_NAMES.TEST_FAIL);
-
-  // Register worker for SEND_EMAIL
-  await boss.work(JOB_NAMES.SEND_EMAIL, async (jobs: any) => {
-    const list = Array.isArray(jobs) ? jobs : [jobs];
-    let lastResult: any = null;
-    for (const job of list) {
-      if (!job) continue;
-      console.info(`[worker] Processing send-email job: ${job.id}`);
-      lastResult = await handleSendEmail(job.data);
-      console.info(`[worker] Completed send-email job: ${job.id}`);
-    }
-    return lastResult;
-  });
-
-  // Register worker for TEST_FAIL
-  await boss.work(JOB_NAMES.TEST_FAIL, async (jobs: any) => {
-    const list = Array.isArray(jobs) ? jobs : [jobs];
-    let lastResult: any = null;
-    for (const job of list) {
-      if (!job) continue;
-      console.info(`[worker] Processing test-fail job: ${job.id}`);
-      lastResult = await handleTestFail(job.data);
-    }
-    return lastResult;
-  });
-
+  await registerHandlers(boss);
   console.info("[worker] All background job handlers registered and ready.");
 
   // Clean shutdown handling
@@ -64,7 +80,13 @@ async function main() {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-main().catch((err) => {
-  console.error("[worker] Fatal worker startup error:", err);
-  process.exit(1);
-});
+// Only start the worker loop when executed directly as main script
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith("src/index.ts") || process.argv[1].endsWith("dist/index.mjs"))
+) {
+  main().catch((err) => {
+    console.error("[worker] Fatal worker startup error:", err);
+    process.exit(1);
+  });
+}
