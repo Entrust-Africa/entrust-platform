@@ -6,6 +6,7 @@ export {
   stopBoss,
   resolveDatabaseUrl,
 } from "./client";
+export type { PgBoss } from "pg-boss";
 
 export {
   JOB_NAMES,
@@ -14,7 +15,9 @@ export {
   SendEmailJobSchema,
   type TestFailJobData,
   TestFailJobSchema,
+  JOB_SCHEMAS,
   type JobDefinitions,
+  type EnqueueInput,
   type EnqueueOptions,
   type JobStatusInfo,
   DEFAULT_RETRY_CONFIG,

@@ -23,6 +23,38 @@ describe("Background Jobs Runtime with pg-boss", () => {
     await stopBoss();
   });
 
+  it("validates payload schemas on enqueue and fails fast on invalid input", async () => {
+    // Invalid email address
+    await expect(
+      enqueue(JOB_NAMES.SEND_EMAIL, {
+        to: "not-an-email",
+        subject: "Hello",
+        template: "test",
+      } as any),
+    ).rejects.toThrow();
+
+    // Verification template missing required url
+    await expect(
+      enqueue(JOB_NAMES.SEND_EMAIL, {
+        to: "valid@example.test",
+        subject: "Verify",
+        template: "verification",
+        props: {} as any,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("returns null for non-existent queues or jobs instead of throwing", async () => {
+    const unknownQueueStatus = await getJobStatus("non-existent-queue", "any-id");
+    expect(unknownQueueStatus).toBeNull();
+
+    const unknownJobStatus = await getJobStatus(
+      JOB_NAMES.SEND_EMAIL,
+      "00000000-0000-0000-0000-000000000000",
+    );
+    expect(unknownJobStatus).toBeNull();
+  });
+
   it("enqueues and executes an end-to-end send-email job", async () => {
     let processedJob: any = null;
 
@@ -60,45 +92,47 @@ describe("Background Jobs Runtime with pg-boss", () => {
   it(
     "retries a failing job with backoff and lands in failed state with error kept",
     async () => {
-    let attemptCount = 0;
+      let attemptCount = 0;
 
-    // Register a worker handler that always throws an error
-    await workerBoss.work(JOB_NAMES.TEST_FAIL, async (jobs: any) => {
-      attemptCount++;
-      const job = Array.isArray(jobs) ? jobs[0] : jobs;
-      throw new Error(`Simulated failure on attempt ${attemptCount} for job ${job.id}`);
-    });
+      // Register a worker handler that always throws an error
+      await workerBoss.work(JOB_NAMES.TEST_FAIL, async (jobs: any) => {
+        attemptCount++;
+        const job = Array.isArray(jobs) ? jobs[0] : jobs;
+        throw new Error(`Simulated failure on attempt ${attemptCount} for job ${job.id}`);
+      });
 
-    // Enqueue with 1 retry and 1s delay
-    const jobId = await enqueue(
-      JOB_NAMES.TEST_FAIL,
-      {
-        reason: "Testing retry and terminal failure",
-      },
-      {
-        retryLimit: 1,
-        retryDelay: 1,
-        retryBackoff: true,
-      },
-    );
+      // Enqueue with 1 retry and 1s delay
+      const jobId = await enqueue(
+        JOB_NAMES.TEST_FAIL,
+        {
+          reason: "Testing retry and terminal failure",
+        },
+        {
+          retryLimit: 1,
+          retryDelay: 1,
+          retryBackoff: true,
+        },
+      );
 
-    expect(jobId).toBeDefined();
+      expect(jobId).toBeDefined();
 
-    // Wait for retries to exhaust and land in failed state
-    let status = await getJobStatus(JOB_NAMES.TEST_FAIL, jobId!);
-    const startTime = Date.now();
-    while (status?.state !== "failed" && Date.now() - startTime < 15000) {
-      await new Promise((r) => setTimeout(r, 300));
-      status = await getJobStatus(JOB_NAMES.TEST_FAIL, jobId!);
-    }
+      // Wait for retries to exhaust and land in failed state
+      let status = await getJobStatus(JOB_NAMES.TEST_FAIL, jobId!);
+      const startTime = Date.now();
+      while (status?.state !== "failed" && Date.now() - startTime < 15000) {
+        await new Promise((r) => setTimeout(r, 300));
+        status = await getJobStatus(JOB_NAMES.TEST_FAIL, jobId!);
+      }
 
-    expect(status?.state).toBe("failed");
-    expect(status?.retryCount).toBeGreaterThanOrEqual(1);
-    expect(status?.output).toBeDefined();
-    // Verify that the error message is preserved in output
-    const outputStr = JSON.stringify(status?.output);
-    expect(outputStr).toMatch(/Simulated failure/i);
-  }, 20000);
+      expect(status?.state).toBe("failed");
+      expect(status?.retryCount).toBeGreaterThanOrEqual(1);
+      expect(status?.output).toBeDefined();
+      // Verify that the error message is preserved in output
+      const outputStr = JSON.stringify(status?.output);
+      expect(outputStr).toMatch(/Simulated failure/i);
+    },
+    20000,
+  );
 
   it("handles clean graceful shutdown without unhandled rejections", async () => {
     const testBoss = createBoss();

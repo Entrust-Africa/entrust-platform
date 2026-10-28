@@ -1,8 +1,10 @@
 import { PgBoss, type ConstructorOptions } from "pg-boss";
 import {
   DEFAULT_RETRY_CONFIG,
+  JOB_NAMES,
+  JOB_SCHEMAS,
+  type EnqueueInput,
   type EnqueueOptions,
-  type JobDefinitions,
   type JobName,
   type JobStatusInfo,
 } from "./types";
@@ -11,20 +13,14 @@ let sharedBoss: PgBoss | null = null;
 let startPromise: Promise<PgBoss> | null = null;
 
 export function resolveDatabaseUrl(): string {
-  if (!process.env.DATABASE_URL) {
-    for (const envPath of [".env", "../../.env", "../../../.env"]) {
-      try {
-        process.loadEnvFile(envPath);
-        if (process.env.DATABASE_URL) break;
-      } catch {
-        // Fall back if file is missing
-      }
-    }
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL environment variable is required for @entrust/jobs");
   }
-  const url = process.env.DATABASE_URL || "postgres://entrust:entrust@localhost:5432/entrust_platform";
   return url;
 }
 
+/** Creates a new PgBoss instance (used by background worker runtimes and test suites). */
 export function createBoss(options?: ConstructorOptions | string): PgBoss {
   const connection = options ?? resolveDatabaseUrl();
   const bossOptions: ConstructorOptions =
@@ -32,28 +28,59 @@ export function createBoss(options?: ConstructorOptions | string): PgBoss {
   return new PgBoss(bossOptions);
 }
 
-/** Returns the active singleton PgBoss instance for producer operations, starting it if necessary. */
+/**
+ * Returns the active singleton PgBoss instance for producer operations, starting it if necessary.
+ * Configured with producer-only settings (no background supervisor, no schedule runner, small connection pool).
+ */
 export async function getBoss(): Promise<PgBoss> {
   if (sharedBoss) return sharedBoss;
+
   if (!startPromise) {
-    const boss = createBoss();
+    const boss = new PgBoss({
+      connectionString: resolveDatabaseUrl(),
+      supervise: false,
+      schedule: false,
+      max: 2,
+    });
+
     boss.on("error", (err: unknown) => {
       console.error("[jobs:pg-boss] Error:", err);
     });
-    startPromise = boss.start().then(() => {
-      sharedBoss = boss;
-      return boss;
-    });
+
+    startPromise = boss
+      .start()
+      .then(async () => {
+        // Pre-create known queues once on producer initialization
+        for (const queue of Object.values(JOB_NAMES)) {
+          await boss.createQueue(queue);
+        }
+        sharedBoss = boss;
+        return boss;
+      })
+      .catch(async (err) => {
+        startPromise = null;
+        try {
+          await boss.stop({ timeout: 1000 });
+        } catch {
+          // Ignore secondary cleanup error on failed start
+        }
+        throw err;
+      });
   }
+
   return startPromise;
 }
 
 /** Enqueues a typed job into pg-boss with standard retry and backoff defaults. */
 export async function enqueue<K extends JobName>(
   name: K,
-  data: JobDefinitions[K],
+  data: EnqueueInput<K>,
   options?: EnqueueOptions,
 ): Promise<string | null> {
+  // Validate payload before communicating with pg-boss to fail fast on invalid inputs
+  const schema = JOB_SCHEMAS[name];
+  const validatedData = schema ? schema.parse(data) : data;
+
   const boss = await getBoss();
 
   const sendOptions: Record<string, any> = {
@@ -66,32 +93,37 @@ export async function enqueue<K extends JobName>(
   if (options?.expireInSeconds !== undefined) sendOptions.expireInSeconds = options.expireInSeconds;
   if (options?.singletonKey !== undefined) sendOptions.singletonKey = options.singletonKey;
 
-  // Ensure queue is registered in pg-boss
-  try {
-    await boss.createQueue(name);
-  } catch {
-    // Ignore error if queue already exists
-  }
-
-  const jobId = await boss.send(name, data as object, sendOptions);
+  const jobId = await boss.send(name, validatedData as object, sendOptions);
   return jobId;
 }
 
 /** Retrieves job details and execution state by queue name and ID. */
 export async function getJobStatus(name: string, jobId: string): Promise<JobStatusInfo | null> {
   const boss = await getBoss();
-  const job = await boss.getJobById(name, jobId);
-  if (!job) return null;
+  try {
+    const job = await boss.getJobById(name, jobId);
+    if (!job) return null;
 
-  return {
-    id: job.id,
-    name: job.name,
-    state: job.state as JobStatusInfo["state"],
-    retryCount: (job as any).retrycount ?? (job as any).retryCount ?? 0,
-    output: job.output,
-    createdOn: (job as any).createdon ?? (job as any).createdOn,
-    completedOn: (job as any).completedon ?? (job as any).completedOn,
-  };
+    return {
+      id: job.id,
+      name: job.name,
+      state: job.state as JobStatusInfo["state"],
+      retryCount: job.retryCount ?? 0,
+      output: job.output,
+      createdOn: job.createdOn,
+      completedOn: job.completedOn,
+    };
+  } catch (err: any) {
+    // If the queue does not exist in pg-boss, map to null (not found) instead of throwing 500
+    if (
+      err?.message?.includes("does not exist") ||
+      err?.message?.includes("not found") ||
+      err?.message?.includes("not exist")
+    ) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 /** Gracefully stops the singleton PgBoss instance. */
