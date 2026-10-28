@@ -291,6 +291,9 @@ describe("API documentation", () => {
         "/v1/files/{fileId}",
         "/v1/files/{fileId}/download-url",
         "/v1/health",
+        "/v1/jobs/test-email",
+        "/v1/jobs/test-fail",
+        "/v1/jobs/{queue}/{jobId}",
         "/v1/me",
       ].sort(),
     );
