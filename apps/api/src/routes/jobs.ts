@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { getDb } from "@entrust/db";
 import { enqueue, getJobStatus, JOB_NAMES } from "@entrust/jobs";
 import type { AppEnv } from "../app";
 import {
@@ -9,6 +10,7 @@ import {
   JobStatusResponse,
 } from "../schemas/jobs";
 import { Problem } from "../schemas/problem";
+import { loadPrincipal } from "../services/access";
 import { ServiceError } from "../services/errors";
 
 const tags = ["Jobs"];
@@ -21,6 +23,7 @@ const problem = (description: string) => ({
 const jobErrors = {
   400: problem("Invalid input"),
   401: problem("Not signed in"),
+  403: problem("Only Entrust admins can access background job controls"),
   404: problem("Job not found"),
 };
 
@@ -34,13 +37,25 @@ const router = new OpenAPIHono<AppEnv>({
   },
 });
 
-// Require signed-in session for job endpoints
-router.use("*", async (c, next) => {
+// Require signed-in session specifically for /jobs/* routes to prevent interference with sibling routers
+router.use("/jobs/*", async (c, next) => {
   if (!c.get("user")) {
     throw new ServiceError("unauthenticated", "Not signed in.");
   }
   await next();
 });
+
+async function requireEntrustAdmin(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
+  const user = c.get("user");
+  if (!user) {
+    throw new ServiceError("unauthenticated", "Not signed in.");
+  }
+  const principal = await loadPrincipal(getDb(), user.id);
+  if (principal.staffRole !== "admin") {
+    throw new ServiceError("forbidden", "Only Entrust admins can access background job controls.");
+  }
+  return user;
+}
 
 const testEmailRoute = createRoute({
   method: "post",
@@ -48,7 +63,7 @@ const testEmailRoute = createRoute({
   tags,
   summary: "Enqueue an example email background job",
   description:
-    "Enqueues a transactional or test email job to be processed by the background worker runtime.",
+    "Enqueues a test notification email job to be processed by the background worker runtime. Gated to Entrust admins.",
   request: {
     body: {
       required: true,
@@ -70,7 +85,7 @@ const testFailRoute = createRoute({
   tags,
   summary: "Enqueue an intentional failing job to demonstrate retries",
   description:
-    "Enqueues a job that fails on each attempt, demonstrating pg-boss retries with backoff and terminal failure state.",
+    "Enqueues a job that fails on each attempt, demonstrating pg-boss retries with backoff and terminal failure state. Gated to Entrust admins.",
   request: {
     body: {
       required: true,
@@ -91,7 +106,8 @@ const jobStatusRoute = createRoute({
   path: "/jobs/{queue}/{jobId}",
   tags,
   summary: "Retrieve background job status",
-  description: "Queries pg-boss for job execution state, retry count, and output/error.",
+  description:
+    "Queries pg-boss for job execution state, retry count, and sanitized output/error. Gated to Entrust admins.",
   request: {
     params: JobStatusParams,
   },
@@ -106,16 +122,16 @@ const jobStatusRoute = createRoute({
 
 export const jobs = router
   .openapi(testEmailRoute, async (c) => {
+    await requireEntrustAdmin(c);
     const body = c.req.valid("json");
     const jobId = await enqueue(
       JOB_NAMES.SEND_EMAIL,
       {
         to: body.to,
         subject: body.subject,
-        template: body.template,
+        template: "test",
         props: {
-          ...body.props,
-          shouldFail: body.shouldFail,
+          message: body.message,
         },
       },
       {
@@ -132,6 +148,7 @@ export const jobs = router
     return c.json({ jobId, queue: JOB_NAMES.SEND_EMAIL }, 200);
   })
   .openapi(testFailRoute, async (c) => {
+    await requireEntrustAdmin(c);
     const body = c.req.valid("json");
     const jobId = await enqueue(
       JOB_NAMES.TEST_FAIL,
@@ -152,10 +169,20 @@ export const jobs = router
     return c.json({ jobId, queue: JOB_NAMES.TEST_FAIL }, 200);
   })
   .openapi(jobStatusRoute, async (c) => {
+    await requireEntrustAdmin(c);
     const { queue, jobId } = c.req.valid("param");
     const status = await getJobStatus(queue, jobId);
     if (!status) {
       throw new ServiceError("not_found", `Job not found: ${jobId}`);
+    }
+
+    // Sanitize output to prevent leaking internal stack traces or database errors
+    let sanitizedOutput: unknown = status.output;
+    if (status.state === "failed" && typeof status.output === "object" && status.output !== null) {
+      const errObj = status.output as Record<string, unknown>;
+      sanitizedOutput = {
+        message: typeof errObj.message === "string" ? errObj.message : "Job failed",
+      };
     }
 
     return c.json(
@@ -164,7 +191,7 @@ export const jobs = router
         name: status.name,
         state: status.state,
         retryCount: status.retryCount,
-        output: status.output,
+        output: sanitizedOutput,
         createdOn: status.createdOn ? new Date(status.createdOn).toISOString() : undefined,
         completedOn: status.completedOn ? new Date(status.completedOn).toISOString() : undefined,
       },

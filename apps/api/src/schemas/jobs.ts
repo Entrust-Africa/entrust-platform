@@ -1,28 +1,19 @@
 import { z } from "@hono/zod-openapi";
+import { JOB_NAMES } from "@entrust/jobs";
 
 export const EnqueueTestEmailBody = z
   .object({
-    to: z.union([z.string().email(), z.array(z.string().email())]).openapi({
-      description: "Recipient email address(es)",
-      example: "user@example.test",
+    to: z.string().email().openapi({
+      description: "Single recipient email address for testing",
+      example: "developer@example.test",
     }),
     subject: z.string().min(1).default("Test Background Email").openapi({
       description: "Email subject line",
       example: "Welcome to Entrust Background Jobs",
     }),
-    template: z
-      .enum(["test", "verification", "invitation", "password-reset"])
-      .default("test")
-      .openapi({
-        description: "Template to render",
-        example: "test",
-      }),
-    props: z.record(z.string(), z.unknown()).default({}).openapi({
-      description: "Template variables or payload parameters",
-    }),
-    shouldFail: z.boolean().default(false).openapi({
-      description: "If true, simulates delivery failure to trigger pg-boss retry mechanism",
-      example: false,
+    message: z.string().optional().default("Hello from Entrust Background Worker!").openapi({
+      description: "Custom test notification message",
+      example: "Testing background job dispatch",
     }),
   })
   .openapi("EnqueueTestEmailBody");
@@ -62,11 +53,13 @@ export const EnqueueJobResponse = z
 
 export const JobStatusParams = z
   .object({
-    queue: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/).openapi({
-      description: "Queue name of the job",
+    queue: z.enum([JOB_NAMES.SEND_EMAIL, JOB_NAMES.TEST_FAIL]).openapi({
+      param: { name: "queue", in: "path" },
+      description: "Valid registered job queue name",
       example: "send-email",
     }),
     jobId: z.string().min(1).max(128).openapi({
+      param: { name: "jobId", in: "path" },
       description: "Job ID",
       example: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     }),
@@ -82,7 +75,6 @@ export const JobStatusResponse = z
       "retry",
       "active",
       "completed",
-      "expired",
       "cancelled",
       "failed",
     ]),
