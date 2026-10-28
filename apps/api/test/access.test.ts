@@ -268,6 +268,7 @@ describe("API documentation", () => {
     const doc = await (await app.request("/openapi.json")).json();
     expect(Object.keys(doc.paths).sort()).toEqual(
       [
+        "/v1/audit",
         "/v1/clear/cases",
         "/v1/clear/cases/{id}",
         "/v1/clear/cases/{id}/amendments",
