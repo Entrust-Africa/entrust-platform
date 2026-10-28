@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ArrowRight, Package } from "lucide-react";
 import { cn } from "./cn";
-import { ErrorState, Skeleton } from "./skeleton";
+import { ErrorState, LoadingShell, Skeleton } from "./skeleton";
 import { StatusBadge, type StatusTone } from "./status-badge";
 
 export interface CaseHeaderProps {
@@ -11,6 +11,7 @@ export interface CaseHeaderProps {
   product?: string;
   terms?: string;
   status?: { label: string; tone: StatusTone };
+  headingLevel?: "h1" | "h2" | "h3";
   actionSlot?: React.ReactNode;
   loading?: boolean;
   error?: string | null;
@@ -25,6 +26,7 @@ export function CaseHeader({
   product,
   terms,
   status,
+  headingLevel = "h1",
   actionSlot,
   loading = false,
   error = null,
@@ -37,9 +39,8 @@ export function CaseHeader({
 
   if (loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading case header"
+      <LoadingShell
+        label="Loading case header"
         className={cn(
           "flex flex-col gap-4 rounded-xl border border-line bg-surface p-6 shadow-xs",
           className,
@@ -54,9 +55,11 @@ export function CaseHeader({
           <Skeleton className="h-4 w-28" />
           <Skeleton className="h-4 w-40" />
         </div>
-      </div>
+      </LoadingShell>
     );
   }
+
+  const HeadingTag = headingLevel;
 
   return (
     <div
@@ -77,15 +80,26 @@ export function CaseHeader({
         </div>
 
         {/* Exporter -> Buyer Trade Title */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="font-display text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
-            {exporterName ?? "Exporter"}
-          </h1>
-          <ArrowRight className="size-5 text-ink-3" aria-hidden="true" />
-          <h2 className="font-display text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
-            {buyerName ?? "Buyer"}
-          </h2>
-        </div>
+        <HeadingTag className="mt-2 font-display text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
+          <span>
+            {exporterName ? (
+              exporterName
+            ) : (
+              <span className="font-normal text-ink-3">Not recorded</span>
+            )}
+          </span>
+          <span className="mx-2 inline-flex items-center" aria-hidden="true">
+            <ArrowRight className="size-5 text-ink-3" />
+          </span>
+          <span className="sr-only"> to </span>
+          <span>
+            {buyerName ? (
+              buyerName
+            ) : (
+              <span className="font-normal text-ink-3">Not recorded</span>
+            )}
+          </span>
+        </HeadingTag>
 
         {/* Product & Terms metadata */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-2">

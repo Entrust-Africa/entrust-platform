@@ -1,8 +1,9 @@
 import * as React from "react";
 import { AlertCircle, CheckCircle2, Lock, ShieldCheck } from "lucide-react";
 import { cn } from "./cn";
-import { ErrorState, Skeleton } from "./skeleton";
-import { StatusBadge, type StatusTone } from "./status-badge";
+import { ErrorState, LoadingShell, Skeleton } from "./skeleton";
+import { StatusBadge } from "./status-badge";
+import { GATE_STATUSES } from "./statuses";
 
 export interface RemainingItem {
   title: string;
@@ -45,9 +46,8 @@ export function GateSummaryCard({
 
   if (loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading gate summary"
+      <LoadingShell
+        label="Loading gate summary"
         className={cn("flex flex-col gap-4 rounded-xl border border-line bg-surface p-6", className)}
       >
         <div className="flex items-center justify-between">
@@ -59,25 +59,14 @@ export function GateSummaryCard({
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-4 w-64" />
         </div>
-      </div>
+      </LoadingShell>
     );
   }
 
   const percentage = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
   const isLocked = gateStatus === "locked";
-  const isReady = gateStatus === "ready" || (remainingItems.length === 0 && !isLocked);
-
-  const statusConfig: Record<"open" | "ready" | "locked", { label: string; tone: StatusTone }> = {
-    open: { label: "Gate in progress", tone: "info" },
-    ready: { label: "Ready to sign off", tone: "product" },
-    locked: { label: "Gate signed off", tone: "ok" },
-  };
-
-  const currentStatus = isLocked
-    ? statusConfig.locked
-    : isReady
-      ? statusConfig.ready
-      : statusConfig.open;
+  const isReady = gateStatus === "ready";
+  const currentStatus = GATE_STATUSES[gateStatus] ?? GATE_STATUSES.open;
 
   return (
     <div
@@ -86,7 +75,7 @@ export function GateSummaryCard({
         isLocked
           ? "border-ok/30 bg-ok-50/15"
           : isReady
-            ? "border-product-300 bg-product-50/20"
+            ? "border-product/40 bg-product-50/20"
             : "border-line bg-surface",
         className,
       )}
@@ -127,16 +116,23 @@ export function GateSummaryCard({
         </div>
       </div>
 
-      {/* Body: Locked details or Remaining blocking items */}
-      {isLocked && lockedDetails ? (
+      {/* Body: Locked details, Ready prompt, or Remaining blocking items */}
+      {isLocked ? (
         <div className="mt-5 flex items-center gap-2.5 rounded-lg border border-ok/25 bg-ok-50/40 p-3.5 text-xs text-ink-2">
           <ShieldCheck className="size-5 shrink-0 text-ok" aria-hidden="true" />
           <div>
             <span className="font-bold text-ok">Signed off and locked</span>
             <p className="mt-0.5 text-ink-3">
-              Signed by {lockedDetails.signedBy} on {lockedDetails.signedAt}. Phase cannot be modified without formal amendment.
+              {lockedDetails
+                ? `Signed by ${lockedDetails.signedBy} on ${lockedDetails.signedAt}. Phase cannot be modified without formal amendment.`
+                : "Phase has been signed off and locked. Cannot be modified without formal amendment."}
             </p>
           </div>
+        </div>
+      ) : isReady ? (
+        <div className="mt-5 flex items-center gap-2 rounded-lg bg-product-50/50 border border-product/30 p-3 text-xs text-ink">
+          <CheckCircle2 className="size-4 shrink-0 text-product-600" aria-hidden="true" />
+          <span>All requirements in this phase are fulfilled. Ready for final milestone sign-off.</span>
         </div>
       ) : remainingItems.length > 0 ? (
         <div className="mt-5 border-t border-line/60 pt-4">
@@ -168,9 +164,8 @@ export function GateSummaryCard({
           </ul>
         </div>
       ) : (
-        <div className="mt-5 flex items-center gap-2 rounded-lg bg-product-50/50 border border-product-200 p-3 text-xs text-ink">
-          <CheckCircle2 className="size-4 shrink-0 text-product-600" aria-hidden="true" />
-          <span>All requirements in this phase are fulfilled. Ready for final milestone sign-off.</span>
+        <div className="mt-5 border-t border-line/60 pt-4 text-xs text-ink-3">
+          In progress. Awaiting remaining steps and evidence approvals before milestone sign-off.
         </div>
       )}
     </div>

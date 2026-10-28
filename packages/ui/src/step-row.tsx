@@ -1,7 +1,7 @@
 import * as React from "react";
 import { AlertCircle, Calendar, Clock, User } from "lucide-react";
 import { cn } from "./cn";
-import { ErrorState, Skeleton } from "./skeleton";
+import { ErrorState, LoadingShell, Skeleton } from "./skeleton";
 import { StatusBadge, type StatusTone } from "./status-badge";
 
 export interface StepRowProps {
@@ -41,9 +41,8 @@ export function StepRow({
 
   if (loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading step"
+      <LoadingShell
+        label="Loading step details"
         className={cn(
           "flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between",
           className,
@@ -63,7 +62,7 @@ export function StepRow({
           <Skeleton className="h-6 w-24 rounded-sm" />
           <Skeleton className="h-8 w-20 rounded-md" />
         </div>
-      </div>
+      </LoadingShell>
     );
   }
 
@@ -73,8 +72,12 @@ export function StepRow({
   return (
     <div
       className={cn(
-        "group flex flex-col justify-between gap-3 rounded-lg border bg-surface p-4 transition-all sm:flex-row sm:items-center",
-        isBlocked ? "border-danger/40 bg-danger-50/20" : isNotApplicable ? "border-line bg-canvas/60 opacity-80" : "border-line hover:border-line-strong",
+        "group flex flex-col justify-between gap-3 rounded-lg border p-4 transition-all sm:flex-row sm:items-center",
+        isBlocked
+          ? "border-danger/40 bg-danger-50/20"
+          : isNotApplicable
+            ? "border-line bg-canvas/60 opacity-80"
+            : "border-line bg-surface hover:border-line-strong",
         className,
       )}
     >

@@ -1,8 +1,9 @@
 import * as React from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { cn } from "./cn";
-import { ErrorState, Skeleton } from "./skeleton";
-import { StatusBadge, type StatusTone } from "./status-badge";
+import { ErrorState, LoadingShell, Skeleton } from "./skeleton";
+import { StatusBadge } from "./status-badge";
+import { FLAG_SEVERITIES, FLAG_STATUSES } from "./statuses";
 
 export type FlagSeverity = "critical" | "high" | "medium";
 export type FlagStatus = "open" | "waived" | "resolved";
@@ -38,9 +39,8 @@ export function FlagBanner({
 
   if (loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading flag banner"
+      <LoadingShell
+        label="Loading flag banner"
         className={cn(
           "flex items-start gap-3 rounded-lg border border-line bg-surface p-4",
           className,
@@ -51,7 +51,7 @@ export function FlagBanner({
           <Skeleton className="h-4 w-48" />
           <Skeleton className="h-3 w-full" />
         </div>
-      </div>
+      </LoadingShell>
     );
   }
 
@@ -85,21 +85,19 @@ export function FlagBanner({
   const currentConfig = severityStyles[severity];
   const IconComponent = isResolved ? CheckCircle : currentConfig.Icon;
 
-  const severityBadgeTones: Record<FlagSeverity, StatusTone> = {
-    critical: "danger",
-    high: "warn",
-    medium: "info",
-  };
+  const severityInfo = FLAG_SEVERITIES[severity] ?? FLAG_SEVERITIES.medium;
+  const statusInfo = FLAG_STATUSES[status] ?? FLAG_STATUSES.open;
 
-  const statusBadgeTones: Record<FlagStatus, StatusTone> = {
-    open: "danger",
-    waived: "idle",
-    resolved: "ok",
-  };
+  const role =
+    status === "open" && severity === "critical"
+      ? "alert"
+      : status === "open"
+        ? "status"
+        : undefined;
 
   return (
     <div
-      role="alert"
+      role={role}
       className={cn(
         "flex flex-col justify-between gap-3 rounded-lg border p-4 transition-all sm:flex-row sm:items-start",
         isResolved
@@ -134,12 +132,12 @@ export function FlagBanner({
             >
               {title}
             </h4>
-            <StatusBadge tone={severityBadgeTones[severity]}>
-              {severity.toUpperCase()}
+            <StatusBadge tone={severityInfo.tone}>
+              {severityInfo.label}
             </StatusBadge>
             {status !== "open" && (
-              <StatusBadge tone={statusBadgeTones[status]}>
-                {status.toUpperCase()}
+              <StatusBadge tone={statusInfo.tone}>
+                {statusInfo.label}
               </StatusBadge>
             )}
           </div>

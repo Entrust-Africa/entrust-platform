@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Check, Lock } from "lucide-react";
 import { cn } from "./cn";
-import { ErrorState, Skeleton } from "./skeleton";
+import { ErrorState, LoadingShell, Skeleton } from "./skeleton";
 
-export type PhaseState = "done" | "current" | "upcoming" | "locked";
+export type PhaseState = "done" | "current" | "upcoming" | "locked" | "unavailable";
 
 export interface PhaseStepData {
   n: number;
@@ -16,16 +16,26 @@ export interface PhaseStepperProps {
   phases?: PhaseStepData[];
   currentPhase?: number;
   onSelectPhase?: (n: number) => void;
+  getPhaseHref?: (n: number) => string;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
   className?: string;
 }
 
+const PHASE_STATE_LABELS: Record<PhaseState, string> = {
+  done: "Completed",
+  current: "Current phase",
+  upcoming: "Upcoming phase",
+  locked: "Locked phase",
+  unavailable: "Unavailable phase",
+};
+
 export function PhaseStepper({
   phases = [],
   currentPhase,
   onSelectPhase,
+  getPhaseHref,
   loading = false,
   error = null,
   onRetry,
@@ -37,9 +47,8 @@ export function PhaseStepper({
 
   if (loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label="Loading phases"
+      <LoadingShell
+        label="Loading phases"
         className={cn("w-full rounded-lg border border-line bg-surface p-4", className)}
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7">
@@ -51,7 +60,7 @@ export function PhaseStepper({
             </div>
           ))}
         </div>
-      </div>
+      </LoadingShell>
     );
   }
 
@@ -69,9 +78,11 @@ export function PhaseStepper({
       className={cn("w-full rounded-lg border border-line bg-surface p-4", className)}
     >
       <ol className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7 md:gap-2">
-        {phases.map((p, idx) => {
+        {phases.map((p) => {
           const isSelected = currentPhase !== undefined && p.n === currentPhase;
-          const isInteractive = Boolean(onSelectPhase);
+          const isLink = Boolean(getPhaseHref);
+          const isInteractive = Boolean(onSelectPhase) || isLink;
+          const stateLabel = PHASE_STATE_LABELS[p.state] ?? p.state;
 
           const StepContent = (
             <div
@@ -86,15 +97,16 @@ export function PhaseStepper({
                   "relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all",
                   p.state === "done" && "bg-ok text-white shadow-xs",
                   p.state === "current" &&
-                    "bg-product-600 text-white shadow-sm ring-4 ring-product-100",
+                    "bg-product-600 text-white shadow-sm ring-4 ring-product/20",
                   p.state === "upcoming" && "border border-line bg-canvas text-ink-3",
-                  p.state === "locked" && "border border-line bg-surface-2 text-ink-3/70",
+                  (p.state === "locked" || p.state === "unavailable") &&
+                    "border border-line bg-surface-2 text-ink-3/70",
                   isSelected && "ring-2 ring-brand-500 ring-offset-2",
                 )}
               >
                 {p.state === "done" ? (
                   <Check className="size-4 stroke-[2.5]" aria-hidden="true" />
-                ) : p.state === "locked" ? (
+                ) : p.state === "locked" || p.state === "unavailable" ? (
                   <Lock className="size-3.5 stroke-[2]" aria-hidden="true" />
                 ) : (
                   <span>{p.n}</span>
@@ -111,6 +123,7 @@ export function PhaseStepper({
                   )}
                 >
                   {p.title}
+                  <span className="sr-only"> ({stateLabel})</span>
                 </span>
                 {p.steps && (
                   <span className="mt-0.5 font-mono text-[10px] text-ink-3">
@@ -123,12 +136,21 @@ export function PhaseStepper({
 
           return (
             <li key={p.n} className="flex flex-col items-center">
-              {isInteractive ? (
+              {isLink ? (
+                <a
+                  href={getPhaseHref!(p.n)}
+                  aria-current={p.state === "current" ? "step" : undefined}
+                  aria-label={`Phase ${p.n}: ${p.title}`}
+                  className="w-full rounded-md p-1 focus-visible:outline-2 focus-visible:outline-brand-500"
+                >
+                  {StepContent}
+                </a>
+              ) : isInteractive ? (
                 <button
                   type="button"
                   onClick={() => onSelectPhase?.(p.n)}
                   aria-current={p.state === "current" ? "step" : undefined}
-                  aria-label={`Phase ${p.n}: ${p.title} (${p.state})`}
+                  aria-label={`Phase ${p.n}: ${p.title}`}
                   className="w-full rounded-md p-1 focus-visible:outline-2 focus-visible:outline-brand-500"
                 >
                   {StepContent}

@@ -5,7 +5,7 @@ export { StatusBadge, type StatusTone } from "./status-badge";
 export { Card } from "./card";
 export { Patchwork } from "./patchwork";
 export { emailTheme } from "./email-theme";
-export { Skeleton, ErrorState, EmptyState } from "./skeleton";
+export { Skeleton, LoadingShell, ErrorState, EmptyState } from "./skeleton";
 
 export {
   PhaseStepper,
