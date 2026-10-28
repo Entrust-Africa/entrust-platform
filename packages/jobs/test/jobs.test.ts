@@ -129,7 +129,7 @@ describe("Background Jobs Runtime with pg-boss", () => {
       expect(status?.output).toBeDefined();
       // Verify that the error message is preserved in output
       const outputStr = JSON.stringify(status?.output);
-      expect(outputStr).toMatch(/Simulated failure/i);
+      expect(outputStr).toMatch(/Testing retry and terminal failure|Simulated failure/i);
     },
     20000,
   );

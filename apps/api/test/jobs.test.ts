@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { JOB_NAMES, stopBoss } from "@entrust/jobs";
+import { getBoss, JOB_NAMES, stopBoss } from "@entrust/jobs";
 import { callV1, cleanup, createOrganization, signUp, type TestUser } from "./support";
 
 let adminUser: TestUser;
 let regularUser: TestUser;
+const createdJobs: { queue: string; id: string }[] = [];
 
 beforeAll(async () => {
   await cleanup();
@@ -21,6 +22,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.ENTRUST_ORG_ID;
+  try {
+    const boss = await getBoss();
+    for (const { queue, id } of createdJobs) {
+      try {
+        await boss.cancel(queue, id);
+      } catch {
+        // Ignore errors if job was already processed or removed
+      }
+    }
+  } catch {
+    // Ignore error during cleanup
+  }
   await stopBoss();
   await cleanup();
 });
@@ -76,6 +89,7 @@ describe("Jobs API", () => {
       expect(res.body.queue).toBe(JOB_NAMES.SEND_EMAIL);
 
       const { jobId } = res.body;
+      createdJobs.push({ queue: JOB_NAMES.SEND_EMAIL, id: jobId });
 
       // Query status
       const statusRes = await callV1(adminUser, "GET", `/jobs/${JOB_NAMES.SEND_EMAIL}/${jobId}`);
@@ -97,6 +111,7 @@ describe("Jobs API", () => {
       expect(res.body.queue).toBe(JOB_NAMES.TEST_FAIL);
 
       const { jobId } = res.body;
+      createdJobs.push({ queue: JOB_NAMES.TEST_FAIL, id: jobId });
 
       const statusRes = await callV1(adminUser, "GET", `/jobs/${JOB_NAMES.TEST_FAIL}/${jobId}`);
       expect(statusRes.status).toBe(200);

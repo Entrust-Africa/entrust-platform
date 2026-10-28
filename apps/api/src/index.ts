@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { stopBoss } from "@entrust/jobs";
+import { getBoss, stopBoss } from "@entrust/jobs";
 import { app } from "./app";
 
 const port = Number(process.env.API_PORT ?? 4000);
@@ -29,6 +29,13 @@ if (process.env.NODE_ENV === "production" || process.env.EMAIL_MODE === "send") 
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Entrust API on http://localhost:${info.port} (docs at /docs)`);
 });
+
+// Eagerly initialize the pg-boss background jobs producer so connection issues surface during deploy
+if (process.env.DATABASE_URL) {
+  getBoss().catch((err) => {
+    console.error("[api:jobs] Failed to initialize background jobs producer:", err);
+  });
+}
 
 const shutdown = async () => {
   await stopBoss();

@@ -1,6 +1,7 @@
 import {
   createBoss,
   JOB_NAMES,
+  type Job,
   type JobDefinitions,
   type JobName,
   type PgBoss,
@@ -8,7 +9,7 @@ import {
 import { handleSendEmail } from "./handlers/send-email";
 import { handleTestFail } from "./handlers/test-fail";
 
-export type JobHandler<T> = (data: T, job: any) => Promise<any>;
+export type JobHandler<T> = (data: T, job: Job<T>) => Promise<any>;
 
 export const WORKER_HANDLERS: {
   [K in JobName]: JobHandler<JobDefinitions[K]>;
@@ -24,7 +25,7 @@ export const WORKER_HANDLERS: {
 export async function registerHandlers(boss: PgBoss): Promise<void> {
   for (const [queueName, handler] of Object.entries(WORKER_HANDLERS)) {
     await boss.createQueue(queueName);
-    await boss.work(queueName, async (jobs: any) => {
+    await boss.work(queueName, async (jobs: Job<any>[] | Job<any>) => {
       const list = Array.isArray(jobs) ? jobs : [jobs];
       let lastResult: any = null;
       for (const job of list) {

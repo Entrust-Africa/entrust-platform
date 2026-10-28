@@ -6,7 +6,7 @@ export {
   stopBoss,
   resolveDatabaseUrl,
 } from "./client";
-export type { PgBoss } from "pg-boss";
+export type { Job, PgBoss } from "pg-boss";
 
 export {
   JOB_NAMES,

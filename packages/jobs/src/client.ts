@@ -48,7 +48,7 @@ export async function getBoss(): Promise<PgBoss> {
     });
 
     startPromise = boss
-      .start()
+      .start({ attempts: 3 })
       .then(async () => {
         // Pre-create known queues once on producer initialization
         for (const queue of Object.values(JOB_NAMES)) {
