@@ -25,3 +25,10 @@ export type {
   MinimumPriceCheckView,
   RulePackUpdateView,
 } from "./schemas/clear";
+
+// The shapes the Audit endpoint returns, for apps that query platform audit logs.
+export type {
+  AuditLogItemType,
+  AuditLogListType,
+  AuditQueryType,
+} from "./schemas/audit";

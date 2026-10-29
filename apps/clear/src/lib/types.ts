@@ -3,4 +3,5 @@ export interface UserProfile {
   name: string;
   email: string;
   activeOrganizationId?: string | null;
+  staffRole?: "admin" | "facilitator" | "reviewer" | null;
 }
