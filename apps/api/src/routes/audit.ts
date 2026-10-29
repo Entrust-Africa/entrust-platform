@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { stream } from "hono/streaming";
 import { and, count, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@entrust/db";
 import type { AppEnv } from "../app";
@@ -132,33 +133,87 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
   const isCsv = query.format === "csv" || c.req.header("Accept")?.includes("text/csv");
 
   if (isCsv) {
-    const rows = await db
-      .select({
-        id: schema.auditLog.id,
-        occurredAt: schema.auditLog.occurredAt,
-        actorUserId: schema.auditLog.actorUserId,
-        actorName: schema.user.name,
-        actorEmail: schema.user.email,
-        organizationId: schema.auditLog.organizationId,
-        organizationName: schema.organization.name,
-        platform: schema.auditLog.platform,
-        action: schema.auditLog.action,
-        entityType: schema.auditLog.entityType,
-        entityId: schema.auditLog.entityId,
-        reason: schema.auditLog.reason,
-      })
+    const [countResult] = await db
+      .select({ count: count() })
       .from(schema.auditLog)
-      .leftJoin(schema.user, eq(schema.auditLog.actorUserId, schema.user.id))
-      .leftJoin(schema.organization, eq(schema.auditLog.organizationId, schema.organization.id))
-      .where(whereClause)
-      .orderBy(desc(schema.auditLog.occurredAt))
-      .limit(5000);
+      .where(whereClause);
 
-    const csvContent = formatAuditCsv(rows);
+    const total = Number(countResult?.count ?? 0);
     const dateStr = new Date().toISOString().slice(0, 10);
-    return c.text(csvContent, 200, {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="audit-log-${dateStr}.csv"`,
+
+    c.header("Content-Type", "text/csv; charset=utf-8");
+    c.header("Content-Disposition", `attachment; filename="audit-log-${dateStr}.csv"`);
+    c.header("X-Total-Count", String(total));
+    c.header("X-Truncated", "false");
+
+    return stream(c, async (stream) => {
+      const headers = [
+        "id",
+        "occurred_at",
+        "actor_user_id",
+        "actor_name",
+        "actor_email",
+        "organization_id",
+        "organization_name",
+        "platform",
+        "action",
+        "entity_type",
+        "entity_id",
+        "reason",
+      ];
+      await stream.write(headers.join(",") + "\r\n");
+
+      let offset = 0;
+      const batchSize = 1000;
+      while (true) {
+        const rows = await db
+          .select({
+            id: schema.auditLog.id,
+            occurredAt: schema.auditLog.occurredAt,
+            actorUserId: schema.auditLog.actorUserId,
+            actorName: schema.user.name,
+            actorEmail: schema.user.email,
+            organizationId: schema.auditLog.organizationId,
+            organizationName: schema.organization.name,
+            platform: schema.auditLog.platform,
+            action: schema.auditLog.action,
+            entityType: schema.auditLog.entityType,
+            entityId: schema.auditLog.entityId,
+            reason: schema.auditLog.reason,
+          })
+          .from(schema.auditLog)
+          .leftJoin(schema.user, eq(schema.auditLog.actorUserId, schema.user.id))
+          .leftJoin(schema.organization, eq(schema.auditLog.organizationId, schema.organization.id))
+          .where(whereClause)
+          .orderBy(desc(schema.auditLog.occurredAt), desc(schema.auditLog.id))
+          .limit(batchSize)
+          .offset(offset);
+
+        if (rows.length === 0) break;
+
+        for (const item of rows) {
+          const row = [
+            item.id,
+            item.occurredAt instanceof Date ? item.occurredAt.toISOString() : item.occurredAt,
+            item.actorUserId,
+            item.actorName,
+            item.actorEmail,
+            item.organizationId,
+            item.organizationName,
+            item.platform,
+            item.action,
+            item.entityType,
+            item.entityId,
+            item.reason,
+          ]
+            .map(sanitizeCsvValue)
+            .join(",");
+          await stream.write(row + "\r\n");
+        }
+
+        offset += rows.length;
+        if (rows.length < batchSize) break;
+      }
     });
   }
 
@@ -195,7 +250,7 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
     .leftJoin(schema.user, eq(schema.auditLog.actorUserId, schema.user.id))
     .leftJoin(schema.organization, eq(schema.auditLog.organizationId, schema.organization.id))
     .where(whereClause)
-    .orderBy(desc(schema.auditLog.occurredAt))
+    .orderBy(desc(schema.auditLog.occurredAt), desc(schema.auditLog.id))
     .limit(limit)
     .offset(offset);
 
