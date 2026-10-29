@@ -11,9 +11,11 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import type { AuditLogItemType, AuditLogListType } from "@entrust/api/client";
 import { cn } from "@entrust/ui";
+import { formatDateTime } from "@/lib/format";
 
 interface AuditViewProps {
   initialData: AuditLogListType;
@@ -33,17 +35,34 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
   const [toFilter, setToFilter] = useState(searchParams.to ? searchParams.to.slice(0, 10) : "");
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const applyFilters = (newPage?: number) => {
+  const applyFilters = () => {
     const params = new URLSearchParams();
     if (orgFilter.trim()) params.set("organizationId", orgFilter.trim());
     if (entityFilter.trim()) params.set("entityType", entityFilter.trim());
     if (actionFilter.trim()) params.set("action", actionFilter.trim());
     if (platformFilter.trim()) params.set("platform", platformFilter.trim());
-    if (fromFilter.trim()) params.set("from", `${fromFilter.trim()}T00:00:00.000Z`);
-    if (toFilter.trim()) params.set("to", `${toFilter.trim()}T23:59:59.999Z`);
-    if (newPage && newPage > 1) params.set("page", String(newPage));
+    if (fromFilter.trim()) params.set("from", `${fromFilter.trim()}T00:00:00+03:00`);
+    if (toFilter.trim()) params.set("to", `${toFilter.trim()}T23:59:59.999+03:00`);
+    if (searchParams.entityId) params.set("entityId", searchParams.entityId);
 
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  };
+
+  const goToPage = (newPage: number) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (value && key !== "page") {
+        params.set(key, value);
+      }
+    }
+    if (newPage > 1) {
+      params.set("page", String(newPage));
+    }
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
@@ -61,16 +80,43 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
     });
   };
 
-  const handleExportCsv = () => {
-    const params = new URLSearchParams();
-    if (orgFilter.trim()) params.set("organizationId", orgFilter.trim());
-    if (entityFilter.trim()) params.set("entityType", entityFilter.trim());
-    if (actionFilter.trim()) params.set("action", actionFilter.trim());
-    if (platformFilter.trim()) params.set("platform", platformFilter.trim());
-    if (fromFilter.trim()) params.set("from", `${fromFilter.trim()}T00:00:00.000Z`);
-    if (toFilter.trim()) params.set("to", `${toFilter.trim()}T23:59:59.999Z`);
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true);
+      setExportError(null);
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(searchParams)) {
+        if (value && key !== "page" && key !== "limit" && key !== "format") {
+          params.set(key, value);
+        }
+      }
 
-    window.location.href = `/api/audit/export?${params.toString()}`;
+      const res = await fetch(`/api/audit/export?${params.toString()}`);
+      if (res.status === 401) {
+        window.location.href = "/sign-in";
+        return;
+      }
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Failed to export audit log");
+        setExportError(errorText || "Failed to export audit log");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `audit-log-${dateStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch {
+      setExportError("Network error while exporting audit log.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const currentPage = initialData.page;
@@ -94,19 +140,28 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
         <button
           type="button"
           onClick={handleExportCsv}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500"
+          disabled={isExporting}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-brand-700 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-brand-500"
         >
           <Download className="size-4" aria-hidden="true" />
-          <span>Export CSV</span>
+          <span>{isExporting ? "Exporting..." : "Export CSV"}</span>
         </button>
       </div>
+
+      {/* Export Error Alert Banner */}
+      {exportError && (
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-50/50 p-3 text-xs text-danger shadow-xs">
+          <AlertCircle className="size-4 shrink-0 text-danger" aria-hidden="true" />
+          <span>{exportError}</span>
+        </div>
+      )}
 
       {/* Filter Toolbar Card */}
       <div className="rounded-xl border border-line bg-surface p-4 shadow-xs sm:p-5">
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            applyFilters(1);
+            applyFilters();
           }}
           className="space-y-4"
         >
@@ -131,21 +186,14 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
               <label htmlFor="filter-entity" className="block text-xs font-semibold text-ink-2">
                 Entity Type
               </label>
-              <select
+              <input
                 id="filter-entity"
+                type="text"
+                placeholder="e.g. export_case"
                 value={entityFilter}
                 onChange={(e) => setEntityFilter(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                <option value="">All entity types</option>
-                <option value="case">Case</option>
-                <option value="evidence">Evidence</option>
-                <option value="rule_pack">Rule Pack</option>
-                <option value="organization">Organisation</option>
-                <option value="member">Member</option>
-                <option value="file">File</option>
-                <option value="minimum_price">Minimum Price</option>
-              </select>
+                className="mt-1 block w-full rounded-md border border-line bg-surface px-3 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
             </div>
 
             {/* Action Filter */}
@@ -280,10 +328,7 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
                     <tr key={item.id} className="hover:bg-canvas/40 transition-colors">
                       {/* Occurred At */}
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-ink-2">
-                        {new Date(item.occurredAt).toLocaleString("en-GB", {
-                          dateStyle: "medium",
-                          timeStyle: "medium",
-                        })}
+                        {formatDateTime(item.occurredAt)}
                       </td>
 
                       {/* Actor */}
@@ -387,7 +432,7 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
               <button
                 type="button"
                 disabled={currentPage <= 1 || isPending}
-                onClick={() => applyFilters(currentPage - 1)}
+                onClick={() => goToPage(currentPage - 1)}
                 className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-3 py-1.5 font-semibold text-ink shadow-xs hover:bg-canvas disabled:opacity-40 disabled:hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand-500"
               >
                 <ChevronLeft className="size-3.5" aria-hidden="true" />
@@ -401,7 +446,7 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
               <button
                 type="button"
                 disabled={currentPage >= totalPages || isPending}
-                onClick={() => applyFilters(currentPage + 1)}
+                onClick={() => goToPage(currentPage + 1)}
                 className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-3 py-1.5 font-semibold text-ink shadow-xs hover:bg-canvas disabled:opacity-40 disabled:hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand-500"
               >
                 <span>Next</span>

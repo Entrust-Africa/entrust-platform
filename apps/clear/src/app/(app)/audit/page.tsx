@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ShieldAlert, AlertCircle } from "lucide-react";
 import type { AuditLogListType } from "@entrust/api/client";
-import { getMe, serverApi } from "@/lib/api";
+import { serverApi } from "@/lib/api";
 import { AuditView } from "./audit-view";
 
 interface AuditPageProps {
@@ -10,12 +11,6 @@ interface AuditPageProps {
 
 export default async function AuditPage({ searchParams }: AuditPageProps) {
   const search = await searchParams;
-  const me = await getMe();
-
-  if (!me) {
-    return null;
-  }
-
   const client = await serverApi();
   const res = await client.v1.audit.$get({
     query: {
@@ -31,6 +26,10 @@ export default async function AuditPage({ searchParams }: AuditPageProps) {
       format: "json",
     },
   });
+
+  if (res.status === 401) {
+    redirect("/sign-in");
+  }
 
   // Handle SME / unauthorized access (403 Forbidden)
   if (res.status === 403) {

@@ -18,18 +18,27 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  if (!res.ok) {
-    return new NextResponse("Failed to export audit log", { status: res.status });
+  if (res.status === 401) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const csvText = await res.text();
-  const dateStr = new Date().toISOString().slice(0, 10);
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "Failed to export audit log");
+    return new NextResponse(errorText || "Failed to export audit log", { status: res.status });
+  }
 
-  return new NextResponse(csvText, {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const headers = new Headers();
+  headers.set("Content-Type", "text/csv; charset=utf-8");
+  headers.set("Content-Disposition", `attachment; filename="audit-log-${dateStr}.csv"`);
+
+  const totalCount = res.headers.get("X-Total-Count");
+  const truncated = res.headers.get("X-Truncated");
+  if (totalCount) headers.set("X-Total-Count", totalCount);
+  if (truncated) headers.set("X-Truncated", truncated);
+
+  return new NextResponse(res.body, {
     status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="audit-log-${dateStr}.csv"`,
-    },
+    headers,
   });
 }

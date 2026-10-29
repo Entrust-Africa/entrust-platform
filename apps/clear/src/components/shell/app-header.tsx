@@ -54,7 +54,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
         {/* Center: Desktop Navigation */}
         <div className="hidden md:flex md:items-center">
-          <NavLinks orientation="horizontal" />
+          <NavLinks orientation="horizontal" user={user} />
         </div>
 
         {/* Right: Account Menu */}

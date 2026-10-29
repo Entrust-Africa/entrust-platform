@@ -2,28 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Building2, User } from "lucide-react";
+import { Briefcase, Building2, ShieldCheck, User } from "lucide-react";
 import { cn } from "@entrust/ui";
-
-const NAV_ITEMS = [
-  { href: "/", label: "Cases", icon: Briefcase, match: (path: string) => path === "/" || path.startsWith("/cases") },
-  { href: "/organizations", label: "Organisation", icon: Building2, match: (path: string) => path.startsWith("/organizations") },
-  { href: "/account", label: "Account", icon: User, match: (path: string) => path.startsWith("/account") },
-] as const;
+import type { UserProfile } from "@/lib/types";
 
 interface NavLinksProps {
   orientation?: "horizontal" | "vertical";
   onNavigate?: () => void;
   className?: string;
+  user?: UserProfile;
 }
 
-export function NavLinks({ orientation = "horizontal", onNavigate, className }: NavLinksProps) {
+export function NavLinks({ orientation = "horizontal", onNavigate, className, user }: NavLinksProps) {
   const pathname = usePathname();
+
+  const navItems = [
+    { href: "/", label: "Cases", icon: Briefcase, match: (path: string) => path === "/" || path.startsWith("/cases") },
+    { href: "/organizations", label: "Organisation", icon: Building2, match: (path: string) => path.startsWith("/organizations") },
+    ...(user?.staffRole
+      ? [{ href: "/audit", label: "Audit", icon: ShieldCheck, match: (path: string) => path.startsWith("/audit") }]
+      : []),
+    { href: "/account", label: "Account", icon: User, match: (path: string) => path.startsWith("/account") },
+  ];
 
   if (orientation === "vertical") {
     return (
       <nav aria-label="Main Navigation" className={cn("flex flex-col gap-1", className)}>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = item.match(pathname);
           const Icon = item.icon;
           return (
@@ -51,7 +56,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className }: 
 
   return (
     <nav aria-label="Main Navigation" className={cn("flex items-center gap-1", className)}>
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const isActive = item.match(pathname);
         const Icon = item.icon;
         return (
