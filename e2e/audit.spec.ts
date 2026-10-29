@@ -33,10 +33,14 @@ test.describe("Platform audit log viewer (#21)", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/$/);
 
-    // 2. Navigate to /audit as SME user
+    // 2. Assert Audit link is not visible in Main Navigation for SME user
+    const auditNavLink = page.getByRole("navigation", { name: "Main Navigation" }).getByRole("link", { name: "Audit" });
+    await expect(auditNavLink).toHaveCount(0);
+
+    // 3. Navigate to /audit as SME user
     await page.goto("/audit");
 
-    // 3. Assert SME user gets 403 Access Denied
+    // 4. Assert SME user gets 403 Access Denied
     const accessDeniedHeading = page.getByRole("heading", { name: /Access Denied \(403\)/i });
     await expect(accessDeniedHeading).toBeVisible();
 
