@@ -1,4 +1,4 @@
-import { MODULE_IDS, PATHWAYS, REASON_CODES } from "./types";
+import { MODULE_IDS, PATHWAYS, PATHWAY_REASON_CODES, REASON_CODES } from "./types";
 import type { ModuleDefinition, Question, TradeRules } from "./types";
 
 const POINTS_PER_QUESTION = 3;
@@ -172,12 +172,56 @@ function moduleErrors(rules: TradeRules): string[] {
 function reasonCodeErrors(rules: TradeRules): string[] {
   const codes = rules.reasonCodes.map((r) => r.code);
   const known = new Set<string>(REASON_CODES);
+  // A version only defines the codes it uses, so a later version can add codes without changing an earlier one.
+  const missingPathwayCodes = rules.pathway ? PATHWAY_REASON_CODES.filter((c) => !codes.includes(c)) : [];
   return [
     ...duplicates(codes).map((c) => `duplicate reason code ${c}`),
-    ...REASON_CODES.filter((c) => !codes.includes(c)).map((c) => `reason code ${c} has no sentence`),
     ...codes.filter((c) => !known.has(c)).map((c) => `unknown reason code ${c}`),
     ...rules.reasonCodes.filter((r) => !r.text.trim()).map((r) => `reason code ${r.code} has an empty sentence`),
+    ...missingPathwayCodes.map((c) => `pathway rules use reason code ${c}, which has no sentence`),
   ];
+}
+
+/** The values a question offers, or none if the question doesn't exist. */
+const optionValues = (rules: TradeRules, id: string): Set<string> =>
+  new Set(rules.template.questions.find((q) => q.id === id)?.options?.map((o) => o.value));
+
+function planErrors(rules: TradeRules): string[] {
+  const { pathway, plan } = rules;
+  const errors: string[] = [];
+  if (!pathway && !plan) return errors;
+  if (!pathway || !plan) return ["pathway rules and plan rules come together"];
+
+  if (!Number.isInteger(pathway.shipmentWindowMonths) || pathway.shipmentWindowMonths < 1) {
+    errors.push("the shipment window is a whole number of months, at least 1");
+  }
+
+  const stages = optionValues(rules, "A2");
+  const history = optionValues(rules, "A1");
+  const answers: [string, readonly string[], Set<string>, string][] = [
+    ["live order stages", plan.liveOrderStages, stages, "A2"],
+    ["quotation stages", plan.quotationStages, stages, "A2"],
+    ["no-buyer stages", plan.noBuyerStages, stages, "A2"],
+    ["exported history", plan.exportedHistory, history, "A1"],
+  ];
+  for (const [name, values, allowed, question] of answers) {
+    if (!values.length) errors.push(`plan: ${name} are empty`);
+    for (const v of values) if (!allowed.has(v)) errors.push(`plan: ${name} name "${v}", which ${question} doesn't offer`);
+  }
+  for (const v of plan.liveOrderStages) {
+    if (plan.quotationStages.includes(v)) errors.push(`plan: "${v}" is both a live order and a quotation stage`);
+    if (plan.noBuyerStages.includes(v)) errors.push(`plan: "${v}" is both a live order and a no-buyer stage`);
+  }
+
+  const known = new Set<string>(MODULE_IDS);
+  for (const id of plan.urgentModules) if (!known.has(id)) errors.push(`plan: urgent module ${id} is unknown`);
+  for (const id of duplicates(plan.urgentModules)) errors.push(`plan: urgent module ${id} listed twice`);
+
+  const placed = Object.values(plan.sequence).flat();
+  for (const id of placed) if (!known.has(id)) errors.push(`plan: sequence has unknown module ${id}`);
+  for (const id of duplicates(placed)) errors.push(`plan: ${id} is in the sequence twice`);
+  for (const id of MODULE_IDS) if (!placed.includes(id)) errors.push(`plan: ${id} has no place in the sequence`);
+  return errors;
 }
 
 /** Check published versions of TRADE's rules for internal consistency. One message per problem; empty when valid. */
@@ -185,7 +229,7 @@ export function validateTradeRules(versions: readonly TradeRules[]): string[] {
   const errors = duplicates(versions.map((r) => r.version)).map((v) => `${v}: published twice`);
   for (const rules of versions) {
     const found = /^\d+\.\d+\.\d+$/.test(rules.version) ? [] : ["the version is major.minor.patch"];
-    const all = [...found, ...templateErrors(rules), ...scoringErrors(rules), ...moduleErrors(rules), ...reasonCodeErrors(rules)];
+    const all = [...found, ...templateErrors(rules), ...scoringErrors(rules), ...moduleErrors(rules), ...reasonCodeErrors(rules), ...planErrors(rules)];
     errors.push(...all.map((message) => `${rules.version}: ${message}`));
   }
   return errors;

@@ -31,8 +31,20 @@ export const REASON_CODES = [
   "RECORDS_BEFORE_FINANCE",
   "TEST_OUT_OFFERED",
   "STAFF_OVERRIDE",
+  "PATHWAY_RECENT_SHIPMENT",
+  "PATHWAY_NO_RECENT_SHIPMENT",
+  "PATHWAY_SHIPMENT_UNVERIFIED",
+  "PATHWAY_ORDER_PRIORITY",
 ] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
+
+/** The codes an assigned pathway can carry. A version with pathway rules defines all four. */
+export const PATHWAY_REASON_CODES = [
+  "PATHWAY_RECENT_SHIPMENT",
+  "PATHWAY_NO_RECENT_SHIPMENT",
+  "PATHWAY_SHIPMENT_UNVERIFIED",
+  "PATHWAY_ORDER_PRIORITY",
+] as const satisfies readonly ReasonCode[];
 
 export interface ReasonCodeDefinition {
   code: ReasonCode;
@@ -212,6 +224,40 @@ export interface ModuleDefinition {
   contentStatus: ContentStatus;
 }
 
+/** How the pathway is assigned. Added in 0.2.0. */
+export interface PathwayRules {
+  /** A shipment on or after this many months before the assessment date counts as recent experience. */
+  shipmentWindowMonths: number;
+}
+
+/**
+ * How answers become an ordered learning plan. Added in 0.2.0. The values name answers to the
+ * placement questions, so a version can't point at an answer the template doesn't have.
+ */
+export interface PlanRules {
+  /** A2 answers that mean a confirmed order or a shipment in progress: urgent modules go straight after M01. */
+  liveOrderStages: readonly string[];
+  /** A2 answers that mean a quotation is out. */
+  quotationStages: readonly string[];
+  /** A2 answers that, with no active buyer in A3, mean there is no qualified buyer yet. */
+  noBuyerStages: readonly string[];
+  /** A1 answers that mean the SME has exported before. */
+  exportedHistory: readonly string[];
+  /** The modules a live order moves forward, in order. */
+  urgentModules: readonly ModuleId[];
+  /**
+   * The order modules take in a plan: first, then gating prerequisites and urgent modules (placed by
+   * the engine), then bottlenecks, enablers, and the relationship and closing modules. Every module
+   * appears once.
+   */
+  sequence: {
+    first: readonly ModuleId[];
+    bottleneck: readonly ModuleId[];
+    enabler: readonly ModuleId[];
+    closing: readonly ModuleId[];
+  };
+}
+
 /** One published version of TRADE's rules. */
 export interface TradeRules {
   /** major.minor.patch. Every score and plan stores the one it used. */
@@ -223,4 +269,7 @@ export interface TradeRules {
   thresholds: Thresholds;
   modules: readonly ModuleDefinition[];
   reasonCodes: readonly ReasonCodeDefinition[];
+  /** Absent in 0.1.0, which can score but not assign a pathway or build a plan. */
+  pathway?: PathwayRules;
+  plan?: PlanRules;
 }

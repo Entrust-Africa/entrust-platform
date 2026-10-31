@@ -15,6 +15,7 @@ packages/
   rules        CLEAR's canonical 125 steps, master controls, facts, evidence types and rule packs, as data
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
   trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
+  trade-engine TRADE's pure functions: validate answers, score domains, assign a pathway, build a learning plan
 ```
 
 Rules that keep it extensible:

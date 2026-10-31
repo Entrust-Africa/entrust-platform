@@ -18,6 +18,7 @@ const question = (id: string) => rules.template.questions.find((q) => q.id === i
 // version is published.
 const PUBLISHED: Record<string, string> = {
   "0.1.0": "37630a728b9b9599a5e8e02b603e04b5d4a877fdf99b8a264913f31792c7ea36",
+  "0.2.0": "6e65eecb07fa651732172de7e04cbc41603922c23c346ff951c41c02e0b3900c",
 };
 
 describe("TRADE rules", () => {
@@ -37,7 +38,7 @@ describe("TRADE rules", () => {
   it("finds a version, and the newest one", () => {
     expect(findTradeRules("0.1.0")).toBe(rules);
     expect(findTradeRules("9.9.9")).toBeUndefined();
-    expect(latestTradeRules().version).toBe("0.1.0");
+    expect(latestTradeRules().version).toBe("0.2.0");
     expect(compareVersions("0.10.0", "0.9.0")).toBeGreaterThan(0);
     expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
     expect(errorsFor(rules, { ...rules, version: "0.10.0" })).toEqual([]);
@@ -274,18 +275,70 @@ describe("module catalogue", () => {
 });
 
 describe("reason codes", () => {
+  const latest = latestTradeRules();
+
   it("has a sentence for each code, including the ones the issue names", () => {
-    expect(rules.reasonCodes.map((r) => r.code)).toEqual([...REASON_CODES]);
+    expect(latest.reasonCodes.map((r) => r.code)).toEqual([...REASON_CODES]);
+    // 0.1.0 defines the first 18 and 0.2.0 adds the four pathway codes.
+    expect(rules.reasonCodes.map((r) => r.code)).toEqual(REASON_CODES.slice(0, 18));
     for (const code of ["REQUIRED_ALL", "GAP_FINANCIAL", "LIVE_ORDER", "NO_QUALIFIED_BUYER", "HAS_EXPORTED_RETENTION", "ASSESSMENT_NEEDED", "RECORDS_BEFORE_FINANCE", "STAFF_OVERRIDE"]) {
       expect(REASON_CODES).toContain(code);
     }
   });
 
   it("refuses a missing, repeated or empty one", () => {
-    expect(errorsFor(changed({ reasonCodes: rules.reasonCodes.slice(1) }))).toContain("0.1.0: reason code REQUIRED_ALL has no sentence");
+    expect(errorsFor(changed({ reasonCodes: rules.reasonCodes.slice(1) }))).toEqual([
+      "0.1.0: M01: trigger uses unknown reason code REQUIRED_ALL",
+      "0.1.0: M11: trigger uses unknown reason code REQUIRED_ALL",
+    ]);
     expect(errorsFor(changed({ reasonCodes: [...rules.reasonCodes, rules.reasonCodes[0]!] }))).toEqual(["0.1.0: duplicate reason code REQUIRED_ALL"]);
     expect(errorsFor(changed({ reasonCodes: rules.reasonCodes.map((r) => (r.code === "LIVE_ORDER" ? { ...r, text: " " } : r)) }))).toEqual([
       "0.1.0: reason code LIVE_ORDER has an empty sentence",
+    ]);
+  });
+});
+
+describe("pathway and plan rules", () => {
+  const v2 = latestTradeRules();
+  const withPlan = (change: Partial<NonNullable<TradeRules["plan"]>>): TradeRules => ({ ...v2, plan: { ...v2.plan!, ...change } });
+
+  it("are in 0.2.0 and not in 0.1.0", () => {
+    expect(rules.pathway).toBeUndefined();
+    expect(rules.plan).toBeUndefined();
+    expect(v2.pathway).toEqual({ shipmentWindowMonths: 24 });
+    expect(v2.plan?.liveOrderStages).toEqual(["order_confirmed", "shipment_underway", "shipped_awaiting_payment"]);
+    expect(v2.plan?.urgentModules).toEqual(["M04", "M06", "M08"]);
+    expect(Object.values(v2.plan!.sequence).flat().sort()).toEqual([...MODULE_IDS]);
+  });
+
+  it("leave 0.1.0 as it was", () => {
+    expect(errorsFor(rules, v2)).toEqual([]);
+  });
+
+  it("refuse an answer the template doesn't offer", () => {
+    expect(errorsFor(withPlan({ liveOrderStages: ["order_confirmed", "signed"] }))).toEqual(['0.2.0: plan: live order stages name "signed", which A2 doesn\'t offer']);
+    expect(errorsFor(withPlan({ exportedHistory: ["often"] }))).toEqual(['0.2.0: plan: exported history name "often", which A1 doesn\'t offer']);
+    expect(errorsFor(withPlan({ quotationStages: [] }))).toEqual(["0.2.0: plan: quotation stages are empty"]);
+    expect(errorsFor(withPlan({ quotationStages: ["quotation_sent", "order_confirmed"] }))).toEqual([
+      '0.2.0: plan: "order_confirmed" is both a live order and a quotation stage',
+    ]);
+  });
+
+  it("refuse a sequence that loses, repeats or invents a module", () => {
+    const { sequence } = v2.plan!;
+    expect(errorsFor(withPlan({ sequence: { ...sequence, closing: ["M10", "M11"] } }))).toEqual(["0.2.0: plan: M12 has no place in the sequence"]);
+    expect(errorsFor(withPlan({ sequence: { ...sequence, enabler: ["M09", "M05"] } }))).toEqual(["0.2.0: plan: M05 is in the sequence twice"]);
+    expect(errorsFor(withPlan({ sequence: { ...sequence, enabler: ["M09", "M13" as ModuleId] } }))).toEqual([
+      "0.2.0: plan: sequence has unknown module M13",
+    ]);
+    expect(errorsFor(withPlan({ urgentModules: ["M04", "M99" as ModuleId] }))).toEqual(["0.2.0: plan: urgent module M99 is unknown"]);
+  });
+
+  it("refuse a window that isn't whole months, one half without the other, and a missing pathway sentence", () => {
+    expect(errorsFor({ ...v2, pathway: { shipmentWindowMonths: 0 } })).toEqual(["0.2.0: the shipment window is a whole number of months, at least 1"]);
+    expect(errorsFor({ ...v2, plan: undefined })).toEqual(["0.2.0: pathway rules and plan rules come together"]);
+    expect(errorsFor({ ...v2, reasonCodes: v2.reasonCodes.filter((r) => r.code !== "PATHWAY_ORDER_PRIORITY") })).toEqual([
+      "0.2.0: pathway rules use reason code PATHWAY_ORDER_PRIORITY, which has no sentence",
     ]);
   });
 });
