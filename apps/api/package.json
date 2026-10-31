@@ -23,6 +23,8 @@
     "@entrust/jobs": "workspace:*",
     "@entrust/notify": "workspace:*",
     "@entrust/rules": "workspace:*",
+    "@entrust/trade-content": "workspace:*",
+    "@entrust/trade-rules": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "@hono/zod-validator": "^0.7.6",
