@@ -14,6 +14,7 @@ packages/
   auth         Better Auth config (served by apps/api) and the browser auth client
   rules        CLEAR's canonical 125 steps, master controls, facts, evidence types and rule packs, as data
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
+  trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
 ```
 
 Rules that keep it extensible:
