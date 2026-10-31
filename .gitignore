@@ -7,4 +7,6 @@ test-results/
 *.tsbuildinfo
 .env
 .env.local
+.open-next/
+.wrangler/
 .DS_Store
