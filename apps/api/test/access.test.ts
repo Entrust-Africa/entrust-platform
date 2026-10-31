@@ -296,6 +296,8 @@ describe("API documentation", () => {
         "/v1/jobs/test-fail",
         "/v1/jobs/{queue}/{jobId}",
         "/v1/me",
+        "/v1/trade/modules",
+        "/v1/trade/modules/{id}",
       ].sort(),
     );
     expect(Object.keys(doc.paths["/v1/clear/cases"]).sort()).toEqual(["get", "post"]);

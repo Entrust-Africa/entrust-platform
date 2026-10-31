@@ -13,6 +13,7 @@ import { organizations } from "./routes/organizations";
 import { jobs } from "./routes/jobs";
 import { files } from "./routes/files";
 import { auditRouter } from "./routes/audit";
+import { tradeModules } from "./routes/trade/modules";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -61,7 +62,8 @@ export const app = base
   .route("/v1", auditRouter)
   .route("/v1/clear", clearCases)
   .route("/v1/clear", clearMinimumPrices)
-  .route("/v1/clear", clearRulePacks);
+  .route("/v1/clear", clearRulePacks)
+  .route("/v1/trade", tradeModules);
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",
