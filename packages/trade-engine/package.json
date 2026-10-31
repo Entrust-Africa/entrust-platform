@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@entrust/forms": "workspace:*",
     "@entrust/trade-rules": "workspace:*"
   },
   "devDependencies": {

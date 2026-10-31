@@ -5,6 +5,7 @@ import { compareVersions, validateTradeRules } from "./validate";
 
 export * from "./types";
 export { compareVersions, validateTradeRules } from "./validate";
+export * from "./diagnostic";
 
 // Every published version of TRADE's rules. Every score and plan stores the version it used, so a
 // version stays here after a newer one is published, and test/trade-rules.test.ts fails if a published
