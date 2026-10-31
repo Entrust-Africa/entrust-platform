@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@entrust/forms": "workspace:*"
+  },
   "devDependencies": {
     "vitest": "^5.0.5"
   }
