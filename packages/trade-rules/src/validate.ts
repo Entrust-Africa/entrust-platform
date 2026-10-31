@@ -1,18 +1,10 @@
+import { compareVersions } from "@entrust/forms";
 import { MODULE_IDS, PATHWAYS, PATHWAY_REASON_CODES, REASON_CODES } from "./types";
 import type { ModuleDefinition, Question, TradeRules } from "./types";
 
 const POINTS_PER_QUESTION = 3;
 
-/** Compares major.minor.patch versions: negative when a is older, positive when newer. */
-export function compareVersions(a: string, b: string): number {
-  const parts = (v: string) => v.split(".").map(Number);
-  const [x, y] = [parts(a), parts(b)];
-  for (let i = 0; i < 3; i++) {
-    const d = (x[i] ?? 0) - (y[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-}
+export { compareVersions };
 
 const duplicates = <T>(values: readonly T[]): T[] => [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
 

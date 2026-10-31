@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOT_KNOWN, canSubmit, checkAnswers, conditionFacts, effectiveAnswers, evaluateCondition, formDefinitionErrors, isDate, renderText, validateFormDefinitions, visibleQuestions } from "../src";
+import { NOT_KNOWN, canSubmit, checkAnswers, compareVersions, conditionFacts, effectiveAnswers, evaluateCondition, formDefinitionErrors, isDate, options, renderText, sectionBuilder, validateFormDefinitions, visibleQuestions, whenAnswered } from "../src";
 import type { Answers, FormDefinition, FormQuestion, FormSection } from "../src";
 
 const FORM: FormDefinition = {
@@ -351,5 +351,39 @@ describe("isDate", () => {
     expect(isDate("2026-02-29")).toBe(false);
     expect(isDate("2026-13-01")).toBe(false);
     expect(isDate("2026-1-1")).toBe(false);
+  });
+});
+
+describe("builders", () => {
+  it("make options whose values are their labels in snake_case", () => {
+    expect(options("Partially approved", "Agro-processing", "Other")).toEqual([
+      { value: "partially_approved", label: "Partially approved" },
+      { value: "agro_processing", label: "Agro-processing" },
+      { value: "other", label: "Other" },
+    ]);
+  });
+
+  it("make a condition on a yes or no", () => {
+    expect(whenAnswered("Q43")).toEqual({ fact: "Q43", in: ["yes"] });
+    expect(whenAnswered("Q51", "no")).toEqual({ fact: "Q51", in: ["no"] });
+  });
+
+  it("build the questions of a section, putting the prefix on a numeric ID only", () => {
+    const s = sectionBuilder("S4", "Q");
+    expect(s.yesNo(51, "Insured?", { group: "A" })).toEqual({ id: "Q51", section: "S4", type: "yes_no", text: "Insured?", group: "A" });
+    expect(s.short("D1", "Name")).toMatchObject({ id: "D1", type: "short_text" });
+    expect(s.many(52, "Which?", options("Road", "Air"))).toMatchObject({ type: "multiple_choice", options: [{ value: "road" }, { value: "air" }] });
+    expect(s.one(6, "Which?", options("A", "B"), { optional: true })).toMatchObject({ type: "single_choice", optional: true });
+    expect(sectionBuilder("S1").long("S1.1", "Text")).toMatchObject({ id: "S1.1", type: "long_text" });
+    expect([s.number(1, "n"), s.money(2, "m"), s.date(3, "d"), s.list(4, "l")].map((q) => q.type)).toEqual(["number", "money", "date", "list"]);
+  });
+});
+
+describe("compareVersions", () => {
+  it("orders major.minor.patch versions", () => {
+    expect(compareVersions("1.0.0", "0.9.9")).toBeGreaterThan(0);
+    expect(compareVersions("0.2.0", "0.10.0")).toBeLessThan(0);
+    expect(compareVersions("1.2.3", "1.2.3")).toBe(0);
+    expect(compareVersions("1.0.1", "1.0.0")).toBeGreaterThan(0);
   });
 });

@@ -1,4 +1,5 @@
-import type { Condition, FormOption, FormQuestion, QuestionType } from "@entrust/forms";
+import { options, sectionBuilder, whenAnswered } from "@entrust/forms";
+import type { Condition } from "@entrust/forms";
 import type { DiagnosticTemplate } from "./types";
 
 // The TRADE SME Onboarding and Business Diagnostic, version 1.0.0. The wording is the document's, and
@@ -8,33 +9,10 @@ import type { DiagnosticTemplate } from "./types";
 // carries a currency, and the rest is text. A published version never changes: put a correction in a
 // new version.
 
-const slug = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-const options = (...labels: string[]): FormOption[] => labels.map((label) => ({ value: slug(label), label }));
-
 /** Shown after a yes (or a no) to an earlier question. */
-const after = (n: number, answer: "yes" | "no" = "yes"): Condition => ({ fact: `Q${n}`, in: [answer] });
+const after = (n: number, answer: "yes" | "no" = "yes"): Condition => whenAnswered(`Q${n}`, answer);
 
-/** Builders for the questions of one section. */
-function section(id: string) {
-  const ask = (n: number | string, type: QuestionType, text: string, extra: Partial<FormQuestion> = {}): FormQuestion => ({
-    id: typeof n === "number" ? `Q${n}` : n,
-    section: id,
-    type,
-    text,
-    ...extra,
-  });
-  return {
-    yesNo: (n: number, text: string, extra?: Partial<FormQuestion>) => ask(n, "yes_no", text, extra),
-    short: (n: number | string, text: string, extra?: Partial<FormQuestion>) => ask(n, "short_text", text, extra),
-    long: (n: number, text: string, extra?: Partial<FormQuestion>) => ask(n, "long_text", text, extra),
-    number: (n: number, text: string, extra?: Partial<FormQuestion>) => ask(n, "number", text, extra),
-    money: (n: number, text: string, extra?: Partial<FormQuestion>) => ask(n, "money", text, extra),
-    date: (n: number | string, text: string, extra?: Partial<FormQuestion>) => ask(n, "date", text, extra),
-    list: (n: number, text: string, extra?: Partial<FormQuestion>) => ask(n, "list", text, extra),
-    one: (n: number, text: string, choices: FormOption[], extra?: Partial<FormQuestion>) => ask(n, "single_choice", text, { options: choices, ...extra }),
-    many: (n: number, text: string, choices: FormOption[], extra?: Partial<FormQuestion>) => ask(n, "multiple_choice", text, { options: choices, ...extra }),
-  };
-}
+const section = (id: string) => sectionBuilder(id, "Q");
 
 const s1 = section("S1");
 const s2 = section("S2");
