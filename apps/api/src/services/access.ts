@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema, type Database } from "@entrust/db";
 import { ENTRUST_ROLES, SME_ROLES, type Actor, type EntrustRole, type SmeRole } from "@entrust/gate-engine";
 import type { Executor } from "./db";
@@ -18,8 +18,8 @@ export interface Principal {
  * sees real cases only; with it, practice cases only. Nothing crosses over in either direction.
  */
 export interface PracticeScope {
-  /** The role the learner practises in. A learner works every party's steps, so they pick whose turn it is. */
-  actingAs: Actor;
+  /** The role the learner practises in. A learner works every party's steps, so they pick whose turn it is. Default: their own. */
+  actingAs?: Actor | undefined;
 }
 
 export interface Ctx {
@@ -62,11 +62,21 @@ export function actorFor(principal: Principal, organizationId: string): Actor | 
   return principal.staffRole ?? principal.smeRoles.get(organizationId) ?? null;
 }
 
+/** Whether the organisation has been given TRADE access, which practice cases need. */
+export async function hasTradeAccess(db: Executor, organizationId: string): Promise<boolean> {
+  const [grant] = await db
+    .select({ id: schema.platformAccess.id })
+    .from(schema.platformAccess)
+    .where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, "trade")))
+    .limit(1);
+  return grant !== undefined;
+}
+
 /**
  * A case the caller may see, locked for update when `lock` is set. A case that doesn't exist, one in
  * another organisation, and a practice case asked for outside the practice scope (or a real case inside
- * it) look the same: not found. In the practice scope an SME member acts in the role they chose; Entrust
- * staff keep their own.
+ * it) look the same: not found. In the practice scope an SME member needs their organisation to have
+ * TRADE access and acts in the role they chose; Entrust staff keep their own role and need no access.
  */
 export async function findCase(
   db: Executor,
@@ -78,8 +88,11 @@ export async function findCase(
   const [row] = options.lock ? await query.for("update") : await query;
   const own = row ? actorFor(principal, row.organizationId) : null;
   const inScope = row && (row.practiceScenario !== null) === (options.practice !== undefined);
-  const actor = options.practice && own && !principal.staffRole ? options.practice.actingAs : own;
+  const actor = options.practice && own && !principal.staffRole ? (options.practice.actingAs ?? own) : own;
   if (!row || !inScope || !actor) throw new ServiceError("not_found", "Case not found.");
+  if (options.practice && !principal.staffRole && !(await hasTradeAccess(db, row.organizationId))) {
+    throw new ServiceError("forbidden", "Your organisation doesn't have access to TRADE.");
+  }
   return { row, actor };
 }
 
