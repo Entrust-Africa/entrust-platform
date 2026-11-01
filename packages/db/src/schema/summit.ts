@@ -7,12 +7,14 @@ import {
   DOCUMENT_KINDS,
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
+  RESULT_STATUSES,
   VERIFICATION_CLASSES,
   type CategoryId,
   type CommitteeDecision,
   type CriterionResult,
   type EligibilityCriterionId,
   type Recommendation,
+  type ResultStatus,
   type SuitableOpportunity,
 } from "@entrust/summit-engine";
 import { organization, user } from "./auth";
@@ -393,3 +395,32 @@ export const committeeDecision = summit.table(
   },
   (t) => [index("committee_decision_idx").on(t.applicationId, t.decidedAt)],
 );
+
+// The committee's approval of the final list for a period (#80). It closes the committee's work: decisions can no
+// longer change and the applicants are told. Once per period, and never undone.
+export const finalList = summit.table("final_list", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  periodId: uuid("period_id")
+    .notNull()
+    .unique()
+    .references(() => applicationPeriod.id, { onDelete: "cascade" }),
+  // What was approved, kept as approved.
+  selected: integer("selected").notNull(),
+  waitlisted: integer("waitlisted").notNull(),
+  notSelected: integer("not_selected").notNull(),
+  note: text("note"),
+  approvedBy: text("approved_by").references(() => user.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// What one applicant is told once the final list is approved, and whether the email went. The applicant's status page
+// shows a result only when a row is here. Written when the list is approved and never changed except for `notifiedAt`.
+export const applicationResult = summit.table("application_result", {
+  applicationId: uuid("application_id")
+    .primaryKey()
+    .references(() => application.id, { onDelete: "cascade" }),
+  decision: text("decision", { enum: RESULT_STATUSES }).notNull().$type<ResultStatus>(),
+  publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
+  // When the email was queued. Null if it could not be, and the committee can send it again.
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+});
