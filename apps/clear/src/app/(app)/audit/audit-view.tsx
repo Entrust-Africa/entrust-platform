@@ -225,6 +225,7 @@ export function AuditView({ initialData, searchParams }: AuditViewProps) {
                 <option value="">All platforms</option>
                 <option value="clear">CLEAR</option>
                 <option value="trade">TRADE</option>
+                <option value="summit">Summit</option>
                 <option value="mizan">MIZAN</option>
               </select>
             </div>
