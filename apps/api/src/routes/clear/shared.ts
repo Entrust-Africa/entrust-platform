@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import type { AppEnv } from "../../app";
 import { Problem } from "../../schemas/problem";
-import { loadPrincipal, type Ctx } from "../../services/access";
+import { loadPrincipal, type Ctx, type PracticeScope } from "../../services/access";
 import { ServiceError } from "../../services/errors";
 
 // What the CLEAR route files share: the error responses every endpoint documents, the router that
@@ -37,8 +37,9 @@ export function clearRouter() {
   return router;
 }
 
-export async function contextFor(user: { id: string } | null): Promise<Ctx> {
+/** The caller's context. Pass `practice` for a request about practice cases (TRADE's M08). */
+export async function contextFor(user: { id: string } | null, practice?: PracticeScope): Promise<Ctx> {
   if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
   const db = getDb();
-  return { db, principal: await loadPrincipal(db, user.id), now: new Date() };
+  return { db, principal: await loadPrincipal(db, user.id), now: new Date(), ...(practice ? { practice } : {}) };
 }

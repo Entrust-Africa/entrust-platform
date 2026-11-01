@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { MODULE_IDS } from "@entrust/trade-rules";
+import { Facts, Role } from "./clear";
 
 const ModuleSummary = z
   .object({
@@ -32,3 +33,46 @@ export const ModuleDetail = ModuleSummary.extend({
    */
   content: z.union([moduleContentSchema, learnerModuleSchema]).nullable(),
 }).openapi("TradeModule");
+
+// ---- Practice cases (M08) ----
+
+export const PracticeScenarioList = z
+  .object({
+    /** What every screen shows on a practice case. */
+    label: z.string().openapi({ example: "Practice. Simulated, not a real export." }),
+    scenarios: z.array(
+      z.object({
+        id: z.string().openapi({ example: "zebu-coffee" }),
+        title: z.string(),
+        summary: z.string(),
+        /** The learner gives the facts, from their own brief, when they start it. */
+        ownFacts: z.boolean(),
+      }),
+    ),
+  })
+  .openapi("PracticeScenarioList");
+
+export const StartPracticeBody = z
+  .object({
+    organizationId: z
+      .string()
+      .optional()
+      .openapi({ description: "The SME organisation. Defaults to the caller's active organisation." }),
+    scenario: z.string().openapi({ example: "zebu-coffee" }),
+    facts: Facts.optional().openapi({
+      description: "For a scenario that takes the learner's own deal: at least product and destinationCountry. Leave it out for the others.",
+    }),
+  })
+  .openapi("StartPracticeBody");
+
+export const PracticeListQuery = z.object({
+  organizationId: z.string().optional().openapi({ description: "Narrow to one organisation. Default: all the caller's." }),
+});
+
+export const PracticeRoleQuery = z.object({
+  as: Role.optional().openapi({
+    description:
+      "The party whose turn the learner takes. A case's steps belong to the SME, to Entrust's reviewers and to banks and authorities, so a learner working alone picks whose they are working. Default: their own role. Entrust staff keep their own.",
+    example: "reviewer",
+  }),
+});
