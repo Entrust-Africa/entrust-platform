@@ -7,3 +7,7 @@ export * from "./plan";
 export { assignPathwayFromDiagnostic, pathwayInputFromDiagnostic } from "./diagnostic";
 export type { DiagnosticPathwayOptions } from "./diagnostic";
 export * from "./calculators";
+export { evaluatePlacement } from "./placement";
+export type { PlacementInput, PlacementOutcome } from "./placement";
+export { PATHWAY_NAMES, buildPlacementReport } from "./report";
+export type { PlacementReport, ReportBaseline, ReportDomain, ReportInput, ReportModule, ReportObjectives, ReportReason } from "./report";
