@@ -41,6 +41,8 @@ export interface CategoryScore {
 
 export interface ScoreResult {
   rulesVersion: string;
+  /** The pathway scored, kept with the result because the scorecard asks for it beside an adjusted score. */
+  pathway: OpportunityPathway;
   /** Whether the rules are approved. Officers can't record a score against a draft. */
   approved: boolean;
   categories: readonly CategoryScore[];
@@ -50,6 +52,8 @@ export interface ScoreResult {
   complete: boolean;
   /** The points an applicant could earn: 100, less the categories that don't apply. */
   possible: number;
+  /** True when a category was left out, so `total` is the points earned scaled up from `possible` (the scorecard's adjusted score). */
+  normalized: boolean;
   /** The points earned, once complete. */
   points?: number;
   /** Out of 100, once complete. With a category left out it is the points earned scaled up from `possible`, to one decimal. */
@@ -62,8 +66,11 @@ export const canAssess = (rules: SummitRules): boolean => rules.status === "appr
 /**
  * Add up an officer's points under the rubric. A criterion scores whole points from 0 to its maximum.
  * An investment-only category isn't scored for an applicant that isn't seeking investment, and the rest
- * is scaled to 100, so a trade applicant is neither penalized nor given the points. The same input and
- * rules always give the same answer. This says nothing about eligibility.
+ * is scaled to 100, so a trade applicant is neither penalized nor given the points: 64 of 80 is 80 out of
+ * 100. The earned points (`points`), what they were out of (`possible`) and the adjusted score (`total`) are
+ * all in the result to be kept. An applicant that is seeking investment is scored on every category, however
+ * little evidence it gave. The same input and rules always give the same answer. This says nothing about
+ * eligibility.
  */
 export function scoreApplication(rules: SummitRules, input: ScoreInput): ScoreResult {
   const investment = seeksInvestment(input.pathway, input.seekingInvestment);
@@ -103,12 +110,14 @@ export function scoreApplication(rules: SummitRules, input: ScoreInput): ScoreRe
   const total = points === undefined ? undefined : Math.round(((points / possible) * TOTAL_POINTS) * 10) / 10;
   return {
     rulesVersion: rules.version,
+    pathway: input.pathway,
     approved: canAssess(rules),
     categories,
     notApplicable: categories.filter((c) => !c.applicable).map((c) => c.id),
     problems,
     complete,
     possible,
+    normalized: possible !== TOTAL_POINTS,
     ...(points === undefined ? {} : { points }),
     ...(total === undefined ? {} : { total }),
   };
