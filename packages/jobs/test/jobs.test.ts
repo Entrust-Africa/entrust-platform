@@ -55,6 +55,17 @@ describe("Background Jobs Runtime with pg-boss", () => {
     ).rejects.toThrow();
   });
 
+  it("requires the message on a Summit result email", async () => {
+    await expect(
+      enqueue(JOB_NAMES.SEND_EMAIL, {
+        to: "valid@example.test",
+        subject: "Your Summit application result",
+        template: "summit-result",
+        props: { applicationNumber: "SUM-000001", organizationName: "ZEBU Coffee" } as any,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("returns null for non-existent queues or jobs instead of throwing", async () => {
     const unknownQueueStatus = await getJobStatus("non-existent-queue", "any-id");
     expect(unknownQueueStatus).toBeNull();

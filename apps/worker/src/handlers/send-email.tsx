@@ -6,6 +6,7 @@ import {
   InvitationEmail,
   PasswordResetEmail,
   SummitClarificationEmail,
+  SummitResultEmail,
   VerificationEmail,
 } from "@entrust/notify/templates";
 import { SendEmailJobSchema, type SendEmailJobData } from "@entrust/jobs";
@@ -47,6 +48,16 @@ export async function handleSendEmail(jobData: SendEmailJobData) {
     case "summit-clarification":
       reactElement = (
         <SummitClarificationEmail
+          applicationNumber={data.props.applicationNumber}
+          organizationName={data.props.organizationName}
+          message={data.props.message}
+          {...(data.props.url ? { url: data.props.url } : {})}
+        />
+      );
+      break;
+    case "summit-result":
+      reactElement = (
+        <SummitResultEmail
           applicationNumber={data.props.applicationNumber}
           organizationName={data.props.organizationName}
           message={data.props.message}

@@ -65,6 +65,25 @@ describe("Worker Runtime End-to-End Handlers", () => {
     expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["applicant@example.test"] });
   });
 
+  it("sends the Summit result email through the worker", async () => {
+    const jobId = await enqueue(JOB_NAMES.SEND_EMAIL, {
+      to: ["applicant@example.test"],
+      subject: "The result of Summit application SUM-000042",
+      template: "summit-result",
+      props: { applicationNumber: "SUM-000042", organizationName: "ZEBU Coffee", message: "Your business is on the waiting list for the Summit." },
+    });
+
+    let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    const startTime = Date.now();
+    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+      await new Promise((r) => setTimeout(r, 200));
+      status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    }
+
+    expect(status?.state).toBe("completed");
+    expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["applicant@example.test"] });
+  });
+
   it("processes a real test-fail job through handleTestFail and preserves failure message", async () => {
     const failureReason = "Worker retry verification test";
     const jobId = await enqueue(
