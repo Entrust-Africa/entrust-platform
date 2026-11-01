@@ -1,8 +1,8 @@
 import { index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { core, organization, user } from "./auth";
 
-// Platforms that run on the shared core. TRADE and MIZAN have no UI yet.
-export const PLATFORMS = ["clear", "trade", "mizan"] as const;
+// Platforms that run on the shared core. TRADE, Summit and MIZAN have no UI yet.
+export const PLATFORMS = ["clear", "trade", "summit", "mizan"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 // Which organisation may use which platform.
