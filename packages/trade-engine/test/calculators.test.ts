@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { CALCULATORS, CALCULATOR_NAMES, MAX_FORECAST_MONTHS, cashFlowForecast, checklistCompletion, etbEquivalent, incomeStatement, workingCapitalGap } from "../src";
+import {
+  CALCULATORS,
+  CALCULATOR_NAMES,
+  MAX_FORECAST_MONTHS,
+  briefDateChecks,
+  cashFlowForecast,
+  cashSchedule,
+  checklistCompletion,
+  criticalFailureCandidates,
+  etbEquivalent,
+  fundingGap,
+  incomeStatement,
+  workingCapitalGap,
+} from "../src";
 
 describe("incomeStatement", () => {
   it("reproduces the spice firm: 2.4M revenue, 35% gross margin and 10% operating margin", () => {
@@ -220,7 +233,17 @@ describe("checklistCompletion", () => {
 
 describe("the calculator registry", () => {
   it("names the calculators a worksheet can use", () => {
-    expect(CALCULATOR_NAMES).toEqual(["income_statement", "cash_flow_forecast", "working_capital_gap", "etb_equivalent", "checklist_completion"]);
+    expect(CALCULATOR_NAMES).toEqual([
+      "income_statement",
+      "cash_flow_forecast",
+      "working_capital_gap",
+      "etb_equivalent",
+      "checklist_completion",
+      "cash_schedule",
+      "funding_gap",
+      "brief_date_checks",
+      "critical_failure_candidates",
+    ]);
   });
 
   it("maps every name to the function", () => {
@@ -229,5 +252,9 @@ describe("the calculator registry", () => {
     expect(CALCULATORS.working_capital_gap).toBe(workingCapitalGap);
     expect(CALCULATORS.etb_equivalent).toBe(etbEquivalent);
     expect(CALCULATORS.checklist_completion).toBe(checklistCompletion);
+    expect(CALCULATORS.cash_schedule).toBe(cashSchedule);
+    expect(CALCULATORS.funding_gap).toBe(fundingGap);
+    expect(CALCULATORS.brief_date_checks).toBe(briefDateChecks);
+    expect(CALCULATORS.critical_failure_candidates).toBe(criticalFailureCandidates);
   });
 });
