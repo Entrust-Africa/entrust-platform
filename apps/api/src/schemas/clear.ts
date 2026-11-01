@@ -449,6 +449,8 @@ export const CaseSummary = z
   .object({
     id: z.uuid(),
     reference: z.string().openapi({ example: "CLR-ET-2026-000145" }),
+    /** Set on a practice case (TRADE's M08), which is simulated: the scenario it was started from. Null on a real case. */
+    practiceScenario: z.string().nullable().openapi({ example: null }),
     organizationId: z.string(),
     organizationName: z.string(),
     product: z.string(),

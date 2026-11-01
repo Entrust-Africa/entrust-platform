@@ -91,13 +91,14 @@ export interface ListCasesInput {
 
 /**
  * The cases the caller can see, newest first: those of their own organisations, or every case
- * for Entrust staff. Each comes with the next action the engine works out.
+ * for Entrust staff. Each comes with the next action the engine works out. Practice cases aren't listed.
  */
 export async function listCases(ctx: Ctx, input: ListCasesInput): Promise<CaseListView> {
   const { principal } = ctx;
   if (!principal.staffRole && principal.smeRoles.size === 0) return { items: [], total: 0 };
 
   const filters: (SQL | undefined)[] = [
+    schema.realCase,
     principal.staffRole ? undefined : inArray(schema.exportCase.organizationId, [...principal.smeRoles.keys()]),
     input.status ? eq(schema.exportCase.status, input.status) : undefined,
     input.phase ? eq(schema.exportCase.currentPhase, input.phase as PhaseId) : undefined,
@@ -127,7 +128,7 @@ export async function listCases(ctx: Ctx, input: ListCasesInput): Promise<CaseLi
 }
 
 export async function getCase(ctx: Ctx, caseId: string): Promise<CaseDetailView> {
-  const { row, actor } = await findCase(ctx.db, ctx.principal, caseId);
+  const { row, actor } = await findCase(ctx.db, ctx.principal, caseId, { practice: ctx.practice });
   return buildDetail(ctx.db, row, actor, ctx.now);
 }
 

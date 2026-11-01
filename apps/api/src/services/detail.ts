@@ -60,7 +60,7 @@ export function mutateCase(
   change: (tx: Executor, found: { row: CaseRow; actor: Actor }) => Promise<void>,
 ): Promise<CaseDetailView> {
   return ctx.db.transaction(async (tx) => {
-    const found = await findCase(tx, ctx.principal, caseId, { lock: true });
+    const found = await findCase(tx, ctx.principal, caseId, { lock: true, practice: ctx.practice });
     await change(tx, found);
 
     const [current] = await tx.select().from(schema.exportCase).where(eq(schema.exportCase.id, caseId));

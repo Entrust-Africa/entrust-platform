@@ -43,7 +43,8 @@ export function waiveFlag(ctx: Ctx, caseId: string, flagId: string, reason: stri
 }
 
 /**
- * Checks every open case against the failure rules. Some rules fire with time alone (the FX
+ * Checks every open case against the failure rules. Practice cases are left out: they are checked as
+ * the learner works them, and time passing never raises anything on one. Some rules fire with time alone (the FX
  * repatriation deadline passing), when nobody touches the case, so the background worker (#16)
  * calls this on a schedule. Each case is checked in its own transaction, so one failing doesn't
  * hold up the rest. `only` limits the check to the given cases.
@@ -58,6 +59,7 @@ export async function syncOpenCases(
     .from(schema.exportCase)
     .where(
       and(
+        schema.realCase,
         inArray(schema.exportCase.status, ["open", "amendments_pending"]),
         options.only ? inArray(schema.exportCase.id, [...options.only]) : undefined,
       ),

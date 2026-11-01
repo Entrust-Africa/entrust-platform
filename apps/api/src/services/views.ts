@@ -23,6 +23,7 @@ export function summaryOf(data: CaseData, organizationName: string, evaluation: 
   return {
     id: row.id,
     reference: row.reference,
+    practiceScenario: row.practiceScenario,
     organizationId: row.organizationId,
     organizationName,
     product: row.product,
