@@ -162,6 +162,8 @@ describe("signed out", () => {
       ["POST", `/applications/${id}/review`, {}],
       ["POST", `/applications/${id}/decision`, {}],
       ["GET", "/committee/applications"],
+      ["GET", "/dashboard"],
+      ["PUT", `/periods/${id}/selection-target`, {}],
       ["GET", `/periods/${id}/final-list`],
       ["POST", `/periods/${id}/final-list`, {}],
       ["POST", `/periods/${id}/final-list/notifications`],
@@ -744,5 +746,143 @@ describe("the final list", () => {
 
   it("is for the committee, administrators and facilitators to resend", async () => {
     for (const user of [w.reviewer, w.owners[0]!, w.outsider]) expect((await resend(user)).status).toBe(403);
+  });
+});
+
+describe("the dashboard", () => {
+  const dashboard = async (user: TestUser = w.committee, periodId = w.periodId) => {
+    const res = await call(user, "GET", `/dashboard?periodId=${periodId}`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    return res.body;
+  };
+  const setTarget = (user: TestUser, body: object, periodId = w.periodId) => call(user, "PUT", `/periods/${periodId}/selection-target`, body);
+  const mean = (values: number[]) => Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
+
+  it("is for the committee, administrators and facilitators", async () => {
+    for (const user of [w.committee, w.admin, w.facilitator]) expect((await dashboard(user)).period).toMatchObject({ id: w.periodId, countries: [COUNTRY] });
+    for (const user of [w.reviewer, w.owners[0]!, w.outsider]) expect((await call(user, "GET", `/dashboard?periodId=${w.periodId}`)).status).toBe(403);
+    expect((await call(w.committee, "GET", `/dashboard?periodId=${randomUUID()}`)).status).toBe(404);
+    expect((await call(w.committee, "GET", "/dashboard?periodId=nonsense")).status).toBe(400);
+  });
+
+  it("counts the applications at each stage, as the database has them", async () => {
+    // A selected, B and C waitlisted, D not selected, and E back with its officer.
+    const d = await dashboard();
+    expect(d.totals).toMatchObject({
+      applications: 5,
+      drafts: 0,
+      withdrawn: 0,
+      eligible: 5,
+      ineligible: 0,
+      awaitingInformation: 0,
+      underAssessment: 1,
+      assessed: 4,
+      inCommitteeReview: 0,
+      selected: 1,
+      waitlisted: 2,
+      notSelected: 1,
+    });
+    expect(Date.parse(d.generatedAt)).not.toBeNaN();
+  });
+
+  it("averages the scores the committee sees, adjustments counted", async () => {
+    const listed = (await list()).items;
+    const scoreOf = (id: string) => listed.find((i: Json) => i.id === id).score as number;
+    const d = await dashboard();
+    expect(d.totals.averageScore).toBe(mean([w.a, w.b, w.c, w.d].map(scoreOf)));
+    const qz = d.byCountry.find((c: Json) => c.country === COUNTRY);
+    expect(qz.averageScore).toBe(mean([w.a, w.c, w.d].map(scoreOf)));
+  });
+
+  it("splits everything by country, with the period's countries first and any other after", async () => {
+    const d = await dashboard();
+    expect(d.byCountry.map((c: Json) => c.country)).toEqual([COUNTRY, "QY"]);
+    expect(d.byCountry[0]).toMatchObject({ applications: 4, eligible: 4, underAssessment: 1, assessed: 3, selected: 1, waitlisted: 1, notSelected: 1, target: 10, remaining: 9 });
+    // B moved to another country after it applied: it still counts, with no target.
+    expect(d.byCountry[1]).toMatchObject({ applications: 1, eligible: 1, underAssessment: 0, assessed: 1, averageScore: 80, selected: 0, waitlisted: 1, target: 0, remaining: 0 });
+  });
+
+  it("groups the industries, the pathways and the officers' view of what suits each applicant", async () => {
+    const d = await dashboard();
+    expect(d.byIndustry).toHaveLength(5);
+    expect(d.byIndustry.find((i: Json) => i.sector === "Coffee")).toEqual({ sector: "Coffee", applications: 1, selected: 1 });
+    expect(d.byIndustry.map((i: Json) => i.sector).sort()).toEqual(["Coffee", "Coffee processing", "Honey", "Leather goods", "Textiles and apparel"]);
+    expect(d.byPathway).toEqual({ trade_and_market_access: 4, investment: 0, strategic_partnership: 1, combined_trade_and_investment: 0 });
+    // D's latest recommendation, made after its assessment came back, names no opportunity.
+    expect(d.bySuitableOpportunity).toEqual({ trade: 4, investment: 0, strategic_partnership: 0, combined: 0 });
+  });
+
+  it("counts women-owned and youth-owned businesses and how many were selected", async () => {
+    expect((await dashboard()).ownership).toEqual({ womanOwned: { applications: 2, selected: 1 }, youthOwned: { applications: 2, selected: 0 } });
+  });
+
+  it("counts how the claims were verified", async () => {
+    // C's revenue was recorded as self-reported in the comparison tests.
+    expect((await dashboard()).verification).toEqual({
+      byClass: { self_reported: 1, document_supported: 0, independently_verified: 0, not_verified: 0, not_applicable: 0 },
+      classifiedApplications: 1,
+    });
+  });
+
+  it("shows a period with nothing in it as zeros against its targets, and is the default when no period is named", async () => {
+    const d = await dashboard(w.committee, w.otherPeriodId);
+    expect(d.totals).toMatchObject({ applications: 0, drafts: 0, assessed: 0, selected: 0, averageScore: null });
+    expect(d.byCountry).toEqual([expect.objectContaining({ country: COUNTRY, applications: 0, averageScore: null, target: 10, remaining: 10 })]);
+    expect(d.byIndustry).toEqual([]);
+    expect((await call(w.committee, "GET", "/dashboard")).body.period.id).toBe(w.otherPeriodId);
+  });
+
+  it("starts at 10 for each country", async () => {
+    expect((await dashboard()).target).toEqual({ perCountry: 10, overrides: {}, total: 10, selected: 1, remaining: 9 });
+    expect(await db.select().from(schema.selectionTarget).where(eq(schema.selectionTarget.periodId, w.periodId))).toEqual([]);
+  });
+
+  it("lets the committee change the target, for every country or for one", async () => {
+    for (const user of [w.admin, w.facilitator, w.reviewer, w.owners[0]!]) expect([user.id, (await setTarget(user, { perCountry: 5 })).status]).toEqual([user.id, 403]);
+
+    const all = await setTarget(w.committee, { perCountry: 3 });
+    expect(all.status, JSON.stringify(all.body)).toBe(200);
+    expect(all.body.target).toEqual({ perCountry: 3, overrides: {}, total: 3, selected: 1, remaining: 2 });
+    expect(all.body.byCountry[0]).toMatchObject({ target: 3, remaining: 2 });
+
+    const one = await setTarget(w.committee2, { countries: { [COUNTRY.toLowerCase()]: 1 } });
+    expect(one.body.target).toEqual({ perCountry: 3, overrides: { [COUNTRY]: 1 }, total: 1, selected: 1, remaining: 0 });
+    expect(one.body.byCountry[0]).toMatchObject({ target: 1, remaining: 0 });
+
+    const cleared = await setTarget(w.committee, { countries: { [COUNTRY]: null }, perCountry: 12 });
+    expect(cleared.body.target).toEqual({ perCountry: 12, overrides: {}, total: 12, selected: 1, remaining: 11 });
+  });
+
+  it("refuses figures that make no sense, and countries the period doesn't take", async () => {
+    for (const body of [{}, { countries: {} }, { perCountry: -1 }, { perCountry: 1.5 }, { perCountry: 1001 }, { countries: { [COUNTRY]: "ten" } }, { countries: { ABC: 3 } }]) {
+      expect([JSON.stringify(body), (await setTarget(w.committee, body)).status]).toEqual([JSON.stringify(body), 400]);
+    }
+    const unknown = await setTarget(w.committee, { countries: { KE: 3 } });
+    expect(unknown.status).toBe(422);
+    expect(unknown.body.error).toContain("KE isn't one of the countries of this period");
+    expect((await setTarget(w.committee, { perCountry: 3 }, randomUUID())).status).toBe(404);
+    expect((await dashboard()).target.perCountry).toBe(12);
+  });
+
+  it("audits each change with the figures before and after", async () => {
+    const rows = await db
+      .select()
+      .from(schema.auditLog)
+      .where(and(eq(schema.auditLog.entityId, w.periodId), eq(schema.auditLog.action, "summit.selectionTarget.changed")))
+      .orderBy(schema.auditLog.occurredAt);
+    expect(rows.map((r) => [r.platform, r.actorUserId, r.before, r.after])).toEqual([
+      ["summit", w.committee.id, { perCountry: 10, overrides: {} }, { perCountry: 3, overrides: {} }],
+      ["summit", w.committee2.id, { perCountry: 3, overrides: {} }, { perCountry: 3, overrides: { [COUNTRY]: 1 } }],
+      ["summit", w.committee.id, { perCountry: 3, overrides: { [COUNTRY]: 1 } }, { perCountry: 12, overrides: {} }],
+    ]);
+  });
+
+  it("follows the applications as they change", async () => {
+    // E's organisation withdraws while E is with its officer.
+    expect((await call(w.owners[4]!, "POST", `/applications/${w.e}/withdraw`, { reason: "Not this year." })).status).toBe(200);
+    const d = await dashboard();
+    expect(d.totals).toMatchObject({ applications: 4, withdrawn: 1, underAssessment: 0, assessed: 4 });
+    expect(d.byCountry[0]).toMatchObject({ applications: 3, underAssessment: 0 });
+    expect(d.byIndustry.map((i: Json) => i.sector)).not.toContain("Honey");
   });
 });

@@ -638,6 +638,81 @@ export const FinalListView = z
   })
   .openapi("SummitFinalList");
 
+// ---- The dashboard ----
+
+export const DashboardQuery = z.object({ periodId: z.uuid().optional().openapi({ description: "Default: the newest period." }) });
+
+const CountryFigures = z
+  .object({
+    country: z.string().nullable().openapi({ description: "ISO 3166-1 alpha-2 code. Null for applications whose organisation has no country." }),
+    applications: z.number().int(),
+    eligible: z.number().int(),
+    underAssessment: z.number().int(),
+    assessed: z.number().int(),
+    averageScore: z.number().nullable().openapi({ description: "Mean adjusted score out of 100 of the assessed applications." }),
+    selected: z.number().int(),
+    waitlisted: z.number().int(),
+    notSelected: z.number().int(),
+    target: z.number().int().openapi({ description: "How many the committee plans to select from this country." }),
+    remaining: z.number().int().openapi({ description: "How many more selections reach the target. Never below zero." }),
+  })
+  .openapi("SummitCountryFigures");
+
+export const DashboardView = z
+  .object({
+    period: z.object({ id: z.uuid(), name: z.string(), countries: z.array(z.string()) }),
+    generatedAt: Timestamp,
+    totals: z.object({
+      applications: z.number().int().openapi({ description: "Submitted applications that haven't been withdrawn." }),
+      drafts: z.number().int(),
+      withdrawn: z.number().int(),
+      eligible: z.number().int(),
+      ineligible: z.number().int(),
+      awaitingInformation: z.number().int(),
+      underAssessment: z.number().int(),
+      assessed: z.number().int().openapi({ description: "Assessments completed and not sent back." }),
+      inCommitteeReview: z.number().int(),
+      selected: z.number().int(),
+      waitlisted: z.number().int(),
+      notSelected: z.number().int(),
+      averageScore: z.number().nullable(),
+    }),
+    target: z.object({
+      perCountry: z.number().int().openapi({ description: "The planning target for each country without a figure of its own. Default 10." }),
+      overrides: z.record(z.string(), z.number().int()).openapi({ description: "Countries with a figure of their own." }),
+      total: z.number().int().openapi({ description: "The targets of the period's countries added up." }),
+      selected: z.number().int().openapi({ description: "Selected from the period's countries." }),
+      remaining: z.number().int(),
+    }),
+    byCountry: z.array(CountryFigures),
+    byIndustry: z.array(z.object({ sector: z.string().nullable(), applications: z.number().int(), selected: z.number().int() })),
+    byPathway: z.record(z.enum(OPPORTUNITY_PATHWAYS), z.number().int()),
+    bySuitableOpportunity: z.record(z.enum(SUITABLE_OPPORTUNITIES.map((o) => o.id) as [string, ...string[]]), z.number().int()),
+    ownership: z.object({
+      womanOwned: z.object({ applications: z.number().int(), selected: z.number().int() }),
+      youthOwned: z.object({ applications: z.number().int(), selected: z.number().int() }),
+    }),
+    verification: z.object({
+      byClass: z.record(z.enum(VERIFICATION_CLASSES), z.number().int()),
+      classifiedApplications: z.number().int(),
+    }),
+  })
+  .openapi("SummitDashboard");
+
+const TargetFigure = z.number().int().min(0).max(1000);
+
+export const SelectionTargetBody = z
+  .object({
+    perCountry: TargetFigure.optional().openapi({ description: "The figure for every country without one of its own." }),
+    countries: z
+      .record(z.string().trim().length(2), TargetFigure.nullable())
+      .optional()
+      .openapi({ description: "Figures for single countries by ISO code. A null removes a country's own figure.", example: { KE: 12, GH: null } }),
+  })
+  .refine((b) => b.perCountry !== undefined || (b.countries !== undefined && Object.keys(b.countries).length > 0), "Change the figure for all countries or for at least one")
+  .openapi("SummitSelectionTargetBody");
+
+export type DashboardViewType = z.infer<typeof DashboardView>;
 export type CommitteeListView = z.infer<typeof CommitteeList>;
 export type FinalListViewType = z.infer<typeof FinalListView>;
 export type CommitteeItemView = z.infer<typeof CommitteeItem>;

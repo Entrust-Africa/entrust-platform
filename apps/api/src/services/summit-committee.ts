@@ -7,11 +7,8 @@ import {
   RECOMMENDATIONS,
   VERIFIABLE_CLAIMS,
   applicantProfile,
-  applicationPathway,
-  applicationSeeksInvestment,
   rankByScore,
   readinessPercent,
-  scoreApplication,
   type ApplicantProfile,
   type CommitteeDecision,
 } from "@entrust/summit-engine";
@@ -20,8 +17,9 @@ import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { findApplication } from "./summit-access";
-import { loadPeriod, rulesOf, templateOf } from "./summit-applications";
+import { loadPeriod, templateOf } from "./summit-applications";
 import { requireOpenSelection } from "./summit-final-list";
+import { scoreApplications, type Scored } from "./summit-scores";
 import { changeStatus, recordSummitChange } from "./summit-status";
 
 // The selection committee's side of the Summit (#80): comparing applicants, filtering them, and recording a decision
@@ -31,14 +29,14 @@ import { changeStatus, recordSummitChange } from "./summit-status";
 const person = (id: string | null, name: string | null) => (id && name ? { id, name } : null);
 
 /** Who may look at the committee's lists: the committee, and the administrators who run the selection. */
-function requireCommitteeView(ctx: Ctx, doing: string): void {
+export function requireCommitteeView(ctx: Ctx, doing: string): void {
   const { staffRole, committee } = ctx.principal;
   if (!committee && staffRole !== "admin" && staffRole !== "facilitator") {
     throw new ServiceError("forbidden", `Only the selection committee, administrators and facilitators can ${doing}.`);
   }
 }
 
-type PeriodRow = typeof schema.applicationPeriod.$inferSelect;
+export type PeriodRow = typeof schema.applicationPeriod.$inferSelect;
 
 interface Entry {
   item: CommitteeItemView;
@@ -71,8 +69,8 @@ async function committeeEntries(db: Executor, period: PeriodRow): Promise<Entry[
   if (rows.length === 0) return [];
 
   const ids = rows.map((r) => r.row.id);
-  const [assessments, recommendations, decisions, verification] = await Promise.all([
-    db.select().from(schema.assessment).where(inArray(schema.assessment.applicationId, ids)),
+  const [scored, recommendations, decisions, verification] = await Promise.all([
+    scoreApplications(db, period, rows.map((r) => r.row)),
     db
       .select()
       .from(schema.applicationRecommendation)
@@ -86,37 +84,13 @@ async function committeeEntries(db: Executor, period: PeriodRow): Promise<Entry[
       .orderBy(asc(schema.committeeDecision.decidedAt)),
     db.select().from(schema.verificationRecord).where(inArray(schema.verificationRecord.applicationId, ids)).orderBy(asc(schema.verificationRecord.recordedAt)),
   ]);
-  const assessmentIds = assessments.map((a) => a.id);
-  const [scores, adjustments] = assessmentIds.length
-    ? await Promise.all([
-        db.select().from(schema.criterionScore).where(inArray(schema.criterionScore.assessmentId, assessmentIds)),
-        db.select().from(schema.scoreAdjustment).where(inArray(schema.scoreAdjustment.assessmentId, assessmentIds)).orderBy(asc(schema.scoreAdjustment.adjustedAt)),
-      ])
-    : [[], []];
-
-  const assessmentOf = new Map(assessments.map((a) => [a.applicationId, a]));
   // Oldest first, so the last of each application is the current one.
   const recommendationOf = new Map(recommendations.map((r) => [r.applicationId, r]));
   const decisionOf = new Map(decisions.map((d) => [d.decision.applicationId, d]));
 
   const entries = rows.map(({ row, organizationName, smeId, country }): Entry => {
     const template = templateOf(row.templateVersion);
-    const assessment = assessmentOf.get(row.id);
-    const rules = rulesOf(assessment?.rulesVersion ?? period.rulesVersion);
-    const pathway = assessment?.pathway ?? applicationPathway(template, row.answers) ?? null;
-
-    const effective: Record<string, number> = {};
-    if (assessment) {
-      for (const s of scores) if (s.assessmentId === assessment.id) effective[s.criterionId] = s.points;
-      for (const a of adjustments) if (a.assessmentId === assessment.id) effective[a.criterionId] = a.newPoints;
-    }
-    const result = pathway
-      ? scoreApplication(rules, {
-          pathway,
-          seekingInvestment: assessment?.seekingInvestment ?? applicationSeeksInvestment(template, row.answers),
-          scores: effective,
-        })
-      : null;
+    const { rules, pathway, result, adjustments } = scored.get(row.id) as Scored;
 
     const profile = applicantProfile(template, row.answers);
     const recommendation = recommendationOf.get(row.id);
@@ -168,7 +142,7 @@ async function committeeEntries(db: Executor, period: PeriodRow): Promise<Entry[
       item,
       profile,
       search: [organizationName, row.number, smeId ?? ""].join(" ").toLowerCase(),
-      adjustments: adjustments.filter((a) => a.assessmentId === assessment?.id).length,
+      adjustments,
       rationale: recommendation?.rationale ?? null,
       claims: verification
         .filter((v) => v.applicationId === row.id)
@@ -181,7 +155,7 @@ async function committeeEntries(db: Executor, period: PeriodRow): Promise<Entry[
   return entries;
 }
 
-async function pickPeriod(db: Executor, periodId: string | undefined): Promise<PeriodRow | null> {
+export async function pickPeriod(db: Executor, periodId: string | undefined): Promise<PeriodRow | null> {
   if (periodId) return loadPeriod(db, periodId).catch(() => null);
   const [newest] = await db.select().from(schema.applicationPeriod).orderBy(desc(schema.applicationPeriod.opensAt)).limit(1);
   return newest ?? null;

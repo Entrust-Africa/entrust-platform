@@ -22,6 +22,8 @@ import {
   CompareQuery,
   CompareView,
   CreateApplicationBody,
+  DashboardQuery,
+  DashboardView,
   DecisionBody,
   CurrentPeriod,
   DocumentDownload,
@@ -43,6 +45,7 @@ import {
   RespondBody,
   ReviewBody,
   SaveAnswersBody,
+  SelectionTargetBody,
   StageBody,
   WithdrawBody,
   type FormView,
@@ -64,6 +67,7 @@ import { createPeriod, currentPeriod, listPeriods, updatePeriod } from "../servi
 import { adjustScore, addComment, classifyClaim, completeAssessment, getAssessment, recordRecommendation, recordScores, saveCategoryNote, setStage } from "../services/summit-assessment";
 import { requestClarification, respondToClarification } from "../services/summit-clarifications";
 import { compareForCommittee, listForCommittee, recordDecision } from "../services/summit-committee";
+import { getDashboard, setSelectionTarget } from "../services/summit-dashboard";
 import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
@@ -501,6 +505,28 @@ const resendRoute = createRoute({
   },
 });
 
+const dashboardRoute = createRoute({
+  method: "get",
+  path: "/dashboard",
+  tags,
+  summary: "The live distribution dashboard",
+  description:
+    "Figures from the specification's section 8, worked out on every request so they follow the applications as they come in: applications, eligible applicants, applicants under assessment, completed assessments, average score, and selected SMEs, each by country with the planning target; applications by industry; the opportunity pathways chosen and the opportunity the officers think suits each applicant; women-owned and youth-owned businesses; and how the claims were verified. Scores count manual adjustments. The selection committee, administrators and facilitators.",
+  request: { query: DashboardQuery },
+  responses: { 200: { description: "The dashboard", content: json(DashboardView) }, ...listErrors, 403: problem("Not the committee, an administrator or a facilitator"), 404: problem("No such period") },
+});
+
+const targetRoute = createRoute({
+  method: "put",
+  path: "/periods/{id}/selection-target",
+  tags,
+  summary: "Change the selection target",
+  description:
+    "How many SMEs the committee plans to select from each country. A period starts at 10 for each country. Set the figure for every country, for single countries of the period (a null removes a country's own figure), or both. Every change is audited with the figures before and after. Members of the selection committee only.",
+  request: { params: PeriodParam, body: { required: true, content: json(SelectionTargetBody) } },
+  responses: { 200: { description: "The dashboard", content: json(DashboardView) }, ...listErrors, 403: problem("Not a member of the selection committee"), 404: problem("No such period"), 422: problem("A country that isn't one of the period's") },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -587,4 +613,8 @@ export const summit = router
   .openapi(approveListRoute, async (c) =>
     c.json(await approveFinalList(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")?.note), 201),
   )
-  .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200));
+  .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(dashboardRoute, async (c) => c.json(await getDashboard(await contextFor(c.get("user")), c.req.valid("query").periodId), 200))
+  .openapi(targetRoute, async (c) =>
+    c.json(await setSelectionTarget(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  );
