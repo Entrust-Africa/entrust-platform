@@ -15,6 +15,7 @@ import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { fromEngine, ServiceError } from "./errors";
 import { findApplication, requireApplicant, type ApplicationRow, type SummitAccess } from "./summit-access";
+import { listClarifications, openClarification } from "./summit-clarification-data";
 import { findApplicationTemplate, findSummitRules } from "./summit-forms";
 import { openPeriod, periodState, type PeriodRow } from "./summit-periods";
 import { changeStatus, publicStatus, recordSummitChange, WITHDRAWABLE } from "./summit-status";
@@ -26,13 +27,13 @@ import { getStorageProvider } from "./storage";
 
 const todayOf = (now: Date): string => now.toISOString().slice(0, 10);
 
-function templateOf(version: string): ApplicationTemplate {
+export function templateOf(version: string): ApplicationTemplate {
   const template = findApplicationTemplate(version);
   if (!template) throw new Error(`Application form ${version} is missing`);
   return template;
 }
 
-function rulesOf(version: string): SummitRules {
+export function rulesOf(version: string): SummitRules {
   const rules = findSummitRules(version);
   if (!rules) throw new Error(`Summit rules ${version} are missing`);
   return rules;
@@ -83,7 +84,7 @@ const problemView = (p: { question: string; code: string; message: string }) => 
 // ---- Views ----
 
 export async function buildDetail(db: Executor, row: ApplicationRow, access: SummitAccess, now: Date): Promise<ApplicationDetailView> {
-  const [period, [organisation], documents, latest] = await Promise.all([
+  const [period, [organisation], documents, latest, clarifications, open] = await Promise.all([
     loadPeriod(db, row.periodId),
     db
       .select({ name: schema.organization.name, smeId: schema.smeProfile.smeId, country: schema.smeProfile.country })
@@ -105,6 +106,8 @@ export async function buildDetail(db: Executor, row: ApplicationRow, access: Sum
       .where(eq(schema.applicationDocument.applicationId, row.id))
       .orderBy(schema.applicationDocument.addedAt),
     latestEligibility(db, row.id),
+    listClarifications(db, row.id, access.applicant),
+    openClarification(db, row.id),
   ]);
 
   const template = templateOf(row.templateVersion);
@@ -156,6 +159,8 @@ export async function buildDetail(db: Executor, row: ApplicationRow, access: Sum
       : null,
     editable,
     canSubmit: editable && canSubmit(check),
+    canEditDocuments: access.applicant && (editable || (row.status === "awaiting_additional_information" && open !== undefined)),
+    clarifications,
     closesAt: period.closesAt.toISOString(),
     submittedAt: row.submittedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -440,6 +445,14 @@ async function editableApplication(ctx: Ctx, tx: Executor, id: string, doing: st
   return { row, access, period, latest };
 }
 
+/** Like `editableApplication`, and also open while a request for more information waits for the applicant. */
+async function documentsApplication(ctx: Ctx, tx: Executor, id: string) {
+  const { row, access } = await findApplication(tx, ctx.principal, id, { lock: true });
+  requireApplicant(access, "add documents");
+  if (row.status === "awaiting_additional_information" && (await openClarification(tx, id))) return { row, access };
+  return editableApplication(ctx, tx, id, "add documents");
+}
+
 /**
  * Saves answers as the applicant goes, so they can leave and resume. A value sets an answer, null clears it, and
  * answers not named stay. An answer that isn't valid for its question is refused; a question left unanswered is not,
@@ -471,7 +484,8 @@ export async function saveAnswers(ctx: Ctx, id: string, patch: Readonly<Record<s
 
 export async function attachDocument(ctx: Ctx, id: string, input: { fileId: string; kind: DocumentKind }): Promise<ApplicationDetailView> {
   return ctx.db.transaction(async (tx) => {
-    const { row, access } = await editableApplication(ctx, tx, id, "add documents");
+    // While Entrust waits on a request for more information the applicant can add documents, but not change answers.
+    const { row, access } = await documentsApplication(ctx, tx, id);
     const [file] = await tx
       .select({ id: schema.file.id, name: schema.file.originalName })
       .from(schema.file)

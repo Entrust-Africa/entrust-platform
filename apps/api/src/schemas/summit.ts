@@ -1,6 +1,15 @@
 import { z } from "@hono/zod-openapi";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { DOCUMENT_KINDS, ELIGIBILITY_CRITERIA, ELIGIBILITY_OUTCOMES, OPPORTUNITY_PATHWAYS } from "@entrust/summit-engine";
+import {
+  CATEGORY_IDS,
+  DOCUMENT_KINDS,
+  ELIGIBILITY_CRITERIA,
+  ELIGIBILITY_OUTCOMES,
+  OPPORTUNITY_PATHWAYS,
+  RECOMMENDATIONS,
+  SUITABLE_OPPORTUNITIES,
+  VERIFICATION_CLASSES,
+} from "@entrust/summit-engine";
 import { DownloadUrlResponse } from "./files";
 
 // What the Summit endpoints take and give. The services build these shapes, so the OpenAPI document,
@@ -152,6 +161,22 @@ const EligibilityView = z
   })
   .openapi("SummitEligibility");
 
+export const Clarification = z
+  .object({
+    id: z.uuid(),
+    /** What Entrust asked the applicant. */
+    message: z.string(),
+    requestedAt: Timestamp,
+    /** Who asked. Entrust staff only. */
+    requestedBy: Person.nullable(),
+    /** When the email was queued. Entrust staff only: null for an applicant, and for staff when it could not be. */
+    notifiedAt: Timestamp.nullable(),
+    response: z.string().nullable(),
+    respondedAt: Timestamp.nullable(),
+    open: z.boolean().openapi({ description: "The application is waiting on this one." }),
+  })
+  .openapi("SummitClarification");
+
 export const ApplicationDetail = z
   .object({
     id: z.uuid(),
@@ -183,6 +208,10 @@ export const ApplicationDetail = z
     editable: z.boolean(),
     /** Whether the applicant can submit now: editable, and the form is complete. */
     canSubmit: z.boolean(),
+    /** Whether the applicant can attach documents now: when they can edit, and while a request for more information is open. */
+    canEditDocuments: z.boolean(),
+    /** Requests for more information, newest last. The applicant sees these and nothing else of the assessment. */
+    clarifications: z.array(Clarification),
     closesAt: Timestamp,
     submittedAt: Timestamp.nullable(),
     createdAt: Timestamp,
@@ -281,9 +310,169 @@ export const ExceptionBody = z
   })
   .openapi("SummitExceptionBody");
 
+// ---- The officer's workspace ----
+
+const Points = z.number().int().min(0);
+
+const Criterion = z
+  .object({
+    id: z.string().openapi({ example: "A1" }),
+    text: z.string(),
+    maxPoints: z.number().int(),
+    guidance: z.array(z.object({ from: z.number().int(), to: z.number().int(), text: z.string() })),
+    evidence: z.array(z.string()),
+    /** The points that count: the original score, or the latest adjustment of it. Null until scored. */
+    points: Points.nullable(),
+    /** The officer's original score, which is never overwritten. */
+    original: z.object({ points: Points, by: Person.nullable(), at: Timestamp }).nullable(),
+    adjusted: z.boolean(),
+  })
+  .openapi("SummitCriterionScore");
+
+const CategoryView = z
+  .object({
+    id: z.enum(CATEGORY_IDS),
+    title: z.string(),
+    maxPoints: z.number().int(),
+    assess: z.array(z.string()),
+    /** The evidence the scorecard lists for the category. */
+    evidence: z.array(z.string()),
+    /** False for the investment category when the applicant isn't seeking investment: it is left out and the rest scaled. */
+    applicable: z.boolean(),
+    criteria: z.array(Criterion),
+    /** Points for the category, once all its criteria are scored. */
+    points: Points.nullable(),
+    note: z.object({ justification: z.string(), evidence: z.array(z.string()), by: Person.nullable(), updatedAt: Timestamp }).nullable(),
+  })
+  .openapi("SummitCategoryScore");
+
+const Verification = z
+  .object({
+    claim: z.string(),
+    label: z.string().nullable().openapi({ description: "The name of a claim the specification lists; null for any other claim." }),
+    class: z.enum(VERIFICATION_CLASSES),
+    documents: z.array(z.object({ id: z.uuid(), kind: z.enum(DOCUMENT_KINDS), fileName: z.string() })),
+    independentCheck: z.string().nullable(),
+    by: Person.nullable(),
+    at: Timestamp,
+  })
+  .openapi("SummitVerification");
+
+export const AssessmentView = z
+  .object({
+    applicationId: z.uuid(),
+    number: z.string(),
+    status: z.string(),
+    rulesVersion: z.string(),
+    /** Officers can't record scores against rules that aren't approved. */
+    approved: z.boolean(),
+    state: z.enum(["not_started", "in_progress", "completed"]),
+    pathway: z.enum(OPPORTUNITY_PATHWAYS),
+    seekingInvestment: z.boolean(),
+    categories: z.array(CategoryView),
+    score: z.object({
+      /** Every applicable criterion has a score. */
+      complete: z.boolean(),
+      /** Points earned, once complete. */
+      points: z.number().nullable(),
+      /** What they are out of: 100, less a category that doesn't apply. */
+      possible: z.number(),
+      /** The adjusted score out of 100, once complete. With a category left out it is the points earned scaled up from `possible`. */
+      total: z.number().nullable(),
+      normalized: z.boolean(),
+      notApplicable: z.array(z.enum(CATEGORY_IDS)),
+    }),
+    /** What the officer still owes before completing: a justification, or the evidence the points rest on. */
+    noteProblems: z.array(z.object({ category: z.enum(CATEGORY_IDS), message: z.string() })),
+    adjustments: z.array(
+      z.object({
+        criterion: z.string(),
+        previousPoints: Points,
+        newPoints: Points,
+        reason: z.string(),
+        by: Person.nullable(),
+        at: Timestamp,
+      }),
+    ),
+    /** The claims the specification gives as examples, for the officer to classify. */
+    claims: z.array(z.object({ id: z.string(), label: z.string(), evidence: z.string() })),
+    verification: z.array(Verification),
+    comments: z.array(z.object({ id: z.uuid(), body: z.string(), by: Person.nullable(), at: Timestamp })),
+    clarifications: z.array(Clarification),
+    recommendation: z
+      .object({
+        recommendation: z.enum(RECOMMENDATIONS.map((r) => r.id) as [string, ...string[]]),
+        label: z.string(),
+        suitableOpportunity: z.string().nullable(),
+        rationale: z.string(),
+        by: Person.nullable(),
+        at: Timestamp,
+      })
+      .nullable(),
+    completedAt: Timestamp.nullable(),
+    completedBy: Person.nullable(),
+  })
+  .openapi("SummitAssessment");
+
+export const CategoryParam = ApplicationParam.extend({ category: z.enum(CATEGORY_IDS) });
+export const ClaimParam = ApplicationParam.extend({ claim: z.string().trim().min(1).max(100).openapi({ example: "annual_revenue" }) });
+export const ClarificationParam = ApplicationParam.extend({ clarificationId: z.uuid() });
+
+export const RecordScoresBody = z
+  .object({
+    scores: z.record(z.string(), z.number()).refine((s) => Object.keys(s).length > 0, "Score at least one criterion").openapi({
+      description: "Whole points by criterion ID. A recorded score is written once: changing it later is an adjustment.",
+      example: { A1: 4, A2: 5 },
+    }),
+  })
+  .openapi("SummitRecordScoresBody");
+
+export const AdjustScoreBody = z
+  .object({
+    criterion: z.string().min(1),
+    points: z.number(),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .openapi("SummitAdjustScoreBody");
+
+export const CategoryNoteBody = z
+  .object({
+    justification: z.string().trim().max(2000),
+    evidence: z.array(z.string().trim().min(1).max(500)).max(20),
+  })
+  .openapi("SummitCategoryNoteBody");
+
+export const ClassifyClaimBody = z
+  .object({
+    class: z.enum(VERIFICATION_CLASSES),
+    documents: z.array(z.uuid()).max(20).default([]).openapi({ description: "Application documents that support the claim." }),
+    independentCheck: z.string().trim().max(1000).optional().openapi({
+      description: "What was checked outside the application. Independent verification needs it; an uploaded document alone is never enough.",
+    }),
+  })
+  .openapi("SummitClassifyClaimBody");
+
+export const CommentBody = z.object({ body: z.string().trim().min(1).max(4000) }).openapi("SummitCommentBody");
+
+export const StageBody = z.object({ to: z.enum(["under_assessment", "under_verification"]) }).openapi("SummitStageBody");
+
+export const ClarificationBody = z.object({ message: z.string().trim().min(1).max(4000) }).openapi("SummitClarificationBody");
+
+export const RespondBody = z.object({ response: z.string().trim().min(1).max(4000) }).openapi("SummitRespondBody");
+
+export const RecommendationBody = z
+  .object({
+    recommendation: z.enum(RECOMMENDATIONS.map((r) => r.id) as [string, ...string[]]),
+    suitableOpportunity: z.enum(SUITABLE_OPPORTUNITIES.map((o) => o.id) as [string, ...string[]]).optional(),
+    rationale: z.string().trim().min(1).max(4000),
+  })
+  .openapi("SummitRecommendationBody");
+
 export type PeriodView = z.infer<typeof Period>;
 export type FormView = z.infer<typeof Form>;
 export type ApplicationDetailView = z.infer<typeof ApplicationDetail>;
 export type ApplicationSummaryView = z.infer<typeof ApplicationSummary>;
 export type ApplicationListView = z.infer<typeof ApplicationList>;
 export type OfficerListView = z.infer<typeof OfficerList>;
+export type AssessmentViewType = z.infer<typeof AssessmentView>;
+export type ClarificationView = z.infer<typeof Clarification>;

@@ -82,3 +82,20 @@ describe("sendEmail", () => {
     }
   });
 });
+
+describe("the Summit clarification email", () => {
+  it("shows the request to the applicant, with a link when there is one", async () => {
+    const { render } = await import("@react-email/components");
+    const { SummitClarificationEmail } = await import("../src/templates");
+    const props = { applicationNumber: "SUM-000042", organizationName: "ZEBU Coffee", message: "Please upload your export licence." };
+
+    const withLink = await render(SummitClarificationEmail({ ...props, url: "https://summit.example.test/apply/42" }), { plainText: true });
+    expect(withLink).toContain("SUM-000042");
+    expect(withLink).toContain("ZEBU Coffee");
+    expect(withLink).toContain("Please upload your export licence.");
+    expect(withLink).toContain("https://summit.example.test/apply/42");
+
+    const withoutLink = await render(SummitClarificationEmail(props), { plainText: true });
+    expect(withoutLink).toContain("Sign in to answer the request.");
+  });
+});

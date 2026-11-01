@@ -1,23 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { visibleQuestions, type Answers, type FormQuestion } from "@entrust/forms";
+import type { FormQuestion } from "@entrust/forms";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { callV1, cleanup, COUNTRY, createOrganization, db, PREFIX, signUp, type Json, type TestUser } from "./support";
+import { callV1, cleanup, COUNTRY, createOrganization, db, makeFile, PREFIX, signUp, type Json, type TestUser } from "./support";
+import { completeAnswers as completeFor } from "./summit-form";
 
 // The real application form is still a draft until Entrust confirms the questions, and a period needs a published
 // one. These tests publish a copy of it.
-vi.mock("../src/services/summit-forms", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../src/services/summit-forms")>();
-  const published = { ...(original.findApplicationTemplate("0.1.0") as object), status: "published" } as NonNullable<
-    ReturnType<typeof original.findApplicationTemplate>
-  >;
-  return {
-    ...original,
-    findApplicationTemplate: (version: string) => (version === published.version ? published : original.findApplicationTemplate(version)),
-    latestPublishedTemplate: () => published,
-  };
-});
+// The factory runs before the imports above are ready, so it loads the helper itself.
+vi.mock("../src/services/summit-forms", async (importOriginal) => (await import("./summit-form")).withPublishedForm(await importOriginal()));
 
 // Organisation A is the applicant the main flow follows. Organisation B is in a country the period doesn't take.
 // "entrust" is the Entrust team.
@@ -36,55 +28,7 @@ const OPEN = "2030-01-15T10:00:00Z";
 
 let form: { questions: FormQuestion[] };
 
-/** A valid answer to a question: the first option, yes, some text, or the least number. */
-function answerFor(q: FormQuestion) {
-  switch (q.type) {
-    case "single_choice":
-      return q.options?.[0]?.value as string;
-    case "multiple_choice":
-      return [q.options?.[0]?.value as string];
-    case "yes_no":
-      return "yes";
-    case "short_text":
-    case "long_text":
-      return "An answer";
-    case "number":
-      return q.min ?? 1;
-    case "money":
-      return { amount: 1000, currency: "USD" };
-    case "date":
-      return "2026-10-01";
-    case "list":
-      return ["one", "two"];
-  }
-}
-
-/** Answers to every question the form shows, with the given ones kept. */
-function completeAnswers(overrides: Answers = {}): Answers {
-  let answers: Answers = { ...overrides };
-  for (let pass = 0; pass < 6; pass++) {
-    for (const q of visibleQuestions(form as never, answers)) {
-      if (answers[q.id] === undefined) answers = { ...answers, [q.id]: answerFor(q) as never };
-    }
-  }
-  return answers;
-}
-
-async function makeFile(organizationId: string, userId: string, name = "document.pdf") {
-  const [row] = await db
-    .insert(schema.file)
-    .values({
-      organizationId,
-      uploaderUserId: userId,
-      storageKey: `orgs/${organizationId}/${randomUUID()}/${name}`,
-      originalName: name,
-      contentType: "application/pdf",
-      sizeBytes: 1000,
-      sha256: "a".repeat(64),
-    })
-    .returning();
-  return row!.id;
-}
+const completeAnswers = (overrides: Parameters<typeof completeFor>[1] = {}) => completeFor(form, overrides);
 
 const attach = (user: TestUser, id: string, fileId: string, kind: string) => call(user, "POST", `/applications/${id}/documents`, { fileId, kind });
 const detail = (user: TestUser | null, id: string) => call(user, "GET", `/applications/${id}`);

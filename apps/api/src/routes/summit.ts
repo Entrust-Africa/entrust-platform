@@ -2,11 +2,20 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import type { AppEnv } from "../app";
 import {
+  AdjustScoreBody,
   ApplicationDetail,
   ApplicationList,
   ApplicationParam,
+  AssessmentView,
   AssignOfficerBody,
   AttachDocumentBody,
+  CategoryNoteBody,
+  CategoryParam,
+  ClarificationBody,
+  ClarificationParam,
+  ClassifyClaimBody,
+  ClaimParam,
+  CommentBody,
   CreateApplicationBody,
   CurrentPeriod,
   DocumentDownload,
@@ -21,7 +30,11 @@ import {
   PeriodList,
   PeriodParam,
   PeriodPatch,
+  RecommendationBody,
+  RecordScoresBody,
+  RespondBody,
   SaveAnswersBody,
+  StageBody,
   WithdrawBody,
   type FormView,
 } from "../schemas/summit";
@@ -39,6 +52,8 @@ import {
 } from "../services/summit-applications";
 import { findApplicationTemplate } from "../services/summit-forms";
 import { createPeriod, currentPeriod, listPeriods, updatePeriod } from "../services/summit-periods";
+import { adjustScore, addComment, classifyClaim, completeAssessment, getAssessment, recordRecommendation, recordScores, saveCategoryNote, setStage } from "../services/summit-assessment";
+import { requestClarification, respondToClarification } from "../services/summit-clarifications";
 import { assignOfficer, listOfficers, recordException } from "../services/summit-review";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
@@ -253,6 +268,136 @@ const exceptionRoute = createRoute({
   responses: { 201: { description: "The application", content: json(ApplicationDetail) }, ...writes },
 });
 
+// ---- The officer's workspace ----
+
+const staffOnly = problem("The caller is an applicant, or their role can't make this change");
+const workspace = {
+  ...listErrors,
+  403: staffOnly,
+  404: notFound,
+  409: writes[409],
+  422: writes[422],
+};
+
+const assessmentRoute = createRoute({
+  method: "get",
+  path: "/applications/{id}/assessment",
+  tags,
+  summary: "Open the assessment workspace",
+  description:
+    "The rubric with the officer's scores, any adjustments, the justification and evidence for each category, the adjusted score, claim classifications, internal comments, requests for more information and the recommendation. The assigned officer, administrators and facilitators only: an applicant never sees any of it.",
+  request: { params: ApplicationParam },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const scoresRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/assessment/scores",
+  tags,
+  summary: "Record scores",
+  description:
+    "Whole points for one or more criteria, from 0 to each criterion's maximum, against the approved rubric the period names. A score is written once and never overwritten: a criterion already scored is refused, and a change is made as an adjustment. Only the assigned officer, while the application is in assessment or verification.",
+  request: { params: ApplicationParam, body: { required: true, content: json(RecordScoresBody) } },
+  responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const adjustRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/assessment/adjustments",
+  tags,
+  summary: "Adjust a score",
+  description:
+    "Changes a recorded score by hand and keeps the score before, the score after, the reason, who and when. The original score stays. The assigned officer can adjust until they complete the assessment; an administrator or facilitator until the committee starts.",
+  request: { params: ApplicationParam, body: { required: true, content: json(AdjustScoreBody) } },
+  responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const noteRoute = createRoute({
+  method: "put",
+  path: "/applications/{id}/assessment/notes/{category}",
+  tags,
+  summary: "Write a category's justification and evidence",
+  description:
+    "The short justification of the points and the evidence they rest on, which the scorecard asks for each category. A category that earned points needs both before the assessment can be completed. Only the assigned officer.",
+  request: { params: CategoryParam, body: { required: true, content: json(CategoryNoteBody) } },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const claimRoute = createRoute({
+  method: "put",
+  path: "/applications/{id}/verification/{claim}",
+  tags,
+  summary: "Classify a claim",
+  description:
+    "Self-reported, document-supported, independently verified, not verified or not applicable. A claim is never independently verified because a document was uploaded: that class needs a note of what was checked outside the application. Classifying again replaces the earlier classification. Only the assigned officer.",
+  request: { params: ClaimParam, body: { required: true, content: json(ClassifyClaimBody) } },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const commentRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/comments",
+  tags,
+  summary: "Add an internal comment",
+  description: "A note between staff. The applicant can't see it.",
+  request: { params: ApplicationParam, body: { required: true, content: json(CommentBody) } },
+  responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const stageRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/stage",
+  tags,
+  summary: "Move between assessment and verification",
+  description: "Only the assigned officer.",
+  request: { params: ApplicationParam, body: { required: true, content: json(StageBody) } },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const clarificationRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/clarifications",
+  tags,
+  summary: "Ask the applicant for more information",
+  description:
+    "The application waits in \"awaiting additional information\" and the applicant is emailed. `notifiedAt` on the request says whether the email was queued. The assigned officer, administrators and facilitators, while the application is in assessment or verification.",
+  request: { params: ApplicationParam, body: { required: true, content: json(ClarificationBody) } },
+  responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const respondRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/clarifications/{clarificationId}/respond",
+  tags,
+  summary: "Answer a request for more information",
+  description:
+    "The applicant's reply. They can attach documents while the request is open. The application returns to the stage it was in.",
+  request: { params: ClarificationParam, body: { required: true, content: json(RespondBody) } },
+  responses: { 200: { description: "The application", content: json(ApplicationDetail) }, ...writes },
+});
+
+const completeRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/assessment/complete",
+  tags,
+  summary: "Complete the assessment",
+  description:
+    "Every applicable criterion has to be scored, every scored category needs its justification, and one that earned points needs its evidence. Only the assigned officer.",
+  request: { params: ApplicationParam },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const recommendRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/recommendation",
+  tags,
+  summary: "Make the recommendation",
+  description:
+    "Recommend for selection, subject to verification, for development or waitlist, or not at all, with the opportunity that suits the applicant and the reason. The application becomes recommended. Only the assigned officer, once the assessment is complete.",
+  request: { params: ApplicationParam, body: { required: true, content: json(RecommendationBody) } },
+  responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -294,4 +439,36 @@ export const summit = router
   )
   .openapi(exceptionRoute, async (c) =>
     c.json(await recordException(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
+  )
+  .openapi(assessmentRoute, async (c) => c.json(await getAssessment(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(scoresRoute, async (c) =>
+    c.json(await recordScores(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json").scores), 201),
+  )
+  .openapi(adjustRoute, async (c) =>
+    c.json(await adjustScore(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
+  )
+  .openapi(noteRoute, async (c) => {
+    const { id, category } = c.req.valid("param");
+    return c.json(await saveCategoryNote(await contextFor(c.get("user")), id, category, c.req.valid("json")), 200);
+  })
+  .openapi(claimRoute, async (c) => {
+    const { id, claim } = c.req.valid("param");
+    return c.json(await classifyClaim(await contextFor(c.get("user")), id, claim, c.req.valid("json")), 200);
+  })
+  .openapi(commentRoute, async (c) =>
+    c.json(await addComment(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json").body), 201),
+  )
+  .openapi(stageRoute, async (c) =>
+    c.json(await setStage(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json").to), 200),
+  )
+  .openapi(clarificationRoute, async (c) =>
+    c.json(await requestClarification(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json").message), 201),
+  )
+  .openapi(respondRoute, async (c) => {
+    const { id, clarificationId } = c.req.valid("param");
+    return c.json(await respondToClarification(await contextFor(c.get("user")), id, clarificationId, c.req.valid("json").response), 200);
+  })
+  .openapi(completeRoute, async (c) => c.json(await completeAssessment(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(recommendRoute, async (c) =>
+    c.json(await recordRecommendation(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
   );
