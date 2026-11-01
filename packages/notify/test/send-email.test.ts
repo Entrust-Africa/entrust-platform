@@ -99,3 +99,20 @@ describe("the Summit clarification email", () => {
     expect(withoutLink).toContain("Sign in to answer the request.");
   });
 });
+
+describe("the Summit result email", () => {
+  it("tells the applicant the decision, with a link when there is one", async () => {
+    const { render } = await import("@react-email/components");
+    const { SummitResultEmail } = await import("../src/templates");
+    const props = { applicationNumber: "SUM-000042", organizationName: "ZEBU Coffee", message: "Your business is on the waiting list for the Summit." };
+
+    const withLink = await render(SummitResultEmail({ ...props, url: "https://summit.example.test/apply/42" }), { plainText: true });
+    expect(withLink).toContain("SUM-000042");
+    expect(withLink).toContain("ZEBU Coffee");
+    expect(withLink).toContain("Your business is on the waiting list for the Summit.");
+    expect(withLink).toContain("https://summit.example.test/apply/42");
+
+    const withoutLink = await render(SummitResultEmail(props), { plainText: true });
+    expect(withoutLink).toContain("Sign in to view your application.");
+  });
+});

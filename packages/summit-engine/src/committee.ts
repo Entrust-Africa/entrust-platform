@@ -9,6 +9,29 @@ import type { ApplicationStatus, CategoryId } from "./types";
 /** The statuses the committee works with: from the start of its review to its decision. */
 export const COMMITTEE_STATUSES = ["committee_review", "selected", "waitlisted", "not_selected"] as const satisfies readonly ApplicationStatus[];
 
+/** The decisions an applicant is told about when the final list is approved. "Further review required" is not one: it keeps the application with the committee. */
+export const RESULT_STATUSES = ["selected", "waitlisted", "not_selected"] as const satisfies readonly ApplicationStatus[];
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+/**
+ * What an applicant is told about the committee's decision, in the words of the status page and the email. They name no
+ * score and give no reason: the committee's reasons are internal.
+ */
+export const APPLICANT_RESULTS: Readonly<Record<ResultStatus, { label: string; message: string }>> = {
+  selected: {
+    label: "Selected",
+    message: "Congratulations. Your business has been selected for the Africa Diaspora Trade and Investment Summit. Entrust will contact you with the next steps.",
+  },
+  waitlisted: {
+    label: "Waitlisted",
+    message: "Your business is on the waiting list for the Summit. Entrust will contact you if a place opens.",
+  },
+  not_selected: {
+    label: "Not selected",
+    message: "Thank you for applying. Your business was not selected for the Summit this time.",
+  },
+};
+
 /**
  * The categories that say how ready an applicant is for the Summit: financial and operational readiness (E) and
  * participation readiness (G). The specification asks for a readiness filter without defining one, so this is the

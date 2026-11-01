@@ -41,6 +41,15 @@ export const SummitClarificationEmailPropsSchema = z.object({
   url: z.string().url().optional(),
 });
 
+export const SummitResultEmailPropsSchema = z.object({
+  applicationNumber: z.string().min(1),
+  organizationName: z.string().min(1),
+  /** What the applicant is told: selected, waitlisted or not selected. It names no score and no reason. */
+  message: z.string().min(1),
+  /** Where the applicant sees the result. Absent when no Summit app address is configured. */
+  url: z.string().url().optional(),
+});
+
 const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("test"),
@@ -61,6 +70,10 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("summit-clarification"),
     props: SummitClarificationEmailPropsSchema,
+  }),
+  BaseEmailSchema.extend({
+    template: z.literal("summit-result"),
+    props: SummitResultEmailPropsSchema,
   }),
 ]);
 

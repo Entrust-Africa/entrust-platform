@@ -27,6 +27,8 @@ import {
   DocumentDownload,
   DocumentParam,
   ExceptionBody,
+  FinalListBody,
+  FinalListView,
   Form,
   FormParam,
   ListQuery,
@@ -62,6 +64,7 @@ import { createPeriod, currentPeriod, listPeriods, updatePeriod } from "../servi
 import { adjustScore, addComment, classifyClaim, completeAssessment, getAssessment, recordRecommendation, recordScores, saveCategoryNote, setStage } from "../services/summit-assessment";
 import { requestClarification, respondToClarification } from "../services/summit-clarifications";
 import { compareForCommittee, listForCommittee, recordDecision } from "../services/summit-committee";
+import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
@@ -452,6 +455,52 @@ const decisionRoute = createRoute({
   responses: { 201: { description: "The application as the committee sees it", content: json(CommitteeItem) }, ...workspace },
 });
 
+const finalListRoute = createRoute({
+  method: "get",
+  path: "/periods/{id}/final-list",
+  tags,
+  summary: "See the final list",
+  description:
+    "Where the committee's work on a period stands: what has been decided, what is still in committee review, what is still on its way to the committee, whether the list can be approved and why not, and whether it was approved. The selection committee, administrators and facilitators.",
+  request: { params: PeriodParam },
+  responses: { 200: { description: "The final list", content: json(FinalListView) }, ...listErrors, 403: problem("Not the committee, an administrator or a facilitator"), 404: problem("No such period") },
+});
+
+const approveListRoute = createRoute({
+  method: "post",
+  path: "/periods/{id}/final-list",
+  tags,
+  summary: "Approve the final list",
+  description:
+    "Closes the committee's work on the period. It needs every application in committee review decided. Decisions can no longer change, each decided applicant sees their result on their status page, and they are emailed (the person who applied and the organisation's owners). Applications still being assessed are not on the list and stay in review. Once, and not undone. Members of the selection committee only.",
+  request: { params: PeriodParam, body: { required: false, content: json(FinalListBody) } },
+  responses: {
+    201: { description: "The final list", content: json(FinalListView) },
+    ...listErrors,
+    403: problem("Not a member of the selection committee"),
+    404: problem("No such period"),
+    409: problem("The final list is already approved"),
+    422: problem("Applications are still in committee review, or nothing has been decided"),
+  },
+});
+
+const resendRoute = createRoute({
+  method: "post",
+  path: "/periods/{id}/final-list/notifications",
+  tags,
+  summary: "Send the result emails again",
+  description:
+    "Queues the result email for the applicants it didn't reach, such as when the queue was down at approval. Each applicant gets one. The selection committee, administrators and facilitators.",
+  request: { params: PeriodParam },
+  responses: {
+    200: { description: "The final list", content: json(FinalListView) },
+    ...listErrors,
+    403: problem("Not the committee, an administrator or a facilitator"),
+    404: problem("No such period"),
+    409: problem("The final list isn't approved yet"),
+  },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -533,4 +582,9 @@ export const summit = router
   .openapi(compareRoute, async (c) => c.json(await compareForCommittee(await contextFor(c.get("user")), c.req.valid("query").ids), 200))
   .openapi(decisionRoute, async (c) =>
     c.json(await recordDecision(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
-  );
+  )
+  .openapi(finalListRoute, async (c) => c.json(await getFinalList(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(approveListRoute, async (c) =>
+    c.json(await approveFinalList(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")?.note), 201),
+  )
+  .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200));

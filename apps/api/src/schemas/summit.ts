@@ -9,6 +9,7 @@ import {
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
   RECOMMENDATIONS,
+  RESULT_STATUSES,
   SUITABLE_OPPORTUNITIES,
   VERIFICATION_CLASSES,
 } from "@entrust/summit-engine";
@@ -192,7 +193,7 @@ export const ApplicationDetail = z
     view: z.enum(["applicant", "staff"]).openapi({ description: "Who is looking. The applicant never sees staff-only fields." }),
     status: z.string().openapi({
       description:
-        "Staff see the status of the workflow. The applicant sees one of draft, in_review, action_required, not_eligible or withdrawn.",
+        "Staff see the status of the workflow. The applicant sees one of draft, in_review, action_required, not_eligible or withdrawn, and selected, waitlisted or not_selected once the committee's final list is approved.",
       example: "under_assessment",
     }),
     templateVersion: z.string(),
@@ -214,6 +215,17 @@ export const ApplicationDetail = z
     canEditDocuments: z.boolean(),
     /** Requests for more information, newest last. The applicant sees these and nothing else of the assessment. */
     clarifications: z.array(Clarification),
+    /** What the applicant is told once the final list is approved: the decision and a message that names no score or reason. */
+    result: z
+      .object({
+        decision: z.enum(RESULT_STATUSES),
+        label: z.string(),
+        message: z.string(),
+        publishedAt: Timestamp,
+        /** When the email was queued. Entrust staff only: null for an applicant, and for staff when it could not be. */
+        notifiedAt: Timestamp.nullable(),
+      })
+      .nullable(),
     closesAt: Timestamp,
     submittedAt: Timestamp.nullable(),
     createdAt: Timestamp,
@@ -603,7 +615,31 @@ export const CompareView = z
   })
   .openapi("SummitCompare");
 
+export const FinalListBody = z
+  .object({ note: z.string().trim().max(2000).optional().openapi({ description: "Anything the committee wants kept with the approval." }) })
+  .openapi("SummitFinalListBody");
+
+export const FinalListView = z
+  .object({
+    period: z.object({ id: z.uuid(), name: z.string() }),
+    approved: z.boolean(),
+    approvedAt: Timestamp.nullable(),
+    approvedBy: Person.nullable(),
+    note: z.string().nullable(),
+    /** What the list holds: as approved, or what the committee has decided so far. */
+    counts: z.object({ selected: z.number().int(), waitlisted: z.number().int(), notSelected: z.number().int() }),
+    /** What isn't on the list. Applications still in committee review block the approval; those earlier in the workflow don't. */
+    pending: z.object({ inCommitteeReview: z.number().int(), beforeCommittee: z.number().int() }),
+    /** Applicants whose result email has not been queued. After approval the committee can send them again. */
+    unnotified: z.number().int(),
+    canApprove: z.boolean(),
+    /** Why it can't be approved yet. */
+    blockers: z.array(z.string()),
+  })
+  .openapi("SummitFinalList");
+
 export type CommitteeListView = z.infer<typeof CommitteeList>;
+export type FinalListViewType = z.infer<typeof FinalListView>;
 export type CommitteeItemView = z.infer<typeof CommitteeItem>;
 export type CompareViewType = z.infer<typeof CompareView>;
 
