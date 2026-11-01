@@ -19,6 +19,8 @@ export { applicableCriteria, canAssess, scoreApplication, seeksInvestment } from
 export type { CategoryScore, ScoreInput, ScoreProblem, ScoreProblemCode, ScoreResult } from "./scoring";
 export { APPLICANT_RESULTS, COMMITTEE_STATUSES, READINESS_CATEGORIES, RESULT_STATUSES, applicantProfile, rankByScore, readinessPercent } from "./committee";
 export type { ApplicantProfile, ResultStatus } from "./committee";
+export { DEFAULT_SELECTION_TARGET, summarise, targetFor, validTarget } from "./dashboard";
+export type { CountryFigures, Dashboard, DashboardInput, DashboardRow, SelectionTarget } from "./dashboard";
 export { verificationProblems } from "./verification";
 export type { VerificationRecord } from "./verification";
 
