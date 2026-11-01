@@ -424,3 +424,17 @@ export const applicationResult = summit.table("application_result", {
   // When the email was queued. Null if it could not be, and the committee can send it again.
   notifiedAt: timestamp("notified_at", { withTimezone: true }),
 });
+
+// How many SMEs the committee plans to select from each country of a period (#80). The specification's planning target
+// is 10 for each of 10 countries, which is what a period has until the committee changes it. A row exists once it has.
+export const selectionTarget = summit.table("selection_target", {
+  periodId: uuid("period_id")
+    .primaryKey()
+    .references(() => applicationPeriod.id, { onDelete: "cascade" }),
+  // For every country without a figure of its own.
+  perCountry: integer("per_country").notNull(),
+  // Countries with a figure of their own, by ISO 3166-1 alpha-2 code.
+  overrides: jsonb("overrides").$type<Record<string, number>>().notNull().default({}),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
