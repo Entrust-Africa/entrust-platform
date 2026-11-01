@@ -1,6 +1,6 @@
-import { isDate } from "@entrust/forms";
 import { figure, round2, sum } from "./amounts";
 import type { Amount } from "./amounts";
+import { dayNumber } from "./dates";
 
 export interface WorkingCapitalInput {
   /** Cash going out before the goods ship: materials, production, packing. */
@@ -28,15 +28,6 @@ export interface WorkingCapital {
   fundingNeeded: number | null;
   /** Days from the first outflow until payment arrives, or null without both dates. */
   daysUntilPayment: number | null;
-}
-
-const DAY = 24 * 60 * 60 * 1000;
-
-function dayNumber(label: string, value: string | null | undefined): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (!isDate(value)) throw new RangeError(`${label} must be a real date as YYYY-MM-DD, not "${value}"`);
-  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
-  return Date.UTC(y, m - 1, d) / DAY;
 }
 
 /**
