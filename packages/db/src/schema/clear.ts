@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { isNull, relations, sql } from "drizzle-orm";
 import {
   check,
   date,
@@ -146,6 +146,10 @@ export const exportCase = clear.table(
     // Both are null while the case runs on the canonical steps only.
     rulePackId: text("rule_pack_id"),
     rulePackVersion: text("rule_pack_version"),
+    // Set on a practice case: TRADE's M08 runs a simulated export on a CLEAR case, and this names the
+    // scenario it was started from. Null on every real case. A practice case is left out of CLEAR's lists,
+    // queues, checks and reports (see realCase), and no real case number is spent on it.
+    practiceScenario: text("practice_scenario"),
     // Updated from the engine's phase gates, so lists can filter without evaluating every case.
     currentPhase: smallint("current_phase").$type<PhaseId>().notNull().default(1),
     status: text("status", { enum: CASE_STATUSES }).notNull().default("open"),
@@ -159,12 +163,23 @@ export const exportCase = clear.table(
   (t) => [
     index("export_case_org_idx").on(t.organizationId, t.status),
     index("export_case_status_idx").on(t.status, t.currentPhase),
+    // One practice case per scenario for an organisation. Resetting it starts the scenario again.
+    uniqueIndex("export_case_practice_uidx")
+      .on(t.organizationId, t.practiceScenario)
+      .where(sql`${t.practiceScenario} is not null`),
     check(
       "export_case_rule_pack_check",
       sql`(${t.rulePackId} is null) = (${t.rulePackVersion} is null)`,
     ),
   ],
 );
+
+/**
+ * Keeps practice cases out of a query. Every CLEAR reader of export_case that isn't about one case the
+ * caller asked for by id uses it: lists, queues, the scheduled flag check, deadline reminders and reports.
+ * A practice case never counts as an outcome.
+ */
+export const realCase = isNull(exportCase.practiceScenario);
 
 // What has been recorded for a step on a case. A step with nothing recorded has no row.
 export const caseStep = clear.table(
