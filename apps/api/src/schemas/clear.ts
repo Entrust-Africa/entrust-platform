@@ -15,7 +15,7 @@ import {
 
 const Phase = z.number().int().min(1).max(7);
 const Owner = z.enum(["sme", "entrust", "system", "buyer", "bank", "authority"]);
-const Role = z.enum(["owner", "member", "admin", "facilitator", "reviewer"]);
+export const Role = z.enum(["owner", "member", "admin", "facilitator", "reviewer"]);
 const StepIdPattern = /^STEP-\d{3}$/;
 
 export const CaseStatus = z.enum(schema.CASE_STATUSES);

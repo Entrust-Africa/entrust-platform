@@ -3,7 +3,7 @@ import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { STEP_WORKERS, type CaseFacts } from "@entrust/gate-engine";
 import type { CaseCreatedView, CaseListView } from "../schemas/clear";
-import { actorFor, findCase, requireRole, type Ctx } from "./access";
+import { actorFor, findCase, hasTradeAccess, requireRole, type Ctx } from "./access";
 import { recordChange } from "./audit";
 import { evaluate, loadCaseData, organizationNames } from "./case-data";
 import { buildDetail } from "./detail";
@@ -11,7 +11,7 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { checkFacts, type FactInput } from "./facts";
 import { syncFlags } from "./flag-sync";
-import { findScenario, type PracticeScenario } from "./practice-scenarios";
+import { PRACTICE_LABEL, PRACTICE_SCENARIOS, findScenario, type PracticeScenario } from "./practice-scenarios";
 import { currentPack } from "./rule-packs";
 import { summaryOf } from "./views";
 
@@ -20,6 +20,14 @@ import { summaryOf } from "./views";
 // and what it counts for: it belongs to the learner's organisation and needs TRADE access, not CLEAR;
 // CLEAR's lists, scheduled checks, queues and reports leave it out (schema.realCase); and it never
 // uses a real case number.
+
+/** The scenarios a learner can start, and the label every screen shows on a practice case. */
+export function listPracticeScenarios() {
+  return {
+    label: PRACTICE_LABEL,
+    scenarios: PRACTICE_SCENARIOS.map(({ id, title, summary, ownFacts }) => ({ id, title, summary, ownFacts })),
+  };
+}
 
 export interface StartPracticeInput {
   organizationId?: string | null;
@@ -30,13 +38,8 @@ export interface StartPracticeInput {
 
 /** The organisation's practice cases need TRADE access. Entrust staff, who run demonstrations, don't. */
 async function requireTradeAccess(ctx: Ctx, organizationId: string): Promise<void> {
-  if (ctx.principal.staffRole) return;
-  const [grant] = await ctx.db
-    .select({ id: schema.platformAccess.id })
-    .from(schema.platformAccess)
-    .where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, "trade")))
-    .limit(1);
-  if (!grant) throw new ServiceError("forbidden", "Your organisation doesn't have access to TRADE.");
+  if (ctx.principal.staffRole || (await hasTradeAccess(ctx.db, organizationId))) return;
+  throw new ServiceError("forbidden", "Your organisation doesn't have access to TRADE.");
 }
 
 /** Who may start, reset or list an organisation's practice cases: the people who could open its cases, if it has TRADE. */
@@ -128,7 +131,7 @@ export async function startPracticeCase(ctx: Ctx, input: StartPracticeInput): Pr
  */
 export async function resetPracticeCase(ctx: Ctx, caseId: string): Promise<CaseCreatedView> {
   return ctx.db.transaction(async (tx) => {
-    const { row } = await findCase(tx, ctx.principal, caseId, { lock: true, practice: { actingAs: "owner" } });
+    const { row } = await findCase(tx, ctx.principal, caseId, { lock: true, practice: {} });
     await practiceActor(ctx, row.organizationId);
     const scenario = findScenario(row.practiceScenario ?? "");
     if (!scenario) throw new ServiceError("not_found", "Case not found.");
