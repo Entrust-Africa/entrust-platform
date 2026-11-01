@@ -11,6 +11,8 @@ const Me = z
     email: z.email(),
     activeOrganizationId: z.string().nullable(),
     staffRole: z.enum(["admin", "facilitator", "reviewer"]).nullable(),
+    /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
+    summitCommittee: z.boolean(),
   })
   .openapi("Me");
 
@@ -38,6 +40,7 @@ export const me = new OpenAPIHono<AppEnv>().openapi(route, async (c) => {
       email: user.email,
       activeOrganizationId: session.activeOrganizationId ?? null,
       staffRole: principal.staffRole ?? null,
+      summitCommittee: principal.committee,
     },
     200,
   );

@@ -2,6 +2,8 @@ import { z } from "@hono/zod-openapi";
 import { QUESTION_TYPES } from "@entrust/forms";
 import {
   CATEGORY_IDS,
+  COMMITTEE_DECISIONS,
+  COMMITTEE_STATUSES,
   DOCUMENT_KINDS,
   ELIGIBILITY_CRITERIA,
   ELIGIBILITY_OUTCOMES,
@@ -358,6 +360,10 @@ const Verification = z
   })
   .openapi("SummitVerification");
 
+const AssessmentReviewEntry = z
+  .object({ decision: z.enum(["approved", "returned"]), reason: z.string().nullable(), by: Person.nullable(), at: Timestamp })
+  .openapi("SummitAssessmentReview");
+
 export const AssessmentView = z
   .object({
     applicationId: z.uuid(),
@@ -409,6 +415,8 @@ export const AssessmentView = z
         at: Timestamp,
       })
       .nullable(),
+    /** Administrators' quality review of the assessment, oldest first. A returned one says what to fix. */
+    reviews: z.array(AssessmentReviewEntry),
     completedAt: Timestamp.nullable(),
     completedBy: Person.nullable(),
   })
@@ -467,6 +475,137 @@ export const RecommendationBody = z
     rationale: z.string().trim().min(1).max(4000),
   })
   .openapi("SummitRecommendationBody");
+
+// ---- Quality review and the committee ----
+
+const DECISION_IDS = COMMITTEE_DECISIONS.map((d) => d.id) as [string, ...string[]];
+
+export const ReviewBody = z
+  .object({
+    decision: z.enum(["approve", "return"]),
+    reason: z.string().trim().max(2000).optional().openapi({
+      description: "Required when returning the assessment: what the officer should fix. Optional when approving.",
+    }),
+  })
+  .openapi("SummitReviewBody");
+
+export const DecisionBody = z
+  .object({
+    decision: z.enum(DECISION_IDS),
+    reason: z.string().trim().min(1).max(4000).openapi({ description: "Why the committee decided this. Recorded with the decision." }),
+  })
+  .openapi("SummitDecisionBody");
+
+const Decision = z
+  .object({
+    decision: z.enum(DECISION_IDS),
+    label: z.string(),
+    reason: z.string(),
+    by: Person.nullable(),
+    at: Timestamp,
+  })
+  .openapi("SummitCommitteeDecision");
+
+const CommitteeStatus = z.enum(COMMITTEE_STATUSES);
+
+const boolean = z.enum(["true", "false"]).transform((v) => v === "true");
+
+export const CommitteeQuery = z.object({
+  periodId: z.uuid().optional().openapi({ description: "Default: the newest period." }),
+  country: z.string().trim().length(2).optional().openapi({ description: "ISO 3166-1 alpha-2 code of the applicant's country." }),
+  sector: z.string().trim().min(1).optional().openapi({ description: "Part of the industry or sector the applicant gave, ignoring case." }),
+  pathway: Pathway.optional().openapi({ description: "The opportunity type the applicant chose." }),
+  recommendation: z.enum(RECOMMENDATIONS.map((r) => r.id) as [string, ...string[]]).optional().openapi({ description: "The officer's recommendation." }),
+  status: CommitteeStatus.optional().openapi({ description: "Where the application is: still in committee review, or decided." }),
+  minScore: z.coerce.number().min(0).max(100).optional().openapi({ description: "The lowest score out of 100." }),
+  maxScore: z.coerce.number().min(0).max(100).optional(),
+  minReadiness: z.coerce.number().min(0).max(100).optional().openapi({
+    description: "The lowest readiness: the share of the points available in categories E and G that the applicant earned.",
+  }),
+  womanOwned: boolean.optional(),
+  youthOwned: boolean.optional(),
+  q: z.string().trim().min(1).optional().openapi({ description: "Part of the business name, application number or SME ID." }),
+  sort: z.enum(["rank", "score", "readiness", "name", "country"]).default("rank"),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const CategoryPoints = z.object({
+  id: z.enum(CATEGORY_IDS),
+  title: z.string(),
+  maxPoints: z.number().int(),
+  applicable: z.boolean(),
+  /** Null until the category is fully scored. */
+  points: z.number().int().nullable(),
+});
+
+export const CommitteeItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    organizationName: z.string(),
+    smeId: z.string().nullable(),
+    country: z.string().nullable(),
+    sector: z.string().nullable(),
+    pathway: Pathway.nullable(),
+    status: CommitteeStatus,
+    womanOwned: z.boolean().nullable(),
+    youthOwned: z.boolean().nullable(),
+    /** The adjusted score out of 100, with any manual adjustments counted. */
+    score: z.number().nullable(),
+    /** Points earned, and what they were out of (100, less a category that doesn't apply). */
+    points: z.number().nullable(),
+    possible: z.number(),
+    /** Place by score among the period's applications in committee stages. Equal scores share a place. Null without a score. */
+    rank: z.number().int().nullable(),
+    readiness: z.number().nullable(),
+    categories: z.array(CategoryPoints),
+    recommendation: z
+      .object({ recommendation: z.string(), label: z.string(), suitableOpportunity: z.string().nullable() })
+      .nullable(),
+    decision: Decision.nullable().openapi({ description: "The committee's latest decision on the application." }),
+  })
+  .openapi("SummitCommitteeItem");
+
+export const CommitteeList = z
+  .object({
+    period: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+    items: z.array(CommitteeItem),
+    /** Applications matching the filters. */
+    total: z.number().int(),
+    /** Every application in the period by status, whatever the filters. */
+    counts: z.record(z.string(), z.number().int()),
+  })
+  .openapi("SummitCommitteeList");
+
+export const CompareQuery = z.object({
+  ids: z
+    .string()
+    .transform((value) => value.split(",").map((id) => id.trim()).filter(Boolean))
+    .pipe(z.array(z.uuid()).min(2).max(5))
+    .openapi({ description: "Two to five application IDs, separated by commas.", example: "6f0c…,9a41…" }),
+});
+
+export const CompareView = z
+  .object({
+    items: z.array(
+      CommitteeItem.extend({
+        profile: z.object({
+          annualRevenue: z.object({ amount: z.number(), currency: z.string() }).nullable(),
+          employees: z.number().nullable(),
+          commercialAsk: z.string().nullable(),
+        }),
+        rationale: z.string().nullable().openapi({ description: "Why the officer made the recommendation." }),
+        verification: z.array(z.object({ claim: z.string(), label: z.string().nullable(), class: z.enum(VERIFICATION_CLASSES) })),
+        adjustments: z.number().int().openapi({ description: "Manual score adjustments." }),
+      }),
+    ),
+  })
+  .openapi("SummitCompare");
+
+export type CommitteeListView = z.infer<typeof CommitteeList>;
+export type CommitteeItemView = z.infer<typeof CommitteeItem>;
+export type CompareViewType = z.infer<typeof CompareView>;
 
 export type PeriodView = z.infer<typeof Period>;
 export type FormView = z.infer<typeof Form>;

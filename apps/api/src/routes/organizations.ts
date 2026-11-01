@@ -8,7 +8,8 @@ import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
 
 const SmeRoles = z.enum(["owner", "member"]);
-const EntrustRoles = z.enum(["admin", "facilitator", "reviewer"]);
+// "committee" is the Summit selection committee's role (#80). It grants nothing in CLEAR or TRADE.
+const EntrustRoles = z.enum(["admin", "facilitator", "reviewer", "committee"]);
 const Platform = z.literal("clear");
 
 function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {

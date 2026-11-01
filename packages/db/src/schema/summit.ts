@@ -3,11 +3,13 @@ import { boolean, check, index, integer, jsonb, pgSchema, text, timestamp, uniqu
 import type { Answers } from "@entrust/forms";
 import {
   APPLICATION_STATUSES,
+  COMMITTEE_DECISIONS,
   DOCUMENT_KINDS,
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
   VERIFICATION_CLASSES,
   type CategoryId,
+  type CommitteeDecision,
   type CriterionResult,
   type EligibilityCriterionId,
   type Recommendation,
@@ -15,6 +17,9 @@ import {
 } from "@entrust/summit-engine";
 import { organization, user } from "./auth";
 import { file } from "./core";
+
+// The decisions the committee can record, as a tuple for the column's enum.
+const COMMITTEE_DECISION_IDS = COMMITTEE_DECISIONS.map((d) => d.id) as [CommitteeDecision, ...CommitteeDecision[]];
 
 // The Summit SME application platform's tables (#79). They reference core (users, organisations, files) and
 // never clear or trade. The audit log is shared and lives in core, with platform = 'summit'.
@@ -350,4 +355,41 @@ export const applicationRecommendation = summit.table(
     recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("application_recommendation_idx").on(t.applicationId, t.recordedAt)],
+);
+
+// ---- Selection (the committee) ----
+
+// An administrator's quality review of a completed assessment and its recommendation: approved for the committee, or
+// returned to the officer with the reason. Rows are only added, so every round of review stays on record.
+export const assessmentReview = summit.table(
+  "assessment_review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    decision: text("decision", { enum: ["approved", "returned"] }).notNull(),
+    // Required when returned, so the officer knows what to fix.
+    reason: text("reason"),
+    reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("assessment_review_idx").on(t.applicationId, t.reviewedAt)],
+);
+
+// A committee member's decision on an application, with the reason. Rows are only added; the newest is the current
+// one, and a decision can be replaced until the final list is approved.
+export const committeeDecision = summit.table(
+  "committee_decision",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    decision: text("decision", { enum: COMMITTEE_DECISION_IDS }).notNull(),
+    reason: text("reason").notNull(),
+    decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("committee_decision_idx").on(t.applicationId, t.decidedAt)],
 );

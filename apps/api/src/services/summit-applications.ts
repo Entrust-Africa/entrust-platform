@@ -422,7 +422,7 @@ export async function createApplication(ctx: Ctx, input: CreateApplicationInput)
       organizationId: row.organizationId,
       after: { number: row.number, periodId: period.id, templateVersion: template.version },
     });
-    return buildDetail(tx, row, { applicant: true, staffRole: null, assigned: false }, ctx.now);
+    return buildDetail(tx, row, { applicant: true, staffRole: null, assigned: false, committee: false }, ctx.now);
   });
 }
 
@@ -546,7 +546,7 @@ export async function documentDownloadUrl(ctx: Ctx, id: string, documentId: stri
     .innerJoin(schema.file, eq(schema.file.id, schema.applicationDocument.fileId))
     .where(and(eq(schema.applicationDocument.id, documentId), eq(schema.applicationDocument.applicationId, row.id)));
   if (!document) throw new ServiceError("not_found", "Document not found.");
-  if (RESTRICTED_DOCUMENT_KINDS.includes(document.kind) && access.staffRole === "facilitator") {
+  if (RESTRICTED_DOCUMENT_KINDS.includes(document.kind) && !(access.applicant || access.assigned || access.staffRole === "admin")) {
     throw new ServiceError("forbidden", "This is a restricted document. Only the applicant, the assigned officer and an administrator can open it.");
   }
 

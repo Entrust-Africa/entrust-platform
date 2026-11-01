@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import type { EntrustRole } from "@entrust/gate-engine";
+import { COMMITTEE_STATUSES } from "@entrust/summit-engine";
 import type { Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
@@ -13,14 +14,17 @@ export interface SummitAccess {
   staffRole: EntrustRole | null;
   /** The caller is the officer the application is assigned to now. */
   assigned: boolean;
+  /** A member of the selection committee, who reads an application from the start of committee review and decides on it. */
+  committee: boolean;
 }
 
 export type ApplicationRow = typeof schema.application.$inferSelect;
 
 /**
  * An application the caller may open, locked for update when `lock` is set. Applicants open their organisation's.
- * Entrust's administrators open all of them. An assessment officer opens only the ones assigned to them now. For
- * anyone else, an application that exists looks the same as one that doesn't.
+ * Entrust's administrators open all of them. An assessment officer opens only the ones assigned to them now. A committee
+ * member opens the ones in committee review or decided. For anyone else, an application that exists looks the same as
+ * one that doesn't.
  */
 export async function findApplication(
   db: Executor,
@@ -36,10 +40,14 @@ export async function findApplication(
 }
 
 async function accessTo(db: Executor, principal: Principal, row: ApplicationRow): Promise<SummitAccess | null> {
-  if (principal.smeRoles.has(row.organizationId)) return { applicant: true, staffRole: null, assigned: false };
+  if (principal.smeRoles.has(row.organizationId)) return { applicant: true, staffRole: null, assigned: false, committee: false };
   const { staffRole } = principal;
-  if (!staffRole) return null;
-  if (staffRole === "admin" || staffRole === "facilitator") return { applicant: false, staffRole, assigned: false };
+  if (!staffRole) {
+    return principal.committee && (COMMITTEE_STATUSES as readonly string[]).includes(row.status)
+      ? { applicant: false, staffRole: null, assigned: false, committee: true }
+      : null;
+  }
+  if (staffRole === "admin" || staffRole === "facilitator") return { applicant: false, staffRole, assigned: false, committee: false };
   const [assignment] = await db
     .select({ id: schema.officerAssignment.id })
     .from(schema.officerAssignment)
@@ -51,7 +59,7 @@ async function accessTo(db: Executor, principal: Principal, row: ApplicationRow)
       ),
     )
     .limit(1);
-  return assignment ? { applicant: false, staffRole, assigned: true } : null;
+  return assignment ? { applicant: false, staffRole, assigned: true, committee: false } : null;
 }
 
 export function requireApplicant(access: SummitAccess, doing: string): void {
