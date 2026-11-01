@@ -1,3 +1,4 @@
+import { CALCULATOR_NAMES } from "@entrust/trade-engine";
 import { MODULE_IDS } from "@entrust/trade-rules";
 import { describe, expect, it } from "vitest";
 import { MODULE_CONTENT, findVersion, learnerModuleSchema, listModules, newerVersion, toLearnerView, validateModuleContent, visibleVersions } from "../src";
@@ -22,6 +23,12 @@ const sha256 = async (text: string) =>
 const hashOf = (content: ModuleContent) => sha256(JSON.stringify(content));
 
 describe("module content", () => {
+  it("only names calculators that exist in the trade engine", () => {
+    // A worksheet's arithmetic is always a named calculator (#64), so content can't name one that isn't there.
+    const named = MODULE_CONTENT.flatMap((c) => c.worksheets.flatMap((w) => w.computed.map((f) => `${c.module}@${c.version} ${w.id}.${f.id}: ${f.calculator}`)));
+    expect(named.filter((n) => !(CALCULATOR_NAMES as string[]).includes(n.split(": ")[1] as string))).toEqual([]);
+  });
+
   it("all validates", () => {
     expect(errorsFor(...MODULE_CONTENT)).toEqual([]);
   });

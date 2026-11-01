@@ -15,6 +15,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@entrust/trade-engine": "workspace:*",
     "vitest": "^5.0.5"
   }
 }
