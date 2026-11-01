@@ -126,7 +126,7 @@ export async function buildAssessmentView(db: Executor, row: ApplicationRow): Pr
   }
   const basis = { pathway, seekingInvestment: assessment?.seekingInvestment ?? applicationSeeksInvestment(template, row.answers) };
 
-  const [scores, adjustments, notes, verification, comments, recommendations, clarifications, documents, completer] = await Promise.all([
+  const [scores, adjustments, notes, verification, comments, recommendations, clarifications, documents, completer, reviews] = await Promise.all([
     assessment
       ? db
           .select({ score: schema.criterionScore, userId: schema.user.id, userName: schema.user.name })
@@ -177,6 +177,12 @@ export async function buildAssessmentView(db: Executor, row: ApplicationRow): Pr
     assessment?.completedBy
       ? db.select({ id: schema.user.id, name: schema.user.name }).from(schema.user).where(eq(schema.user.id, assessment.completedBy))
       : Promise.resolve([]),
+    db
+      .select({ review: schema.assessmentReview, userId: schema.user.id, userName: schema.user.name })
+      .from(schema.assessmentReview)
+      .leftJoin(schema.user, eq(schema.user.id, schema.assessmentReview.reviewedBy))
+      .where(eq(schema.assessmentReview.applicationId, row.id))
+      .orderBy(asc(schema.assessmentReview.reviewedAt)),
   ]);
 
   const original = new Map(scores.map((s) => [s.score.criterionId, s]));
@@ -272,6 +278,12 @@ export async function buildAssessmentView(db: Executor, row: ApplicationRow): Pr
           at: recommendation.recommendation.recordedAt.toISOString(),
         }
       : null,
+    reviews: reviews.map(({ review, userId, userName }) => ({
+      decision: review.decision,
+      reason: review.reason,
+      by: person(userId, userName),
+      at: review.reviewedAt.toISOString(),
+    })),
     completedAt: assessment?.completedAt?.toISOString() ?? null,
     completedBy: person(completer[0]?.id ?? null, completer[0]?.name ?? null),
   };

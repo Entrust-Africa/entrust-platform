@@ -16,7 +16,13 @@ import {
   ClassifyClaimBody,
   ClaimParam,
   CommentBody,
+  CommitteeItem,
+  CommitteeList,
+  CommitteeQuery,
+  CompareQuery,
+  CompareView,
   CreateApplicationBody,
+  DecisionBody,
   CurrentPeriod,
   DocumentDownload,
   DocumentParam,
@@ -33,6 +39,7 @@ import {
   RecommendationBody,
   RecordScoresBody,
   RespondBody,
+  ReviewBody,
   SaveAnswersBody,
   StageBody,
   WithdrawBody,
@@ -54,7 +61,8 @@ import { findApplicationTemplate } from "../services/summit-forms";
 import { createPeriod, currentPeriod, listPeriods, updatePeriod } from "../services/summit-periods";
 import { adjustScore, addComment, classifyClaim, completeAssessment, getAssessment, recordRecommendation, recordScores, saveCategoryNote, setStage } from "../services/summit-assessment";
 import { requestClarification, respondToClarification } from "../services/summit-clarifications";
-import { assignOfficer, listOfficers, recordException } from "../services/summit-review";
+import { compareForCommittee, listForCommittee, recordDecision } from "../services/summit-committee";
+import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
 // The Summit SME application platform (#79): the public period, the applicant's application, and the administrators'
@@ -398,6 +406,52 @@ const recommendRoute = createRoute({
   responses: { 201: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
 });
 
+// ---- Quality review and the selection committee ----
+
+const reviewRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/review",
+  tags,
+  summary: "Review a completed assessment",
+  description:
+    "An administrator's quality check of the officer's scores and recommendation, once the officer has recommended. Approving sends the application to the selection committee. Returning it, with what to fix, gives the assessment back to the officer, who can adjust scores, complete it and recommend again. Administrators and facilitators only.",
+  request: { params: ApplicationParam, body: { required: true, content: json(ReviewBody) } },
+  responses: { 200: { description: "The workspace", content: json(AssessmentView) }, ...workspace },
+});
+
+const committeeListRoute = createRoute({
+  method: "get",
+  path: "/committee/applications",
+  tags,
+  summary: "Compare and filter the applicants in committee review",
+  description:
+    "The applications from the start of committee review on, with each one's score, place by score, readiness, category points, recommendation and the committee's latest decision. Filter by country, sector, opportunity type, score, readiness, recommendation, decision, and women-owned or youth-owned. Scores include manual adjustments, and places are over the whole period, so a filter doesn't move them. The selection committee, administrators and facilitators.",
+  request: { query: CommitteeQuery },
+  responses: { 200: { description: "The applications", content: json(CommitteeList) }, ...listErrors, 403: problem("Not the committee, an administrator or a facilitator"), 404: problem("No such period") },
+});
+
+const compareRoute = createRoute({
+  method: "get",
+  path: "/committee/compare",
+  tags,
+  summary: "Compare two to five applicants side by side",
+  description:
+    "Each applicant's score and points in every category, the recommendation and the reason for it, what was verified and how, the manual adjustments, and the figures the committee weighs (revenue, employees, the commercial ask).",
+  request: { query: CompareQuery },
+  responses: { 200: { description: "The applicants", content: json(CompareView) }, ...listErrors, 403: problem("Not the committee, an administrator or a facilitator"), 404: problem("One of the applications isn't in committee review") },
+});
+
+const decisionRoute = createRoute({
+  method: "post",
+  path: "/applications/{id}/decision",
+  tags,
+  summary: "Record the committee's decision",
+  description:
+    "Selected, waitlisted, not selected, or further review required, with the reason. A decision can be replaced by another and each is kept. The applicant is told nothing yet. Members of the selection committee only: they change nothing of the assessment, and add comments through the comments endpoint.",
+  request: { params: ApplicationParam, body: { required: true, content: json(DecisionBody) } },
+  responses: { 201: { description: "The application as the committee sees it", content: json(CommitteeItem) }, ...workspace },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -471,4 +525,12 @@ export const summit = router
   .openapi(completeRoute, async (c) => c.json(await completeAssessment(await contextFor(c.get("user")), c.req.valid("param").id), 200))
   .openapi(recommendRoute, async (c) =>
     c.json(await recordRecommendation(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
+  )
+  .openapi(reviewRoute, async (c) =>
+    c.json(await reviewAssessment(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(committeeListRoute, async (c) => c.json(await listForCommittee(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(compareRoute, async (c) => c.json(await compareForCommittee(await contextFor(c.get("user")), c.req.valid("query").ids), 200))
+  .openapi(decisionRoute, async (c) =>
+    c.json(await recordDecision(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 201),
   );

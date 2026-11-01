@@ -6,8 +6,8 @@ import { ServiceError } from "./errors";
 
 /**
  * Where each status can go. The workflow branches in several places (a clarification request returns to the stage
- * it came from), so this is the one place that says which moves are allowed. Selection and the committee's statuses
- * belong to phase 2 (#80).
+ * it came from), so this is the one place that says which moves are allowed. A decision of the committee can be
+ * replaced by another, or sent back to committee review, until the final list is approved.
  */
 export const TRANSITIONS: Readonly<Record<ApplicationStatus, readonly ApplicationStatus[]>> = {
   draft: ["submitted", "withdrawn"],
@@ -22,9 +22,9 @@ export const TRANSITIONS: Readonly<Record<ApplicationStatus, readonly Applicatio
   assessment_completed: ["under_assessment", "recommended", "withdrawn"],
   recommended: ["under_assessment", "committee_review", "withdrawn"],
   committee_review: ["selected", "waitlisted", "not_selected", "withdrawn"],
-  selected: ["committee_review"],
-  waitlisted: ["committee_review"],
-  not_selected: ["committee_review"],
+  selected: ["committee_review", "waitlisted", "not_selected"],
+  waitlisted: ["committee_review", "selected", "not_selected"],
+  not_selected: ["committee_review", "selected", "waitlisted"],
   withdrawn: [],
 };
 

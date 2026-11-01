@@ -11,6 +11,11 @@ export interface Principal {
   staffRole: EntrustRole | null;
   /** Roles in SME organisations, by organisation id. */
   smeRoles: ReadonlyMap<string, SmeRole>;
+  /**
+   * A member of the Summit's selection committee (#80): the Entrust organisation's `committee` role. It is not a staff
+   * role, so it grants nothing in CLEAR or TRADE and only the Summit's committee endpoints know it.
+   */
+  committee: boolean;
 }
 
 /**
@@ -29,6 +34,9 @@ export interface Ctx {
   practice?: PracticeScope;
 }
 
+/** The role of the Summit's selection committee in the Entrust organisation. Summit only, so it isn't in ENTRUST_ROLES. */
+export const COMMITTEE_ROLE = "committee";
+
 const isEntrustRole = (role: string): role is EntrustRole => (ENTRUST_ROLES as readonly string[]).includes(role);
 const isSmeRole = (role: string): role is SmeRole => (SME_ROLES as readonly string[]).includes(role);
 
@@ -46,15 +54,17 @@ export async function loadPrincipal(db: Executor, userId: string): Promise<Princ
     .where(eq(schema.member.userId, userId));
 
   let staffRole: EntrustRole | null = null;
+  let committee = false;
   const smeRoles = new Map<string, SmeRole>();
   for (const { organizationId, role } of memberships) {
     if (entrustOrganizationId && organizationId === entrustOrganizationId) {
       if (isEntrustRole(role)) staffRole = role;
+      else if (role === COMMITTEE_ROLE) committee = true;
     } else if (isSmeRole(role)) {
       smeRoles.set(organizationId, role);
     }
   }
-  return { userId, staffRole, smeRoles };
+  return { userId, staffRole, smeRoles, committee };
 }
 
 /** The role the caller acts in on an organisation's cases, or null if they can't see them. */

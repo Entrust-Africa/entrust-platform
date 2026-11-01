@@ -1,16 +1,18 @@
 import { and, count, eq, isNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { ELIGIBILITY_CRITERIA, type EligibilityCriterionId } from "@entrust/summit-engine";
-import type { ApplicationDetailView, OfficerListView } from "../schemas/summit";
+import type { ApplicationDetailView, AssessmentViewType, OfficerListView } from "../schemas/summit";
 import { requireStaff, type Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { findApplication, requireStaffRole } from "./summit-access";
+import { buildAssessmentView } from "./summit-assessment";
 import { buildDetail, latestEligibility, loadPeriod, reload, screenApplication } from "./summit-applications";
 import { changeStatus, recordSummitChange } from "./summit-status";
 
 // What Entrust's administrators do with an application before and during assessment (#79): hand it to an
-// assessment officer, and accept an applicant that falls short of a requirement.
+// assessment officer, and accept an applicant that falls short of a requirement. And after it (#80): review the
+// officer's work before the committee sees it.
 
 /** The assessment officers: members of the Entrust organisation with the reviewer role. */
 async function officers(db: Executor) {
@@ -123,5 +125,52 @@ export async function recordException(
       reason: input.reason,
     });
     return buildDetail(tx, await reload(tx, id), access, ctx.now);
+  });
+}
+
+/**
+ * The administrators' quality review of a completed assessment and its recommendation. Approving sends the application
+ * to the selection committee. Returning it, with the reason, gives it back to the officer who holds it: the assessment
+ * is open again, so scores can be adjusted and the officer completes it and recommends once more. Every round of
+ * review is kept.
+ */
+export async function reviewAssessment(
+  ctx: Ctx,
+  id: string,
+  input: { decision: "approve" | "return"; reason?: string | undefined },
+): Promise<AssessmentViewType> {
+  const reason = input.reason?.trim() || null;
+  if (input.decision === "return" && !reason) throw new ServiceError("invalid", "Say what the officer should fix when returning an assessment.");
+
+  return ctx.db.transaction(async (tx) => {
+    const { row, access } = await findApplication(tx, ctx.principal, id, { lock: true });
+    requireStaffRole(access, ["admin", "facilitator"], "review an assessment");
+    if (row.status !== "recommended") {
+      throw new ServiceError(
+        "invalid_transition",
+        `An assessment is reviewed once the officer has recommended. The application is ${row.status.replaceAll("_", " ")}.`,
+      );
+    }
+    const approved = input.decision === "approve";
+    if (!approved) {
+      // The officer works on the same assessment again; the earlier completion stays in the status history.
+      await tx.update(schema.assessment).set({ completedAt: null, completedBy: null }).where(eq(schema.assessment.applicationId, id));
+    }
+    await tx.insert(schema.assessmentReview).values({
+      applicationId: id,
+      decision: approved ? "approved" : "returned",
+      reason,
+      reviewedBy: ctx.principal.userId,
+    });
+    await changeStatus(tx, row, approved ? "committee_review" : "under_assessment", ctx.principal.userId, reason ?? "Assessment approved");
+    await recordSummitChange(tx, ctx.principal.userId, {
+      action: "summit.assessment.reviewed",
+      entityType: "summit_application",
+      entityId: id,
+      organizationId: row.organizationId,
+      after: { decision: approved ? "approved" : "returned" },
+      reason,
+    });
+    return buildAssessmentView(tx, row);
   });
 }
