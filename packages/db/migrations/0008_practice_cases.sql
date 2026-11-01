@@ -1,0 +1,2 @@
+ALTER TABLE "clear"."export_case" ADD COLUMN "practice_scenario" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "export_case_practice_uidx" ON "clear"."export_case" USING btree ("organization_id","practice_scenario") WHERE "clear"."export_case"."practice_scenario" is not null;

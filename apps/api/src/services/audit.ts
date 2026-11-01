@@ -19,13 +19,14 @@ export interface CaseChange {
  * Records a change to a case in the shared audit log and in the case's history. Run it in the
  * transaction that makes the change, so neither exists without the other. All of a case's audit
  * rows use the case as the entity, so one query gives its timeline. A null user is CLEAR itself,
- * for what it does on its own, such as raising a flag.
+ * for what it does on its own, such as raising a flag. A practice case belongs to TRADE, so its rows
+ * say so and a CLEAR audit view doesn't show them.
  */
 export async function recordChange(db: Executor, userId: string | null, change: CaseChange): Promise<void> {
   await db.insert(schema.auditLog).values({
     actorUserId: userId,
     organizationId: change.organizationId,
-    platform: "clear",
+    platform: sql<"clear" | "trade">`case when exists (select 1 from clear.export_case where id = ${change.caseId} and practice_scenario is not null) then 'trade' else 'clear' end`,
     action: change.action,
     entityType: "export_case",
     entityId: change.caseId,

@@ -1,4 +1,4 @@
-import { count, desc, eq, getTableColumns, inArray, max, min, sql } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns, inArray, max, min, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import {
   checkMinimumPrices,
@@ -165,7 +165,7 @@ async function recheckCases(ctx: Ctx, prices: readonly NewMinimumPrice[]): Promi
     })
     .from(schema.exportCase)
     .innerJoin(schema.salesContract, eq(schema.exportCase.salesContractId, schema.salesContract.id))
-    .where(inArray(schema.exportCase.status, ["open", "amendments_pending"]));
+    .where(and(schema.realCase, inArray(schema.exportCase.status, ["open", "amendments_pending"])));
 
   const affected = contracts
     .filter((c) =>

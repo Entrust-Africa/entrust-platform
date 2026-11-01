@@ -13,10 +13,20 @@ export interface Principal {
   smeRoles: ReadonlyMap<string, SmeRole>;
 }
 
+/**
+ * A request about practice cases, which TRADE's M08 runs on CLEAR's own services. Without it a request
+ * sees real cases only; with it, practice cases only. Nothing crosses over in either direction.
+ */
+export interface PracticeScope {
+  /** The role the learner practises in. A learner works every party's steps, so they pick whose turn it is. */
+  actingAs: Actor;
+}
+
 export interface Ctx {
   db: Database;
   principal: Principal;
   now: Date;
+  practice?: PracticeScope;
 }
 
 const isEntrustRole = (role: string): role is EntrustRole => (ENTRUST_ROLES as readonly string[]).includes(role);
@@ -53,19 +63,23 @@ export function actorFor(principal: Principal, organizationId: string): Actor | 
 }
 
 /**
- * A case the caller may see, locked for update when `lock` is set. A case that doesn't exist and
- * one in another organisation look the same: not found.
+ * A case the caller may see, locked for update when `lock` is set. A case that doesn't exist, one in
+ * another organisation, and a practice case asked for outside the practice scope (or a real case inside
+ * it) look the same: not found. In the practice scope an SME member acts in the role they chose; Entrust
+ * staff keep their own.
  */
 export async function findCase(
   db: Executor,
   principal: Principal,
   caseId: string,
-  options: { lock?: boolean } = {},
+  options: { lock?: boolean; practice?: PracticeScope | undefined } = {},
 ) {
   const query = db.select().from(schema.exportCase).where(eq(schema.exportCase.id, caseId));
   const [row] = options.lock ? await query.for("update") : await query;
-  const actor = row ? actorFor(principal, row.organizationId) : null;
-  if (!row || !actor) throw new ServiceError("not_found", "Case not found.");
+  const own = row ? actorFor(principal, row.organizationId) : null;
+  const inScope = row && (row.practiceScenario !== null) === (options.practice !== undefined);
+  const actor = options.practice && own && !principal.staffRole ? options.practice.actingAs : own;
+  if (!row || !inScope || !actor) throw new ServiceError("not_found", "Case not found.");
   return { row, actor };
 }
 
