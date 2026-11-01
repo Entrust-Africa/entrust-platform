@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-or
 import { schema } from "@entrust/db";
 import { canSubmit, checkAnswers, type Answer, type Answers } from "@entrust/forms";
 import {
+  APPLICANT_RESULTS,
   RESTRICTED_DOCUMENT_KINDS,
   applicationPathway,
   screenEligibility,
@@ -84,7 +85,7 @@ const problemView = (p: { question: string; code: string; message: string }) => 
 // ---- Views ----
 
 export async function buildDetail(db: Executor, row: ApplicationRow, access: SummitAccess, now: Date): Promise<ApplicationDetailView> {
-  const [period, [organisation], documents, latest, clarifications, open] = await Promise.all([
+  const [period, [organisation], documents, latest, clarifications, open, [published]] = await Promise.all([
     loadPeriod(db, row.periodId),
     db
       .select({ name: schema.organization.name, smeId: schema.smeProfile.smeId, country: schema.smeProfile.country })
@@ -108,6 +109,7 @@ export async function buildDetail(db: Executor, row: ApplicationRow, access: Sum
     latestEligibility(db, row.id),
     listClarifications(db, row.id, access.applicant),
     openClarification(db, row.id),
+    db.select().from(schema.applicationResult).where(eq(schema.applicationResult.applicationId, row.id)),
   ]);
 
   const template = templateOf(row.templateVersion);
@@ -125,7 +127,7 @@ export async function buildDetail(db: Executor, row: ApplicationRow, access: Sum
     country: organisation?.country ?? null,
     periodId: row.periodId,
     view: access.applicant ? "applicant" : "staff",
-    status: access.applicant ? publicStatus(row.status) : row.status,
+    status: access.applicant ? publicStatus(row.status, published !== undefined) : row.status,
     templateVersion: row.templateVersion,
     pathway,
     answers: row.answers as ApplicationDetailView["answers"],
@@ -161,6 +163,15 @@ export async function buildDetail(db: Executor, row: ApplicationRow, access: Sum
     canSubmit: editable && canSubmit(check),
     canEditDocuments: access.applicant && (editable || (row.status === "awaiting_additional_information" && open !== undefined)),
     clarifications,
+    result: published
+      ? {
+          decision: published.decision,
+          label: APPLICANT_RESULTS[published.decision].label,
+          message: APPLICANT_RESULTS[published.decision].message,
+          publishedAt: published.publishedAt.toISOString(),
+          notifiedAt: access.applicant ? null : (published.notifiedAt?.toISOString() ?? null),
+        }
+      : null,
     closesAt: period.closesAt.toISOString(),
     submittedAt: row.submittedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -280,7 +291,7 @@ export async function listApplications(ctx: Ctx, input: ListApplicationsInput): 
   if (rows.length === 0) return { items: [], total: total?.total ?? 0 };
 
   const ids = rows.map((r) => r.row.id);
-  const [eligibility, documents, officers] = await Promise.all([
+  const [eligibility, documents, officers, results] = await Promise.all([
     db
       .selectDistinctOn([schema.eligibilityResult.applicationId], {
         applicationId: schema.eligibilityResult.applicationId,
@@ -300,7 +311,9 @@ export async function listApplications(ctx: Ctx, input: ListApplicationsInput): 
           .innerJoin(schema.user, eq(schema.user.id, schema.officerAssignment.officerUserId))
           .where(and(inArray(schema.officerAssignment.applicationId, ids), isNull(schema.officerAssignment.endedAt)))
       : Promise.resolve([]),
+    db.select({ applicationId: schema.applicationResult.applicationId }).from(schema.applicationResult).where(inArray(schema.applicationResult.applicationId, ids)),
   ]);
+  const published = new Set(results.map((r) => r.applicationId));
   const outcomes = new Map(eligibility.map((e) => [e.applicationId, e.outcome]));
   const officerOf = new Map(officers.map((o) => [o.applicationId, { id: o.userId, name: o.name }]));
   const kindsOf = new Map<string, Set<string>>();
@@ -319,7 +332,7 @@ export async function listApplications(ctx: Ctx, input: ListApplicationsInput): 
       smeId,
       country,
       periodId: row.periodId,
-      status: staff ? row.status : publicStatus(row.status),
+      status: staff ? row.status : publicStatus(row.status, published.has(row.id)),
       pathway: pathway ?? null,
       progressPercent: checkAnswers(template, row.answers).progress.percent,
       eligibility: outcomes.get(row.id) ?? null,

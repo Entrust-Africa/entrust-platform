@@ -21,6 +21,7 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { findApplication } from "./summit-access";
 import { loadPeriod, rulesOf, templateOf } from "./summit-applications";
+import { requireOpenSelection } from "./summit-final-list";
 import { changeStatus, recordSummitChange } from "./summit-status";
 
 // The selection committee's side of the Summit (#80): comparing applicants, filtering them, and recording a decision
@@ -296,8 +297,8 @@ export async function compareForCommittee(ctx: Ctx, ids: readonly string[]): Pro
 
 /**
  * Records the committee's decision on an application, with the reason: selected, waitlisted, not selected, or further
- * review required, which keeps it with the committee. A decision can be replaced by another; every one is kept. Only a
- * member of the committee decides. The applicant isn't told anything yet.
+ * review required, which keeps it with the committee. A decision can be replaced by another, every one is kept, until
+ * the final list is approved. Only a member of the committee decides. The applicant is told when the list is approved.
  */
 export async function recordDecision(ctx: Ctx, id: string, input: { decision: string; reason: string }): Promise<CommitteeItemView> {
   const decision = COMMITTEE_DECISIONS.find((d) => d.id === input.decision)?.id as CommitteeDecision | undefined;
@@ -306,6 +307,7 @@ export async function recordDecision(ctx: Ctx, id: string, input: { decision: st
   const periodId = await ctx.db.transaction(async (tx) => {
     const { row, access } = await findApplication(tx, ctx.principal, id, { lock: true });
     if (!access.committee) throw new ServiceError("forbidden", "Only a member of the selection committee can decide.");
+    await requireOpenSelection(tx, row.periodId, "change a decision");
 
     const before = { status: row.status };
     const to = COMMITTEE_DECISION_STATUS[decision];

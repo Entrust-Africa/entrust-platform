@@ -8,6 +8,7 @@ import { ServiceError } from "./errors";
 import { findApplication, requireStaffRole } from "./summit-access";
 import { buildAssessmentView } from "./summit-assessment";
 import { buildDetail, latestEligibility, loadPeriod, reload, screenApplication } from "./summit-applications";
+import { requireOpenSelection } from "./summit-final-list";
 import { changeStatus, recordSummitChange } from "./summit-status";
 
 // What Entrust's administrators do with an application before and during assessment (#79): hand it to an
@@ -152,6 +153,8 @@ export async function reviewAssessment(
       );
     }
     const approved = input.decision === "approve";
+    // Approving puts one more application in front of the committee, which a closed list can't take.
+    if (approved) await requireOpenSelection(tx, row.periodId, "send an application to the committee");
     if (!approved) {
       // The officer works on the same assessment again; the earlier completion stays in the status history.
       await tx.update(schema.assessment).set({ completedAt: null, completedBy: null }).where(eq(schema.assessment.applicationId, id));

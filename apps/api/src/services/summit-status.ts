@@ -31,18 +31,23 @@ export const TRANSITIONS: Readonly<Record<ApplicationStatus, readonly Applicatio
 /** After the committee decides, an application can no longer be withdrawn. */
 export const WITHDRAWABLE = (Object.keys(TRANSITIONS) as ApplicationStatus[]).filter((s) => TRANSITIONS[s].includes("withdrawn"));
 
-export const PUBLIC_STATUSES = ["draft", "in_review", "action_required", "not_eligible", "withdrawn"] as const;
+export const PUBLIC_STATUSES = ["draft", "in_review", "action_required", "not_eligible", "withdrawn", "selected", "waitlisted", "not_selected"] as const;
 export type PublicStatus = (typeof PUBLIC_STATUSES)[number];
 
 /**
  * What an applicant sees of the workflow. Where an application is in assessment, verification or committee review is
- * Entrust's business, and so is the committee's decision until phase 2 publishes the results.
+ * Entrust's business, and so is the committee's decision until the final list is approved. `published` says it has
+ * been, for this application's period.
  */
-export function publicStatus(status: ApplicationStatus): PublicStatus {
+export function publicStatus(status: ApplicationStatus, published = false): PublicStatus {
   switch (status) {
     case "draft":
     case "withdrawn":
       return status;
+    case "selected":
+    case "waitlisted":
+    case "not_selected":
+      return published ? status : "in_review";
     case "incomplete":
     case "awaiting_additional_information":
       return "action_required";

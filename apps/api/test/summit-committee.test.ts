@@ -6,20 +6,28 @@ import { callV1, cleanup, COUNTRY, createOrganization, db, makeFile, PREFIX, sig
 import { completeAnswers } from "./summit-form";
 
 // Quality review and the selection committee (#80): an administrator approves or returns a completed assessment, the
-// committee compares and filters the applicants and records a decision with its reason. The officer's workspace is in
+// committee compares and filters the applicants, records a decision with its reason, and approves the final list. The officer's workspace is in
 // summit-assessment.test.ts and the application itself in summit.test.ts.
 vi.mock("../src/services/summit-forms", async (importOriginal) => (await import("./summit-form")).withPublishedForm(await importOriginal()));
 
-// The emails go to the background worker; here the queue only has to accept them.
+// The emails go to the background worker; here the queue is a list.
+const queue = vi.hoisted(() => ({ jobs: [] as { name: string; data: any }[], failNext: false }));
 vi.mock("@entrust/jobs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@entrust/jobs")>()),
-  enqueue: vi.fn(async () => "job-1"),
+  enqueue: vi.fn(async (name: string, data: unknown) => {
+    if (queue.failNext) {
+      queue.failNext = false;
+      throw new Error("The queue is down");
+    }
+    queue.jobs.push({ name, data });
+    return "job-1";
+  }),
 }));
 
 const w = {} as {
   owners: TestUser[]; outsider: TestUser;
   admin: TestUser; facilitator: TestUser; reviewer: TestUser; reviewer2: TestUser; committee: TestUser; committee2: TestUser;
-  orgs: string[]; entrust: string; periodId: string;
+  orgs: string[]; entrust: string; periodId: string; otherPeriodId: string;
   /** Four applications that go to the committee, and one that stays with its officer. */
   a: string; b: string; c: string; d: string; e: string;
 };
@@ -112,6 +120,15 @@ beforeAll(async () => {
   });
   expect(period.status, JSON.stringify(period.body)).toBe(201);
   w.periodId = period.body.id;
+  // A second period, with nothing in it, for a final list that has nothing to approve.
+  const other = await call(w.admin, "POST", "/periods", {
+    name: `${PREFIX}summit-committee-later`,
+    opensAt: "2031-01-01T00:00:00Z",
+    closesAt: "2031-02-01T00:00:00Z",
+    countries: [COUNTRY],
+  });
+  expect(other.status, JSON.stringify(other.body)).toBe(201);
+  w.otherPeriodId = other.body.id;
   const form = (await call(w.owners[0]!, "GET", "/forms/0.1.0")).body;
 
   // A and C seek investment, so all seven categories are scored. B is trade only, so category D is left out.
@@ -145,6 +162,9 @@ describe("signed out", () => {
       ["POST", `/applications/${id}/review`, {}],
       ["POST", `/applications/${id}/decision`, {}],
       ["GET", "/committee/applications"],
+      ["GET", `/periods/${id}/final-list`],
+      ["POST", `/periods/${id}/final-list`, {}],
+      ["POST", `/periods/${id}/final-list/notifications`],
       ["GET", `/committee/compare?ids=${id},${randomUUID()}`],
     ] as const) {
       const res = await call(null, method, path, body);
@@ -329,8 +349,9 @@ describe("comparing applicants", () => {
   });
 
   it("uses the newest period when none is named", async () => {
+    // The second period, which opens later and has nothing in it.
     const res = await call(w.committee, "GET", "/committee/applications");
-    expect(res.body.period.id).toBe(w.periodId);
+    expect(res.body).toMatchObject({ period: { id: w.otherPeriodId }, items: [], total: 0 });
   });
 
   it("scores each applicant as the officer's workspace does, and ranks them", async () => {
@@ -541,5 +562,187 @@ describe("deciding", () => {
     }
     const listed = await call(w.owners[0]!, "GET", "/applications");
     expect(listed.body.items[0].status).toBe("in_review");
+  });
+});
+
+describe("the final list", () => {
+  const view = async (user: TestUser = w.committee, periodId = w.periodId) => {
+    const res = await call(user, "GET", `/periods/${periodId}/final-list`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    return res.body;
+  };
+  const approveList = (user: TestUser, body: object = {}, periodId = w.periodId) => call(user, "POST", `/periods/${periodId}/final-list`, body);
+  const resend = (user: TestUser, periodId = w.periodId) => call(user, "POST", `/periods/${periodId}/final-list/notifications`);
+  const results = async () =>
+    db.select().from(schema.applicationResult).orderBy(schema.applicationResult.applicationId);
+  const text = (res: Json) => JSON.stringify(res.body);
+
+  it("shows where the committee's work stands, to the committee, administrators and facilitators", async () => {
+    // A is selected, B waitlisted, D not selected; C is still with the committee and E is still with its officer.
+    for (const user of [w.committee, w.admin, w.facilitator]) {
+      expect(await view(user)).toMatchObject({
+        period: { id: w.periodId },
+        approved: false,
+        approvedAt: null,
+        counts: { selected: 1, waitlisted: 1, notSelected: 1 },
+        pending: { inCommitteeReview: 1, beforeCommittee: 1 },
+        unnotified: 0,
+        canApprove: false,
+      });
+    }
+    expect((await view()).blockers).toEqual(["1 application is still in committee review. Decide each one first."]);
+    for (const user of [w.reviewer, w.owners[0]!, w.outsider]) {
+      expect((await call(user, "GET", `/periods/${w.periodId}/final-list`)).status).toBe(403);
+    }
+    expect((await call(w.committee, "GET", `/periods/${randomUUID()}/final-list`)).status).toBe(404);
+  });
+
+  it("can't be approved by anyone but the committee", async () => {
+    for (const user of [w.admin, w.facilitator, w.reviewer, w.owners[0]!]) expect([user.id, (await approveList(user)).status]).toEqual([user.id, 403]);
+    expect((await approveList(w.committee, {}, randomUUID())).status).toBe(404);
+  });
+
+  it("waits until every application in committee review is decided, and publishes nothing before", async () => {
+    const refused = await approveList(w.committee);
+    expect(refused.status).toBe(422);
+    expect(refused.body.error).toContain("1 application is still in committee review");
+    expect(await results()).toEqual([]);
+    expect(queue.jobs).toEqual([]);
+    expect((await call(w.owners[0]!, "GET", `/applications/${w.a}`)).body).toMatchObject({ status: "in_review", result: null });
+  });
+
+  it("has nothing to approve in a period where nothing has been decided", async () => {
+    const empty = await view(w.committee, w.otherPeriodId);
+    expect(empty).toMatchObject({ approved: false, counts: { selected: 0, waitlisted: 0, notSelected: 0 }, canApprove: false });
+    expect(empty.blockers).toEqual(["No application has been decided yet."]);
+    expect((await approveList(w.committee, {}, w.otherPeriodId)).status).toBe(422);
+    expect((await resend(w.committee, w.otherPeriodId)).status).toBe(409);
+  });
+
+  it("approves once every application in committee review is decided, and says what it holds", async () => {
+    // E is recommended and waiting for an administrator: it is on its way to the committee, not in its hands.
+    await recommended(w.e, 40);
+    expect(await statusOf(w.e)).toBe("recommended");
+    expect((await call(w.committee2, "POST", `/applications/${w.c}/decision`, { decision: "waitlisted", reason: "Verification of revenue came back late." })).status).toBe(201);
+    const ready = await view();
+    expect(ready).toMatchObject({ canApprove: true, blockers: [], counts: { selected: 1, waitlisted: 2, notSelected: 1 }, pending: { inCommitteeReview: 0, beforeCommittee: 1 } });
+
+    const res = await approveList(w.committee2, { note: "Agreed at the meeting of 4 January." });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body).toMatchObject({
+      approved: true,
+      approvedBy: { name: "committee2" },
+      note: "Agreed at the meeting of 4 January.",
+      counts: { selected: 1, waitlisted: 2, notSelected: 1 },
+      canApprove: false,
+      blockers: ["The final list is already approved."],
+      unnotified: 0,
+    });
+    expect(await results()).toHaveLength(4);
+    const audit = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, w.periodId), eq(schema.auditLog.action, "summit.finalList.approved")));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      platform: "summit",
+      entityType: "summit_period",
+      actorUserId: w.committee2.id,
+      after: { selected: 1, waitlisted: 2, notSelected: 1, inReview: 1 },
+      reason: "Agreed at the meeting of 4 January.",
+    });
+  });
+
+  it("emails each decided applicant once, with what they are told and no more", async () => {
+    const emails = queue.jobs.filter((j) => j.name === "send-email" && j.data.template === "summit-result");
+    expect(emails).toHaveLength(4);
+    const byNumber = Object.fromEntries(emails.map((j) => [j.data.props.applicationNumber, j.data]));
+    const numbersOf = async (id: string) => (await call(w.admin, "GET", `/applications/${id}`)).body.number as string;
+    expect(byNumber[await numbersOf(w.a)].props).toMatchObject({ organizationName: "org-a", message: expect.stringContaining("has been selected") });
+    expect(byNumber[await numbersOf(w.b)].props.message).toContain("waiting list");
+    expect(byNumber[await numbersOf(w.d)].props.message).toContain("was not selected");
+    expect(byNumber[await numbersOf(w.e)]).toBeUndefined();
+    for (const email of emails) {
+      expect(email.data.to).toEqual([expect.stringContaining("@example.test")]);
+      expect(email.data.subject).toBe(`The result of Summit application ${email.data.props.applicationNumber}`);
+      const text = JSON.stringify(email.data);
+      for (const secret of ["Scored below", "cohort", "verification", "score", "reason"]) expect(text).not.toContain(secret);
+    }
+    expect((await results()).every((r) => r.notifiedAt !== null)).toBe(true);
+  });
+
+  it("shows each applicant their result, and an application still in assessment stays in review", async () => {
+    const expected: [number, string, string][] = [[0, w.a, "selected"], [1, w.b, "waitlisted"], [2, w.c, "waitlisted"], [3, w.d, "not_selected"]];
+    for (const [i, id, decision] of expected) {
+      const res = await call(w.owners[i]!, "GET", `/applications/${id}`);
+      expect(res.body.status).toBe(decision);
+      expect(res.body.result).toMatchObject({ decision, notifiedAt: null, label: expect.any(String), message: expect.any(String) });
+      const listed = await call(w.owners[i]!, "GET", "/applications");
+      expect(listed.body.items[0].status).toBe(decision);
+    }
+    const e = await call(w.owners[4]!, "GET", `/applications/${w.e}`);
+    expect(e.body).toMatchObject({ status: "in_review", result: null });
+  });
+
+  it("never shows the applicant a score, a reason, or the committee's comments", async () => {
+    for (const [i, id] of [w.a, w.b, w.c, w.d].entries()) {
+      const body = text(await call(w.owners[i]!, "GET", `/applications/${id}`));
+      for (const secret of ["Strong buyers", "Second thoughts", "cohort", "Scored below", "Confirmed after", "verification of revenue", "rationale", "coffee buyers"]) {
+        expect(body).not.toContain(secret);
+      }
+    }
+  });
+
+  it("shows staff whether the email was queued", async () => {
+    const res = await call(w.admin, "GET", `/applications/${w.a}`);
+    expect(res.body.status).toBe("selected");
+    expect(res.body.result).toMatchObject({ decision: "selected", notifiedAt: expect.any(String) });
+  });
+
+  it("closes the committee's work: no more decisions, and no more applications sent to it", async () => {
+    const late = await call(w.committee, "POST", `/applications/${w.a}/decision`, { decision: "not_selected", reason: "Changed my mind." });
+    expect(late.status).toBe(409);
+    expect(late.body.error).toContain("final list for this period is approved");
+    expect(await statusOf(w.a)).toBe("selected");
+
+    const review = await approve(w.e);
+    expect(review.status).toBe(409);
+    expect(review.body.error).toContain("final list for this period is approved");
+    expect(await statusOf(w.e)).toBe("recommended");
+    // Sending it back to its officer is still open.
+    expect((await call(w.admin, "POST", `/applications/${w.e}/review`, { decision: "return", reason: "Look again." })).status).toBe(200);
+  });
+
+  it("is approved once and not undone", async () => {
+    const again = await approveList(w.committee);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toContain("already approved");
+    expect(queue.jobs.filter((j) => j.data.template === "summit-result")).toHaveLength(4);
+  });
+
+  it("sends the emails again to the applicants a down queue missed, and to nobody twice", async () => {
+    const before = queue.jobs.length;
+    expect((await resend(w.committee)).body.unnotified).toBe(0);
+    expect(queue.jobs).toHaveLength(before);
+
+    const [first, second, third] = await results();
+    await db.update(schema.applicationResult).set({ notifiedAt: null }).where(eq(schema.applicationResult.applicationId, first!.applicationId));
+    await db.update(schema.applicationResult).set({ notifiedAt: null }).where(eq(schema.applicationResult.applicationId, second!.applicationId));
+    await db.update(schema.applicationResult).set({ notifiedAt: null }).where(eq(schema.applicationResult.applicationId, third!.applicationId));
+    expect((await view()).unnotified).toBe(3);
+
+    // The queue is down for the first one tried: that applicant is still waiting, the others are sent.
+    queue.failNext = true;
+    const partial = await resend(w.facilitator);
+    expect(partial.status, JSON.stringify(partial.body)).toBe(200);
+    expect(partial.body.unnotified).toBe(1);
+    expect(queue.jobs).toHaveLength(before + 2);
+
+    const rest = await resend(w.admin);
+    expect(rest.body.unnotified).toBe(0);
+    expect(queue.jobs).toHaveLength(before + 3);
+    const audit = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, w.periodId), eq(schema.auditLog.action, "summit.finalList.resent")));
+    expect(audit).toHaveLength(3);
+  });
+
+  it("is for the committee, administrators and facilitators to resend", async () => {
+    for (const user of [w.reviewer, w.owners[0]!, w.outsider]) expect((await resend(user)).status).toBe(403);
   });
 });
