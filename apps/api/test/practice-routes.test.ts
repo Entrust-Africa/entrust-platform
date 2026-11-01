@@ -133,3 +133,85 @@ describe("working the ZEBU Coffee case alone", () => {
     expect((await get(w.learner, res.body.id)).status).toBe(200);
   });
 });
+
+describe("the scripted events", () => {
+  let id: string;
+  const events = (caseId: string) => callV1(w.learner, "GET", `${PRACTICE}/${caseId}/events`);
+  const play = (caseId: string, event: string, as?: string) => callV1(w.learner, "POST", `${PRACTICE}/${caseId}/events/${event}${asQuery(as)}`);
+  const flagOf = (detail: Json, rule: string) => detail.flags.find((f: Json) => f.rule === rule);
+  const plannedLoading = async (caseId: string) => {
+    const rows = await db.select().from(schema.caseEvent).where(and(eq(schema.caseEvent.caseId, caseId), eq(schema.caseEvent.type, "clock_input_set")));
+    return rows.map((r) => r.data as { key: string; value: string }).findLast((d) => d.key === "plannedLoading")?.value;
+  };
+  beforeAll(async () => {
+    const [practice] = await db.select().from(schema.exportCase).where(and(eq(schema.exportCase.organizationId, w.org), eq(schema.exportCase.practiceScenario, "zebu-coffee")));
+    id = practice!.id;
+  });
+
+  it("lists what can happen in the scenario, none of it played yet", async () => {
+    const res = await events(id);
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((e: Json) => [e.id, e.played])).toEqual([["documents-arrive", false], ["shipment-delay", false]]);
+    expect((await callV1(w.stranger, "GET", `${PRACTICE}/${id}/events`)).status).toBe(404);
+    expect((await callV1(null, "GET", `${PRACTICE}/${id}/events`)).status).toBe(401);
+  });
+
+  it("brings the documents in with a 12 kg discrepancy that raises FL-06, and holds the bank handoff until it is fixed", async () => {
+    const res = await play(id, "documents-arrive");
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.yourRole).toBe("owner");
+    expect(flagOf(res.body, "FL-06")).toMatchObject({ status: "open" });
+    expect(JSON.stringify(res.body.reconciliation)).toMatch(/19596 ?kg/);
+
+    // The learner finds the packing list is the one that's wrong, and corrects it.
+    const fixed = await callV1(w.learner, "PUT", `${PRACTICE}/${id}/documents/final_packing_list/fields`, { fields: { grossWeight: "19584 kg" } });
+    expect(fixed.status, JSON.stringify(fixed.body)).toBe(200);
+    expect(flagOf(fixed.body, "FL-06")).toMatchObject({ status: "resolved" });
+  });
+
+  it("happens once", async () => {
+    const again = await play(id, "documents-arrive");
+    expect(again.status).toBe(409);
+    expect(again.body.error).toMatch(/already happened/);
+    expect((await events(id)).body.items[0]).toMatchObject({ id: "documents-arrive", played: true });
+    expect((await play(id, "no-such-event")).status).toBe(404);
+  });
+
+  it("delays the vessel by moving the planned loading time five days, once it has one", async () => {
+    const early = await play(id, "shipment-delay");
+    expect(early.status).toBe(422);
+    expect(early.body.error).toMatch(/planned loading time first/);
+
+    const recorded = await callV1(w.learner, "POST", `${PRACTICE}/${id}/clock-inputs`, { key: "plannedLoading", value: "2026-11-10T09:00:00+03:00" });
+    expect(recorded.status, JSON.stringify(recorded.body)).toBe(200);
+    const delayed = await play(id, "shipment-delay");
+    expect(delayed.status, JSON.stringify(delayed.body)).toBe(200);
+    expect(await plannedLoading(id)).toBe("2026-11-15T09:00:00+03:00");
+    expect(JSON.stringify(delayed.body.deadlines)).not.toBe(JSON.stringify(recorded.body.deadlines));
+  });
+
+  it("keeps a plain date a plain date, and carries it over a month end", async () => {
+    const created = await callV1(w.learner, "POST", `${PRACTICE}/${id}/reset`);
+    const fresh = created.body.id;
+    await callV1(w.learner, "POST", `${PRACTICE}/${fresh}/clock-inputs`, { key: "plannedLoading", value: "2026-11-28" });
+    expect((await play(fresh, "shipment-delay")).status).toBe(200);
+    expect(await plannedLoading(fresh)).toBe("2026-12-03");
+    id = fresh;
+  });
+
+  it("can be played again after a reset, and records each play in the audit trail as the learner's", async () => {
+    const created = await callV1(w.learner, "POST", `${PRACTICE}/${id}/reset`);
+    expect((await events(created.body.id)).body.items.every((e: Json) => e.played === false)).toBe(true);
+    expect((await play(created.body.id, "documents-arrive", "facilitator")).body.yourRole).toBe("facilitator");
+    const rows = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, created.body.id), eq(schema.auditLog.action, "practice.event_played")));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: w.learner.id, platform: "trade", after: { event: "documents-arrive" } });
+  });
+
+  it("is not available on a real case, or to another organisation", async () => {
+    const real = await callV1(w.learner, "POST", "/clear/cases", { organizationId: w.org, facts: { product: "green_coffee", destinationCountry: "US", transportMode: "sea" } });
+    expect(real.status).toBe(201);
+    expect((await play(real.body.id, "documents-arrive")).status).toBe(404);
+    expect((await callV1(w.stranger, "POST", `${PRACTICE}/${id}/events/documents-arrive`)).status).toBe(404);
+  });
+});

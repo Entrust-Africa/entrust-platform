@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { MODULE_IDS } from "@entrust/trade-rules";
-import { Facts, Role } from "./clear";
+import { CaseIdParam, Facts, Role } from "./clear";
 
 const ModuleSummary = z
   .object({
@@ -76,3 +76,20 @@ export const PracticeRoleQuery = z.object({
     example: "reviewer",
   }),
 });
+
+export const PracticeEventParam = CaseIdParam.extend({ eventId: z.string().openapi({ example: "documents-arrive" }) });
+
+export const PracticeEventList = z
+  .object({
+    items: z.array(
+      z.object({
+        id: z.string().openapi({ example: "documents-arrive" }),
+        title: z.string(),
+        /** What the learner is told has happened. */
+        story: z.string(),
+        /** Whether it has been played on this case. Resetting the case clears it. */
+        played: z.boolean(),
+      }),
+    ),
+  })
+  .openapi("PracticeEventList");

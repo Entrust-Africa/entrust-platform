@@ -304,6 +304,8 @@ describe("API documentation", () => {
         "/v1/trade/practice-cases/{id}/clock-inputs",
         "/v1/trade/practice-cases/{id}/contract",
         "/v1/trade/practice-cases/{id}/documents/{document}/fields",
+        "/v1/trade/practice-cases/{id}/events",
+        "/v1/trade/practice-cases/{id}/events/{eventId}",
         "/v1/trade/practice-cases/{id}/evidence",
         "/v1/trade/practice-cases/{id}/evidence/{evidenceId}/review",
         "/v1/trade/practice-cases/{id}/facts",

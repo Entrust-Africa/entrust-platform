@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { STEP_WORKERS, type CaseFacts } from "@entrust/gate-engine";
-import type { CaseCreatedView, CaseListView } from "../schemas/clear";
+import type { CaseCreatedView, CaseDetailView, CaseListView } from "../schemas/clear";
 import { actorFor, findCase, hasTradeAccess, requireRole, type Ctx } from "./access";
 import { recordChange } from "./audit";
-import { evaluate, loadCaseData, organizationNames } from "./case-data";
-import { buildDetail } from "./detail";
+import { evaluate, loadCaseData, loadEvents, organizationNames, type EventRow } from "./case-data";
+import { applyClockInput, latestClockInput } from "./clocks";
+import { buildDetail, mutateCase } from "./detail";
+import { applyDocumentFields } from "./documents";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { checkFacts, type FactInput } from "./facts";
@@ -178,4 +180,59 @@ export async function listPracticeCases(ctx: Ctx, organizationId?: string): Prom
 async function summaries(ctx: Ctx, rows: (typeof schema.exportCase.$inferSelect)[]): Promise<CaseListView> {
   const [data, names] = await Promise.all([loadCaseData(ctx.db, rows), organizationNames(ctx.db, rows.map((r) => r.organizationId))]);
   return { items: data.map((d) => summaryOf(d, names.get(d.row.organizationId) ?? "", evaluate(d, ctx.now))), total: rows.length };
+}
+
+const PRACTICE_EVENT_PLAYED = "practice_event_played";
+
+const playedEvents = (history: readonly EventRow[]): Set<string> =>
+  new Set(history.filter((e) => e.type === PRACTICE_EVENT_PLAYED).map((e) => (e.data as { event: string }).event));
+
+/** A date or timestamp moved by whole days, keeping its time and offset. */
+function shiftDays(value: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(.*)$/.exec(value);
+  if (!match) throw new Error(`Not a date: ${value}`);
+  const moved = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return `${moved.toISOString().slice(0, 10)}${match[4]}`;
+}
+
+/** The scripted events of a practice case's scenario, and which of them have happened. */
+export async function listPracticeEvents(ctx: Ctx, caseId: string) {
+  const { row } = await findCase(ctx.db, ctx.principal, caseId, { practice: ctx.practice ?? {} });
+  const played = playedEvents(await loadEvents(ctx.db, row.id));
+  const events = findScenario(row.practiceScenario ?? "")?.events ?? [];
+  return { items: events.map(({ id, title, story }) => ({ id, title, story, played: played.has(id) })) };
+}
+
+/**
+ * Plays a scripted event: what happens to the shipment, which the learner then has to handle. Its
+ * effects are applied the way the SME would enter them, in one transaction with the case locked, so an
+ * event happens once even if it is played twice at the same time. Anyone who can work the case can play it.
+ * Resetting the case lets it be played again.
+ */
+export function playPracticeEvent(ctx: Ctx, caseId: string, eventId: string): Promise<CaseDetailView> {
+  return mutateCase({ ...ctx, practice: ctx.practice ?? {} }, caseId, async (tx, { row }) => {
+    const event = findScenario(row.practiceScenario ?? "")?.events.find((e) => e.id === eventId);
+    if (!event) throw new ServiceError("not_found", "No such event in this scenario.");
+    const history = await loadEvents(tx, row.id);
+    if (playedEvents(history).has(event.id)) {
+      throw new ServiceError("invalid_transition", `"${event.title}" has already happened. Reset the case to play it again.`);
+    }
+
+    for (const effect of event.effects) {
+      if (effect.kind === "document_fields") {
+        for (const [document, fields] of Object.entries(effect.documents)) await applyDocumentFields(tx, row, ctx, document, { ...fields });
+      } else {
+        const planned = latestClockInput(history, "plannedLoading");
+        if (!planned) throw new ServiceError("precondition_failed", "Record the planned loading time first. The delay moves it.");
+        await applyClockInput(tx, row, ctx, { key: "plannedLoading", value: shiftDays(planned, effect.days) });
+      }
+    }
+    await recordChange(tx, ctx.principal.userId, {
+      caseId: row.id,
+      organizationId: row.organizationId,
+      action: "practice.event_played",
+      after: { event: event.id },
+      event: { type: PRACTICE_EVENT_PLAYED, data: { event: event.id } },
+    });
+  });
 }

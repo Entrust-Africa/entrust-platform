@@ -18,7 +18,7 @@ import {
   UpdateFactsBody,
   WaiveFlagBody,
 } from "../../schemas/clear";
-import { PracticeListQuery, PracticeRoleQuery, PracticeScenarioList, StartPracticeBody } from "../../schemas/trade";
+import { PracticeEventList, PracticeEventParam, PracticeListQuery, PracticeRoleQuery, PracticeScenarioList, StartPracticeBody } from "../../schemas/trade";
 import { amendCase } from "../../services/amendments";
 import { getCase, updateFacts } from "../../services/cases";
 import { recordClockInput } from "../../services/clocks";
@@ -26,7 +26,14 @@ import { recordContract } from "../../services/contracts";
 import { recordDocumentFields } from "../../services/documents";
 import { reviewEvidence, submitEvidence } from "../../services/evidence";
 import { waiveFlag } from "../../services/flags";
-import { listPracticeCases, listPracticeScenarios, resetPracticeCase, startPracticeCase } from "../../services/practice";
+import {
+  listPracticeCases,
+  listPracticeEvents,
+  listPracticeScenarios,
+  playPracticeEvent,
+  resetPracticeCase,
+  startPracticeCase,
+} from "../../services/practice";
 import { transitionCaseStep } from "../../services/steps";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "../clear/shared";
 
@@ -182,6 +189,27 @@ const waiveRoute = createRoute({
   responses: { 200: { description: "The updated case", content: json(CaseDetail) }, ...writes },
 });
 
+const eventsRoute = createRoute({
+  method: "get",
+  path: "/practice-cases/{id}/events",
+  tags,
+  summary: "List the scenario's events",
+  description: "What can happen to the shipment in this scenario, in the order the story reaches it, and which of them have happened on this case.",
+  request: { params: CaseIdParam },
+  responses: { 200: { description: "The events", content: json(PracticeEventList) }, ...reads },
+});
+
+const playEventRoute = createRoute({
+  method: "post",
+  path: "/practice-cases/{id}/events/{eventId}",
+  tags,
+  summary: "Play an event",
+  description:
+    "Makes the event happen: the documents arrive with a discrepancy for the learner to find, or the vessel is delayed and the deadline clocks move. Each event happens once per case (reset to play it again). The delay needs a planned loading time recorded first.",
+  request: { params: PracticeEventParam, query: PracticeRoleQuery },
+  responses: { 200: { description: "The case after the event", content: json(CaseDetail) }, ...writes },
+});
+
 /** The caller's context for a request about a practice case, practising as the role in `as`. */
 const practiceContext = (c: { get(key: "user"): { id: string } | null }, as?: z.infer<typeof PracticeRoleQuery>["as"]) =>
   contextFor(c.get("user"), { actingAs: as });
@@ -204,6 +232,14 @@ export const tradePractice = practice
   .openapi(getRoute, async (c) => {
     const { id } = c.req.valid("param");
     return c.json(await getCase(await practiceContext(c, c.req.valid("query").as), id), 200);
+  })
+  .openapi(eventsRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    return c.json(await listPracticeEvents(await practiceContext(c), id), 200);
+  })
+  .openapi(playEventRoute, async (c) => {
+    const { id, eventId } = c.req.valid("param");
+    return c.json(await playPracticeEvent(await practiceContext(c, c.req.valid("query").as), id, eventId), 200);
   })
   .openapi(resetRoute, async (c) => {
     const { id } = c.req.valid("param");
