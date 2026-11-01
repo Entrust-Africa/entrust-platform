@@ -3,7 +3,8 @@ import type { CaseDetailView } from "../schemas/clear";
 import type { Ctx } from "./access";
 import { requireRole } from "./access";
 import { recordChange } from "./audit";
-import { loadEvents } from "./case-data";
+import { loadEvents, type CaseRow, type EventRow } from "./case-data";
+import type { Executor } from "./db";
 import { mutateCase } from "./detail";
 import { fromEngine } from "./errors";
 
@@ -19,20 +20,31 @@ export function recordClockInput(
 ): Promise<CaseDetailView> {
   return mutateCase(ctx, caseId, async (tx, { row, actor }) => {
     requireRole(actor, STEP_WORKERS.sme, "record dates for a case's deadlines");
-    const value = fromEngine(() => checkClockInput(input.key, input.value));
+    await applyClockInput(tx, row, ctx, input);
+  });
+}
 
-    const previous = (await loadEvents(tx, row.id))
-      .findLast((e) => e.type === CLOCK_INPUT_SET && isInput(e.data, input.key))
-      ?.data as { value: string } | undefined;
+/** The value a clock input was last set to, from the case's history. */
+export const latestClockInput = (events: readonly EventRow[], key: ClockInputKey): string | undefined =>
+  (events.findLast((e) => e.type === CLOCK_INPUT_SET && isInput(e.data, key))?.data as { value: string } | undefined)?.value;
 
-    await recordChange(tx, ctx.principal.userId, {
-      caseId: row.id,
-      organizationId: row.organizationId,
-      action: "case.clock_input_set",
-      before: previous ? { key: input.key, value: previous.value } : null,
-      after: { key: input.key, value },
-      event: { type: CLOCK_INPUT_SET, data: { key: input.key, value } },
-    });
+/** Checks and records a clock input, inside the transaction of a change to the case. Role checks are the caller's. */
+export async function applyClockInput(
+  tx: Executor,
+  row: CaseRow,
+  ctx: Pick<Ctx, "principal">,
+  input: { key: ClockInputKey; value: string },
+): Promise<void> {
+  const value = fromEngine(() => checkClockInput(input.key, input.value));
+  const previous = latestClockInput(await loadEvents(tx, row.id), input.key);
+
+  await recordChange(tx, ctx.principal.userId, {
+    caseId: row.id,
+    organizationId: row.organizationId,
+    action: "case.clock_input_set",
+    before: previous ? { key: input.key, value: previous } : null,
+    after: { key: input.key, value },
+    event: { type: CLOCK_INPUT_SET, data: { key: input.key, value } },
   });
 }
 

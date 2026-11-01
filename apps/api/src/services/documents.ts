@@ -30,23 +30,34 @@ export function recordDocumentFields(
 ): Promise<CaseDetailView> {
   return mutateCase(ctx, caseId, async (tx, { row, actor }) => {
     requireRole(actor, STEP_WORKERS.sme, "enter a case's document fields");
-    const stored = await storeDocumentFields(tx, row, { userId: ctx.principal.userId, now: ctx.now }, documentId, input);
-    if (!stored) return;
-    const { document, existing, changes, cleared } = stored;
+    await applyDocumentFields(tx, row, ctx, documentId, input);
+  });
+}
 
-    const keys = [...changes.map(([key]) => key), ...cleared];
-    const pick = (values: Record<string, string | undefined>) => Object.fromEntries(keys.map((key) => [key, values[key] ?? null]));
-    await recordChange(tx, ctx.principal.userId, {
-      caseId: row.id,
-      organizationId: row.organizationId,
-      action: "case.document_fields_recorded",
-      before: { document: document.id, fields: pick(existing) },
-      after: { document: document.id, fields: pick({ ...Object.fromEntries(changes), ...Object.fromEntries(cleared.map((key) => [key, undefined])) }) },
-      event: {
-        type: "document_fields_recorded",
-        data: { document: document.id, set: changes.map(([key]) => key), cleared },
-      },
-    });
+/** Writes the fields and records the change, inside the transaction of a change to the case. Role checks are the caller's. */
+export async function applyDocumentFields(
+  tx: Executor,
+  row: CaseRow,
+  ctx: Pick<Ctx, "principal" | "now">,
+  documentId: string,
+  input: Record<string, string | null>,
+): Promise<void> {
+  const stored = await storeDocumentFields(tx, row, { userId: ctx.principal.userId, now: ctx.now }, documentId, input);
+  if (!stored) return;
+  const { document, existing, changes, cleared } = stored;
+
+  const keys = [...changes.map(([key]) => key), ...cleared];
+  const pick = (values: Record<string, string | undefined>) => Object.fromEntries(keys.map((key) => [key, values[key] ?? null]));
+  await recordChange(tx, ctx.principal.userId, {
+    caseId: row.id,
+    organizationId: row.organizationId,
+    action: "case.document_fields_recorded",
+    before: { document: document.id, fields: pick(existing) },
+    after: { document: document.id, fields: pick({ ...Object.fromEntries(changes), ...Object.fromEntries(cleared.map((key) => [key, undefined])) }) },
+    event: {
+      type: "document_fields_recorded",
+      data: { document: document.id, set: changes.map(([key]) => key), cleared },
+    },
   });
 }
 
