@@ -33,6 +33,14 @@ export const PasswordResetEmailPropsSchema = z.object({
   url: z.string().url(),
 });
 
+export const SummitClarificationEmailPropsSchema = z.object({
+  applicationNumber: z.string().min(1),
+  organizationName: z.string().min(1),
+  message: z.string().min(1),
+  /** Where the applicant answers. Absent when no Summit app address is configured. */
+  url: z.string().url().optional(),
+});
+
 const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("test"),
@@ -49,6 +57,10 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("password-reset"),
     props: PasswordResetEmailPropsSchema,
+  }),
+  BaseEmailSchema.extend({
+    template: z.literal("summit-clarification"),
+    props: SummitClarificationEmailPropsSchema,
   }),
 ]);
 
