@@ -13,7 +13,9 @@ const withCategory = (id: string, change: Partial<Category>, base: SummitRules =
 // The content of every approved rules version and published application form. Every score and application
 // stores the version it used, so an approved or published version must not change: put a correction in a new
 // version instead. Add a line here when a version is approved or published. Drafts can change.
-const PUBLISHED_RULES: Record<string, string> = {};
+const PUBLISHED_RULES: Record<string, string> = {
+  "1.0.0": "9b1c84dbc04fe340320ef047f506b3228b6c5618297828a5a02ff904ed7d599e",
+};
 const PUBLISHED_TEMPLATES: Record<string, string> = {};
 
 const sha256 = async (value: unknown) =>
@@ -35,16 +37,18 @@ describe("the Summit rules", () => {
     expect(Object.fromEntries(await Promise.all(published.map(async (t) => [t.version, await sha256(t)])))).toEqual(PUBLISHED_TEMPLATES);
   });
 
-  it("start as a draft that nobody can score against", () => {
+  it("start with a placeholder draft that nobody can score against, then the scorecard's approved version", () => {
     expect(draftRules.status).toBe("draft");
     expect(canAssess(draftRules)).toBe(false);
     expect(canAssess(approvedRules)).toBe(true);
-    expect(latestApprovedRules()).toBeUndefined();
+    expect(latestApprovedRules()?.version).toBe("1.0.0");
+    expect(canAssess(latestApprovedRules() as SummitRules)).toBe(true);
     expect(latestPublishedTemplate()).toBeUndefined();
   });
 
   it("finds a version", () => {
     expect(findSummitRules("0.1.0")).toBe(draftRules);
+    expect(findSummitRules("1.0.0")?.status).toBe("approved");
     expect(findSummitRules("9.9.9")).toBeUndefined();
     expect(findApplicationTemplate("0.1.0")?.status).toBe("draft");
   });

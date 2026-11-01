@@ -77,13 +77,22 @@ export type CategoryId = (typeof CATEGORY_IDS)[number];
 /** The total the commercial assessment is out of. */
 export const TOTAL_POINTS = 100;
 
+/** What a range of points means, from the scorecard's scoring guidance. Together a criterion's bands cover 0 to its maximum. */
+export interface ScoreBand {
+  from: number;
+  to: number;
+  text: string;
+}
+
 export interface Criterion {
   /** Permanent ID, stored with every score. */
   id: string;
   text: string;
   maxPoints: number;
-  /** What an officer needs to see to give the points. Required before a version is approved. */
+  /** What an officer needs to see to give the points. An approved version needs it here or on the category. */
   evidence: readonly string[];
+  /** What each range of points means. */
+  guidance?: readonly ScoreBand[];
   /** The pathways this criterion scores. Absent means all of them. */
   pathways?: readonly OpportunityPathway[];
 }
@@ -94,6 +103,8 @@ export interface Category {
   maxPoints: number;
   /** What the spec says to assess. */
   assess: readonly string[];
+  /** The evidence the scorecard lists for the whole category, for criteria that don't list their own. */
+  evidence?: readonly string[];
   criteria: readonly Criterion[];
   /** Not applicable to an applicant that isn't seeking investment (category D). */
   investmentOnly?: boolean;
@@ -120,6 +131,41 @@ export interface SummitRules {
   eligibility: EligibilityRules;
   rubric: Rubric;
 }
+
+// What the assessment officer recommends and what the committee decides (the scorecard's last two sections).
+
+export const RECOMMENDATIONS = [
+  { id: "recommend_selection", label: "Recommend for Summit selection" },
+  { id: "recommend_subject_to_verification", label: "Recommend subject to additional verification" },
+  { id: "recommend_development_or_waitlist", label: "Recommend for development or waitlist" },
+  { id: "do_not_recommend", label: "Do not recommend" },
+] as const;
+export type Recommendation = (typeof RECOMMENDATIONS)[number]["id"];
+
+/** The Summit opportunity an officer thinks suits the applicant best. */
+export const SUITABLE_OPPORTUNITIES = [
+  { id: "trade", label: "Trade opportunity" },
+  { id: "investment", label: "Investment opportunity" },
+  { id: "strategic_partnership", label: "Strategic partnership" },
+  { id: "combined", label: "Combined opportunity" },
+] as const;
+export type SuitableOpportunity = (typeof SUITABLE_OPPORTUNITIES)[number]["id"];
+
+export const COMMITTEE_DECISIONS = [
+  { id: "selected", label: "Selected" },
+  { id: "waitlisted", label: "Waitlisted" },
+  { id: "not_selected", label: "Not selected" },
+  { id: "further_review_required", label: "Further review required" },
+] as const;
+export type CommitteeDecision = (typeof COMMITTEE_DECISIONS)[number]["id"];
+
+/** The application's status once the committee decides. A decision to review further leaves it with the committee. */
+export const COMMITTEE_DECISION_STATUS: Readonly<Record<CommitteeDecision, ApplicationStatus>> = {
+  selected: "selected",
+  waitlisted: "waitlisted",
+  not_selected: "not_selected",
+  further_review_required: "committee_review",
+};
 
 // Verification (section 7).
 

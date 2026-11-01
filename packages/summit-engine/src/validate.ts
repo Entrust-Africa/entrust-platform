@@ -1,8 +1,27 @@
 import { DOCUMENT_KINDS, CATEGORY_IDS, OPPORTUNITY_PATHWAYS, TOTAL_POINTS } from "./types";
-import type { SummitRules } from "./types";
+import type { Criterion, SummitRules } from "./types";
 import { applicableCriteria } from "./scoring";
 
 const duplicates = <T>(values: readonly T[]): T[] => [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
+
+/** The score bands of a criterion cover every whole score from 0 to its maximum, once. */
+function guidanceErrors({ id, maxPoints, guidance = [] }: Criterion): string[] {
+  const errors: string[] = [];
+  const covered = new Map<number, number>();
+  for (const band of guidance) {
+    if (!Number.isInteger(band.from) || !Number.isInteger(band.to) || band.from > band.to) errors.push(`criterion ${id}: the score band ${band.from} to ${band.to} is not a range of whole points`);
+    else for (let points = band.from; points <= band.to; points++) covered.set(points, (covered.get(points) ?? 0) + 1);
+    if (!band.text.trim()) errors.push(`criterion ${id}: the score band ${band.from} to ${band.to} says nothing`);
+  }
+  for (let points = 0; points <= maxPoints; points++) {
+    if (!covered.has(points)) errors.push(`criterion ${id}: no score band covers ${points} points`);
+  }
+  for (const [points, times] of covered) {
+    if (points > maxPoints || points < 0) errors.push(`criterion ${id}: a score band reaches ${points} points, above its ${maxPoints}`);
+    else if (times > 1) errors.push(`criterion ${id}: ${points} points are in more than one score band`);
+  }
+  return errors;
+}
 
 function rulesErrors(rules: SummitRules): string[] {
   const errors: string[] = [];
@@ -38,14 +57,17 @@ function rulesErrors(rules: SummitRules): string[] {
     if (!Number.isInteger(category.maxPoints) || category.maxPoints <= 0) errors.push(`${label}: max points is a whole number above 0`);
     if (!category.title.trim() || !category.assess.length) errors.push(`${label}: needs a title and what it assesses`);
     if (!category.criteria.length) errors.push(`${label}: has no criteria`);
+    if (category.evidence?.some((e) => !e.trim())) errors.push(`${label}: an evidence requirement is blank`);
     for (const criterion of category.criteria) {
       if (!Number.isInteger(criterion.maxPoints) || criterion.maxPoints <= 0) errors.push(`criterion ${criterion.id}: max points is a whole number above 0`);
       if (!criterion.text.trim()) errors.push(`criterion ${criterion.id}: needs its text`);
       for (const p of criterion.pathways ?? []) if (!(OPPORTUNITY_PATHWAYS as readonly string[]).includes(p)) errors.push(`criterion ${criterion.id}: unknown pathway ${p}`);
       if (criterion.pathways && !criterion.pathways.length) errors.push(`criterion ${criterion.id}: scores no pathway`);
       if (rules.status === "approved") {
-        if (!criterion.evidence.length || criterion.evidence.some((e) => !e.trim())) errors.push(`criterion ${criterion.id}: an approved version needs its evidence requirements`);
+        const evidence = criterion.evidence.length ? criterion.evidence : (category.evidence ?? []);
+        if (!evidence.length || criterion.evidence.some((e) => !e.trim())) errors.push(`criterion ${criterion.id}: an approved version needs its evidence requirements`);
       }
+      if (criterion.guidance) errors.push(...guidanceErrors(criterion));
     }
     // Every pathway has to be able to earn the category's full points, or the pathways wouldn't be comparable.
     for (const pathway of OPPORTUNITY_PATHWAYS) {
