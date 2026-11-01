@@ -85,6 +85,16 @@ export async function cleanup() {
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, tableIds));
     await db.delete(schema.minimumPriceTable).where(inArray(schema.minimumPriceTable.id, tableIds));
   }
+  // Summit periods belong to no organisation. An organisation's applications go with it, so the periods are free to go.
+  const periods = await db
+    .select({ id: schema.applicationPeriod.id })
+    .from(schema.applicationPeriod)
+    .where(like(schema.applicationPeriod.name, `${PREFIX}%`));
+  if (periods.length) {
+    const periodIds = periods.map((p) => p.id);
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, periodIds));
+    await db.delete(schema.applicationPeriod).where(inArray(schema.applicationPeriod.id, periodIds));
+  }
   await db.delete(schema.user).where(like(schema.user.email, `${PREFIX}%`));
   await db.delete(schema.caseReferenceCounter).where(eq(schema.caseReferenceCounter.country, COUNTRY));
 }

@@ -1,0 +1,289 @@
+import { z } from "@hono/zod-openapi";
+import { QUESTION_TYPES } from "@entrust/forms";
+import { DOCUMENT_KINDS, ELIGIBILITY_CRITERIA, ELIGIBILITY_OUTCOMES, OPPORTUNITY_PATHWAYS } from "@entrust/summit-engine";
+import { DownloadUrlResponse } from "./files";
+
+// What the Summit endpoints take and give. The services build these shapes, so the OpenAPI document,
+// the typed client and the code can't drift apart.
+
+const Timestamp = z.string().openapi({ description: "ISO 8601 timestamp", example: "2026-12-01T09:00:00.000Z" });
+const CriterionId = z.enum(ELIGIBILITY_CRITERIA.map((c) => c.id) as [string, ...string[]]);
+
+// ---- Application periods ----
+
+export const Period = z
+  .object({
+    id: z.uuid(),
+    name: z.string().openapi({ example: "Africa Diaspora Trade and Investment Summit 2026" }),
+    opensAt: Timestamp,
+    closesAt: Timestamp,
+    /** ISO 3166-1 alpha-2 codes of the countries whose SMEs may apply. */
+    countries: z.array(z.string()),
+    /** The application form applicants answer. */
+    templateVersion: z.string().openapi({ example: "1.0.0" }),
+    /** The version of the rules (eligibility documents and the scorecard) used to screen and score. */
+    rulesVersion: z.string().openapi({ example: "1.0.0" }),
+    state: z.enum(["upcoming", "open", "closed"]),
+  })
+  .openapi("SummitPeriod");
+
+export const PeriodList = z.object({ items: z.array(Period) }).openapi("SummitPeriodList");
+
+export const CurrentPeriod = z
+  .object({
+    period: Period.nullable().openapi({
+      description: "The period open now; otherwise the next one to open; otherwise the latest to close. Null before any is set.",
+    }),
+  })
+  .openapi("SummitCurrentPeriod");
+
+export const PeriodBody = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+    opensAt: z.iso.datetime({ offset: true }),
+    closesAt: z.iso.datetime({ offset: true }),
+    countries: z.array(z.string().trim().length(2)).min(1).max(60).openapi({ example: ["ET", "KE", "GH"] }),
+    templateVersion: z
+      .string()
+      .optional()
+      .openapi({ description: "A published version of the application form. Default: the newest published." }),
+    rulesVersion: z.string().optional().openapi({ description: "An approved version of the rules. Default: the newest approved." }),
+  })
+  .openapi("SummitPeriodBody");
+
+export const PeriodPatch = z
+  .object({
+    name: PeriodBody.shape.name.optional(),
+    opensAt: PeriodBody.shape.opensAt.optional(),
+    closesAt: PeriodBody.shape.closesAt.optional(),
+    countries: PeriodBody.shape.countries.optional(),
+  })
+  .openapi("SummitPeriodPatch");
+
+export const PeriodParam = z.object({ id: z.uuid() });
+
+// ---- The application form ----
+
+export const Form = z
+  .object({
+    id: z.string().openapi({ example: "summit.application" }),
+    version: z.string(),
+    title: z.string(),
+    status: z.enum(["draft", "published"]),
+    sections: z.array(
+      z.object({ id: z.string(), title: z.string(), purpose: z.string().optional(), notes: z.array(z.string()).optional() }),
+    ),
+    questions: z.array(
+      z.object({
+        id: z.string().openapi({ example: "S2.12" }),
+        section: z.string(),
+        type: z.enum(QUESTION_TYPES),
+        text: z.string(),
+        help: z.string().optional(),
+        group: z.string().optional(),
+        options: z.array(z.object({ value: z.string(), label: z.string(), exclusive: z.boolean().optional() })).optional(),
+        showIf: z.unknown().optional().openapi({ description: "A condition on earlier answers, evaluated with @entrust/forms." }),
+        optional: z.boolean().optional(),
+        mustBe: z.enum(["yes", "no"]).optional(),
+        maxLength: z.number().optional(),
+        integer: z.boolean().optional(),
+        min: z.number().optional(),
+        max: z.number().optional(),
+        currencies: z.array(z.string()).optional(),
+        maxItems: z.number().optional(),
+        notFuture: z.boolean().optional(),
+      }),
+    ),
+    /** The questions the SME registry fills in ahead of time. */
+    registry: z.array(z.string()),
+  })
+  .openapi("SummitForm");
+
+export const FormParam = z.object({ version: z.string().openapi({ example: "1.0.0" }) });
+
+// ---- Applications ----
+
+export const Answer = z
+  .union([z.string(), z.number(), z.array(z.string()), z.object({ amount: z.number(), currency: z.string() }), z.object({ notKnown: z.literal(true) })])
+  .openapi("SummitAnswer", {
+    description:
+      "A choice, yes/no, text or date (YYYY-MM-DD) is a string; a number is a number; a multiple choice or a list is an array of strings; money is { amount, currency }; \"not known\" is { notKnown: true }.",
+  });
+
+const Pathway = z.enum(OPPORTUNITY_PATHWAYS);
+const DocumentKind = z.enum(DOCUMENT_KINDS);
+
+const QuestionProblem = z.object({ question: z.string(), code: z.string(), message: z.string() });
+
+const Progress = z
+  .object({
+    total: z.number().int().openapi({ description: "Shown questions that have to be answered." }),
+    answered: z.number().int(),
+    percent: z.number().int().openapi({ description: "100 means the form can be submitted." }),
+    bySection: z.record(z.string(), z.object({ answered: z.number().int(), total: z.number().int() })),
+  })
+  .openapi("SummitProgress");
+
+const Person = z.object({ id: z.string(), name: z.string() });
+
+const DocumentView = z
+  .object({
+    id: z.uuid(),
+    fileId: z.uuid(),
+    kind: DocumentKind,
+    /** Financial documents are restricted: only the applicant, the assigned officer and a super administrator open them. */
+    restricted: z.boolean(),
+    fileName: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number().int(),
+    addedAt: Timestamp,
+  })
+  .openapi("SummitDocument");
+
+const EligibilityView = z
+  .object({
+    outcome: z.enum(ELIGIBILITY_OUTCOMES),
+    /** The six requirements. The applicant sees an excepted requirement as met. */
+    criteria: z.array(
+      z.object({ id: CriterionId, text: z.string(), result: z.enum(["met", "not_met", "unclear", "excepted"]), reason: z.string() }),
+    ),
+    missingDocuments: z.array(DocumentKind),
+    screenedAt: Timestamp,
+  })
+  .openapi("SummitEligibility");
+
+export const ApplicationDetail = z
+  .object({
+    id: z.uuid(),
+    /** The unique application ID, such as SUM-000123. */
+    number: z.string().openapi({ example: "SUM-000123" }),
+    organizationId: z.string(),
+    organizationName: z.string(),
+    smeId: z.string().nullable(),
+    country: z.string().nullable(),
+    periodId: z.uuid(),
+    view: z.enum(["applicant", "staff"]).openapi({ description: "Who is looking. The applicant never sees staff-only fields." }),
+    status: z.string().openapi({
+      description:
+        "Staff see the status of the workflow. The applicant sees one of draft, in_review, action_required, not_eligible or withdrawn.",
+      example: "under_assessment",
+    }),
+    templateVersion: z.string(),
+    pathway: Pathway.nullable(),
+    answers: z.record(z.string(), Answer),
+    progress: Progress,
+    /** Shown questions still to answer, and answers that aren't valid. */
+    incomplete: z.array(QuestionProblem),
+    errors: z.array(QuestionProblem),
+    /** The documents the chosen pathway needs at least. */
+    requiredDocuments: z.array(DocumentKind),
+    documents: z.array(DocumentView),
+    eligibility: EligibilityView.nullable(),
+    /** Whether the applicant can change answers and documents now. */
+    editable: z.boolean(),
+    /** Whether the applicant can submit now: editable, and the form is complete. */
+    canSubmit: z.boolean(),
+    closesAt: Timestamp,
+    submittedAt: Timestamp.nullable(),
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
+    staff: z
+      .object({
+        history: z.array(
+          z.object({ from: z.string().nullable(), to: z.string(), by: Person.nullable(), at: Timestamp, reason: z.string().nullable() }),
+        ),
+        officer: z.object({ userId: z.string(), name: z.string(), email: z.string(), assignedAt: Timestamp }).nullable(),
+        exceptions: z.array(z.object({ criterion: CriterionId, reason: z.string(), by: Person.nullable(), at: Timestamp })),
+      })
+      .optional()
+      .openapi({ description: "Present for Entrust staff only." }),
+  })
+  .openapi("SummitApplication");
+
+export const ApplicationSummary = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    organizationId: z.string(),
+    organizationName: z.string(),
+    smeId: z.string().nullable(),
+    country: z.string().nullable(),
+    periodId: z.uuid(),
+    status: z.string(),
+    pathway: Pathway.nullable(),
+    progressPercent: z.number().int(),
+    eligibility: z.enum(ELIGIBILITY_OUTCOMES).nullable(),
+    missingDocuments: z.number().int().openapi({ description: "Required documents not yet provided." }),
+    officer: Person.nullable().openapi({ description: "Entrust staff only." }),
+    submittedAt: Timestamp.nullable(),
+    updatedAt: Timestamp,
+  })
+  .openapi("SummitApplicationSummary");
+
+export const ApplicationList = z.object({ items: z.array(ApplicationSummary), total: z.number().int() }).openapi("SummitApplicationList");
+
+export const ApplicationParam = z.object({ id: z.uuid() });
+export const DocumentParam = ApplicationParam.extend({ documentId: z.uuid() });
+
+export const ListQuery = z.object({
+  organizationId: z.string().optional().openapi({ description: "Narrow to one organisation." }),
+  periodId: z.uuid().optional(),
+  status: z.string().optional().openapi({ description: "Entrust staff: a status of the workflow." }),
+  pathway: Pathway.optional(),
+  officerUserId: z.string().optional().openapi({ description: "Entrust administrators: the officer an application is assigned to." }),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const CreateApplicationBody = z
+  .object({
+    organizationId: z.string().min(1),
+    periodId: z.uuid().optional().openapi({ description: "Default: the period open now." }),
+  })
+  .openapi("SummitCreateApplicationBody");
+
+export const SaveAnswersBody = z
+  .object({
+    answers: z.record(z.string(), Answer.nullable()).openapi({
+      description: "Answers to add or change, by question ID. A null clears the answer. Answers not named stay as they were.",
+      example: { "S1.4": "registered", "S2.12": "trade_and_market_access" },
+    }),
+  })
+  .openapi("SummitSaveAnswersBody");
+
+export const AttachDocumentBody = z
+  .object({
+    fileId: z.uuid().openapi({ description: "A file uploaded through the files API for the applicant's organisation." }),
+    kind: DocumentKind,
+  })
+  .openapi("SummitAttachDocumentBody");
+
+export const WithdrawBody = z.object({ reason: z.string().trim().max(1000).optional() }).openapi("SummitWithdrawBody");
+
+export const DocumentDownload = DownloadUrlResponse;
+
+// ---- Administrators ----
+
+export const OfficerList = z
+  .object({
+    items: z.array(
+      z.object({ userId: z.string(), name: z.string(), email: z.string(), assigned: z.number().int().openapi({ description: "Applications currently assigned." }) }),
+    ),
+  })
+  .openapi("SummitOfficerList");
+
+export const AssignOfficerBody = z.object({ officerUserId: z.string().min(1) }).openapi("SummitAssignOfficerBody");
+
+export const ExceptionBody = z
+  .object({
+    criterion: CriterionId,
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .openapi("SummitExceptionBody");
+
+export type PeriodView = z.infer<typeof Period>;
+export type FormView = z.infer<typeof Form>;
+export type ApplicationDetailView = z.infer<typeof ApplicationDetail>;
+export type ApplicationSummaryView = z.infer<typeof ApplicationSummary>;
+export type ApplicationListView = z.infer<typeof ApplicationList>;
+export type OfficerListView = z.infer<typeof OfficerList>;

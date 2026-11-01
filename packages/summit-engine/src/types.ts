@@ -64,6 +64,9 @@ export const DOCUMENT_KINDS = [
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
+/** Kinds that only the assigned officer and Entrust's administrators may open (section 4: financial documents are restricted). */
+export const RESTRICTED_DOCUMENT_KINDS: readonly DocumentKind[] = ["financial_statements"];
+
 export interface EligibilityRules {
   /** The minimum documents for each pathway. */
   requiredDocuments: Readonly<Record<OpportunityPathway, readonly DocumentKind[]>>;
