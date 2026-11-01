@@ -1,13 +1,15 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
-import { Card, StatusBadge, cn } from "@entrust/ui";
 import { serverApi } from "@/lib/api";
-import { countryName, productLabel, readable } from "@/lib/catalogue";
-import { CASE_STATUSES, NEXT_ACTIONS, OWNERS, PHASES, ROLES } from "@/lib/statuses";
-import { EvidenceList } from "./evidence";
-import { Amendments, Contract, Deadlines, Facts, Flags, Requirements } from "./panels";
-import { Phases } from "./phases";
+import { PHASES } from "@/lib/statuses";
+import { Drawer } from "./drawer";
+import { EvidenceTab } from "./evidence";
+import { CaseHeader } from "./header";
+import { OverviewTab } from "./overview";
+import { DeadlinesTab, DetailsTab, FlagsTab, RequirementsTab } from "./panels";
+import { StepPanel } from "./step-panel";
+import { StepsTab } from "./steps";
+import { TABS, caseHref, type Tab, type View } from "./view";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,135 +29,39 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: detail.reference };
 }
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-  return (
-    <section id={id} className="scroll-mt-4">
-      <h2 className="font-display text-lg font-bold">{title}</h2>
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
+type Search = Record<string, string | string[] | undefined>;
 
-export default async function CasePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+export default async function CasePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Search> }) {
+  const [{ id }, search] = await Promise.all([params, searchParams]);
   const detail = await loadCase(id);
-  const status = CASE_STATUSES[detail.status];
-  const next = detail.nextAction;
-  const openFlags = detail.flags.filter((f) => f.status === "open").length;
-  const toReview = detail.evidence.filter((e) => e.latest && (e.status === "submitted" || e.status === "under_review")).length;
+
+  const tabParam = one(search.tab);
+  const tab: Tab = TABS.find((t) => t.id === tabParam)?.id ?? "overview";
+  const phaseParam = Number(one(search.phase));
+  const phase = tab === "steps" && PHASES.some((p) => p.n === phaseParam) ? phaseParam : undefined;
+  const view: View = { tab, phase, show: one(search.show), req: one(search.req) };
+  const step = detail.workflow.steps.find((s) => s.id === one(search.step));
+  if (step) view.step = step.id;
 
   return (
     <>
-      <Link href="/" className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline">
-        ← Cases
-      </Link>
-
-      <Card className="mt-3 overflow-hidden">
-        <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-6">
-          <div className="min-w-0">
-            <p className="font-mono text-xs text-ink-3">
-              {detail.reference} · {detail.organizationName}
-              {detail.version > 1 && ` · version ${detail.version}`}
-            </p>
-            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
-              {productLabel(detail.product)} → {countryName(detail.destinationCountry)}
-            </h1>
-            <p className="mt-1 text-sm text-ink-2">Your role: {ROLES[detail.yourRole]}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {openFlags > 0 && <StatusBadge tone="danger">{openFlags === 1 ? "1 open flag" : `${openFlags} open flags`}</StatusBadge>}
-            <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
-          </div>
-        </div>
-        <ol className="grid grid-cols-7 gap-1 px-4 sm:px-6" aria-label={`Phase ${detail.currentPhase} of 7`}>
-          {PHASES.map((p) => (
-            <li
-              key={p.n}
-              title={`Phase ${p.n}: ${p.title}`}
-              className={cn(
-                "h-1.5 rounded-full",
-                p.n < detail.currentPhase ? "bg-ok" : p.n === detail.currentPhase ? "bg-product" : "bg-line",
-              )}
-            />
-          ))}
-        </ol>
-        <div className="mt-5 border-t border-line bg-surface-2 px-4 py-3 text-sm sm:px-6">
-          {next ? (
-            <p>
-              <span className="font-semibold">
-                Phase {detail.currentPhase} · next: {NEXT_ACTIONS[next.kind]}{" "}
-                <a href={`#${next.stepId}`} className="font-mono text-brand-600 underline underline-offset-2">
-                  {next.stepId}
-                </a>
-              </span>{" "}
-              ({OWNERS[next.owner]}). {readable(next.detail)}
-            </p>
-          ) : (
-            <p>
-              <span className="font-semibold">Phase {detail.currentPhase}</span> · nothing is waiting.
-            </p>
-          )}
-        </div>
-      </Card>
-
-      <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {[
-          ["steps", "Steps"],
-          ["evidence", toReview ? `Evidence (${toReview} to review)` : "Evidence"],
-          ["flags", openFlags ? `Flags (${openFlags})` : "Flags"],
-          ["facts", "Facts"],
-          ["contract", "Contract"],
-          ["deadlines", "Deadlines"],
-          ["requirements", "Requirements"],
-        ].map(([anchor, label]) => (
-          <a key={anchor} href={`#${anchor}`} className="font-semibold text-brand-600 underline-offset-4 hover:underline">
-            {label}
-          </a>
-        ))}
-      </nav>
-
-      <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="flex min-w-0 flex-col gap-8">
-          <Section id="steps" title="Steps">
-            <Phases detail={detail} />
-          </Section>
-          <Section id="evidence" title="Evidence">
-            <EvidenceList detail={detail} />
-          </Section>
-        </div>
-        <div className="flex min-w-0 flex-col gap-8">
-          <Section id="flags" title="Flags">
-            <Flags detail={detail} />
-          </Section>
-          <Section id="facts" title="Facts">
-            <Card className="p-4">
-              <Facts detail={detail} />
-            </Card>
-          </Section>
-          <Section id="contract" title="Sales contract">
-            <Card className="p-4">
-              <Contract detail={detail} />
-            </Card>
-          </Section>
-          <Section id="deadlines" title="Deadlines">
-            <Card className="p-4">
-              <Deadlines detail={detail} />
-            </Card>
-          </Section>
-          {detail.amendments.length > 0 && (
-            <Section id="amendments" title="Amendments">
-              <Card className="p-4">
-                <Amendments detail={detail} />
-              </Card>
-            </Section>
-          )}
-          <Section id="requirements" title="Requirements">
-            <Card className="p-4">
-              <Requirements detail={detail} />
-            </Card>
-          </Section>
-        </div>
+      <CaseHeader detail={detail} view={view} />
+      <div className="mt-6">
+        {tab === "overview" && <OverviewTab detail={detail} view={view} />}
+        {tab === "steps" && <StepsTab detail={detail} view={view} phase={phase ?? detail.currentPhase} />}
+        {tab === "evidence" && <EvidenceTab detail={detail} view={view} />}
+        {tab === "flags" && <FlagsTab detail={detail} view={view} />}
+        {tab === "details" && <DetailsTab detail={detail} />}
+        {tab === "deadlines" && <DeadlinesTab detail={detail} view={view} />}
+        {tab === "requirements" && <RequirementsTab detail={detail} view={view} />}
       </div>
+      {step && (
+        <Drawer key={step.id} closeHref={caseHref(detail.id, { ...view, step: undefined })} label={`${step.id} ${step.name}`}>
+          <StepPanel detail={detail} step={step} view={view} />
+        </Drawer>
+      )}
     </>
   );
 }
