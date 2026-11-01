@@ -61,6 +61,23 @@ export async function createOrganization(
   return id;
 }
 
+/** A file in the files store for an organisation, without going through an upload. */
+export async function makeFile(organizationId: string, userId: string, name = "document.pdf") {
+  const [row] = await db
+    .insert(schema.file)
+    .values({
+      organizationId,
+      uploaderUserId: userId,
+      storageKey: `orgs/${organizationId}/${randomUUID()}/${name}`,
+      originalName: name,
+      contentType: "application/pdf",
+      sizeBytes: 1000,
+      sha256: "a".repeat(64),
+    })
+    .returning();
+  return row!.id;
+}
+
 export async function cleanup() {
   const organizations = await db
     .select({ id: schema.organization.id })
