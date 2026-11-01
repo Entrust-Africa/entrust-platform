@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  APPLICANT_RESULTS,
   COMMITTEE_STATUSES,
+  RESULT_STATUSES,
   COMMITTEE_DECISION_STATUS,
   applicantProfile,
   rankByScore,
@@ -21,6 +23,22 @@ describe("the statuses the committee works with", () => {
 
   it("include every status a committee decision leads to", () => {
     for (const status of Object.values(COMMITTEE_DECISION_STATUS)) expect(COMMITTEE_STATUSES).toContain(status);
+  });
+});
+
+describe("what an applicant is told", () => {
+  it("covers every decision that closes the committee's work, and no other", () => {
+    expect([...RESULT_STATUSES]).toEqual(["selected", "waitlisted", "not_selected"]);
+    expect(Object.keys(APPLICANT_RESULTS)).toEqual([...RESULT_STATUSES]);
+    for (const status of RESULT_STATUSES) expect(COMMITTEE_STATUSES).toContain(status);
+    expect(COMMITTEE_DECISION_STATUS.further_review_required).not.toBeOneOf([...RESULT_STATUSES]);
+  });
+
+  it("names no score and no reason", () => {
+    for (const { label, message } of Object.values(APPLICANT_RESULTS)) {
+      expect(label.length).toBeGreaterThan(0);
+      expect(message).not.toMatch(/score|point|rank|reason|committee/i);
+    }
   });
 });
 
