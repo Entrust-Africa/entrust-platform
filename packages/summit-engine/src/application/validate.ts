@@ -42,6 +42,14 @@ function templateErrors(template: ApplicationTemplate): string[] {
     if (q && q.mustBe !== "yes") errors.push(`declaration: ${id} must be yes to submit`);
   }
 
+  const { profile } = inputs;
+  find(profile.sector, "profile.sector", ["short_text", "long_text", "single_choice"]);
+  find(profile.womanOwned, "profile.womanOwned", ["yes_no"]);
+  find(profile.youthOwned, "profile.youthOwned", ["yes_no"]);
+  find(profile.revenue, "profile.revenue", ["money"]);
+  find(profile.employees, "profile.employees", ["number"]);
+  find(profile.commercialAsk, "profile.commercialAsk", ["short_text", "long_text"]);
+
   for (const id of duplicates(template.registry)) errors.push(`registry lists ${id} twice`);
   for (const id of template.registry) if (!questions.has(id)) errors.push(`registry names missing question ${id}`);
   return errors;

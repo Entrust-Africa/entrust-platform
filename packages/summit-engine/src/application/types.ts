@@ -23,6 +23,24 @@ export interface ApplicationInputs {
   offering: readonly string[];
   /** Yes/no questions that have to be yes for the declaration and data-use terms to be accepted. */
   declaration: readonly string[];
+  /** What the committee compares and filters applicants on. */
+  profile: ProfileInputs;
+}
+
+/** The questions behind the committee's filters and comparison. An answer a version doesn't ask for reads as unknown. */
+export interface ProfileInputs {
+  /** Industry or sector: a text question. */
+  sector: string;
+  /** Yes/no: the business is woman-owned or woman-led. */
+  womanOwned: string;
+  /** Yes/no: the business is youth-owned or youth-led. */
+  youthOwned: string;
+  /** Annual revenue: a money question. */
+  revenue: string;
+  /** Number of employees: a number question. */
+  employees: string;
+  /** The commercial ask for the Summit: a text question. */
+  commercialAsk: string;
 }
 
 /**

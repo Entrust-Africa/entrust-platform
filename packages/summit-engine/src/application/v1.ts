@@ -71,6 +71,7 @@ export const APPLICATION_0_1_0: ApplicationTemplate = {
     representative: "S1.14",
     offering: ["S2.2", "S2.3"],
     declaration: ["S9.1", "S9.2", "S9.3"],
+    profile: { sector: "S2.1", womanOwned: "S1.8", youthOwned: "S1.9", revenue: "S2.4", employees: "S2.5", commercialAsk: "S7.3" },
   },
   sections: [
     { id: "S1", title: "Business identity", purpose: "Registration, ownership, country, contacts" },

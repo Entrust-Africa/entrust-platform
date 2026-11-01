@@ -17,6 +17,8 @@ export { categoryNoteProblems } from "./assessment";
 export type { CategoryNote, NoteProblem } from "./assessment";
 export { applicableCriteria, canAssess, scoreApplication, seeksInvestment } from "./scoring";
 export type { CategoryScore, ScoreInput, ScoreProblem, ScoreProblemCode, ScoreResult } from "./scoring";
+export { COMMITTEE_STATUSES, READINESS_CATEGORIES, applicantProfile, rankByScore, readinessPercent } from "./committee";
+export type { ApplicantProfile } from "./committee";
 export { verificationProblems } from "./verification";
 export type { VerificationRecord } from "./verification";
 
