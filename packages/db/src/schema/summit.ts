@@ -1,13 +1,17 @@
 import { isNull, sql } from "drizzle-orm";
-import { check, index, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { Answers } from "@entrust/forms";
 import {
   APPLICATION_STATUSES,
   DOCUMENT_KINDS,
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
+  VERIFICATION_CLASSES,
+  type CategoryId,
   type CriterionResult,
   type EligibilityCriterionId,
+  type Recommendation,
+  type SuitableOpportunity,
 } from "@entrust/summit-engine";
 import { organization, user } from "./auth";
 import { file } from "./core";
@@ -195,4 +199,155 @@ export const officerAssignment = summit.table(
     index("officer_assignment_officer_idx").on(t.officerUserId),
     uniqueIndex("officer_assignment_current_uidx").on(t.applicationId).where(isNull(t.endedAt)),
   ],
+);
+
+// ---- Assessment (the officer's workspace) ----
+
+// One assessment of an application, started when its first score or note is recorded. It keeps the rules version,
+// the pathway and the investment answer it was scored under, so the same answers and rules always give the same
+// score. An officer taking over from another continues the same assessment.
+export const assessment = summit.table("assessment", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  applicationId: uuid("application_id")
+    .notNull()
+    .unique()
+    .references(() => application.id, { onDelete: "cascade" }),
+  rulesVersion: text("rules_version").notNull(),
+  pathway: text("pathway", { enum: OPPORTUNITY_PATHWAYS }).notNull(),
+  seekingInvestment: boolean("seeking_investment").notNull(),
+  startedBy: text("started_by").references(() => user.id, { onDelete: "set null" }),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedBy: text("completed_by").references(() => user.id, { onDelete: "set null" }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+// An officer's points for one criterion. Written once and never overwritten: a later change is a score adjustment.
+export const criterionScore = summit.table(
+  "criterion_score",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => assessment.id, { onDelete: "cascade" }),
+    criterionId: text("criterion_id").notNull(),
+    points: integer("points").notNull(),
+    recordedBy: text("recorded_by").references(() => user.id, { onDelete: "set null" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("criterion_score_criterion_uidx").on(t.assessmentId, t.criterionId), check("criterion_score_points_check", sql`${t.points} >= 0`)],
+);
+
+// A manual change to a recorded score, with the score before and after, why, who and when. The newest one for a
+// criterion is the score that counts; the original stays in `criterion_score`.
+export const scoreAdjustment = summit.table(
+  "score_adjustment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => assessment.id, { onDelete: "cascade" }),
+    criterionId: text("criterion_id").notNull(),
+    previousPoints: integer("previous_points").notNull(),
+    newPoints: integer("new_points").notNull(),
+    reason: text("reason").notNull(),
+    adjustedBy: text("adjusted_by").references(() => user.id, { onDelete: "set null" }),
+    adjustedAt: timestamp("adjusted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("score_adjustment_idx").on(t.assessmentId, t.criterionId, t.adjustedAt)],
+);
+
+// The short justification and the evidence an officer relies on for a category, which the scorecard asks for.
+export const categoryNote = summit.table(
+  "category_note",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => assessment.id, { onDelete: "cascade" }),
+    category: text("category").$type<CategoryId>().notNull(),
+    justification: text("justification").notNull(),
+    evidence: text("evidence").array().notNull(),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("category_note_category_uidx").on(t.assessmentId, t.category)],
+);
+
+// The officer's classification of one claim (section 7). Reclassifying replaces the row; the audit log keeps the old one.
+export const verificationRecord = summit.table(
+  "verification_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    claim: text("claim").notNull(),
+    class: text("class", { enum: VERIFICATION_CLASSES }).notNull(),
+    // The application documents that support the claim.
+    documentIds: uuid("document_ids").array().notNull(),
+    // What the officer checked outside the application, which independent verification needs.
+    independentCheck: text("independent_check"),
+    recordedBy: text("recorded_by").references(() => user.id, { onDelete: "set null" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("verification_record_claim_uidx").on(t.applicationId, t.claim)],
+);
+
+// A request for more information. The application waits in "awaiting additional information" until the applicant
+// responds, then returns to the status it left. At most one is open at a time.
+export const clarificationRequest = summit.table(
+  "clarification_request",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
+    // Where the application goes back to when the applicant responds.
+    returnStatus: text("return_status", { enum: APPLICATION_STATUSES }).notNull(),
+    // When the email to the applicant was queued. Null if it could not be.
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    response: text("response"),
+    respondedBy: text("responded_by").references(() => user.id, { onDelete: "set null" }),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("clarification_request_idx").on(t.applicationId, t.requestedAt),
+    uniqueIndex("clarification_request_open_uidx").on(t.applicationId).where(isNull(t.respondedAt)),
+  ],
+);
+
+// Notes between staff. The applicant never sees them.
+export const internalComment = summit.table(
+  "internal_comment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").references(() => user.id, { onDelete: "set null" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("internal_comment_idx").on(t.applicationId, t.createdAt)],
+);
+
+// The officer's recommendation once the assessment is complete (the scorecard's last section). Added to, so the
+// newest is the current one and an earlier one is not lost.
+export const applicationRecommendation = summit.table(
+  "application_recommendation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    recommendation: text("recommendation").$type<Recommendation>().notNull(),
+    suitableOpportunity: text("suitable_opportunity").$type<SuitableOpportunity>(),
+    rationale: text("rationale").notNull(),
+    recordedBy: text("recorded_by").references(() => user.id, { onDelete: "set null" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("application_recommendation_idx").on(t.applicationId, t.recordedAt)],
 );
