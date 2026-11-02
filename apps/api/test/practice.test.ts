@@ -29,8 +29,8 @@ beforeAll(async () => {
   const [owner, other, stranger, admin] = await Promise.all(["owner", "other", "stranger", "admin"].map(signUp));
   Object.assign(w, { owner, other, stranger, admin });
   // The learner's organisation has TRADE and not CLEAR. The other has neither.
-  w.org = await createOrganization("org", [[owner!, "owner"], [other!, "member"]]);
-  w.plain = await createOrganization("plain", [[stranger!, "owner"]]);
+  w.org = await createOrganization("org", [[owner!, "owner"], [other!, "member"]], { platform: null });
+  w.plain = await createOrganization("plain", [[stranger!, "owner"]], { platform: null });
   w.entrust = await createOrganization("entrust", [[admin!, "admin"]], { smeProfile: false });
   await db.insert(schema.platformAccess).values({ organizationId: w.org, platform: "trade" });
   process.env.ENTRUST_ORG_ID = w.entrust;
@@ -100,6 +100,7 @@ describe("keeping practice out of CLEAR", () => {
   beforeAll(async () => {
     const [practice] = await db.select().from(schema.exportCase).where(and(eq(schema.exportCase.organizationId, w.org), eq(schema.exportCase.practiceScenario, "zebu-coffee")));
     practiceId = practice!.id;
+    await db.insert(schema.platformAccess).values({ organizationId: w.org, platform: "clear" });
     const opened = await call(w.owner, "POST", "/cases", { organizationId: w.org, facts: FACTS });
     expect(opened.status).toBe(201);
     realId = opened.body.id;

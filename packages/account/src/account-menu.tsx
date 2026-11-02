@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@entrust/ui";
+import { PLATFORMS, type Platform } from "@entrust/roles";
 import type { UserProfile } from "./types";
 import { useSignOut } from "./use-sign-out";
 
@@ -13,6 +14,10 @@ export interface AccountMenuProps {
   accountHref?: string;
   organizationsHref?: string;
   signOutRedirect?: string;
+  currentPlatform?: "clear" | "trade";
+  platforms?: string[];
+  clearAppUrl?: string;
+  tradeAppUrl?: string;
 }
 
 function getInitials(name?: string, email?: string): string {
@@ -35,10 +40,35 @@ export function AccountMenu({
   accountHref = "/account",
   organizationsHref = "/organizations",
   signOutRedirect = "/sign-in",
+  currentPlatform = "clear",
+  platforms,
+  clearAppUrl,
+  tradeAppUrl,
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const activeOrg = user.organizations?.find((o) => o.id === user.activeOrganizationId);
+  const activePlatforms =
+    platforms ?? user.platforms ?? (user.staffRole ? ["clear", "trade"] : activeOrg?.platforms ?? []);
+  const availablePlatforms = activePlatforms.filter((p: string) => (PLATFORMS as readonly string[]).includes(p));
+
+  const clearUrl =
+    currentPlatform === "clear"
+      ? "/"
+      : clearAppUrl ||
+        (typeof window !== "undefined" && window.location.origin.includes(":3000")
+          ? "/"
+          : process.env.NEXT_PUBLIC_CLEAR_APP_URL || "http://localhost:3000");
+
+  const tradeUrl =
+    currentPlatform === "trade"
+      ? "/"
+      : tradeAppUrl ||
+        (typeof window !== "undefined" && window.location.origin.includes(":3001")
+          ? "/"
+          : process.env.NEXT_PUBLIC_TRADE_APP_URL || "http://localhost:3001");
 
   const { signOut, signingOut, signOutError } = useSignOut(signOutRedirect);
 
@@ -113,6 +143,48 @@ export function AccountMenu({
             <p className="truncate text-xs font-semibold text-ink">{user.name || "User"}</p>
             <p className="truncate text-[11px] text-ink-3">{user.email}</p>
           </div>
+
+          {availablePlatforms.length > 0 && (
+            <div className="border-b border-line py-1">
+              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+                Platforms
+              </p>
+              <div className="flex flex-col gap-0.5 px-1">
+                {availablePlatforms.includes("clear") && (
+                  <a
+                    href={clearUrl}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      currentPlatform === "clear"
+                        ? "bg-brand-50 text-brand-700 font-semibold"
+                        : "text-ink-2 hover:bg-canvas hover:text-ink",
+                    )}
+                  >
+                    <span>CLEAR</span>
+                    {currentPlatform === "clear" && (
+                      <span className="size-1.5 rounded-full bg-brand-600" aria-hidden="true" />
+                    )}
+                  </a>
+                )}
+                {availablePlatforms.includes("trade") && (
+                  <a
+                    href={tradeUrl}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      currentPlatform === "trade"
+                        ? "bg-brand-50 text-brand-700 font-semibold"
+                        : "text-ink-2 hover:bg-canvas hover:text-ink",
+                    )}
+                  >
+                    <span>TRADE</span>
+                    {currentPlatform === "trade" && (
+                      <span className="size-1.5 rounded-full bg-brand-600" aria-hidden="true" />
+                    )}
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="py-1">
             <Link

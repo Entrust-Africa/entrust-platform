@@ -14,8 +14,8 @@ beforeAll(async () => {
   await cleanup();
   const [learner, noGrant, stranger, admin] = await Promise.all(["learner", "no-grant", "stranger", "admin"].map(signUp));
   Object.assign(w, { learner, noGrant, stranger, admin });
-  w.trade = await createOrganization("trade-org", [[learner!, "owner"]]);
-  w.clearOnly = await createOrganization("clear-org", [[noGrant!, "owner"]]);
+  w.trade = await createOrganization("trade-org", [[learner!, "owner"]], { platform: null });
+  w.clearOnly = await createOrganization("clear-org", [[noGrant!, "owner"]], { platform: null });
   w.entrust = await createOrganization("entrust", [[admin!, "admin"]], { smeProfile: false });
   await db.insert(schema.platformAccess).values([
     { organizationId: w.trade, platform: "trade", grantedBy: admin!.id },

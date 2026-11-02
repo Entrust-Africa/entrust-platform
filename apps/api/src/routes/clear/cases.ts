@@ -34,7 +34,7 @@ import { clearRouter, contextFor, json, listErrors, readErrors, writeErrors } fr
 
 const tags = ["CLEAR cases"];
 
-const cases = clearRouter();
+const cases = clearRouter("clear");
 
 const createCaseRoute = createRoute({
   method: "post",

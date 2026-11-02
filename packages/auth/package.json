@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./roles": "./src/roles.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -14,6 +15,7 @@
   "dependencies": {
     "@entrust/db": "workspace:*",
     "@entrust/notify": "workspace:*",
+    "@entrust/roles": "workspace:*",
     "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.4"
   },

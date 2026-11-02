@@ -35,6 +35,9 @@ import {
   startPracticeCase,
 } from "../../services/practice";
 import { transitionCaseStep } from "../../services/steps";
+import { getDb } from "@entrust/db";
+import { hasTradeAccess, loadPrincipal } from "../../services/access";
+import { ServiceError } from "../../services/errors";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "../clear/shared";
 
 // TRADE's M08 practice cases (#74). The learner works a simulated export on a CLEAR case. These are CLEAR's own
@@ -42,7 +45,7 @@ import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeEr
 // practice cases only; CLEAR's endpoints reach real ones only.
 
 const tags = ["TRADE practice"];
-const practice = clearRouter();
+const practice = clearRouter("trade");
 
 const noAccess = problem("The caller's organisation doesn't have TRADE access");
 const reads = { ...readErrors, 403: noAccess };

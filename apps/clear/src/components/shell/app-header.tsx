@@ -59,7 +59,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
         {/* Right: Account Menu */}
         <div className="flex items-center gap-2">
-          <AccountMenu user={user} />
+          <AccountMenu user={user} currentPlatform="clear" />
         </div>
       </div>
     </header>

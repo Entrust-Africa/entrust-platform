@@ -51,18 +51,18 @@ export interface EvidenceRecord {
   validUntil?: string | null;
 }
 
-/** Roles in an SME organisation (#18). */
-export const SME_ROLES = ["owner", "member"] as const;
-export type SmeRole = (typeof SME_ROLES)[number];
-
-/** Roles in the Entrust organisation (#18). */
-export const ENTRUST_ROLES = ["admin", "facilitator", "reviewer"] as const;
-export type EntrustRole = (typeof ENTRUST_ROLES)[number];
-
-export type Role = SmeRole | EntrustRole;
-
-/** Who makes a change: a person with one of these roles, or CLEAR itself (timers, automated checks). */
-export type Actor = Role | "system";
+export {
+  ORGANIZATION_KINDS,
+  type OrganizationKind,
+  SME_ROLES,
+  type SmeRole,
+  ENTRUST_ROLES,
+  type EntrustRole,
+  type Role,
+  type Actor,
+  PLATFORMS,
+  type Platform,
+} from "@entrust/roles";
 
 /** An open flag, as the evaluation needs it: the rule, why it was raised and the steps it holds. */
 export interface HeldFlag {

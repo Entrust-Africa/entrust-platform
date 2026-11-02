@@ -3,7 +3,7 @@ import { allocateCaseReference, schema } from "@entrust/db";
 import { STEP_WORKERS, checkCadCap, type CaseFacts } from "@entrust/gate-engine";
 import type { PhaseId } from "@entrust/rules";
 import type { CaseCreatedView, CaseDetailView, CaseListView } from "../schemas/clear";
-import { actorFor, findCase, requireRole, type Ctx } from "./access";
+import { actorFor, findCase, hasClearAccess, requireRole, type Ctx } from "./access";
 import { evaluate, loadCaseData, loadOneCaseData, organizationNames } from "./case-data";
 import { buildDetail, mutateCase } from "./detail";
 import { syncFlags } from "./flag-sync";
@@ -29,6 +29,9 @@ export async function createCase(ctx: Ctx, input: CreateCaseInput): Promise<Case
   if (!organizationId) throw new ServiceError("invalid", "Say which organisation the case is for (organizationId).");
   const actor = actorFor(ctx.principal, organizationId);
   if (!actor) throw new ServiceError("not_found", "Organisation not found.");
+  if (!ctx.principal.staffRole && !(await hasClearAccess(ctx.db, organizationId))) {
+    throw new ServiceError("not_found", "Organisation not found.");
+  }
   requireRole(actor, STEP_WORKERS.sme, "open cases");
 
   const { set: facts, clear } = checkFacts(input.facts);
@@ -97,9 +100,30 @@ export async function listCases(ctx: Ctx, input: ListCasesInput): Promise<CaseLi
   const { principal } = ctx;
   if (!principal.staffRole && principal.smeRoles.size === 0) return { items: [], total: 0 };
 
+  if (input.organizationId && !principal.staffRole) {
+    if (!(await hasClearAccess(ctx.db, input.organizationId))) {
+      throw new ServiceError("not_found", "Organisation not found.");
+    }
+  }
+
+  let allowedOrgIds: string[] | undefined;
+  if (!principal.staffRole) {
+    const grants = await ctx.db
+      .select({ organizationId: schema.platformAccess.organizationId })
+      .from(schema.platformAccess)
+      .where(
+        and(
+          eq(schema.platformAccess.platform, "clear"),
+          inArray(schema.platformAccess.organizationId, [...principal.smeRoles.keys()]),
+        ),
+      );
+    allowedOrgIds = grants.map((g) => g.organizationId);
+    if (allowedOrgIds.length === 0) return { items: [], total: 0 };
+  }
+
   const filters: (SQL | undefined)[] = [
     schema.realCase,
-    principal.staffRole ? undefined : inArray(schema.exportCase.organizationId, [...principal.smeRoles.keys()]),
+    principal.staffRole ? undefined : inArray(schema.exportCase.organizationId, allowedOrgIds!),
     input.status ? eq(schema.exportCase.status, input.status) : undefined,
     input.phase ? eq(schema.exportCase.currentPhase, input.phase as PhaseId) : undefined,
     input.organizationId ? eq(schema.exportCase.organizationId, input.organizationId) : undefined,

@@ -4,13 +4,15 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@entrust/db";
 import { auth } from "@entrust/auth";
+import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, SME_ROLES } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
+import { getUserOrganizations } from "../services/access";
 
-const SmeRoles = z.enum(["owner", "member"]);
+const SmeRoles = z.enum(SME_ROLES);
 // "committee" is the Summit selection committee's role (#80). It grants nothing in CLEAR or TRADE.
-const EntrustRoles = z.enum(["admin", "facilitator", "reviewer", "committee"]);
-const Platform = z.literal("clear");
+const EntrustRoles = z.enum([...ENTRUST_ROLES, "committee"]);
+const Platform = z.enum(PLATFORMS);
 
 function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
   const user = c.get("user");
@@ -67,6 +69,8 @@ const createOrganization = z.object({
   legalName: z.string().trim().min(1).max(200),
   tin: z.string().trim().max(80).optional(),
   country: z.string().trim().length(2).default("ET"),
+  platform: z.enum(["clear", "trade"]).optional(),
+  kind: z.enum(ORGANIZATION_KINDS).default("sme"),
 });
 // Better Auth's configured organization roles are member/admin/owner. Staff roles
 // are assigned by the platform, not through the SME invitation UI.
@@ -83,11 +87,7 @@ export const organizations = new Hono<AppEnv>()
   .get("/organizations", async (c) => {
     const user = requireUser(c);
     const db = getDb();
-    const rows = await db
-      .select({ id: schema.organization.id, name: schema.organization.name, slug: schema.organization.slug, role: schema.member.role })
-      .from(schema.member)
-      .innerJoin(schema.organization, eq(schema.organization.id, schema.member.organizationId))
-      .where(eq(schema.member.userId, user.id));
+    const rows = await getUserOrganizations(db, user.id);
     return c.json({ organizations: rows });
   })
   .post(
@@ -109,15 +109,23 @@ export const organizations = new Hono<AppEnv>()
         .from(schema.organization)
         .where(eq(schema.organization.slug, body.slug));
       if (existing[0]) throw new ServiceError("invalid", "An organisation with that slug already exists.");
+      const origin = c.req.header("origin") ?? "";
+      const platformToGrant = body.platform ?? (origin.includes(":3001") || origin.includes("trade.") ? "trade" : "clear");
       const id = crypto.randomUUID();
       const smeId = await allocateSmeId();
       await db.transaction(async (tx) => {
-        await tx.insert(schema.organization).values({ id, name: body.name, slug: body.slug, createdAt: new Date(), metadata: JSON.stringify({ kind: "sme" }) });
+        await tx.insert(schema.organization).values({
+          id,
+          name: body.name,
+          slug: body.slug,
+          createdAt: new Date(),
+          metadata: JSON.stringify({ kind: body.kind }),
+        });
         await tx.insert(schema.member).values({ id: crypto.randomUUID(), organizationId: id, userId: user.id, role: "owner", createdAt: new Date() });
         await tx.insert(schema.smeProfile).values({ organizationId: id, smeId, legalName: body.legalName, tin: body.tin ?? null, country: body.country });
-        await tx.insert(schema.platformAccess).values({ organizationId: id, platform: "clear", grantedBy: user.id });
+        await tx.insert(schema.platformAccess).values({ organizationId: id, platform: platformToGrant, grantedBy: user.id });
       });
-      return c.json({ id, smeId }, 201);
+      return c.json({ id, smeId, platform: platformToGrant }, 201);
     },
   )
   .get("/organizations/:organizationId/members", async (c) => {
@@ -231,7 +239,33 @@ export const organizations = new Hono<AppEnv>()
     }
     const organizationId = c.req.param("organizationId");
     const body = c.req.valid("json");
-    if (body.enabled) await getDb().insert(schema.platformAccess).values({ organizationId, platform: body.platform, grantedBy: user.id }).onConflictDoNothing();
-    else await getDb().delete(schema.platformAccess).where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, body.platform)));
+    if (body.enabled) {
+      await getDb()
+        .insert(schema.platformAccess)
+        .values({ organizationId, platform: body.platform, grantedBy: user.id })
+        .onConflictDoNothing();
+      await getDb().insert(schema.auditLog).values({
+        actorUserId: user.id,
+        organizationId,
+        platform: body.platform,
+        action: "organization.platform_access_granted",
+        entityType: "organization",
+        entityId: organizationId,
+        after: { platform: body.platform },
+      });
+    } else {
+      await getDb()
+        .delete(schema.platformAccess)
+        .where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, body.platform)));
+      await getDb().insert(schema.auditLog).values({
+        actorUserId: user.id,
+        organizationId,
+        platform: body.platform,
+        action: "organization.platform_access_revoked",
+        entityType: "organization",
+        entityId: organizationId,
+        before: { platform: body.platform },
+      });
+    }
     return c.json({ organizationId, platform: body.platform, enabled: body.enabled });
   });
