@@ -74,7 +74,13 @@ export function detectPlatformFromUrl(rawUrl: string): AuthPlatform {
     const tradeUrl = getTradeAppUrl();
     const tradeOrigin = new URL(tradeUrl).origin.toLowerCase();
 
-    if (targetOrigin === tradeOrigin || targetUrl.hostname.startsWith("trade.")) {
+    if (
+      targetOrigin === tradeOrigin ||
+      targetUrl.hostname.startsWith("trade.") ||
+      targetUrl.searchParams.get("platform") === "trade" ||
+      cb?.includes(":3001") ||
+      cb?.includes("trade.")
+    ) {
       return "trade";
     }
     return "clear";

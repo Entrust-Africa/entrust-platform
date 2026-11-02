@@ -88,7 +88,8 @@ export const auth = betterAuth({
         },
       },
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
-        const platform = (invitation as any).platform === "trade" ? "trade" : "clear";
+        const inviteRecord = invitation as typeof invitation & { platform?: string };
+        const platform = inviteRecord.platform === "trade" ? "trade" : "clear";
         const appUrl = platform === "trade" ? getTradeAppUrl() : getClearAppUrl();
         const platformName = platform === "trade" ? "TRADE" : "CLEAR";
         await sendEmail({
