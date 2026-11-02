@@ -116,3 +116,51 @@ describe("the Summit result email", () => {
     expect(withoutLink).toContain("Sign in to view your application.");
   });
 });
+
+describe("platform-aware auth email templates", () => {
+  it("renders platform name in invitation email", async () => {
+    const { render } = await import("@react-email/components");
+    const { InvitationEmail } = await import("../src/templates");
+    const text = await render(
+      InvitationEmail({
+        organizationName: "Test Exporters",
+        inviterName: "Alice",
+        role: "member",
+        url: "http://localhost:3001/accept-invitation?id=123",
+        platformName: "TRADE",
+      }),
+      { plainText: true },
+    );
+    expect(text).toContain("Alice invited you to join Test Exporters on TRADE as a member.");
+    expect(text).toContain("http://localhost:3001/accept-invitation?id=123");
+  });
+
+  it("renders platform name in password reset email", async () => {
+    const { render } = await import("@react-email/components");
+    const { PasswordResetEmail } = await import("../src/templates");
+    const text = await render(
+      PasswordResetEmail({
+        url: "http://localhost:3001/reset-password?token=abc",
+        platformName: "TRADE",
+      }),
+      { plainText: true },
+    );
+    expect(text).toContain("We received a request to reset the password for your TRADE account.");
+    expect(text).toContain("http://localhost:3001/reset-password?token=abc");
+  });
+
+  it("renders platform name in verification email", async () => {
+    const { render } = await import("@react-email/components");
+    const { VerificationEmail } = await import("../src/templates");
+    const text = await render(
+      VerificationEmail({
+        url: "http://localhost:3001/verify-email?token=xyz",
+        platformName: "TRADE",
+      }),
+      { plainText: true },
+    );
+    expect(text).toContain("Welcome to TRADE.");
+    expect(text).toContain("http://localhost:3001/verify-email?token=xyz");
+  });
+});
+

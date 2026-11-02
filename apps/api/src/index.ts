@@ -24,6 +24,16 @@ if (process.env.NODE_ENV === "production" || process.env.EMAIL_MODE === "send") 
       "[auth:warning] CLEAR_APP_URL is not set or points to localhost in production. Member invitations will fail.",
     );
   }
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!process.env.TRADE_APP_URL ||
+      process.env.TRADE_APP_URL.includes("localhost") ||
+      process.env.TRADE_APP_URL.includes("127.0.0.1"))
+  ) {
+    console.warn(
+      "[auth:warning] TRADE_APP_URL is not set or points to localhost in production. TRADE invitations will fail.",
+    );
+  }
 }
 
 const server = serve({ fetch: app.fetch, port }, (info) => {

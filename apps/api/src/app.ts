@@ -21,7 +21,9 @@ export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
 };
 
-const origins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+const defaultDevOrigins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
+const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+const origins = Array.from(new Set([...defaultDevOrigins, ...envOrigins]));
 
 const base = new OpenAPIHono<AppEnv>();
 

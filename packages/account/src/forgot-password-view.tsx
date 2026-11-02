@@ -3,9 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button, Field, Patchwork } from "@entrust/ui";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "./auth-client";
 
-export function ForgotPassword() {
+export interface ForgotPasswordViewProps {
+  signInHref?: string;
+  resetPasswordPath?: string;
+}
+
+export function ForgotPasswordView({
+  signInHref = "/sign-in",
+  resetPasswordPath = "/reset-password",
+}: ForgotPasswordViewProps) {
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [pending, setPending] = useState(false);
@@ -14,9 +22,10 @@ export function ForgotPassword() {
     setPending(true);
     setMessage("");
     const email = String(form.get("email"));
+    const redirectTo = `${window.location.origin}${resetPasswordPath}`;
     const result = await authClient.requestPasswordReset({
       email,
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo,
     });
     setPending(false);
     if (result.error) {
@@ -33,7 +42,9 @@ export function ForgotPassword() {
       <section className="w-full overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
         <Patchwork />
         <div className="p-6 sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Entrust Africa</p>
+          <p className="text-xs font-bold tracking-wider text-brand-600 uppercase">
+            Entrust Africa
+          </p>
           <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
             Reset your password
           </h1>
@@ -59,7 +70,7 @@ export function ForgotPassword() {
 
           <div className="mt-6 border-t border-line pt-4">
             <Link
-              href="/sign-in"
+              href={signInHref}
               className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
             >
               ← Return to sign in

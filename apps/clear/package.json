@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@entrust/account": "workspace:*",
     "@entrust/api": "workspace:*",
     "@entrust/auth": "workspace:*",
     "@entrust/gate-engine": "workspace:*",

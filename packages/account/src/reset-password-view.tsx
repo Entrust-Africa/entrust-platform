@@ -4,11 +4,25 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Field, Patchwork } from "@entrust/ui";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "./auth-client";
 
-export function ResetPassword({ token, error }: { token: string; error?: string }) {
+export interface ResetPasswordViewProps {
+  token: string;
+  error?: string;
+  signInHref?: string;
+  forgotPasswordHref?: string;
+}
+
+export function ResetPasswordView({
+  token,
+  error,
+  signInHref = "/sign-in",
+  forgotPasswordHref = "/forgot-password",
+}: ResetPasswordViewProps) {
   const router = useRouter();
-  const [message, setMessage] = useState(error ? "This reset link is invalid or has expired." : "");
+  const [message, setMessage] = useState(
+    error ? "This reset link is invalid or has expired." : "",
+  );
   const [pending, setPending] = useState(false);
 
   async function submit(form: FormData) {
@@ -28,7 +42,7 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
     if (result.error) {
       setMessage(result.error.message ?? "Could not reset your password.");
     } else {
-      router.replace("/sign-in");
+      router.replace(signInHref);
     }
   }
 
@@ -37,7 +51,9 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
       <section className="w-full overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
         <Patchwork />
         <div className="p-6 sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Entrust Africa</p>
+          <p className="text-xs font-bold tracking-wider text-brand-600 uppercase">
+            Entrust Africa
+          </p>
           <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
             Choose a new password
           </h1>
@@ -49,7 +65,7 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
               <p className="mt-1">Please request a new link to reset your account password.</p>
               <div className="mt-3">
                 <Link
-                  href="/forgot-password"
+                  href={forgotPasswordHref}
                   className="font-semibold text-danger underline underline-offset-4 hover:opacity-80"
                 >
                   Request a new reset link →
@@ -89,7 +105,7 @@ export function ResetPassword({ token, error }: { token: string; error?: string 
 
           <div className="mt-6 border-t border-line pt-4">
             <Link
-              href="/sign-in"
+              href={signInHref}
               className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
             >
               ← Return to sign in

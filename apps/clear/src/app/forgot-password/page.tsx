@@ -1,5 +1,7 @@
-import { ForgotPassword } from "./forgot-password";
+import { ForgotPasswordView } from "@entrust/account";
+
+export const metadata = { title: "Reset your password" };
 
 export default function ForgotPasswordPage() {
-  return <ForgotPassword />;
+  return <ForgotPasswordView />;
 }

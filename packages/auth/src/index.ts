@@ -4,13 +4,29 @@ import { organization } from "better-auth/plugins";
 import { getDb, schema } from "@entrust/db";
 import { sendEmail } from "@entrust/notify";
 import { InvitationEmail, PasswordResetEmail, VerificationEmail } from "@entrust/notify/templates";
-import { getClearAppUrl } from "./url";
+import {
+  detectPlatformFromUrl,
+  getClearAppUrl,
+  getPlatformAppUrl,
+  getTradeAppUrl,
+  type AuthPlatform,
+} from "./url";
 
-// Origins allowed to call the API with cookies, e.g. the CLEAR app and the website.
-const trustedOrigins = (process.env.CORS_ORIGINS ?? "")
+// Origins allowed to call the API with cookies, e.g. the CLEAR and TRADE apps and the website.
+const defaultDevOrigins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
+const envOrigins = (process.env.CORS_ORIGINS ?? "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
+
+const trustedOrigins = Array.from(
+  new Set([
+    ...defaultDevOrigins,
+    ...envOrigins,
+    ...(process.env.CLEAR_APP_URL ? [process.env.CLEAR_APP_URL.trim().replace(/\/+$/, "")] : []),
+    ...(process.env.TRADE_APP_URL ? [process.env.TRADE_APP_URL.trim().replace(/\/+$/, "")] : []),
+  ]),
+);
 
 // In production the API and the apps share a parent domain (".entrust-africa.com"),
 // so the session cookie is scoped to it. Locally, every port shares "localhost".
@@ -37,28 +53,53 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail({ to: user.email, subject: "Reset your Entrust password", react: PasswordResetEmail({ url }) });
+      const platform = detectPlatformFromUrl(url);
+      const platformName = platform === "trade" ? "TRADE" : "CLEAR";
+      await sendEmail({
+        to: user.email,
+        subject: `Reset your ${platformName} password`,
+        react: PasswordResetEmail({ url, platformName }),
+      });
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await sendEmail({ to: user.email, subject: "Verify your Entrust email", react: VerificationEmail({ url }) });
+      const platform = detectPlatformFromUrl(url);
+      const platformName = platform === "trade" ? "TRADE" : "CLEAR";
+      await sendEmail({
+        to: user.email,
+        subject: `Verify your ${platformName} email`,
+        react: VerificationEmail({ url, platformName }),
+      });
     },
   },
   plugins: [
     organization({
+      schema: {
+        invitation: {
+          additionalFields: {
+            platform: {
+              type: "string",
+              required: false,
+            },
+          },
+        },
+      },
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
-        const clearUrl = getClearAppUrl();
+        const platform = (invitation as any).platform === "trade" ? "trade" : "clear";
+        const appUrl = platform === "trade" ? getTradeAppUrl() : getClearAppUrl();
+        const platformName = platform === "trade" ? "TRADE" : "CLEAR";
         await sendEmail({
           to: invitation.email,
-          subject: `Invitation to join ${organization.name} on Entrust`,
+          subject: `Invitation to join ${organization.name} on ${platformName}`,
           react: InvitationEmail({
             organizationName: organization.name,
             inviterName: inviter.user.name,
             role: invitation.role ?? "member",
-            url: `${clearUrl}/accept-invitation?id=${encodeURIComponent(invitation.id)}`,
+            url: `${appUrl}/accept-invitation?id=${encodeURIComponent(invitation.id)}`,
+            platformName,
           }),
         });
       },
@@ -71,3 +112,10 @@ export const auth = betterAuth({
 
 export type Session = typeof auth.$Infer.Session;
 export { APIError } from "better-auth";
+export {
+  detectPlatformFromUrl,
+  getClearAppUrl,
+  getPlatformAppUrl,
+  getTradeAppUrl,
+  type AuthPlatform,
+};

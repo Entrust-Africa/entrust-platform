@@ -4,11 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { Building2, CheckCircle2, KeyRound, LogOut, Shield, User } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { authClient } from "@/lib/auth-client";
-import type { UserProfile } from "@/lib/types";
-import { useSignOut } from "@/lib/use-sign-out";
+import { authClient } from "./auth-client";
+import type { UserProfile } from "./types";
+import { useSignOut } from "./use-sign-out";
 
-export function AccountView({ user }: { user: UserProfile }) {
+export interface AccountViewProps {
+  user: UserProfile;
+  platformName?: string;
+  organizationsHref?: string;
+}
+
+export function AccountView({
+  user,
+  platformName = "CLEAR",
+  organizationsHref = "/organizations",
+}: AccountViewProps) {
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetPending, setResetPending] = useState(false);
@@ -42,9 +52,15 @@ export function AccountView({ user }: { user: UserProfile }) {
   return (
     <div className="w-full">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-brand-600">CLEAR · Account</p>
-        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">Account settings</h1>
-        <p className="mt-1 text-sm text-ink-2">Manage your profile details, organisation association, and session.</p>
+        <p className="text-xs font-bold tracking-wider text-brand-600 uppercase">
+          {platformName} · Account
+        </p>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          Account settings
+        </h1>
+        <p className="mt-1 text-sm text-ink-2">
+          Manage your profile details, organisation association, and session.
+        </p>
       </div>
 
       <div className="mt-8 grid gap-6 md:grid-cols-2">
@@ -99,84 +115,109 @@ export function AccountView({ user }: { user: UserProfile }) {
                     <p className="font-semibold text-ink">{activeOrg.name}</p>
                     <p className="text-xs text-ink-3">{activeOrg.slug}</p>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600">
-                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                  <span className="rounded bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-600">
                     Active
                   </span>
                 </div>
+                <div className="mt-4 border-t border-line pt-3">
+                  <Link
+                    href={`${organizationsHref}/${activeOrg.id}/members`}
+                    className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
+                  >
+                    Manage organisation members →
+                  </Link>
+                </div>
               </div>
             ) : (
-              <div className="rounded-md border border-line bg-canvas p-4 text-xs text-ink-3">
-                No active organisation selected.
+              <div className="rounded-md border border-line bg-canvas p-4 text-center">
+                <p className="text-sm text-ink-2">No active organisation selected.</p>
+                <Link
+                  href={organizationsHref}
+                  className="mt-2 inline-block text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
+                >
+                  View all organisations →
+                </Link>
               </div>
             )}
-
-            <div className="mt-4 flex items-center justify-between">
-              <Link
-                href="/organizations"
-                className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
-              >
-                Manage all organisations →
-              </Link>
-            </div>
           </div>
         </Card>
 
-        {/* Security & Authentication Controls */}
-        <Card className="p-6 md:col-span-2">
+        {/* Security & Password Card */}
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
-              <Shield className="size-5" aria-hidden="true" />
+            <div className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <KeyRound className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-bold">Security & session</h2>
-              <p className="text-xs text-ink-3">Password and authentication controls</p>
+              <h2 className="font-display text-lg font-bold">Password & Security</h2>
+              <p className="text-xs text-ink-3">Request a password reset link for your account</p>
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between border-t border-line pt-6">
-            <div>
-              <p className="text-sm font-semibold text-ink">Change password</p>
-              <p className="mt-0.5 text-xs text-ink-3">We will send a password reset link to your email address.</p>
-              {resetMessage && (
-                <p
-                  className={`mt-2 text-xs font-medium ${resetSuccess ? "text-brand-600" : "text-danger"}`}
-                  role={resetSuccess ? "status" : "alert"}
-                >
-                  {resetMessage}
-                </p>
-              )}
-            </div>
+          <div className="mt-6">
+            <p className="text-sm text-ink-2">
+              To change your password, we can email you a secure reset link.
+            </p>
+
             <Button
+              type="button"
               variant="secondary"
               size="sm"
+              className="mt-4"
               loading={resetPending}
               onClick={() => void handleResetPassword()}
             >
-              <KeyRound className="size-3.5 mr-1.5" aria-hidden="true" />
-              Send reset link
+              Send password reset email
             </Button>
+
+            {resetMessage && (
+              <p
+                className={`mt-3 text-xs font-medium ${resetSuccess ? "text-brand-600" : "text-danger"}`}
+                role={resetSuccess ? "status" : "alert"}
+              >
+                {resetMessage}
+              </p>
+            )}
+          </div>
+        </Card>
+
+        {/* Session Card */}
+        <Card className="p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <Shield className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="font-display text-lg font-bold">Session</h2>
+              <p className="text-xs text-ink-3">Manage your active authentication session</p>
+            </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between border-t border-line pt-6">
-            <div>
-              <p className="text-sm font-semibold text-ink">Sign out</p>
-              <p className="mt-0.5 text-xs text-ink-3">Terminate your active session on this browser.</p>
-              {signOutError && (
-                <p className="mt-2 text-xs font-medium text-danger" role="alert">
-                  {signOutError}
-                </p>
-              )}
+          <div className="mt-6">
+            <div className="flex items-center gap-2 text-xs text-ink-2">
+              <CheckCircle2 className="size-4 text-ok" aria-hidden="true" />
+              <span>Signed in via secure cookie</span>
             </div>
-            <Button
-              variant="danger"
-              size="sm"
-              loading={signingOut}
-              onClick={() => void signOut()}
-            >
-              <LogOut className="size-3.5 mr-1.5" aria-hidden="true" />
-              Sign out
-            </Button>
+
+            {signOutError && (
+              <p className="mt-3 text-xs text-danger" role="alert">
+                {signOutError}
+              </p>
+            )}
+
+            <div className="mt-6 border-t border-line pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="text-danger hover:border-danger hover:bg-danger-50 hover:text-danger"
+                loading={signingOut}
+                onClick={() => void signOut()}
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                <span>Sign out of all apps</span>
+              </Button>
+            </div>
           </div>
         </Card>
       </div>

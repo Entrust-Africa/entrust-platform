@@ -20,7 +20,9 @@ function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
 
 function requireTrustedOrigin(c: { req: { header: (name: string) => string | undefined } }) {
   const origin = c.req.header("origin");
-  const trusted = (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  const defaultTrusted = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
+  const envTrusted = (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  const trusted = Array.from(new Set([...defaultTrusted, ...envTrusted]));
   if (origin && !trusted.includes(origin)) throw new ServiceError("forbidden", "That request origin is not allowed.");
 }
 
@@ -68,7 +70,11 @@ const createOrganization = z.object({
 });
 // Better Auth's configured organization roles are member/admin/owner. Staff roles
 // are assigned by the platform, not through the SME invitation UI.
-const invite = z.object({ email: z.email(), role: z.literal("member").default("member") });
+const invite = z.object({
+  email: z.email(),
+  role: z.literal("member").default("member"),
+  platform: z.enum(["clear", "trade"]).optional(),
+});
 const role = z.object({ role: z.union([SmeRoles, EntrustRoles]) });
 const profile = z.object({ legalName: z.string().trim().min(1).max(200), tin: z.string().trim().max(80).nullable().optional(), country: z.string().trim().length(2).optional() });
 const platform = z.object({ enabled: z.boolean().default(true), platform: Platform.default("clear") });
@@ -136,13 +142,16 @@ export const organizations = new Hono<AppEnv>()
       const member = await getDb().select({ id: schema.member.id }).from(schema.member).where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, existing[0].id)));
       if (member[0]) throw new ServiceError("invalid", "That user is already a member.");
     }
+    const origin = c.req.header("origin") ?? "";
+    const platform = body.platform ?? (origin.includes(":3001") || origin.includes("trade.") ? "trade" : "clear");
     const result = await auth.api.createInvitation({
       headers: c.req.raw.headers,
       body: {
         organizationId,
         email,
         role: body.role,
-      },
+        platform,
+      } as any,
     });
     return c.json(result, 201);
   })

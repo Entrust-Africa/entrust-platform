@@ -12,6 +12,7 @@ packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
   auth         Better Auth config (served by apps/api) and the browser auth client
+  account      shared sign-in, account settings, org switcher and auth UI for CLEAR and TRADE
   rules        CLEAR's canonical 125 steps, master controls, facts, evidence types and rule packs, as data
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
   trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
@@ -24,6 +25,7 @@ Rules that keep it extensible:
   through the typed client (`@entrust/api/client`) and never import `@entrust/db`.
 - Platforms never import from each other. Shared code goes in `packages/`.
 - One SME identity: an SME registers once (`core.sme_profile`) and appears in every platform.
+- Shared authentication: session cookies are shared across `.entrust-africa.com` through `AUTH_COOKIE_DOMAIN` (or `localhost` in dev). The active organisation is stored on the session, so switching organisation in one app switches it in the other.
 - One database, one Postgres schema per platform. Shared tables live in `core`.
 - Every platform writes to `core.audit_log`.
 

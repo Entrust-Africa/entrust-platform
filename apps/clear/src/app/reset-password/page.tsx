@@ -1,6 +1,12 @@
-import { ResetPassword } from "./reset-password";
+import { ResetPasswordView } from "@entrust/account";
 
-export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string }> }) {
+export const metadata = { title: "Choose a new password" };
+
+export default async function ResetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string; error?: string }>;
+}) {
   const params = await searchParams;
-  return <ResetPassword token={params.token ?? ""} error={params.error} />;
+  return <ResetPasswordView token={params.token ?? ""} error={params.error} />;
 }
