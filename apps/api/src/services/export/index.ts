@@ -6,6 +6,8 @@ import { toXlsx } from "./xlsx";
 export type { ExportCell, ExportTable } from "./table";
 export { csvCell } from "./csv";
 export { columnName } from "./xlsx";
+export { toProfilePdf } from "./profile";
+export type { ProfileFile } from "./profile";
 
 export const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];

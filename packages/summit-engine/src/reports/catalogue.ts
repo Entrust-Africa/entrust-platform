@@ -569,7 +569,7 @@ const TRADE = perApplication(
 
 // ---- Reports 9 to 12: the committee's output ----
 
-const selectionId = (a: ReportApplication): string | null => (a.selectionNumber === null ? null : `SEL-${String(a.selectionNumber).padStart(3, "0")}`);
+export const selectionId = (a: ReportApplication): string | null => (a.selectionNumber === null ? null : `SEL-${String(a.selectionNumber).padStart(3, "0")}`);
 const approval = (a: ReportApplication): string => (a.finalListApprovedAt ? `Approved ${day(a.finalListApprovedAt)}` : "Awaiting final list approval");
 
 const SELECTED = perApplication(

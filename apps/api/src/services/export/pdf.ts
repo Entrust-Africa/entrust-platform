@@ -22,7 +22,7 @@ const VALUE_SIZE = 8.5;
 const LINE = 10.5;
 
 /** The text with every letter the font can't draw replaced by "?", and line breaks made spaces. */
-function drawable(text: string, font: PDFFont): string {
+export function drawable(text: string, font: PDFFont): string {
   const known = new Set(font.getCharacterSet());
   return Array.from(text.replace(/\s+/g, " "))
     .map((ch) => (known.has(ch.codePointAt(0) as number) ? ch : "?"))
@@ -30,7 +30,7 @@ function drawable(text: string, font: PDFFont): string {
 }
 
 /** The text broken into lines no wider than `width`; a word longer than a line is cut. */
-function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
+export function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const lines: string[] = [];
   let current = "";
   const push = (word: string) => {

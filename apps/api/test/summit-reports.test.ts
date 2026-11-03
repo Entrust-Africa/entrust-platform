@@ -474,7 +474,7 @@ describe("the audit log", () => {
 
   it("records an export for a user with narrower access at the size of what they received", async () => {
     await file(w.reviewer2, "application-register", "csv");
-    const entry = (await auditOf(w.reviewer2.id)).at(-1)!;
+    const entry = (await auditOf(w.reviewer2.id)).sort((x, y) => x.occurredAt.getTime() - y.occurredAt.getTime()).at(-1)!;
     expect(entry.after).toMatchObject({ report: "application-register", scope: "assigned", records: 1 });
   });
 });
@@ -594,6 +594,61 @@ describe("the other reports", () => {
   });
 });
 
+describe("the profile of a selected SME", () => {
+  const profile = (user: TestUser | null, id: string) => callFileV1(user, `${S}/applications/${id}/profile`);
+  const profileText = async (user: TestUser, id: string) => {
+    const res = await profile(user, id);
+    expect(res.status).toBe(200);
+    return { res, text: await pdfText(new Uint8Array(await res.arrayBuffer())) };
+  };
+  const generated = (id: string) =>
+    db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, id), eq(schema.auditLog.action, "summit.profile.generated")));
+
+  it("is a PDF of what the business told us, with no score, reason or recommendation in it", async () => {
+    const { res, text } = await profileText(w.admin, w.a);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="summit-profile-sel-001-org-a.pdf"');
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    for (const expected of ["org-a", "SEL-001", "SME OPPORTUNITY PROFILE", "INTERNAL", "Coffee", "Seeking buyers", "Investment opportunity", "Selection pending the committee's final list approval"]) {
+      expect(text, expected).toContain(expected);
+    }
+    for (const secret of ["Strong buyers and a clear plan.", "Recommend", "Marked 90", "document-supported", "Document-supported"]) {
+      expect(text, secret).not.toContain(secret);
+    }
+  });
+
+  it("is made for the committee, a facilitator and the officer it is assigned to, and for no one else", async () => {
+    for (const user of [w.committee, w.facilitator, w.reviewer]) expect((await profile(user, w.a)).status, user.id).toBe(200);
+    // Another officer can't open the application at all, and an applicant's profile is Entrust's, not theirs.
+    expect((await profile(w.reviewer2, w.a)).status).toBe(404);
+    expect((await profile(w.outsider, w.a)).status).toBe(404);
+    expect((await profile(w.owners[0]!, w.a)).status).toBe(403);
+    expect((await call(null, "GET", `/applications/${w.a}/profile`)).status).toBe(401);
+  });
+
+  it("is made only for an SME the committee has selected", async () => {
+    for (const id of [w.b, w.c, w.d, w.e]) {
+      const res = await profile(w.admin, id);
+      expect([id, res.status]).toEqual([id, 409]);
+    }
+    // The committee can't open one it hasn't reached, so for it the answer is the same as for no application.
+    expect((await profile(w.committee, w.d)).status).toBe(404);
+  });
+
+  it("is written to the audit log with who made it, and a refused one leaves no entry", async () => {
+    const before = (await generated(w.a)).length;
+    await profile(w.admin, w.a);
+    await profile(w.owners[0]!, w.a);
+    await profile(w.admin, w.b);
+    const entries = await generated(w.a);
+    expect(entries).toHaveLength(before + 1);
+    const latest = entries.sort((x, y) => x.occurredAt.getTime() - y.occurredAt.getTime()).at(-1)!;
+    expect(latest).toMatchObject({ platform: "summit", entityType: "summit_application", actorUserId: w.admin.id, organizationId: w.orgs[0] });
+    expect(latest.after).toMatchObject({ format: "pdf", classification: "internal", selectionNumber: 1 });
+    expect(await generated(w.b)).toEqual([]);
+  });
+});
+
 describe("after the final list is approved", () => {
   it("shows the approval and the published results in the reports", async () => {
     expect((await decide(w.c, "not_selected", "Not ready this round.")).status).toBe(201);
@@ -609,5 +664,12 @@ describe("after the final list is approved", () => {
     expect((await records(w.admin, "country-distribution")).find((r) => r.Country === COUNTRY)).toMatchObject({ "Selected SMEs": 1, "Not-selected SMEs": 1 });
     // The committee's view of the same reports agrees.
     expect(await records(w.committee, "selected-smes")).toEqual(register);
+  });
+
+  it("makes the profile say the selection is confirmed", async () => {
+    const res = await callFileV1(w.committee, `${S}/applications/${w.a}/profile`);
+    expect(res.status).toBe(200);
+    const [list] = await db.select().from(schema.finalList).where(eq(schema.finalList.periodId, w.periodId));
+    expect(await pdfText(new Uint8Array(await res.arrayBuffer()))).toContain(`Selection confirmed ${dayOf(list?.approvedAt)}`);
   });
 });

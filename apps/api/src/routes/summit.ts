@@ -74,6 +74,7 @@ import { compareForCommittee, listForCommittee, recordDecision } from "../servic
 import { getDashboard, setSelectionTarget } from "../services/summit-dashboard";
 import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
+import { makeProfile } from "../services/summit-profile";
 import { exportReport, listReports, viewReport } from "../services/summit-reports";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
@@ -564,6 +565,23 @@ const reportRoute = createRoute({
   },
 });
 
+const profileRoute = createRoute({
+  method: "get",
+  path: "/applications/{id}/profile",
+  tags,
+  summary: "The one-page profile of a selected SME",
+  description:
+    "A PDF with what the business told us about itself and what it is looking for, to prepare the business meetings: identity, industry, products, trade, the commercial ask, the markets and partners it wants, the investment it seeks, and who to contact. It holds no score, rationale, verification finding or internal note. It is for Entrust's own use; a copy for a buyer or an investor needs the business's authorisation, which isn't built yet, so there is no such copy. Only for an SME the committee has selected. Entrust administrators and facilitators, the assessment officer it is assigned to, and the selection committee. Every profile is written to the audit log.",
+  request: { params: ApplicationParam },
+  responses: {
+    200: { description: "The profile", content: { "application/pdf": { schema: z.string().openapi({ format: "binary" }) } } },
+    ...listErrors,
+    403: problem("Not Entrust staff or the selection committee"),
+    404: notFound,
+    409: problem("The application isn't selected"),
+  },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -651,6 +669,18 @@ export const summit = router
     c.json(await approveFinalList(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")?.note), 201),
   )
   .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(profileRoute, async (c) => {
+    const file = await makeProfile(await contextFor(c.get("user")), c.req.valid("param").id);
+    return new Response(new Uint8Array(file.body), {
+      status: 200,
+      headers: {
+        "Content-Type": file.contentType,
+        "Content-Disposition": `attachment; filename="${file.filename}"`,
+        "Content-Length": String(file.body.byteLength),
+        "Cache-Control": "private, no-store",
+      },
+    }) as never;
+  })
   .openapi(reportsRoute, async (c) => c.json(await listReports(await contextFor(c.get("user"))), 200))
   .openapi(reportRoute, async (c) => {
     const ctx = await contextFor(c.get("user"));
