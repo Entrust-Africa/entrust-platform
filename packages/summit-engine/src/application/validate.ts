@@ -1,7 +1,46 @@
 import { formDefinitionErrors } from "@entrust/forms";
 import type { FormQuestion } from "@entrust/forms";
 import { OPPORTUNITY_PATHWAYS } from "../types";
-import type { ApplicationTemplate, OptionRule } from "./types";
+import type { ApplicationTemplate, OptionRule, ReportInputs } from "./types";
+
+// The kinds of question each report input can read.
+const TEXTS = ["short_text", "long_text", "single_choice"] as const;
+const REPORT_QUESTIONS: Readonly<Record<keyof ReportInputs, readonly FormQuestion["type"][]>> = {
+  city: TEXTS,
+  contactName: TEXTS,
+  contactPosition: TEXTS,
+  contactEmail: TEXTS,
+  contactPhone: TEXTS,
+  representativeName: TEXTS,
+  representativePosition: TEXTS,
+  description: TEXTS,
+  activities: ["list", "short_text", "long_text", "multiple_choice"],
+  capacity: [...TEXTS, "number", "money"],
+  exported: ["yes_no"],
+  exportMarkets: ["list", "multiple_choice", ...TEXTS],
+  targetMarkets: ["list", "multiple_choice", ...TEXTS],
+  activeBuyer: ["yes_no"],
+  buyerEvidence: ["multiple_choice"],
+  buyerDetails: TEXTS,
+  transactionValue: ["money"],
+  requirements: TEXTS,
+  exportConstraints: TEXTS,
+  investmentAmount: ["money"],
+  investmentTypes: ["multiple_choice", "list", ...TEXTS],
+  investmentUse: TEXTS,
+  investmentOutcomes: TEXTS,
+  investmentSecured: ["money", ...TEXTS],
+  investmentRemaining: ["money", ...TEXTS],
+  investmentPeriod: [...TEXTS, "date", "number"],
+  businessPlan: ["yes_no"],
+  financialStatements: ["yes_no"],
+  partnerInterests: ["multiple_choice", "list", ...TEXTS],
+  partnerBenefit: TEXTS,
+  summitGoal: TEXTS,
+  partnersSought: ["multiple_choice", "list", ...TEXTS],
+  askMarkets: ["list", "multiple_choice", ...TEXTS],
+  askValue: ["money", ...TEXTS],
+};
 
 const duplicates = <T>(values: readonly T[]): T[] => [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
 
@@ -49,6 +88,12 @@ function templateErrors(template: ApplicationTemplate): string[] {
   find(profile.revenue, "profile.revenue", ["money"]);
   find(profile.employees, "profile.employees", ["number"]);
   find(profile.commercialAsk, "profile.commercialAsk", ["short_text", "long_text"]);
+
+  for (const [name, id] of Object.entries(inputs.report) as [keyof ReportInputs, string | undefined][]) {
+    if (id === undefined) continue;
+    if (!(name in REPORT_QUESTIONS)) errors.push(`report: ${name} isn't something a report reads`);
+    else find(id, `report.${name}`, REPORT_QUESTIONS[name]);
+  }
 
   for (const id of duplicates(template.registry)) errors.push(`registry lists ${id} twice`);
   for (const id of template.registry) if (!questions.has(id)) errors.push(`registry names missing question ${id}`);

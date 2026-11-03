@@ -93,7 +93,7 @@ export interface Dashboard {
   verification: { byClass: Record<VerificationClass, number>; classifiedApplications: number };
 }
 
-const UNDER_ASSESSMENT: readonly ApplicationStatus[] = ["under_assessment", "under_verification"];
+export const UNDER_ASSESSMENT: readonly ApplicationStatus[] = ["under_assessment", "under_verification"];
 
 const average = (scores: readonly number[]): number | null =>
   scores.length === 0 ? null : Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
