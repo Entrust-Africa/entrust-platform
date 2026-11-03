@@ -1,6 +1,7 @@
-import { date, index, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { ENROLLMENT_STATUSES } from "@entrust/trade-engine";
-import { organization } from "./auth";
+import { sql } from "drizzle-orm";
+import { boolean, date, index, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { ASSESSMENT_STATUSES, ENROLLMENT_STATUSES } from "@entrust/trade-engine";
+import { organization, user } from "./auth";
 
 // TRADE platform PostgreSQL schema (#55).
 // All tables reference core (organization, smeProfile, user, file) and never clear.
@@ -76,3 +77,65 @@ export const enrollment = trade.table(
     index("trade_enrollment_org_idx").on(t.organizationId),
   ],
 );
+
+export const ASSESSMENT_KINDS = ["placement", "exit"] as const;
+export type AssessmentKind = (typeof ASSESSMENT_KINDS)[number];
+
+// An assessment of an enrolment (placement or exit). Scores are written once; a new assessment
+// supersedes the old one, and nothing is overwritten.
+// At most one placement assessment per enrolment is live (not superseded) at a time.
+// Exported as tradeAssessment to avoid colliding with Summit's assessment table in schema.
+export const tradeAssessment = trade.table(
+  "assessment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ASSESSMENT_KINDS }).notNull(),
+    templateVersion: text("template_version").notNull(),
+    status: text("status", { enum: ASSESSMENT_STATUSES }).notNull().default("draft"),
+    assessedByUserId: text("assessed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    assessedAt: timestamp("assessed_at", { withTimezone: true }),
+    supersededById: uuid("superseded_by_id"),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_assessment_enrollment_idx").on(t.enrollmentId),
+    uniqueIndex("trade_assessment_live_placement_uidx")
+      .on(t.enrollmentId)
+      .where(sql`${t.kind} = 'placement' and ${t.status} <> 'superseded'`),
+  ],
+);
+
+export const UNSCORED_REASONS = ["not_known", "not_applicable"] as const;
+export type UnscoredReason = (typeof UNSCORED_REASONS)[number];
+
+// One response to an assessment question.
+export const assessmentResponse = trade.table(
+  "assessment_response",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => tradeAssessment.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull(),
+    answer: jsonb("answer"),
+    unscored: text("unscored", { enum: UNSCORED_REASONS }),
+    approvedByUserId: text("approved_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    documentsAvailable: boolean("documents_available").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_assessment_response_question_uidx").on(t.assessmentId, t.questionId),
+  ],
+);
+export const tradeAssessmentResponse = assessmentResponse;
+
+
