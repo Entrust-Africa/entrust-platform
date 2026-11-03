@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { QUESTION_TYPES } from "@entrust/forms";
 import {
+  APPLICATION_STATUSES,
   CATEGORY_IDS,
   COMMITTEE_DECISIONS,
   COMMITTEE_STATUSES,
@@ -9,6 +10,7 @@ import {
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
   RECOMMENDATIONS,
+  REPORT_IDS,
   RESULT_STATUSES,
   SUITABLE_OPPORTUNITIES,
   VERIFICATION_CLASSES,
@@ -711,6 +713,60 @@ export const SelectionTargetBody = z
   })
   .refine((b) => b.perCountry !== undefined || (b.countries !== undefined && Object.keys(b.countries).length > 0), "Change the figure for all countries or for at least one")
   .openapi("SummitSelectionTargetBody");
+
+// ---- The reports (spec section 11) ----
+
+export const ReportParam = z.object({ report: z.enum(REPORT_IDS).openapi({ example: "application-register" }) });
+
+export const REPORT_FORMATS = ["csv", "xlsx", "pdf", "json"] as const;
+
+export const ReportQuery = z.object({
+  format: z
+    .enum(REPORT_FORMATS)
+    .default("json")
+    .openapi({ description: "csv and xlsx for analysis and import, pdf for formal reporting, json for a screen." }),
+  periodId: z.uuid().optional().openapi({ description: "Default: the newest period." }),
+  country: z.string().trim().length(2).optional().openapi({ description: "ISO 3166-1 alpha-2 code of the business's country.", example: "KE" }),
+  status: z.enum(APPLICATION_STATUSES).optional(),
+  pathway: z.enum(OPPORTUNITY_PATHWAYS).optional(),
+  sector: z.string().trim().min(1).max(100).optional().openapi({ description: "Part of the industry, ignoring case." }),
+});
+
+const ReportKind = z.object({
+  id: z.enum(REPORT_IDS),
+  number: z.number().int().openapi({ description: "Report 1 to 12 of section 11." }),
+  title: z.string(),
+  purpose: z.string(),
+  classification: z.enum(["internal", "confidential", "restricted", "external_approved"]),
+});
+
+const ReportScope = z.enum(["all", "assigned", "committee", "aggregate"]).openapi({
+  description:
+    "What the caller's export holds: every application, only those assigned to the officer, only those the committee can open, or only the figures of the whole period.",
+});
+
+const ReportColumns = z.array(z.object({ key: z.string(), label: z.string(), numeric: z.boolean() }));
+
+export const ReportCatalogue = z
+  .object({ items: z.array(ReportKind.extend({ scope: ReportScope, columns: ReportColumns })) })
+  .openapi("SummitReportCatalogue");
+
+export const ReportTable = z
+  .object({
+    report: ReportKind,
+    period: z.object({ id: z.uuid(), name: z.string() }),
+    generatedAt: Timestamp,
+    generatedBy: z.string(),
+    filters: z.record(z.string(), z.string()).openapi({ description: "The filters that were applied." }),
+    scope: ReportScope,
+    records: z.number().int(),
+    columns: ReportColumns,
+    rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
+  })
+  .openapi("SummitReportTable");
+
+export type ReportCatalogueView = z.infer<typeof ReportCatalogue>;
+export type ReportTableView = z.infer<typeof ReportTable>;
 
 export type DashboardViewType = z.infer<typeof DashboardView>;
 export type CommitteeListView = z.infer<typeof CommitteeList>;

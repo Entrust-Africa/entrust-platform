@@ -322,6 +322,8 @@ describe("API documentation", () => {
         "/v1/summit/committee/applications",
         "/v1/summit/committee/compare",
         "/v1/summit/dashboard",
+        "/v1/summit/reports",
+        "/v1/summit/reports/{report}",
         "/v1/summit/forms/{version}",
         "/v1/summit/officers",
         "/v1/summit/period",

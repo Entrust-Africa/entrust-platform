@@ -1,4 +1,4 @@
-import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import type { AppEnv } from "../app";
 import {
@@ -43,6 +43,10 @@ import {
   RecommendationBody,
   RecordScoresBody,
   RespondBody,
+  ReportCatalogue,
+  ReportParam,
+  ReportQuery,
+  ReportTable,
   ReviewBody,
   SaveAnswersBody,
   SelectionTargetBody,
@@ -70,6 +74,7 @@ import { compareForCommittee, listForCommittee, recordDecision } from "../servic
 import { getDashboard, setSelectionTarget } from "../services/summit-dashboard";
 import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
+import { exportReport, listReports, viewReport } from "../services/summit-reports";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
 // The Summit SME application platform (#79): the public period, the applicant's application, and the administrators'
@@ -527,6 +532,38 @@ const targetRoute = createRoute({
   responses: { 200: { description: "The dashboard", content: json(DashboardView) }, ...listErrors, 403: problem("Not a member of the selection committee"), 404: problem("No such period"), 422: problem("A country that isn't one of the period's") },
 });
 
+const reportsRoute = createRoute({
+  method: "get",
+  path: "/reports",
+  tags,
+  summary: "The reports",
+  description:
+    "The twelve reports of the specification's section 11, with their columns, their confidentiality classification and what the caller's own export of each would hold. The selection committee and Entrust staff.",
+  responses: { 200: { description: "The reports", content: json(ReportCatalogue) }, ...listErrors, 403: problem("Not the committee or Entrust staff") },
+});
+
+const FILE_CONTENT = {
+  "text/csv": { schema: z.string() },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { schema: z.string().openapi({ format: "binary" }) },
+  "application/pdf": { schema: z.string().openapi({ format: "binary" }) },
+};
+
+const reportRoute = createRoute({
+  method: "get",
+  path: "/reports/{report}",
+  tags,
+  summary: "Export a report",
+  description:
+    "One of the twelve reports as Excel, CSV or PDF, or as JSON for a screen. What it holds depends on the caller's role, and a filter or another format only narrows that: an administrator or facilitator gets every application, an assessment officer only those assigned to them, and the committee only those it can open; the two distribution reports are the whole period's figures for an officer or a committee member. Every export, JSON included, is written to the audit log with the user, report, format, filters and number of records. The file starts with the report name, the period, when and by whom it was made, the filters and the record count. CSV protects against formula injection. The selection committee and Entrust staff.",
+  request: { params: ReportParam, query: ReportQuery },
+  responses: {
+    200: { description: "The report", content: { ...json(ReportTable), ...FILE_CONTENT } },
+    ...listErrors,
+    403: problem("Not the committee or Entrust staff"),
+    404: problem("No such period"),
+  },
+});
+
 export const summit = router
   .openapi(listPeriodsRoute, async (c) => c.json({ items: await listPeriods(await contextFor(c.get("user"))) }, 200))
   .openapi(createPeriodRoute, async (c) => c.json(await createPeriod(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -614,6 +651,24 @@ export const summit = router
     c.json(await approveFinalList(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")?.note), 201),
   )
   .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(reportsRoute, async (c) => c.json(await listReports(await contextFor(c.get("user"))), 200))
+  .openapi(reportRoute, async (c) => {
+    const ctx = await contextFor(c.get("user"));
+    const { report } = c.req.valid("param");
+    const { format, ...query } = c.req.valid("query");
+    if (format === "json") return c.json(await viewReport(ctx, report, query), 200);
+    const file = await exportReport(ctx, report, format, query);
+    // The file is for the person who asked, so no shared cache may keep it.
+    return new Response(new Uint8Array(file.body), {
+      status: 200,
+      headers: {
+        "Content-Type": file.contentType,
+        "Content-Disposition": `attachment; filename="${file.filename}"`,
+        "Content-Length": String(file.body.byteLength),
+        "Cache-Control": "private, no-store",
+      },
+    }) as never;
+  })
   .openapi(dashboardRoute, async (c) => c.json(await getDashboard(await contextFor(c.get("user")), c.req.valid("query").periodId), 200))
   .openapi(targetRoute, async (c) =>
     c.json(await setSelectionTarget(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
