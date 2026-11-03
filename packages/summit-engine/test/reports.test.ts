@@ -8,6 +8,7 @@ import {
   findReport,
   inScope,
   opportunityClassification,
+  opportunityProfile,
   reportAnswers,
   selectionNumbers,
   validateApplicationTemplates,
@@ -617,5 +618,102 @@ describe("a status the report doesn't know", () => {
   it("is still a row: the label is the status in words", () => {
     const status: ApplicationStatus = "awaiting_additional_information";
     expect(asObjects("application-register", [app({ status })])[0]!["Application status"]).toBe("Awaiting additional information");
+  });
+});
+
+describe("the opportunity profile", () => {
+  const selected = (overrides: Partial<ReportApplication> = {}, given: Record<string, unknown> = {}) =>
+    app(
+      {
+        status: "selected",
+        selectionNumber: 7,
+        score: scored(91),
+        decision: decided("selected", "2030-01-10T10:00:00Z", "A secret committee reason."),
+        recommendation: { id: "recommend_selection", suitable: "combined", at: new Date() },
+        ...overrides,
+      },
+      {
+        "S1.8": "yes",
+        "S1.9": "no",
+        "S1.10": "Abebe Kebede",
+        "S1.12": "abebe@example.com",
+        "S2.2": "Roasts and exports coffee.",
+        "S2.3": ["Green coffee", "Roasted coffee"],
+        "S2.4": { amount: 90000, currency: "USD" },
+        "S2.5": 24,
+        "S3.1": "yes",
+        "S3.2": ["Kenya"],
+        "S3.4": ["UAE", "UK"],
+        "S7.1": "Meet buyers",
+        "S7.2": ["investors"],
+        "S7.3": "Seeking buyers in the Gulf",
+        "S7.4": ["UAE"],
+        "S7.5": { amount: 250000, currency: "USD" },
+        "S9.4": "Abebe K.",
+        ...given,
+      },
+    );
+  const flat = (a: ReportApplication) => Object.fromEntries(opportunityProfile(a).sections.flatMap((s) => s.fields.map((f) => [f.label, f.value])));
+
+  it("states who the business is, what it offers abroad, what it asks for and who to contact", () => {
+    const a = selected({ smeId: "ET-SME-000007", businessName: "Abyssinia Coffee" });
+    const profile = opportunityProfile(a);
+    expect(profile.businessName).toBe("Abyssinia Coffee");
+    expect(profile.reference).toBe(`SEL-007 | ET-SME-000007 | ${a.number}`);
+    expect(profile.sections.map((s) => s.heading)).toEqual(["The business", "Trade", "What it is looking for", "Contact"]);
+    expect(flat(a)).toMatchObject({
+      Country: "Ethiopia",
+      Industry: "Coffee",
+      "Main products or services": "Green coffee; Roasted coffee",
+      "About the business": "Roasts and exports coffee.",
+      "Annual revenue": "USD 90,000",
+      Employees: "24",
+      Ownership: "Woman-owned or woman-led",
+      "Export experience": "Yes: Kenya",
+      "Markets it wants to reach": "UAE; UK",
+      Opportunity: "Combined opportunity",
+      "Commercial ask": "Seeking buyers in the Gulf",
+      "Country or market": "UAE",
+      "Looking to meet": "Investors",
+      "Estimated transaction value": "USD 250,000",
+      "Hopes to achieve at the Summit": "Meet buyers",
+      Representative: "Abebe K.",
+      Email: "abebe@example.com",
+    });
+  });
+
+  it("holds nothing from the assessment: no score, rationale, verification, committee reason or comment", () => {
+    const a = selected({
+      committeeComments: ["An internal committee comment."],
+      verification: [{ claim: "annual_revenue", class: "self_reported", files: [], check: "A private check.", by: "Olive", at: new Date() }],
+    });
+    const everything = JSON.stringify(opportunityProfile(a));
+    for (const secret of ["91", "A secret committee reason.", "An internal committee comment.", "A private check.", "score", "Score", "verif", "Recommend"]) {
+      expect(everything, secret).not.toContain(secret);
+    }
+  });
+
+  it("leaves out a field the application has no answer for, and a section left with none", () => {
+    const a = selected({}, { "S3.1": undefined, "S3.2": undefined, "S3.4": undefined, "S3.9": undefined });
+    expect(flat(a)).not.toHaveProperty("Export experience");
+    expect(opportunityProfile(a).sections.map((s) => s.heading)).not.toContain("Trade");
+    expect(flat(a)).not.toHaveProperty("City or region");
+  });
+
+  it("names ownership only where it is yes, and the investment sought only for one seeking investment", () => {
+    expect(flat(selected({}, { "S1.8": "no", "S1.9": "no" }))).not.toHaveProperty("Ownership");
+    expect(flat(selected({}, { "S1.8": "yes", "S1.9": "yes" })).Ownership).toBe("Woman-owned or woman-led; Youth-owned or youth-led");
+    const seeker = selected({ seeksInvestment: true }, { "S2.12": "investment", "S4.2": { amount: 500000, currency: "USD" }, "S4.3": "A new roastery" });
+    expect(flat(seeker)).toMatchObject({ "Investment sought": "USD 500,000", "Intended use of funds": "A new roastery" });
+    expect(flat(selected())).not.toHaveProperty("Investment sought");
+  });
+
+  it("says whether the final list is approved", () => {
+    expect(opportunityProfile(selected()).confirmation).toBe("Selection pending the committee's final list approval");
+    expect(opportunityProfile(selected({ finalListApprovedAt: new Date("2030-01-12T10:00:00Z") })).confirmation).toBe("Selection confirmed 2030-01-12");
+  });
+
+  it("falls back to the contact person where the declaration names no representative", () => {
+    expect(flat(selected({}, { "S9.4": undefined, "S1.10": "Contact Person" })).Representative).toBe("Contact Person");
   });
 });

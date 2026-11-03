@@ -6,7 +6,17 @@ import type { ApplicationTemplate, ReportInputs } from "../application/types";
  * What a report can ask of an application: the questions of `ReportInputs`, and the ones eligibility and the
  * committee already name. A version of the form that doesn't ask one leaves the answer empty.
  */
-export type ReportQuestion = keyof ReportInputs | "registration" | "operating" | "sector" | "commercialAsk" | "revenue" | "seekingInvestment";
+export type ReportQuestion =
+  | keyof ReportInputs
+  | "registration"
+  | "operating"
+  | "sector"
+  | "commercialAsk"
+  | "revenue"
+  | "seekingInvestment"
+  | "employees"
+  | "womanOwned"
+  | "youthOwned";
 
 /** An application's answers as the reports read them. A question the form hides doesn't count, even if it once held an answer. */
 export interface ReportAnswers {
@@ -40,6 +50,9 @@ export function reportAnswers(template: ApplicationTemplate, answers: Answers): 
     commercialAsk: inputs.profile.commercialAsk,
     revenue: inputs.profile.revenue,
     seekingInvestment: inputs.seekingInvestment,
+    employees: inputs.profile.employees,
+    womanOwned: inputs.profile.womanOwned,
+    youthOwned: inputs.profile.youthOwned,
   };
   const questions = new Map<string, FormQuestion>(template.questions.map((q) => [q.id, q]));
 
