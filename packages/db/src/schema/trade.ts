@@ -1,6 +1,24 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, index, jsonb, pgSchema, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { ASSESSMENT_STATUSES, ENROLLMENT_STATUSES } from "@entrust/trade-engine";
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgSchema,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import {
+  ASSESSMENT_STATUSES,
+  EVIDENCE_CONFIDENCE,
+  ENROLLMENT_STATUSES,
+  LEARNING_PLAN_STATUSES,
+} from "@entrust/trade-engine";
+import { PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
 
 // TRADE platform PostgreSQL schema (#55).
@@ -137,5 +155,65 @@ export const assessmentResponse = trade.table(
   ],
 );
 export const tradeAssessmentResponse = assessmentResponse;
+
+// A capability score for one domain or trigger group from an assessment.
+export const capabilityScore = trade.table(
+  "capability_score",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => tradeAssessment.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    points: integer("points").notNull(),
+    maxPoints: integer("max_points").notNull(),
+    coverage: numeric("coverage", { precision: 5, scale: 4 }).notNull(),
+    score: integer("score"),
+    band: text("band"),
+    evidenceStatus: text("evidence_status", { enum: EVIDENCE_CONFIDENCE }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_capability_score_assessment_domain_uidx").on(t.assessmentId, t.domain),
+  ],
+);
+
+// An SME's learning plan, prescribing modules and sequence. One plan per enrolment is live
+// (not superseded) at a time. A new plan supersedes the old one, and nothing is overwritten.
+export const learningPlan = trade.table(
+  "learning_plan",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    assessmentId: uuid("assessment_id").references(() => tradeAssessment.id, {
+      onDelete: "set null",
+    }),
+    rulesVersion: text("rules_version").notNull(),
+    pathway: text("pathway", { enum: PATHWAYS }).notNull(),
+    status: text("status", { enum: LEARNING_PLAN_STATUSES }).notNull().default("generated"),
+    requiresHumanReview: boolean("requires_human_review").notNull().default(false),
+    reviewReasons: text("review_reasons")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    supersededById: uuid("superseded_by_id"),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_learning_plan_enrollment_idx").on(t.enrollmentId),
+    uniqueIndex("trade_learning_plan_live_uidx")
+      .on(t.enrollmentId)
+      .where(sql`${t.status} <> 'superseded'`),
+  ],
+);
+
 
 
