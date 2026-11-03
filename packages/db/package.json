@@ -18,6 +18,8 @@
     "@entrust/gate-engine": "workspace:*",
     "@entrust/rules": "workspace:*",
     "@entrust/summit-engine": "workspace:*",
+    "@entrust/trade-engine": "workspace:*",
+    "@entrust/trade-rules": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1"
   },
