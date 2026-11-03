@@ -1,7 +1,8 @@
 import { strFromU8, unzipSync, unzlibSync } from "fflate";
 import { PDFDocument, PDFRawStream } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { columnName, csvCell, render, type ExportTable } from "../src/services/export";
+import type { OpportunityProfile } from "@entrust/summit-engine";
+import { columnName, csvCell, render, toProfilePdf, type ExportTable } from "../src/services/export";
 
 // The file formats of the Summit's reports (#80), apart from any report: what each writes for awkward text, for no
 // records and for a great many.
@@ -164,5 +165,46 @@ describe("the PDF", () => {
     expect(pdf.getTitle()).toBe("Test Report");
     expect(pdf.getAuthor()).toBe("Adam Admin");
     expect(pdf.getCreationDate()?.toISOString()).toBe("2030-01-15T10:00:00.000Z");
+  });
+});
+
+describe("the one-page profile", () => {
+  const profile = (overrides: Partial<OpportunityProfile> = {}): OpportunityProfile => ({
+    businessName: "Abyssinia Coffee Exporters",
+    reference: "SEL-001 | ET-SME-000001 | SUM-000001",
+    confirmation: "Selection confirmed 2030-01-12",
+    sections: [
+      { heading: "The business", fields: [{ label: "Country", value: "Ethiopia" }, { label: "Industry", value: "Coffee" }] },
+      { heading: "Contact", fields: [{ label: "Email", value: "abebe@example.com" }] },
+    ],
+    ...overrides,
+  });
+  const file = { generatedAt: new Date("2030-01-15T10:00:00Z"), generatedBy: "Adam Admin", summit: "Africa Diaspora Trade and Investment Summit", classification: "Internal" };
+
+  it("is one page with the business's name, its reference, the facts and the notice that it is for Entrust's use", async () => {
+    const bytes = await toProfilePdf(profile(), file);
+    const { pages, text } = await pdfPages(bytes);
+    expect(pages).toBe(1);
+    for (const expected of ["Africa Diaspora Trade and Investment Summit", "INTERNAL", "SME OPPORTUNITY PROFILE", "Abyssinia Coffee Exporters", "SEL-001 | ET-SME-000001 | SUM-000001", "Selection confirmed 2030-01-12", "THE BUSINESS", "Ethiopia", "abebe@example.com", "For Entrust's own use. It isn't to be shared outside Entrust without the business's authorisation."]) {
+      expect(text, expected).toContain(expected);
+    }
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getTitle()).toBe("Abyssinia Coffee Exporters: SME opportunity profile");
+    expect(pdf.getAuthor()).toBe("Adam Admin");
+  });
+
+  it("stays on one page however much the business wrote, by shortening what it must", async () => {
+    const long = "A very long answer that goes on and on. ".repeat(60);
+    const fields = Array.from({ length: 12 }, (_, i) => ({ label: `Field ${i + 1}`, value: long }));
+    const sections = ["The business", "Trade", "What it is looking for", "Contact"].map((heading) => ({ heading, fields }));
+    const { pages, text } = await pdfPages(await toProfilePdf(profile({ sections, businessName: "An extremely long business name ".repeat(4) }), file));
+    expect(pages).toBe(1);
+    expect(text).toContain("...");
+    expect(text).toContain("Field 12");
+  });
+
+  it("draws what the fonts lack as question marks instead of failing", async () => {
+    const { text } = await pdfPages(await toProfilePdf(profile({ businessName: "ቡና Coffee" }), file));
+    expect(text).toContain("?? Coffee");
   });
 });

@@ -85,7 +85,7 @@ function latestOf<T extends { applicationId: string }>(rows: readonly T[]): Late
 }
 
 /** Every application of the period as the reports read it. Nothing is cut down here: the caller's scope does that. */
-async function loadApplications(db: Executor, period: PeriodRow): Promise<ReportApplication[]> {
+export async function loadApplications(db: Executor, period: PeriodRow): Promise<ReportApplication[]> {
   const rows = await db
     .select({ row: schema.application, businessName: schema.organization.name, smeId: schema.smeProfile.smeId, country: schema.smeProfile.country })
     .from(schema.application)
