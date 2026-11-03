@@ -21,6 +21,7 @@ export { APPLICANT_RESULTS, COMMITTEE_STATUSES, READINESS_CATEGORIES, RESULT_STA
 export type { ApplicantProfile, ResultStatus } from "./committee";
 export { DEFAULT_SELECTION_TARGET, summarise, targetFor, validTarget } from "./dashboard";
 export type { CountryFigures, Dashboard, DashboardInput, DashboardRow, SelectionTarget } from "./dashboard";
+export * from "./reports";
 export { verificationProblems } from "./verification";
 export type { VerificationRecord } from "./verification";
 

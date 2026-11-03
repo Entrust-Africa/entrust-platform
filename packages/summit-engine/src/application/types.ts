@@ -25,6 +25,58 @@ export interface ApplicationInputs {
   declaration: readonly string[];
   /** What the committee compares and filters applicants on. */
   profile: ProfileInputs;
+  /** What the reports read beyond the above. */
+  report: ReportInputs;
+}
+
+/**
+ * The questions the reports of the specification's section 11 read, named here so a new version can move them. Each is
+ * optional: a version that doesn't ask a question leaves that column of the report empty.
+ */
+export interface ReportInputs {
+  /** City or region of the business. */
+  city?: string;
+  contactName?: string;
+  contactPosition?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  /** The authorized representative who signed the declaration. */
+  representativeName?: string;
+  representativePosition?: string;
+  description?: string;
+  /** Main products or services: a list. */
+  activities?: string;
+  capacity?: string;
+  /** Has the business exported: yes/no. */
+  exported?: string;
+  exportMarkets?: string;
+  targetMarkets?: string;
+  /** Has an active buyer, enquiry, contract or purchase order: yes/no. */
+  activeBuyer?: string;
+  /** What the applicant has from buyers: a multiple choice whose values include "signed_contract" and "purchase_order". */
+  buyerEvidence?: string;
+  buyerDetails?: string;
+  transactionValue?: string;
+  /** The buyers' requirements the business meets: certifications, standards and volumes. */
+  requirements?: string;
+  exportConstraints?: string;
+  investmentAmount?: string;
+  investmentTypes?: string;
+  investmentUse?: string;
+  investmentOutcomes?: string;
+  investmentSecured?: string;
+  investmentRemaining?: string;
+  investmentPeriod?: string;
+  /** Has a business plan or financial model for the investment: yes/no. */
+  businessPlan?: string;
+  /** Can provide financial statements: yes/no. */
+  financialStatements?: string;
+  partnerInterests?: string;
+  partnerBenefit?: string;
+  summitGoal?: string;
+  partnersSought?: string;
+  askMarkets?: string;
+  askValue?: string;
 }
 
 /** The questions behind the committee's filters and comparison. An answer a version doesn't ask for reads as unknown. */

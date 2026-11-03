@@ -145,6 +145,11 @@ export async function callV1(user: TestUser | null, method: string, path: string
   return { status: response.status, body: (await response.json()) as Json };
 }
 
+/** Calls the API under /v1 in-process and returns the response as it is, for a file. */
+export async function callFileV1(user: TestUser | null, path: string) {
+  return app.request(`/v1${path}`, { headers: { ...(user ? { cookie: user.cookie } : {}), origin: "http://localhost:3000" } });
+}
+
 export const FACTS = { product: "green_coffee", destinationCountry: "US", transportMode: "sea" };
 
 // ---- Putting a case in a state that would take dozens of calls to reach ----
