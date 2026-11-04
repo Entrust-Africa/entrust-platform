@@ -127,6 +127,13 @@
       "when": 1793833799139,
       "tag": "0017_trade_diagnostic_and_pathway",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793834419993,
+      "tag": "0018_trade_sponsor_consent",
+      "breakpoints": true
     }
   ]
 }
