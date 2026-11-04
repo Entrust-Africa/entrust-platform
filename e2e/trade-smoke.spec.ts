@@ -68,8 +68,8 @@ test("a session started on CLEAR is signed in on TRADE, and TRADE opens with rol
 
   // 6. Verify platform switcher in account menu
   await page.getByRole("button", { name: "Account menu" }).click();
-  await expect(page.getByText("CLEAR Export")).toBeVisible();
-  await expect(page.getByText("TRADE Platform")).toBeVisible();
+  await expect(page.getByRole("link", { name: "CLEAR" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "TRADE" })).toBeVisible();
 
   // Cleanup database
   await db.delete(schema.platformAccess).where(eq(schema.platformAccess.organizationId, orgId));
