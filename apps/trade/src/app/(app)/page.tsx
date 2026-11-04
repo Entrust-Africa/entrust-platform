@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getMe, listEnrollments } from "@/lib/api";
+import { getMe, listEnrollments, listSessions } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import { CreateOrganisation } from "@/components/summit/create-organisation";
 import { AFRICAN_COUNTRIES } from "@/lib/summit-business";
@@ -154,6 +154,7 @@ export default async function TradeHomePage() {
   const pathway = diagnostic?.pathway ?? null;
   const currentEnrollment =
     enrollments.find((e) => e.status === "active" || e.status === "registered") ?? enrollments[0];
+  const sessions = currentEnrollment ? await listSessions(currentEnrollment.cohortId) : [];
 
   return (
     <div className="space-y-6">
@@ -205,6 +206,60 @@ export default async function TradeHomePage() {
             <StatusBadge tone={getStatusTone(currentEnrollment.status)}>
               {`Status: ${currentEnrollment.status.toUpperCase()}`}
             </StatusBadge>
+          </div>
+        </Card>
+      )}
+
+      {sessions.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-display text-base font-bold text-ink">Upcoming Live Sessions & Workshops</h2>
+              <p className="mt-0.5 text-xs text-ink-2">
+                Live sessions for your cohort. Attendance is recorded by your facilitator.
+              </p>
+            </div>
+            <StatusBadge tone="info">{`${sessions.length} scheduled`}</StatusBadge>
+          </div>
+          <div className="mt-4 divide-y divide-line/60">
+            {sessions.map((sess) => (
+              <div key={sess.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs">
+                <div>
+                  <div className="font-semibold text-ink text-sm">{sess.title}</div>
+                  <div className="text-ink-2 mt-0.5">
+                    {new Date(sess.startTime).toLocaleString()} –{" "}
+                    {new Date(sess.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                  {sess.moduleCodes.length > 0 && (
+                    <div className="mt-1 flex gap-1">
+                      {sess.moduleCodes.map((c) => (
+                        <span key={c} className="rounded bg-canvas px-1.5 py-0.5 text-[10px] font-mono text-brand-700">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  {sess.venue ? (
+                    sess.venue.startsWith("http") ? (
+                      <a
+                        href={sess.venue}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-brand-50 px-3 py-1.5 font-semibold text-brand-700 hover:bg-brand-100"
+                      >
+                        Join Meeting ↗
+                      </a>
+                    ) : (
+                      <span className="font-medium text-ink">📍 {sess.venue}</span>
+                    )
+                  ) : (
+                    <span className="text-ink-3">Venue TBD</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}

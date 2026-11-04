@@ -211,6 +211,13 @@
       "when": 1793966553000,
       "tag": "0029_public_diagnostic_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793967458602,
+      "tag": "0030_easy_johnny_blaze",
+      "breakpoints": true
     }
   ]
 }

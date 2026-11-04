@@ -12,6 +12,8 @@ export {
 export {
   DELIVERY_MODES,
   ENROLLMENT_STATUSES,
+  ATTENDANCE_STATUSES,
   type DeliveryMode,
   type EnrollmentStatus,
+  type AttendanceStatus,
 } from "./schema/trade";

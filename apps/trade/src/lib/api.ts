@@ -10,6 +10,9 @@ import type {
   TradeEnrollmentSummary,
   WaitingSme,
   StaffAssessmentRow,
+  TradeSessionSummary,
+  TradeSessionDetail,
+  TradeFacilitatorRoster,
 } from "./types";
 import { tradeGet } from "./trade-api";
 
@@ -93,4 +96,32 @@ export async function listWaitingSmes(): Promise<WaitingSme[]> {
 export async function listDiagnostics(): Promise<StaffAssessmentRow[]> {
   const result = await tradeGet<{ items: StaffAssessmentRow[] }>("/assessments?kind=diagnostic");
   return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
+}
+
+/** List sessions for a cohort. */
+export async function listSessions(cohortId: string): Promise<TradeSessionSummary[]> {
+  const res = await (await serverApi()).v1.trade.cohorts[":cohortId"].sessions.$get({
+    param: { cohortId },
+  });
+  if (res.status !== 200) return [];
+  const data = (await res.json()) as { sessions: TradeSessionSummary[] };
+  return data.sessions;
+}
+
+/** Session details by ID. */
+export async function getSession(id: string): Promise<TradeSessionDetail | null> {
+  const res = await (await serverApi()).v1.trade.sessions[":id"].$get({
+    param: { id },
+  });
+  if (res.status !== 200) return null;
+  return (await res.json()) as unknown as TradeSessionDetail;
+}
+
+/** Facilitator roster for a session (Staff only). */
+export async function getFacilitatorRoster(id: string): Promise<TradeFacilitatorRoster | null> {
+  const res = await (await serverApi()).v1.trade.sessions[":id"].roster.$get({
+    param: { id },
+  });
+  if (res.status !== 200) return null;
+  return (await res.json()) as unknown as TradeFacilitatorRoster;
 }

@@ -81,6 +81,23 @@ export async function handleSendEmail(jobData: SendEmailJobData) {
         />
       );
       break;
+    case "trade-session-reminder":
+      reactElement = (
+        <EmailLayout preview={`Reminder: ${data.props.sessionTitle}`} title="Upcoming TRADE Live Session">
+          <EmailParagraph>
+            Hello{data.props.recipientName ? ` ${data.props.recipientName}` : ""},
+          </EmailParagraph>
+          <EmailParagraph>
+            This is a reminder for your upcoming live session in <strong>{data.props.cohortName}</strong>:
+          </EmailParagraph>
+          <EmailParagraph>
+            <strong>{data.props.sessionTitle}</strong><br />
+            Time: {data.props.startTime}<br />
+            {data.props.venue ? `Location / Link: ${data.props.venue}` : ""}
+          </EmailParagraph>
+        </EmailLayout>
+      );
+      break;
     case "test":
     default:
       reactElement = (
