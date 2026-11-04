@@ -340,6 +340,8 @@ describe("API documentation", () => {
         "/v1/trade/assessments/{id}/responses/{questionId}/approve",
         "/v1/trade/assessments/{id}/submit",
         "/v1/trade/enrollments/{id}/pathway",
+        "/v1/trade/consents",
+        "/v1/trade/consents/{id}/withdraw",
         "/v1/trade/modules",
         "/v1/trade/modules/{id}",
         "/v1/trade/practice-cases",
@@ -357,6 +359,13 @@ describe("API documentation", () => {
         "/v1/trade/practice-cases/{id}/reset",
         "/v1/trade/practice-cases/{id}/steps/{stepId}/transition",
         "/v1/trade/practice-scenarios",
+        "/v1/trade/sponsor/cohorts",
+        "/v1/trade/sponsor/cohorts/{id}",
+        "/v1/trade/sponsor/cohorts/{id}/smes/{organizationId}",
+        "/v1/trade/sponsors",
+        "/v1/trade/sponsors/{id}",
+        "/v1/trade/sponsors/{id}/members",
+        "/v1/trade/sponsors/{id}/members/{userId}",
       ].sort(),
     );
     expect(Object.keys(doc.paths["/v1/clear/cases"]).sort()).toEqual(["get", "post"]);

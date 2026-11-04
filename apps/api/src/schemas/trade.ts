@@ -1,7 +1,8 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { ASSESSMENT_STATUSES } from "@entrust/trade-engine";
+import { ASSESSMENT_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
+import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { CaseIdParam, Facts, Role } from "./clear";
 
@@ -261,3 +262,118 @@ export const SetPathwayBody = z
     reason: z.string().min(1).max(500).openapi({ example: "The shipment record was accepted." }),
   })
   .openapi("SetTradePathwayBody");
+
+// ---- Sponsors and consent (#70) ----
+
+const SponsorMember = z.object({ userId: z.string(), name: z.string(), email: z.string(), role: z.string() });
+
+export const SponsorView = z
+  .object({ id: z.string(), name: z.string(), slug: z.string(), members: z.array(SponsorMember) })
+  .openapi("TradeSponsor");
+export const SponsorList = z.object({ items: z.array(SponsorView) }).openapi("TradeSponsorList");
+
+export const CreateSponsorBody = z
+  .object({
+    name: z.string().trim().min(1).max(160).openapi({ example: "Zemen Bank" }),
+    slug: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Lowercase letters, numbers and hyphens only.")
+      .max(80)
+      .openapi({ example: "zemen-bank" }),
+    adminEmail: z.email().optional().openapi({ description: "The first administrator: someone who already has an account." }),
+  })
+  .openapi("CreateTradeSponsorBody");
+
+export const SponsorParam = z.object({ id: z.string().min(1).max(100) });
+export const SponsorMemberParam = z.object({ id: z.string().min(1).max(100), userId: z.string().min(1).max(100) });
+export const AddSponsorMemberBody = z
+  .object({ email: z.email(), role: z.enum(SPONSOR_ROLES) })
+  .openapi("AddTradeSponsorMemberBody");
+
+const DataKind = z.enum(SPONSOR_DATA_KINDS);
+const CohortFigures = z.object({
+  enrolled: z.number(),
+  byStatus: z.record(z.string(), z.number()),
+  diagnosticsSubmitted: z.number(),
+  pathwayA: z.number(),
+  pathwayB: z.number(),
+});
+const SponsorCohort = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  program: z.string(),
+  country: z.string(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+  sponsor: z.object({ id: z.string(), name: z.string() }),
+  /** Counts with no names. */
+  figures: CohortFigures,
+});
+
+export const SponsorCohortList = z
+  .object({ disclaimer: z.string(), items: z.array(SponsorCohort) })
+  .openapi("TradeSponsorCohortList");
+
+export const SponsorCohortDetail = SponsorCohort.extend({
+  disclaimer: z.string(),
+  /** The SMEs whose owners agreed to share something with this sponsor, and what. */
+  consenting: z.array(z.object({ organizationId: z.string(), name: z.string(), smeId: z.string().nullable(), kinds: z.array(DataKind) })),
+}).openapi("TradeSponsorCohort");
+
+export const SponsorCohortParam = z.object({ id: z.uuid() });
+export const SponsorSmeParam = z.object({ id: z.uuid(), organizationId: z.string().min(1).max(100) });
+
+export const SponsorSmeView = z
+  .object({
+    sponsor: z.object({ id: z.string(), name: z.string() }),
+    cohort: z.object({ id: z.uuid(), name: z.string() }),
+    sme: z.object({ organizationId: z.string(), name: z.string(), legalName: z.string().nullable(), smeId: z.string().nullable(), country: z.string().nullable() }),
+    sharedKinds: z.array(DataKind),
+    /** By kind, only the kinds the owner agreed to. `available: false` means TRADE doesn't record it yet. */
+    data: z.record(z.string(), z.unknown()),
+    disclaimer: z.string(),
+  })
+  .openapi("TradeSponsorSme");
+
+export const ConsentQuery = z.object({
+  organizationId: z.string().optional().openapi({ description: "The SME organisation. Default: the caller's only one." }),
+});
+
+export const ConsentView = z
+  .object({
+    organizationId: z.string(),
+    /** Only the owner of the organisation can grant or withdraw. */
+    canChange: z.boolean(),
+    wordingVersion: z.string(),
+    disclaimer: z.string(),
+    sponsors: z.array(
+      z.object({
+        sponsor: z.object({ id: z.string(), name: z.string() }),
+        cohorts: z.array(z.string()),
+        kinds: z.array(
+          z.object({
+            kind: DataKind,
+            label: z.string(),
+            description: z.string(),
+            /** The sentence the owner agrees to. It is stored with the grant. */
+            wording: z.string(),
+            granted: z.boolean(),
+            consentId: z.uuid().nullable(),
+            grantedAt: z.iso.datetime().nullable(),
+          }),
+        ),
+      }),
+    ),
+  })
+  .openapi("TradeConsents");
+
+export const GrantConsentBody = z
+  .object({
+    organizationId: z.string().optional(),
+    sponsorOrganizationId: z.string().min(1),
+    kinds: z.array(DataKind).min(1),
+  })
+  .openapi("GrantTradeConsentBody");
+
+export const ConsentParam = z.object({ id: z.uuid() });

@@ -255,7 +255,7 @@ async function rowsOf(tx: Executor, assessmentId: string): Promise<ResponseRow[]
 
 // ---- The avenue ----
 
-async function pathwayView(tx: Executor, enrollmentId: string) {
+export async function pathwayView(tx: Executor, enrollmentId: string) {
   const [live] = await tx
     .select()
     .from(schema.pathwayAssignment)
