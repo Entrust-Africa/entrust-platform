@@ -49,7 +49,8 @@ export function AccountMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const activeOrg = user.organizations?.find((o) => o.id === user.activeOrganizationId);
+  const activeOrg =
+    user.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user.organizations?.[0];
   const activePlatforms =
     platforms ?? user.platforms ?? (user.staffRole ? ["clear", "trade"] : activeOrg?.platforms ?? []);
   const availablePlatforms = activePlatforms.filter((p: string) => (PLATFORMS as readonly string[]).includes(p));

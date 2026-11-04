@@ -27,7 +27,8 @@ interface NavLinksProps {
 export function NavLinks({ orientation = "horizontal", onNavigate, className, user }: NavLinksProps) {
   const pathname = usePathname();
 
-  const activeOrg = user?.organizations?.find((o) => o.id === user.activeOrganizationId);
+  const activeOrg =
+    user?.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user?.organizations?.[0];
   const isStaff = Boolean(user?.staffRole);
   const isSponsor = activeOrg?.kind === "sponsor";
 

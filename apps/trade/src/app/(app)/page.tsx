@@ -9,7 +9,8 @@ export default async function TradeHomePage() {
   const me = await getMe();
   if (!me) redirect("/sign-in");
 
-  const activeOrg = me.organizations?.find((o) => o.id === me.activeOrganizationId);
+  const activeOrg =
+    me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
   const isStaff = Boolean(me.staffRole);
   const hasTradeAccess = isStaff || (activeOrg?.platforms.includes("trade") ?? false);
 

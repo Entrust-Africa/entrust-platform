@@ -42,7 +42,7 @@ export function AppHeader({ user }: AppHeaderProps) {
           <span className="hidden h-6 w-px bg-line sm:block" aria-hidden="true" />
 
           <div className="hidden sm:block">
-            <OrgSwitcher initialOrgId={user.activeOrganizationId} />
+            <OrgSwitcher initialOrgId={user.activeOrganizationId ?? user.organizations?.[0]?.id} />
           </div>
         </div>
 

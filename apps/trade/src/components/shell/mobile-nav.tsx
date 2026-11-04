@@ -171,7 +171,7 @@ export function MobileNav({ user }: MobileNavProps) {
                 <div className="border-b border-line bg-surface p-4">
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Organisation</p>
                   <OrgSwitcher
-                    initialOrgId={user.activeOrganizationId}
+                    initialOrgId={user.activeOrganizationId ?? user.organizations?.[0]?.id}
                     className="w-full"
                     onSelect={() => setIsOpen(false)}
                   />
