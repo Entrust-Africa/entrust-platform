@@ -17,8 +17,10 @@ import {
   EVIDENCE_CONFIDENCE,
   ENROLLMENT_STATUSES,
   LEARNING_PLAN_STATUSES,
+  MODULE_PROGRESS_STATUSES,
+  MODULE_STATUSES,
 } from "@entrust/trade-engine";
-import { PATHWAYS } from "@entrust/trade-rules";
+import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
 
 // TRADE platform PostgreSQL schema (#55).
@@ -214,6 +216,59 @@ export const learningPlan = trade.table(
       .where(sql`${t.status} <> 'superseded'`),
   ],
 );
+
+export const MODULE_ASSIGNMENT_SOURCES = ["engine", "staff_override"] as const;
+export type ModuleAssignmentSource = (typeof MODULE_ASSIGNMENT_SOURCES)[number];
+
+// A module assigned to an SME as part of a learning plan.
+export const moduleAssignment = trade.table(
+  "module_assignment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => learningPlan.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    status: text("status", { enum: MODULE_STATUSES }).notNull(),
+    sequence: integer("sequence").notNull(),
+    reasonCodes: text("reason_codes")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    source: text("source", { enum: MODULE_ASSIGNMENT_SOURCES }).notNull().default("engine"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_module_assignment_plan_module_uidx").on(t.planId, t.moduleId),
+    index("trade_module_assignment_plan_seq_idx").on(t.planId, t.sequence),
+  ],
+);
+
+// Progress made by an enrolled SME on a specific module.
+export const moduleProgress = trade.table(
+  "module_progress",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    contentVersion: text("content_version").notNull(),
+    status: text("status", { enum: MODULE_PROGRESS_STATUSES }).notNull().default("not_started"),
+    lessonProgress: jsonb("lesson_progress").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_module_progress_enrollment_module_uidx").on(t.enrollmentId, t.moduleId),
+  ],
+);
+
 
 
 
