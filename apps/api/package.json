@@ -27,6 +27,7 @@
     "@entrust/rules": "workspace:*",
     "@entrust/summit-engine": "workspace:*",
     "@entrust/trade-content": "workspace:*",
+    "@entrust/trade-engine": "workspace:*",
     "@entrust/trade-rules": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",

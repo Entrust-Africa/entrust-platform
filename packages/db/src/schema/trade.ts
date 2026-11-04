@@ -104,12 +104,12 @@ export const enrollment = trade.table(
   ],
 );
 
-export const ASSESSMENT_KINDS = ["placement", "exit"] as const;
+export const ASSESSMENT_KINDS = ["placement", "exit", "diagnostic"] as const;
 export type AssessmentKind = (typeof ASSESSMENT_KINDS)[number];
 
-// An assessment of an enrolment (placement or exit). Scores are written once; a new assessment
+// An assessment of an enrolment (placement, exit or the onboarding diagnostic). Scores are written once; a new assessment
 // supersedes the old one, and nothing is overwritten.
-// At most one placement assessment per enrolment is live (not superseded) at a time.
+// At most one placement assessment and one diagnostic per enrolment is live (not superseded) at a time.
 // Exported as tradeAssessment to avoid colliding with Summit's assessment table in schema.
 export const tradeAssessment = trade.table(
   "assessment",
@@ -136,6 +136,9 @@ export const tradeAssessment = trade.table(
     uniqueIndex("trade_assessment_live_placement_uidx")
       .on(t.enrollmentId)
       .where(sql`${t.kind} = 'placement' and ${t.status} <> 'superseded'`),
+    uniqueIndex("trade_assessment_live_diagnostic_uidx")
+      .on(t.enrollmentId)
+      .where(sql`${t.kind} = 'diagnostic' and ${t.status} <> 'superseded'`),
   ],
 );
 
@@ -153,6 +156,8 @@ export const assessmentResponse = trade.table(
     questionId: text("question_id").notNull(),
     answer: jsonb("answer"),
     unscored: text("unscored", { enum: UNSCORED_REASONS }),
+    // Why the question doesn't apply. Required for "not applicable"; staff approve it later.
+    unscoredReason: text("unscored_reason"),
     approvedByUserId: text("approved_by_user_id").references(() => user.id, { onDelete: "set null" }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     documentsAvailable: boolean("documents_available").notNull().default(false),
@@ -462,3 +467,58 @@ export const tradeOutcomeRelations = relations(outcome, ({ one }) => ({
 
 
 
+
+export const PATHWAY_STATUSES = ["provisional", "confirmed", "superseded"] as const;
+export type PathwayStatus = (typeof PATHWAY_STATUSES)[number];
+
+// The avenue an enrolment is on, from the onboarding diagnostic (#78). Rows are written once: a new
+// diagnostic or a staff confirmation adds a row and supersedes the old one.
+export const pathwayAssignment = trade.table(
+  "pathway_assignment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    assessmentId: uuid("assessment_id").references(() => tradeAssessment.id, { onDelete: "set null" }),
+    pathway: text("pathway", { enum: PATHWAYS }).notNull(),
+    status: text("status", { enum: PATHWAY_STATUSES }).notNull(),
+    liveOrder: boolean("live_order").notNull().default(false),
+    rulesVersion: text("rules_version").notNull(),
+    reasonCodes: jsonb("reason_codes").$type<string[]>().notNull(),
+    // Set when staff confirm or change the pathway; null when the rules assigned it.
+    decidedByUserId: text("decided_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    decisionReason: text("decision_reason"),
+    supersededById: uuid("superseded_by_id"),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_pathway_assignment_enrollment_idx").on(t.enrollmentId),
+    uniqueIndex("trade_pathway_assignment_live_uidx")
+      .on(t.enrollmentId)
+      .where(sql`${t.status} <> 'superseded'`),
+  ],
+);
+
+// What a person agreed to at the end of the onboarding diagnostic (section 10): who, when, the wording
+// version they saw, and the electronic signature.
+export const assessmentConsent = trade.table(
+  "assessment_consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => tradeAssessment.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    termsVersion: text("terms_version").notNull(),
+    // Whether they agreed. A "no" to an optional consent is recorded too.
+    accepted: boolean("accepted").notNull().default(true),
+    signedName: text("signed_name"),
+    signedPosition: text("signed_position"),
+    signedDate: date("signed_date"),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("trade_assessment_consent_question_uidx").on(t.assessmentId, t.questionId)],
+);
