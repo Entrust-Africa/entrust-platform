@@ -19,6 +19,8 @@ export interface FormOption {
   label: string;
   /** In a multiple-choice question: if chosen, no other option can be ("none of these"). */
   exclusive?: boolean;
+  /** A line under the label that says what choosing it means. */
+  description?: string;
 }
 
 export interface FormQuestion {
@@ -51,6 +53,10 @@ export interface FormQuestion {
   maxItems?: number;
   /** Date: can't be after the day the form is checked on. Only enforced when that day is passed in. */
   notFuture?: boolean;
+  /** The form asks whether supporting documents are available for this question. Screens only; no check reads it. */
+  evidenceBased?: boolean;
+  /** A "does not apply to us" answer is offered, and it needs a short reason. Screens only; the API stores it apart from the answer. */
+  allowNotApplicable?: boolean;
 }
 
 export interface FormSection {
