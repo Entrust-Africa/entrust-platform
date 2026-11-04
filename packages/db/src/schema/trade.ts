@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -15,13 +16,18 @@ import {
 import {
   ASSESSMENT_STATUSES,
   EVIDENCE_CONFIDENCE,
+  EVIDENCE_REVIEW_STATUSES,
   ENROLLMENT_STATUSES,
+  EXPORT_OUTCOME_STATUSES,
+  FINANCING_OUTCOME_STATUSES,
   LEARNING_PLAN_STATUSES,
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
+  OPPORTUNITY_STATUSES,
 } from "@entrust/trade-engine";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
+import { file } from "./core";
 
 // TRADE platform PostgreSQL schema (#55).
 // All tables reference core (organization, smeProfile, user, file) and never clear.
@@ -268,6 +274,190 @@ export const moduleProgress = trade.table(
     uniqueIndex("trade_module_progress_enrollment_module_uidx").on(t.enrollmentId, t.moduleId),
   ],
 );
+
+// An evidence artifact uploaded or submitted by an SME.
+export const evidenceRecord = trade.table(
+  "evidence_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
+    fileId: uuid("file_id").references(() => file.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    status: text("status", { enum: EVIDENCE_REVIEW_STATUSES }).notNull().default("not_submitted"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_evidence_record_org_idx").on(t.organizationId),
+    index("trade_evidence_record_enrollment_idx").on(t.enrollmentId),
+  ],
+);
+
+// A commercial opportunity tracked for an enrolled SME.
+export const commercialOpportunity = trade.table(
+  "commercial_opportunity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    buyerName: text("buyer_name"),
+    estimatedValue: numeric("estimated_value", { precision: 14, scale: 2 }),
+    currency: text("currency").default("USD"),
+    status: text("status", { enum: OPPORTUNITY_STATUSES }).notNull().default("identified"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_opportunity_org_idx").on(t.organizationId),
+    index("trade_opportunity_enrollment_idx").on(t.enrollmentId),
+  ],
+);
+
+export const OUTCOME_KINDS = ["financing", "export"] as const;
+export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
+
+// A financing or export outcome for an enrolled SME.
+export const outcome = trade.table(
+  "outcome",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
+    kind: text("kind", { enum: OUTCOME_KINDS }).notNull(),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_outcome_org_idx").on(t.organizationId),
+    index("trade_outcome_enrollment_idx").on(t.enrollmentId),
+    check(
+      "trade_outcome_financing_status_check",
+      sql`${t.kind} <> 'financing' or ${t.status} in ('not_started', 'application_prepared', 'submitted', 'approved', 'declined', 'disbursed', 'cancelled')`,
+    ),
+    check(
+      "trade_outcome_export_status_check",
+      sql`${t.kind} <> 'export' or ${t.status} in ('planned', 'preparing', 'shipped', 'delivered', 'payment_pending', 'paid', 'disputed', 'cancelled')`,
+    ),
+  ],
+);
+export const tradeOutcome = outcome;
+
+// ---- Table Relations ----
+
+export const programRelations = relations(program, ({ many }) => ({
+  cohorts: many(cohort),
+}));
+
+export const cohortRelations = relations(cohort, ({ one, many }) => ({
+  program: one(program, { fields: [cohort.programId], references: [program.id] }),
+  sponsorOrganization: one(organization, {
+    fields: [cohort.sponsorOrganizationId],
+    references: [organization.id],
+  }),
+  enrollments: many(enrollment),
+}));
+
+export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
+  cohort: one(cohort, { fields: [enrollment.cohortId], references: [cohort.id] }),
+  organization: one(organization, {
+    fields: [enrollment.organizationId],
+    references: [organization.id],
+  }),
+  assessments: many(tradeAssessment),
+  learningPlans: many(learningPlan),
+  moduleProgress: many(moduleProgress),
+  evidenceRecords: many(evidenceRecord),
+  commercialOpportunities: many(commercialOpportunity),
+  outcomes: many(outcome),
+}));
+
+export const tradeAssessmentRelations = relations(tradeAssessment, ({ one, many }) => ({
+  enrollment: one(enrollment, { fields: [tradeAssessment.enrollmentId], references: [enrollment.id] }),
+  responses: many(assessmentResponse),
+  scores: many(capabilityScore),
+  learningPlans: many(learningPlan),
+}));
+
+export const assessmentResponseRelations = relations(assessmentResponse, ({ one }) => ({
+  assessment: one(tradeAssessment, {
+    fields: [assessmentResponse.assessmentId],
+    references: [tradeAssessment.id],
+  }),
+}));
+
+export const capabilityScoreRelations = relations(capabilityScore, ({ one }) => ({
+  assessment: one(tradeAssessment, {
+    fields: [capabilityScore.assessmentId],
+    references: [tradeAssessment.id],
+  }),
+}));
+
+export const learningPlanRelations = relations(learningPlan, ({ one, many }) => ({
+  enrollment: one(enrollment, { fields: [learningPlan.enrollmentId], references: [enrollment.id] }),
+  assessment: one(tradeAssessment, {
+    fields: [learningPlan.assessmentId],
+    references: [tradeAssessment.id],
+  }),
+  moduleAssignments: many(moduleAssignment),
+}));
+
+export const moduleAssignmentRelations = relations(moduleAssignment, ({ one }) => ({
+  learningPlan: one(learningPlan, {
+    fields: [moduleAssignment.planId],
+    references: [learningPlan.id],
+  }),
+}));
+
+export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [moduleProgress.enrollmentId], references: [enrollment.id] }),
+}));
+
+export const evidenceRecordRelations = relations(evidenceRecord, ({ one }) => ({
+  organization: one(organization, {
+    fields: [evidenceRecord.organizationId],
+    references: [organization.id],
+  }),
+  enrollment: one(enrollment, { fields: [evidenceRecord.enrollmentId], references: [enrollment.id] }),
+  file: one(file, { fields: [evidenceRecord.fileId], references: [file.id] }),
+}));
+
+export const commercialOpportunityRelations = relations(commercialOpportunity, ({ one }) => ({
+  organization: one(organization, {
+    fields: [commercialOpportunity.organizationId],
+    references: [organization.id],
+  }),
+  enrollment: one(enrollment, {
+    fields: [commercialOpportunity.enrollmentId],
+    references: [enrollment.id],
+  }),
+}));
+
+export const tradeOutcomeRelations = relations(outcome, ({ one }) => ({
+  organization: one(organization, {
+    fields: [outcome.organizationId],
+    references: [organization.id],
+  }),
+  enrollment: one(enrollment, { fields: [outcome.enrollmentId], references: [enrollment.id] }),
+}));
+
 
 
 
