@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import "@entrust/ui/styles.css";
+@source "../../../../packages/account/src";
+
+html {
+  scroll-padding-top: 5rem;
+}

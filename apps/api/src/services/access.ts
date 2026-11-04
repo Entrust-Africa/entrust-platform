@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { schema, type Database } from "@entrust/db";
-import { ENTRUST_ROLES, SME_ROLES, type Actor, type EntrustRole, type SmeRole } from "@entrust/gate-engine";
+import { ENTRUST_ROLES, SME_ROLES, ORGANIZATION_KINDS, type Actor, type EntrustRole, type SmeRole, type OrganizationKind } from "@entrust/gate-engine";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 
@@ -82,6 +82,26 @@ export async function hasTradeAccess(db: Executor, organizationId: string): Prom
   return grant !== undefined;
 }
 
+/** Whether the organisation has been given CLEAR access (#50). */
+export async function hasClearAccess(db: Executor, organizationId: string): Promise<boolean> {
+  const [grant] = await db
+    .select({ id: schema.platformAccess.id })
+    .from(schema.platformAccess)
+    .where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, "clear")))
+    .limit(1);
+  return grant !== undefined;
+}
+
+/** Whether the organisation has been given access to the specified platform (#50). */
+export async function hasPlatformAccess(db: Executor, organizationId: string, platform: string): Promise<boolean> {
+  const [grant] = await db
+    .select({ id: schema.platformAccess.id })
+    .from(schema.platformAccess)
+    .where(and(eq(schema.platformAccess.organizationId, organizationId), eq(schema.platformAccess.platform, platform as any)))
+    .limit(1);
+  return grant !== undefined;
+}
+
 /**
  * A case the caller may see, locked for update when `lock` is set. A case that doesn't exist, one in
  * another organisation, and a practice case asked for outside the practice scope (or a real case inside
@@ -100,6 +120,9 @@ export async function findCase(
   const inScope = row && (row.practiceScenario !== null) === (options.practice !== undefined);
   const actor = options.practice && own && !principal.staffRole ? (options.practice.actingAs ?? own) : own;
   if (!row || !inScope || !actor) throw new ServiceError("not_found", "Case not found.");
+  if (!options.practice && !principal.staffRole && !(await hasClearAccess(db, row.organizationId))) {
+    throw new ServiceError("not_found", "Case not found.");
+  }
   if (options.practice && !principal.staffRole && !(await hasTradeAccess(db, row.organizationId))) {
     throw new ServiceError("forbidden", "Your organisation doesn't have access to TRADE.");
   }
@@ -119,3 +142,81 @@ export function requireStaff(principal: Principal, allowed: readonly EntrustRole
     throw new ServiceError("forbidden", `Only Entrust ${allowed.join(" or ")} can ${doing}.`);
   }
 }
+
+export interface UserOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  kind: OrganizationKind;
+  smeId: string | null;
+  platforms: string[];
+}
+
+/**
+ * Returns, for each organisation the user belongs to, its kind, role, SME ID and platforms (#50).
+ */
+export async function getUserOrganizations(db: Executor, userId: string): Promise<UserOrganization[]> {
+  const rows = await db
+    .select({
+      id: schema.organization.id,
+      name: schema.organization.name,
+      slug: schema.organization.slug,
+      metadata: schema.organization.metadata,
+      role: schema.member.role,
+      smeId: schema.smeProfile.smeId,
+    })
+    .from(schema.member)
+    .innerJoin(schema.organization, eq(schema.organization.id, schema.member.organizationId))
+    .leftJoin(schema.smeProfile, eq(schema.smeProfile.organizationId, schema.organization.id))
+    .where(eq(schema.member.userId, userId));
+
+  const orgIds = rows.map((r) => r.id);
+  const grants = orgIds.length
+    ? await db
+        .select({
+          organizationId: schema.platformAccess.organizationId,
+          platform: schema.platformAccess.platform,
+        })
+        .from(schema.platformAccess)
+        .where(inArray(schema.platformAccess.organizationId, orgIds))
+    : [];
+
+  const platformsByOrg = new Map<string, string[]>();
+  for (const g of grants) {
+    const list = platformsByOrg.get(g.organizationId) ?? [];
+    list.push(g.platform);
+    platformsByOrg.set(g.organizationId, list);
+  }
+
+  const entrustOrgId = process.env.ENTRUST_ORG_ID;
+
+  return rows.map((r) => {
+    let kind: OrganizationKind = "sme";
+    if (entrustOrgId && r.id === entrustOrgId) {
+      kind = "entrust";
+    } else if (r.metadata) {
+      try {
+        const parsed = typeof r.metadata === "string" ? JSON.parse(r.metadata) : r.metadata;
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          typeof parsed.kind === "string" &&
+          (ORGANIZATION_KINDS as readonly string[]).includes(parsed.kind)
+        ) {
+          kind = parsed.kind as OrganizationKind;
+        }
+      } catch {}
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      role: r.role,
+      kind,
+      smeId: r.smeId ?? null,
+      platforms: platformsByOrg.get(r.id) ?? [],
+    };
+  });
+}
+

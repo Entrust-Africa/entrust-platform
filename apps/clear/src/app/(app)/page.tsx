@@ -33,6 +33,22 @@ export default async function CasesPage({
     },
   });
   if (res.status === 401) redirect("/sign-in");
+  if (res.status === 404) {
+    return (
+      <div className="mx-auto max-w-xl py-12">
+        <Card className="p-8 text-center">
+          <h1 className="font-display text-2xl font-bold text-ink">
+            CLEAR is not available for this organisation
+          </h1>
+          <p className="mt-2 text-sm text-ink-2">
+            This organisation does not currently have access to the CLEAR platform.
+            Use the organisation switcher to switch to an organisation that has access,
+            or contact Entrust support.
+          </p>
+        </Card>
+      </div>
+    );
+  }
   if (!res.ok) throw new Error(`The case list didn't load (${res.status}).`);
   const { items, total } = await res.json();
   const filtered = status !== undefined || phase !== undefined;

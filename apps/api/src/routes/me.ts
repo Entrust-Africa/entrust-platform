@@ -1,8 +1,19 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
+import { ORGANIZATION_KINDS } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { Problem } from "../schemas/problem";
-import { loadPrincipal } from "../services/access";
+import { getUserOrganizations, loadPrincipal } from "../services/access";
+
+const OrgSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  role: z.string(),
+  kind: z.enum(ORGANIZATION_KINDS),
+  smeId: z.string().nullable(),
+  platforms: z.array(z.string()),
+});
 
 const Me = z
   .object({
@@ -13,6 +24,7 @@ const Me = z
     staffRole: z.enum(["admin", "facilitator", "reviewer"]).nullable(),
     /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
     summitCommittee: z.boolean(),
+    organizations: z.array(OrgSummary).optional(),
   })
   .openapi("Me");
 
@@ -32,7 +44,10 @@ export const me = new OpenAPIHono<AppEnv>().openapi(route, async (c) => {
   const session = c.get("session");
   if (!user || !session) return c.json({ error: "Not signed in" }, 401);
   const db = getDb();
-  const principal = await loadPrincipal(db, user.id);
+  const [principal, userOrgs] = await Promise.all([
+    loadPrincipal(db, user.id),
+    getUserOrganizations(db, user.id),
+  ]);
   return c.json(
     {
       id: user.id,
@@ -41,6 +56,7 @@ export const me = new OpenAPIHono<AppEnv>().openapi(route, async (c) => {
       activeOrganizationId: session.activeOrganizationId ?? null,
       staffRole: principal.staffRole ?? null,
       summitCommittee: principal.committee,
+      organizations: userOrgs,
     },
     200,
   );

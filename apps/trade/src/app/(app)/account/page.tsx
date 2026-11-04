@@ -1,0 +1,15 @@
+import { redirect } from "next/navigation";
+import { AccountView } from "@entrust/account";
+import { getMe } from "@/lib/api";
+
+export const metadata = {
+  title: "Account",
+};
+
+export default async function AccountPage() {
+  const me = await getMe();
+  if (!me) {
+    redirect("/sign-in");
+  }
+  return <AccountView user={me} platformName="TRADE" organizationsHref="/organizations" />;
+}

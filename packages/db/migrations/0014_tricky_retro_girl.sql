@@ -1,0 +1,1 @@
+ALTER TABLE "core"."invitation" ADD COLUMN "platform" text;

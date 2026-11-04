@@ -1,6 +1,6 @@
+import { AccountView } from "@entrust/account";
 import { getMe } from "@/lib/api";
 import { redirect } from "next/navigation";
-import { AccountView } from "./account-view";
 
 export const metadata = {
   title: "Account",
@@ -11,5 +11,5 @@ export default async function AccountPage() {
   if (!me) {
     redirect("/sign-in");
   }
-  return <AccountView user={me} />;
+  return <AccountView user={me} platformName="CLEAR" organizationsHref="/organizations" />;
 }

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@entrust/forms": "workspace:*",
+    "@entrust/roles": "workspace:*",
     "@entrust/rules": "workspace:*"
   },
   "devDependencies": {

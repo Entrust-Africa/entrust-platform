@@ -20,8 +20,8 @@ beforeAll(async () => {
   await cleanup();
   const [learner, other] = await Promise.all(["learner", "other"].map(signUp));
   Object.assign(w, { learner, other });
-  w.org = await createOrganization("org", [[learner!, "owner"]]);
-  await createOrganization("other-org", [[other!, "owner"]]);
+  w.org = await createOrganization("org", [[learner!, "owner"]], { platform: null });
+  await createOrganization("other-org", [[other!, "owner"]], { platform: null });
   await db.insert(schema.platformAccess).values({ organizationId: w.org, platform: "trade" });
 });
 afterAll(cleanup);

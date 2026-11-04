@@ -5,7 +5,7 @@ import { clearRouter, contextFor, json, listErrors, problem } from "../clear/sha
 
 const tags = ["TRADE modules"];
 
-const modules = clearRouter();
+const modules = clearRouter("trade");
 
 const forbidden = problem("The caller's organisation doesn't have TRADE access");
 

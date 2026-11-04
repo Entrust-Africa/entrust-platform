@@ -39,11 +39,11 @@ beforeAll(async () => {
   const users = await Promise.all(names.map(signUp));
   const [ownerA, memberA, ownerB, ownerC, ownerD, ownerE, outsider, admin, facilitator, reviewer, reviewer2, strayOwner] = users;
   Object.assign(w, { ownerA, memberA, ownerB, ownerC, ownerD, ownerE, outsider, admin, facilitator, reviewer, reviewer2, strayOwner });
-  w.orgA = await createOrganization("org-a", [[ownerA!, "owner"], [memberA!, "member"]]);
-  w.orgB = await createOrganization("org-b", [[ownerB!, "owner"]]);
-  w.orgC = await createOrganization("org-c", [[ownerC!, "owner"]]);
-  w.orgD = await createOrganization("org-d", [[ownerD!, "owner"]]);
-  w.orgE = await createOrganization("org-e", [[ownerE!, "owner"]]);
+  w.orgA = await createOrganization("org-a", [[ownerA!, "owner"], [memberA!, "member"]], { platform: null });
+  w.orgB = await createOrganization("org-b", [[ownerB!, "owner"]], { platform: null });
+  w.orgC = await createOrganization("org-c", [[ownerC!, "owner"]], { platform: null });
+  w.orgD = await createOrganization("org-d", [[ownerD!, "owner"]], { platform: null });
+  w.orgE = await createOrganization("org-e", [[ownerE!, "owner"]], { platform: null });
   // Organisation B is in a country the period doesn't take.
   await db.update(schema.smeProfile).set({ country: "ET" }).where(eq(schema.smeProfile.organizationId, w.orgB));
   w.entrust = await createOrganization(

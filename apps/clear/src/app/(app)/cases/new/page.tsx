@@ -31,22 +31,38 @@ export default async function NewCasePage() {
             A case belongs to an exporting company. Ask your Entrust facilitator to add you to yours.
           </p>
         </Card>
-      ) : (
-        <NewCaseForm
-          organizations={organizations}
-          defaultOrganization={
-            organizations.some((o) => o.id === me?.activeOrganizationId) ? me!.activeOrganizationId! : organizations[0]!.id
+      ) : (() => {
+          const clearOrgs = me?.organizations
+            ? organizations.filter((o) => me.organizations?.find((m) => m.id === o.id)?.platforms.includes("clear") ?? true)
+            : organizations;
+          if (clearOrgs.length === 0) {
+            return (
+              <Card className="mt-6 p-6">
+                <p className="font-semibold">CLEAR is not available for this organisation</p>
+                <p className="mt-2 text-sm text-ink-2">
+                  None of your organisations currently have access to the CLEAR platform. Switch to an organisation that has access, or contact Entrust support.
+                </p>
+              </Card>
+            );
           }
-          destinations={DESTINATIONS}
-          facts={{
-            product: choice("product"),
-            transportMode: choice("transportMode"),
-            coldChain: choice("coldChain"),
-            paymentTerms: choice("paymentTerms"),
-            incoterm: choice("incoterm"),
-          }}
-        />
-      )}
+          const defaultOrg = clearOrgs.some((o) => o.id === me?.activeOrganizationId)
+            ? me!.activeOrganizationId!
+            : clearOrgs[0]!.id;
+          return (
+            <NewCaseForm
+              organizations={clearOrgs}
+              defaultOrganization={defaultOrg}
+              destinations={DESTINATIONS}
+              facts={{
+                product: choice("product"),
+                transportMode: choice("transportMode"),
+                coldChain: choice("coldChain"),
+                paymentTerms: choice("paymentTerms"),
+                incoterm: choice("incoterm"),
+              }}
+            />
+          );
+        })()}
     </div>
   );
 }

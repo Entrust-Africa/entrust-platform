@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import type { AppEnv } from "../../app";
 import { Problem } from "../../schemas/problem";
-import { loadPrincipal, type Ctx, type PracticeScope } from "../../services/access";
+import { hasClearAccess, hasTradeAccess, loadPrincipal, type Ctx, type PracticeScope } from "../../services/access";
 import { ServiceError } from "../../services/errors";
 
 // What the CLEAR route files share: the error responses every endpoint documents, the router that
@@ -11,7 +11,11 @@ import { ServiceError } from "../../services/errors";
 export const problem = (description: string) => ({ description, content: { "application/json": { schema: Problem } } });
 export const json = <T extends object>(schema: T) => ({ "application/json": { schema } });
 
-export const listErrors = { 400: problem("The request is malformed"), 401: problem("Not signed in") };
+export const listErrors = {
+  400: problem("The request is malformed"),
+  401: problem("Not signed in"),
+  404: problem("Organisation not found or platform not available"),
+};
 export const readErrors = { ...listErrors, 404: problem("No such case, or it belongs to another organisation") };
 export const writeErrors = {
   ...readErrors,
@@ -20,8 +24,8 @@ export const writeErrors = {
   422: problem("The values aren't allowed, or the change isn't possible yet"),
 };
 
-/** A router whose endpoints all need a signed-in user. */
-export function clearRouter() {
+/** A router whose endpoints all need a signed-in user, and checks platform access (#50). */
+export function clearRouter(platform?: "clear" | "trade") {
   const router = new OpenAPIHono<AppEnv>({
     defaultHook: (result, c) => {
       if (result.success) return;
@@ -31,7 +35,28 @@ export function clearRouter() {
   });
   // Signed in before anything else, so a stranger learns nothing from validation errors.
   router.use("*", async (c, next) => {
-    if (!c.get("user")) throw new ServiceError("unauthenticated", "Not signed in.");
+    const user = c.get("user");
+    if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
+
+    if (platform) {
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (!principal.staffRole) {
+        const session = c.get("session");
+        const queryOrg = c.req.query("organizationId");
+        const targetOrgId = queryOrg ?? session?.activeOrganizationId;
+        if (targetOrgId) {
+          const hasAccess =
+            platform === "trade"
+              ? await hasTradeAccess(db, targetOrgId)
+              : await hasClearAccess(db, targetOrgId);
+          if (!hasAccess) {
+            throw new ServiceError("not_found", `This organisation does not have access to ${platform.toUpperCase()}.`);
+          }
+        }
+      }
+    }
+
     await next();
   });
   return router;

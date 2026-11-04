@@ -23,6 +23,7 @@
     "@entrust/gate-engine": "workspace:*",
     "@entrust/jobs": "workspace:*",
     "@entrust/notify": "workspace:*",
+    "@entrust/roles": "workspace:*",
     "@entrust/rules": "workspace:*",
     "@entrust/summit-engine": "workspace:*",
     "@entrust/trade-content": "workspace:*",

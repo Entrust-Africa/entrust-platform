@@ -8,10 +8,12 @@ apps/
   api          the backend: Hono on Node.js, REST under /v1, login, OpenAPI docs at /docs
   website      entrust-africa.com: Entrust, Andinet and Bridgepoint (Next.js 16, Sanity)
   clear        CLEAR Export frontend (Next.js 16); talks to apps/api
+  trade        TRADE frontend (Next.js 16); talks to apps/api
 packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
   auth         Better Auth config (served by apps/api) and the browser auth client
+  account      shared sign-in, account settings, org switcher and auth UI for CLEAR and TRADE
   rules        CLEAR's canonical 125 steps, master controls, facts, evidence types and rule packs, as data
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
   trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
@@ -24,6 +26,7 @@ Rules that keep it extensible:
   through the typed client (`@entrust/api/client`) and never import `@entrust/db`.
 - Platforms never import from each other. Shared code goes in `packages/`.
 - One SME identity: an SME registers once (`core.sme_profile`) and appears in every platform.
+- Shared authentication: session cookies are shared across `.entrust-africa.com` through `AUTH_COOKIE_DOMAIN` (or `localhost` in dev). The active organisation is stored on the session, so switching organisation in one app switches it in the other.
 - One database, one Postgres schema per platform. Shared tables live in `core`.
 - Every platform writes to `core.audit_log`.
 
@@ -42,7 +45,7 @@ sudo -u postgres createdb -O entrust entrust_platform
 cp .env.example .env            # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm install
 pnpm db:migrate
-pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
+pnpm dev                        # API on :4000, CLEAR on :3000, TRADE on :3001, website on :6001
 ```
 
 - API docs: http://localhost:4000/docs (OpenAPI JSON at `/openapi.json`).

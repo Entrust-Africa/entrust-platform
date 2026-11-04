@@ -46,10 +46,16 @@ export async function signUp(name: string): Promise<TestUser> {
 export async function createOrganization(
   name: string,
   members: readonly (readonly [TestUser, string])[],
-  { smeProfile = true } = {},
+  { smeProfile = true, platform = "clear" as "clear" | "trade" | null } = {},
 ): Promise<string> {
   const id = `${PREFIX}${RUN}-${name}`;
-  await db.insert(schema.organization).values({ id, name, slug: id, createdAt: new Date() });
+  await db.insert(schema.organization).values({
+    id,
+    name,
+    slug: id,
+    createdAt: new Date(),
+    metadata: JSON.stringify({ kind: smeProfile ? "sme" : "entrust" }),
+  });
   if (members.length) {
     await db
       .insert(schema.member)
@@ -57,6 +63,9 @@ export async function createOrganization(
   }
   if (smeProfile) {
     await db.insert(schema.smeProfile).values({ organizationId: id, smeId: `TEST-${RUN}-${name}`, legalName: name, country: COUNTRY });
+    if (platform) {
+      await db.insert(schema.platformAccess).values({ organizationId: id, platform });
+    }
   }
   return id;
 }
@@ -87,6 +96,7 @@ export async function cleanup() {
   if (ids.length) {
     // Audit rows would otherwise outlive the organisation with their link set to null.
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
+    await db.delete(schema.platformAccess).where(inArray(schema.platformAccess.organizationId, ids));
     await db.delete(schema.file).where(inArray(schema.file.organizationId, ids));
     await db.delete(schema.exportCase).where(inArray(schema.exportCase.organizationId, ids));
     await db.delete(schema.salesContract).where(inArray(schema.salesContract.organizationId, ids));
