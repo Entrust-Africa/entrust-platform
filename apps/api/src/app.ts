@@ -13,6 +13,7 @@ import { organizations } from "./routes/organizations";
 import { jobs } from "./routes/jobs";
 import { files } from "./routes/files";
 import { auditRouter } from "./routes/audit";
+import { tradeAssessments } from "./routes/trade/assessments";
 import { tradeModules } from "./routes/trade/modules";
 import { tradePractice } from "./routes/trade/practice";
 import { summit, summitPublic } from "./routes/summit";
@@ -68,6 +69,7 @@ export const app = base
   .route("/v1/clear", clearMinimumPrices)
   .route("/v1/clear", clearRulePacks)
   .route("/v1/trade", tradeModules)
+  .route("/v1/trade", tradeAssessments)
   .route("/v1/trade", tradePractice)
   .route("/v1/summit", summitPublic)
   .route("/v1/summit", summit);

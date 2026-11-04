@@ -223,6 +223,9 @@ importers:
       '@entrust/trade-content':
         specifier: workspace:*
         version: link:../../packages/trade-content
+      '@entrust/trade-engine':
+        specifier: workspace:*
+        version: link:../../packages/trade-engine
       '@entrust/trade-rules':
         specifier: workspace:*
         version: link:../../packages/trade-rules
