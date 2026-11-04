@@ -217,10 +217,11 @@ describe("Organisation kinds, roles and platform access (#50)", () => {
     it("maintains the same user, organisation and SME ID across both platforms", async () => {
       // 1. SME signs up and creates organisation for TRADE
       const user = await signUp("trade-first-user");
+      const ts = Date.now();
       const createRes = await callV1(user, "POST", "/organizations", {
-        name: "Trade First Exporters",
-        slug: `trade-first-exp-${Date.now()}`,
-        legalName: "Trade First PLC",
+        name: `Trade First Exporters ${ts}`,
+        slug: `trade-first-exp-${ts}`,
+        legalName: `Trade First ${ts} PLC`,
         country: "ET",
         platform: "trade",
       });

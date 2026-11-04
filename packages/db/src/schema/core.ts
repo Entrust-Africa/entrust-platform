@@ -1,9 +1,16 @@
+import { sql } from "drizzle-orm";
 import { index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { core, organization, user } from "./auth";
 
 // Platforms that run on the shared core. TRADE, Summit and MIZAN have no UI yet.
 export const PLATFORMS = ["clear", "trade", "summit", "mizan"] as const;
 export type Platform = (typeof PLATFORMS)[number];
+
+export const REGISTRATION_STATUSES = ["registered", "unregistered"] as const;
+export type RegistrationStatus = (typeof REGISTRATION_STATUSES)[number];
+
+export const BUSINESS_STATUSES = ["active", "inactive", "closed"] as const;
+export type BusinessStatus = (typeof BUSINESS_STATUSES)[number];
 
 // Which organisation may use which platform.
 export const platformAccess = core.table(
@@ -22,22 +29,41 @@ export const platformAccess = core.table(
 
 // One SME profile per organisation, shared by every platform. The SME ID is
 // the permanent, human-readable identifier (e.g. ET-SME-000001).
-export const smeProfile = core.table("sme_profile", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id")
-    .notNull()
-    .unique()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  smeId: text("sme_id").notNull().unique(),
-  legalName: text("legal_name").notNull(),
-  tin: text("tin"),
-  country: text("country").notNull().default("ET"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const smeProfile = core.table(
+  "sme_profile",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    smeId: text("sme_id").notNull().unique(),
+    legalName: text("legal_name").notNull(),
+    tradingName: text("trading_name"),
+    registrationNumber: text("registration_number"),
+    registrationStatus: text("registration_status", { enum: REGISTRATION_STATUSES })
+      .notNull()
+      .default("registered"),
+    businessStatus: text("business_status", { enum: BUSINESS_STATUSES })
+      .notNull()
+      .default("active"),
+    sector: text("sector"),
+    mergedIntoSmeId: text("merged_into_sme_id"),
+    tin: text("tin"),
+    country: text("country").notNull().default("ET"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("sme_profile_reg_country_uidx")
+      .on(t.registrationNumber, t.country)
+      .where(sql`registration_number is not null`),
+    index("sme_profile_merged_into_idx").on(t.mergedIntoSmeId),
+  ],
+);
 
 // Append-only audit trail written by every platform.
 export const auditLog = core.table(

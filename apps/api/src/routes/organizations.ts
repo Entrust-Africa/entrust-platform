@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getDb, schema } from "@entrust/db";
+import { getDb, schema, REGISTRATION_STATUSES, BUSINESS_STATUSES } from "@entrust/db";
 import { auth, trustedOrigins } from "@entrust/auth";
 import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, SME_ROLES } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
 import { getUserOrganizations } from "../services/access";
+import { checkSmeDuplicates } from "../services/sme-registry";
 
 const SmeRoles = z.enum(SME_ROLES);
 // "committee" is the Summit selection committee's role (#80). It grants nothing in CLEAR or TRADE.
@@ -64,11 +65,17 @@ const createOrganization = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers, and hyphens (e.g. 'my-company').")
     .max(80),
   legalName: z.string().trim().min(1).max(200),
+  tradingName: z.string().trim().max(200).optional(),
+  registrationNumber: z.string().trim().max(100).optional(),
+  registrationStatus: z.enum(REGISTRATION_STATUSES).default("registered"),
+  businessStatus: z.enum(BUSINESS_STATUSES).default("active"),
+  sector: z.string().trim().max(100).optional(),
   tin: z.string().trim().max(80).optional(),
   country: z.string().trim().length(2).default("ET"),
   // The platform the new organisation gets first. A Summit applicant gets `summit` alone, so TRADE's learner screens stay out of their way.
   platform: z.enum(["clear", "trade", "summit"]).optional(),
   kind: z.enum(ORGANIZATION_KINDS).default("sme"),
+  confirmDuplicateName: z.boolean().default(false),
 });
 // Better Auth's configured organization roles are member/admin/owner. Staff roles
 // are assigned by the platform, not through the SME invitation UI.
@@ -78,7 +85,16 @@ const invite = z.object({
   platform: z.enum(["clear", "trade"]).optional(),
 });
 const role = z.object({ role: z.union([SmeRoles, EntrustRoles]) });
-const profile = z.object({ legalName: z.string().trim().min(1).max(200), tin: z.string().trim().max(80).nullable().optional(), country: z.string().trim().length(2).optional() });
+const profile = z.object({
+  legalName: z.string().trim().min(1).max(200).optional(),
+  tradingName: z.string().trim().max(200).nullable().optional(),
+  registrationNumber: z.string().trim().max(100).nullable().optional(),
+  registrationStatus: z.enum(REGISTRATION_STATUSES).optional(),
+  businessStatus: z.enum(BUSINESS_STATUSES).optional(),
+  sector: z.string().trim().max(100).nullable().optional(),
+  tin: z.string().trim().max(80).nullable().optional(),
+  country: z.string().trim().length(2).optional(),
+});
 const platform = z.object({ enabled: z.boolean().default(true), platform: Platform.default("clear") });
 
 export const organizations = new Hono<AppEnv>()
@@ -107,6 +123,33 @@ export const organizations = new Hono<AppEnv>()
         .from(schema.organization)
         .where(eq(schema.organization.slug, body.slug));
       if (existing[0]) throw new ServiceError("invalid", "An organisation with that slug already exists.");
+
+      // Duplicate check in SME registry
+      const duplicateResult = await checkSmeDuplicates(db, {
+        legalName: body.legalName,
+        registrationNumber: body.registrationNumber,
+        country: body.country,
+      });
+
+      if (duplicateResult.registrationNumberConflict) {
+        throw new ServiceError(
+          "conflict",
+          `An organisation with registration number '${duplicateResult.registrationNumberConflict.registrationNumber}' already exists in ${duplicateResult.registrationNumberConflict.country}. Please ask the existing owner for an invitation.`,
+        );
+      }
+
+      if (duplicateResult.legalNameWarning && !body.confirmDuplicateName) {
+        return c.json(
+          {
+            error: `An organisation with a similar name already exists ('${duplicateResult.legalNameWarning.legalName}'). Please confirm if this is a different organisation.`,
+            code: "duplicate_legal_name_warning",
+            warning: "duplicate_legal_name",
+            existingSme: duplicateResult.legalNameWarning,
+          },
+          409,
+        );
+      }
+
       const origin = c.req.header("origin") ?? "";
       const platformToGrant = body.platform ?? (origin.includes(":3001") || origin.includes("trade.") ? "trade" : "clear");
       const id = crypto.randomUUID();
@@ -120,8 +163,40 @@ export const organizations = new Hono<AppEnv>()
           metadata: JSON.stringify({ kind: body.kind }),
         });
         await tx.insert(schema.member).values({ id: crypto.randomUUID(), organizationId: id, userId: user.id, role: "owner", createdAt: new Date() });
-        await tx.insert(schema.smeProfile).values({ organizationId: id, smeId, legalName: body.legalName, tin: body.tin ?? null, country: body.country });
+        await tx.insert(schema.smeProfile).values({
+          organizationId: id,
+          smeId,
+          legalName: body.legalName,
+          tradingName: body.tradingName ?? null,
+          registrationNumber: body.registrationNumber ?? null,
+          registrationStatus: body.registrationStatus ?? "registered",
+          businessStatus: body.businessStatus ?? "active",
+          sector: body.sector ?? null,
+          tin: body.tin ?? null,
+          country: body.country,
+        });
         await tx.insert(schema.platformAccess).values({ organizationId: id, platform: platformToGrant, grantedBy: user.id });
+        await tx.insert(schema.auditLog).values({
+          actorUserId: user.id,
+          organizationId: id,
+          action: "organization.created",
+          entityType: "organization",
+          entityId: id,
+          after: {
+            id,
+            name: body.name,
+            slug: body.slug,
+            legalName: body.legalName,
+            tradingName: body.tradingName ?? null,
+            registrationNumber: body.registrationNumber ?? null,
+            registrationStatus: body.registrationStatus ?? "registered",
+            businessStatus: body.businessStatus ?? "active",
+            sector: body.sector ?? null,
+            tin: body.tin ?? null,
+            country: body.country,
+            smeId,
+          },
+        });
       });
       return c.json({ id, smeId, platform: platformToGrant }, 201);
     },
@@ -226,7 +301,80 @@ export const organizations = new Hono<AppEnv>()
     const organizationId = c.req.param("organizationId");
     await canManage(organizationId, user.id);
     const body = c.req.valid("json");
-    await getDb().update(schema.smeProfile).set({ legalName: body.legalName, tin: body.tin, ...(body.country ? { country: body.country } : {}) }).where(eq(schema.smeProfile.organizationId, organizationId));
+    const db = getDb();
+
+    const [current] = await db
+      .select()
+      .from(schema.smeProfile)
+      .where(eq(schema.smeProfile.organizationId, organizationId));
+    if (!current) throw new ServiceError("not_found", "SME profile not found.");
+
+    if (
+      body.registrationNumber &&
+      body.registrationNumber !== current.registrationNumber
+    ) {
+      const dup = await checkSmeDuplicates(db, {
+        legalName: body.legalName ?? current.legalName,
+        registrationNumber: body.registrationNumber,
+        country: body.country ?? current.country,
+        excludeOrganizationId: organizationId,
+      });
+      if (dup.registrationNumberConflict) {
+        throw new ServiceError(
+          "conflict",
+          `An organisation with registration number '${dup.registrationNumberConflict.registrationNumber}' already exists in ${dup.registrationNumberConflict.country}. Please ask the existing owner for an invitation.`,
+        );
+      }
+    }
+
+    const updateData: Record<string, any> = {
+      ...(body.legalName ? { legalName: body.legalName } : {}),
+      ...(body.tradingName !== undefined ? { tradingName: body.tradingName } : {}),
+      ...(body.registrationNumber !== undefined ? { registrationNumber: body.registrationNumber } : {}),
+      ...(body.registrationStatus ? { registrationStatus: body.registrationStatus } : {}),
+      ...(body.businessStatus ? { businessStatus: body.businessStatus } : {}),
+      ...(body.sector !== undefined ? { sector: body.sector } : {}),
+      ...(body.tin !== undefined ? { tin: body.tin } : {}),
+      ...(body.country ? { country: body.country } : {}),
+      updatedAt: new Date(),
+    };
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.smeProfile)
+        .set(updateData)
+        .where(eq(schema.smeProfile.organizationId, organizationId));
+
+      await tx.insert(schema.auditLog).values({
+        actorUserId: user.id,
+        organizationId,
+        action: "sme_profile.updated",
+        entityType: "sme_profile",
+        entityId: current.id,
+        before: {
+          legalName: current.legalName,
+          tradingName: current.tradingName,
+          registrationNumber: current.registrationNumber,
+          registrationStatus: current.registrationStatus,
+          businessStatus: current.businessStatus,
+          sector: current.sector,
+          tin: current.tin,
+          country: current.country,
+        },
+        after: {
+          legalName: body.legalName ?? current.legalName,
+          tradingName: body.tradingName !== undefined ? body.tradingName : current.tradingName,
+          registrationNumber:
+            body.registrationNumber !== undefined ? body.registrationNumber : current.registrationNumber,
+          registrationStatus: body.registrationStatus ?? current.registrationStatus,
+          businessStatus: body.businessStatus ?? current.businessStatus,
+          sector: body.sector !== undefined ? body.sector : current.sector,
+          tin: body.tin !== undefined ? body.tin : current.tin,
+          country: body.country ?? current.country,
+        },
+      });
+    });
+
     return c.json({ ok: true });
   })
   .post("/organizations/:organizationId/platform-access", zValidator("json", platform), async (c) => {
