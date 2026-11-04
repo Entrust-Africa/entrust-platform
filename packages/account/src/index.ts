@@ -1,6 +1,6 @@
 export { authClient } from "./auth-client";
 export { useSignOut } from "./use-sign-out";
-export type { UserProfile } from "./types";
+export type { UserProfile, UserOrganization } from "./types";
 
 export { SignInView, type SignInViewProps } from "./sign-in-view";
 export { CheckEmailView, type CheckEmailViewProps } from "./check-email-view";

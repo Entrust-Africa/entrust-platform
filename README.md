@@ -8,6 +8,7 @@ apps/
   api          the backend: Hono on Node.js, REST under /v1, login, OpenAPI docs at /docs
   website      entrust-africa.com: Entrust, Andinet and Bridgepoint (Next.js 16, Sanity)
   clear        CLEAR Export frontend (Next.js 16); talks to apps/api
+  trade        TRADE frontend (Next.js 16); talks to apps/api
 packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
@@ -44,7 +45,7 @@ sudo -u postgres createdb -O entrust entrust_platform
 cp .env.example .env            # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm install
 pnpm db:migrate
-pnpm dev                        # API on :4000, CLEAR on :3000, website on :6001
+pnpm dev                        # API on :4000, CLEAR on :3000, TRADE on :3001, website on :6001
 ```
 
 - API docs: http://localhost:4000/docs (OpenAPI JSON at `/openapi.json`).
