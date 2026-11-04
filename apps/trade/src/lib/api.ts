@@ -1,7 +1,13 @@
 import "server-only";
 import { headers } from "next/headers";
 import { createApiClient } from "@entrust/api/client";
-import type { UserProfile } from "./types";
+import type {
+  UserProfile,
+  TradeProgram,
+  TradeCohort,
+  TradeCohortDetail,
+  TradeEnrollmentSummary,
+} from "./types";
 
 /** Server-side API client that forwards the visitor's cookies. */
 export async function serverApi() {
@@ -25,4 +31,47 @@ export async function listOrganizations(): Promise<{ id: string; name: string }[
   if (!res.ok) return [];
   const organizations = (await res.json()) as { id: string; name: string }[];
   return organizations.map(({ id, name }) => ({ id, name }));
+}
+
+/** All programs (Entrust staff only). */
+export async function listPrograms(): Promise<TradeProgram[]> {
+  const res = await (await serverApi()).v1.trade.programs.$get();
+  if (res.status !== 200) return [];
+  const data = (await res.json()) as { programs: TradeProgram[] };
+  return data.programs;
+}
+
+/** Cohorts list, optionally filtered by program ID (Entrust staff only). */
+export async function listCohorts(programId?: string): Promise<TradeCohort[]> {
+  const res = await (await serverApi()).v1.trade.cohorts.$get({
+    query: programId ? { programId } : {},
+  });
+  if (res.status !== 200) return [];
+  const data = (await res.json()) as { cohorts: TradeCohort[] };
+  return data.cohorts;
+}
+
+/** Cohort details including enrolled SMEs (Entrust staff only). */
+export async function getCohort(id: string): Promise<TradeCohortDetail | null> {
+  const res = await (await serverApi()).v1.trade.cohorts[":id"].$get({
+    param: { id },
+  });
+  if (res.status !== 200) return null;
+  return (await res.json()) as unknown as TradeCohortDetail;
+}
+
+/** Enrollments list filtered by cohortId or organizationId. */
+export async function listEnrollments(filter?: {
+  cohortId?: string;
+  organizationId?: string;
+}): Promise<TradeEnrollmentSummary[]> {
+  const res = await (await serverApi()).v1.trade.enrollments.$get({
+    query: {
+      ...(filter?.cohortId ? { cohortId: filter.cohortId } : {}),
+      ...(filter?.organizationId ? { organizationId: filter.organizationId } : {}),
+    },
+  });
+  if (res.status !== 200) return [];
+  const data = (await res.json()) as { enrollments: TradeEnrollmentSummary[] };
+  return data.enrollments;
 }

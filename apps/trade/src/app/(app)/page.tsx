@@ -1,10 +1,29 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getMe } from "@/lib/api";
+import { getMe, listEnrollments } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
+import type { EnrollmentStatus } from "@/lib/types";
 
 export const metadata = { title: "My plan" };
+
+function getStatusTone(status: EnrollmentStatus): "ok" | "info" | "warn" | "danger" | "idle" | "product" {
+  switch (status) {
+    case "active":
+      return "ok";
+    case "registered":
+      return "info";
+    case "completed":
+      return "product";
+    case "paused":
+      return "warn";
+    case "withdrawn":
+      return "danger";
+    case "invited":
+    default:
+      return "idle";
+  }
+}
 
 export default async function TradeHomePage() {
   const me = await getMe();
@@ -104,11 +123,20 @@ export default async function TradeHomePage() {
   }
 
   // SME User View: My Plan
-  const list = activeOrg ? await tradeGet<{ items: AssessmentSummary[] }>(`/assessments?organizationId=${encodeURIComponent(activeOrg.id)}`) : null;
+  const [list, enrollments] = await Promise.all([
+    activeOrg
+      ? tradeGet<{ items: AssessmentSummary[] }>(`/assessments?organizationId=${encodeURIComponent(activeOrg.id)}`)
+      : Promise.resolve(null),
+    activeOrg
+      ? listEnrollments({ organizationId: activeOrg.id })
+      : Promise.resolve([]),
+  ]);
   const live = (kind: "diagnostic" | "placement") => list?.data?.items.find((item) => item.kind === kind && item.status !== "superseded");
   const diagnostic = live("diagnostic");
   const placement = live("placement");
   const pathway = diagnostic?.pathway ?? null;
+  const currentEnrollment =
+    enrollments.find((e) => e.status === "active" || e.status === "registered") ?? enrollments[0];
 
   return (
     <div className="space-y-6">
@@ -119,12 +147,40 @@ export default async function TradeHomePage() {
             Tailored capability roadmap for {activeOrg?.name ?? "your organisation"}.
           </p>
         </div>
-        {pathway && (
+        {currentEnrollment ? (
+          <StatusBadge tone={getStatusTone(currentEnrollment.status)}>
+            {`${currentEnrollment.cohortName} (${currentEnrollment.status})`}
+          </StatusBadge>
+        ) : pathway ? (
           <StatusBadge tone="info">
             {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
           </StatusBadge>
+        ) : (
+          <StatusBadge tone="info">Pathway A: Export Readiness</StatusBadge>
         )}
       </div>
+
+      {currentEnrollment && (
+        <Card className="flex flex-wrap items-center justify-between gap-4 bg-surface p-4 border-l-4 border-l-brand-600">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-ink-3">
+              {currentEnrollment.programName}
+            </div>
+            <div className="font-display text-base font-bold text-ink">
+              Cohort: {currentEnrollment.cohortName}
+            </div>
+            <p className="mt-0.5 text-xs text-ink-2">
+              Enrolled on {new Date(currentEnrollment.enrolledAt).toLocaleDateString()}
+              {currentEnrollment.completedAt && ` • Completed on ${new Date(currentEnrollment.completedAt).toLocaleDateString()}`}
+            </p>
+          </div>
+          <div>
+            <StatusBadge tone={getStatusTone(currentEnrollment.status)}>
+              {`Status: ${currentEnrollment.status.toUpperCase()}`}
+            </StatusBadge>
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="p-6 md:col-span-2">

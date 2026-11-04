@@ -1,0 +1,246 @@
+import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+import { getDb, DELIVERY_MODES, ENROLLMENT_STATUSES } from "@entrust/db";
+import type { AppEnv } from "../../app";
+import { ServiceError } from "../../services/errors";
+import { loadPrincipal } from "../../services/access";
+import {
+  createCohort,
+  createProgram,
+  enrolSme,
+  getCohort,
+  getEnrollment,
+  getProgram,
+  listCohorts,
+  listEnrollments,
+  listPrograms,
+  updateEnrollmentStatus,
+} from "../../services/trade-cohorts";
+
+function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
+  const user = c.get("user");
+  if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
+  return user;
+}
+
+function requireTrustedOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+  const origin = c.req.header("origin");
+  const defaultTrusted = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
+  const envTrusted = (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const trusted = Array.from(new Set([...defaultTrusted, ...envTrusted]));
+  if (origin && !trusted.includes(origin)) {
+    throw new ServiceError("forbidden", "That request origin is not allowed.");
+  }
+}
+
+// Schemas
+const createProgramSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(1000).optional(),
+});
+
+const createCohortSchema = z.object({
+  programId: z.string().uuid(),
+  name: z.string().trim().min(1).max(200),
+  deliveryMode: z.enum(DELIVERY_MODES).default("self_paced"),
+  country: z.string().trim().length(2).default("ET"),
+  language: z.string().trim().default("en"),
+  sponsorOrganizationId: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+const enrolSmeSchema = z.object({
+  cohortId: z.string().uuid(),
+  organizationId: z.string().trim().min(1),
+});
+
+const updateStatusSchema = z.object({
+  status: z.enum(ENROLLMENT_STATUSES),
+  reason: z.string().trim().optional().nullable(),
+});
+
+export const tradePrograms = new Hono<AppEnv>()
+  // Programs
+  .post(
+    "/programs",
+    zValidator("json", createProgramSchema, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+        throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can create programs.");
+      }
+
+      const body = c.req.valid("json");
+      const program = await createProgram(db, body);
+      return c.json(program, 201);
+    },
+  )
+  .get("/programs", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (!principal.staffRole) {
+      throw new ServiceError("forbidden", "Only Entrust staff can view all programs.");
+    }
+
+    const rows = await listPrograms(db);
+    return c.json({ programs: rows });
+  })
+  .get("/programs/:id", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (!principal.staffRole) {
+      throw new ServiceError("forbidden", "Only Entrust staff can view program details.");
+    }
+
+    const id = c.req.param("id");
+    const prog = await getProgram(db, id);
+    return c.json(prog);
+  })
+
+  // Cohorts
+  .post(
+    "/cohorts",
+    zValidator("json", createCohortSchema, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+        throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can create cohorts.");
+      }
+
+      const body = c.req.valid("json");
+      const cohort = await createCohort(db, body);
+      return c.json(cohort, 201);
+    },
+  )
+  .get("/cohorts", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (!principal.staffRole) {
+      throw new ServiceError("forbidden", "Only Entrust staff can view cohorts.");
+    }
+
+    const programId = c.req.query("programId");
+    const rows = await listCohorts(db, { programId });
+    return c.json({ cohorts: rows });
+  })
+  .get("/cohorts/:id", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (!principal.staffRole) {
+      throw new ServiceError("forbidden", "Only Entrust staff can view cohort details.");
+    }
+
+    const id = c.req.param("id");
+    const cohort = await getCohort(db, id);
+    return c.json(cohort);
+  })
+
+  // Enrolments
+  .post(
+    "/enrollments",
+    zValidator("json", enrolSmeSchema, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+        throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can enrol SMEs.");
+      }
+
+      const body = c.req.valid("json");
+      const enr = await enrolSme(db, user.id, body);
+      return c.json(enr, 201);
+    },
+  )
+  .get("/enrollments", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+
+    const cohortId = c.req.query("cohortId");
+    const organizationId = c.req.query("organizationId");
+
+    // If not staff, user can only query their own SME organisation
+    if (!principal.staffRole) {
+      if (!organizationId || !principal.smeRoles.has(organizationId)) {
+        throw new ServiceError("forbidden", "You can only view enrolments for organisations you belong to.");
+      }
+    }
+
+    const rows = await listEnrollments(db, { cohortId, organizationId });
+    return c.json({ enrollments: rows });
+  })
+  .get("/enrollments/:id", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+
+    const id = c.req.param("id");
+    const enr = await getEnrollment(db, id);
+
+    // If not staff, ensure user is a member of the enrolled organisation
+    if (!principal.staffRole && !principal.smeRoles.has(enr.organizationId)) {
+      throw new ServiceError("forbidden", "You can only view enrolments for your own organisation.");
+    }
+
+    return c.json(enr);
+  })
+  .patch(
+    "/enrollments/:id/status",
+    zValidator("json", updateStatusSchema, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+        throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can update enrolment status.");
+      }
+
+      const id = c.req.param("id");
+      const body = c.req.valid("json");
+
+      const result = await updateEnrollmentStatus(db, user.id, id, body.status, body.reason);
+      return c.json(result);
+    },
+  );
