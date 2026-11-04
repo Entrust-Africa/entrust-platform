@@ -9,3 +9,9 @@ export {
   type RegistrationStatus,
   type BusinessStatus,
 } from "./schema/core";
+export {
+  DELIVERY_MODES,
+  ENROLLMENT_STATUSES,
+  type DeliveryMode,
+  type EnrollmentStatus,
+} from "./schema/trade";

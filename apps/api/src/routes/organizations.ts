@@ -43,10 +43,18 @@ async function isEntrustAdmin(userId: string) {
   return row?.role === "admin";
 }
 
+async function isEntrustStaff(userId: string) {
+  const entrustOrgId = process.env.ENTRUST_ORG_ID;
+  if (!entrustOrgId) return false;
+  const row = await membership(entrustOrgId, userId);
+  return row?.role === "admin" || row?.role === "facilitator";
+}
+
 async function canManage(organizationId: string, userId: string) {
   const row = await membership(organizationId, userId);
-  if (row?.role === "owner") return { ...row, isOwner: true, isEntrustAdmin: false };
-  if (await isEntrustAdmin(userId)) return { role: "admin", organizationName: "", isOwner: false, isEntrustAdmin: true };
+  const isAdmin = await isEntrustAdmin(userId);
+  if (row?.role === "owner") return { ...row, isOwner: true, isEntrustAdmin: isAdmin };
+  if (isAdmin) return { role: "admin", organizationName: "", isOwner: false, isEntrustAdmin: true };
   throw new ServiceError("forbidden", "Only organisation owners and Entrust admins can manage members.");
 }
 
@@ -81,7 +89,7 @@ const createOrganization = z.object({
 // are assigned by the platform, not through the SME invitation UI.
 const invite = z.object({
   email: z.email(),
-  role: z.literal("member").default("member"),
+  role: z.enum(["member", "owner"]).default("member"),
   platform: z.enum(["clear", "trade"]).optional(),
 });
 const role = z.object({ role: z.union([SmeRoles, EntrustRoles]) });
@@ -214,9 +222,14 @@ export const organizations = new Hono<AppEnv>()
     const user = requireUser(c);
     requireTrustedOrigin(c);
     const organizationId = c.req.param("organizationId");
-    await canManage(organizationId, user.id);
+    const manager = await canManage(organizationId, user.id);
     const body = c.req.valid("json");
-    if (body.role !== "member") throw new ServiceError("invalid", "Only member invitations are supported here.");
+    if (body.role === "owner") {
+      const isStaff = await isEntrustStaff(user.id);
+      if (!isStaff) {
+        throw new ServiceError("invalid", "Only Entrust staff can invite organisation owners.");
+      }
+    }
     const email = body.email.trim().toLowerCase();
     const existing = await getDb().select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
     if (existing[0]) {

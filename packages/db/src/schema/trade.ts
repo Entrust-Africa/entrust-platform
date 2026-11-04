@@ -37,6 +37,8 @@ export const trade = pgSchema("trade");
 export const DELIVERY_MODES = ["self_paced", "live", "hybrid"] as const;
 export type DeliveryMode = (typeof DELIVERY_MODES)[number];
 
+export { ENROLLMENT_STATUSES, type EnrollmentStatus } from "@entrust/trade-engine";
+
 // A TRADE program, for example "TRADE Ethiopia, Zemen Bank pilot".
 export const program = trade.table("program", {
   id: uuid("id").primaryKey().defaultRandom(),
