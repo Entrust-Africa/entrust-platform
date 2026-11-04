@@ -28,7 +28,7 @@ jobs:
       DATABASE_URL: postgres://ci:ci@localhost:5432/ci
       BETTER_AUTH_SECRET: ci-only-secret-never-used-outside-ci
       BETTER_AUTH_URL: http://localhost:4000
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       NEXT_PUBLIC_API_URL: http://localhost:4000
       API_URL: http://localhost:4000
     steps:
@@ -49,18 +49,22 @@ jobs:
         run: pnpm --filter @entrust/api start > /tmp/entrust-api.log 2>&1 &
       - name: Start CLEAR
         run: pnpm --filter @entrust/clear start > /tmp/entrust-clear.log 2>&1 &
-      - name: Wait for API and CLEAR
+      - name: Start TRADE
+        run: pnpm --filter @entrust/trade start > /tmp/entrust-trade.log 2>&1 &
+      - name: Wait for API, CLEAR and TRADE
         run: |
           for attempt in {1..60}; do
             api_ready=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:4000/v1/health || true)
             clear_ready=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:3000/sign-in || true)
-            if [ "$api_ready" = "200" ] && [ "$clear_ready" = "200" ]; then
+            trade_ready=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:3001/sign-in || true)
+            if [ "$api_ready" = "200" ] && [ "$clear_ready" = "200" ] && [ "$trade_ready" = "200" ]; then
               exit 0
             fi
             sleep 2
           done
           cat /tmp/entrust-api.log
           cat /tmp/entrust-clear.log
+          cat /tmp/entrust-trade.log
           exit 1
       - name: Run Playwright auth tests
         run: pnpm test:e2e
