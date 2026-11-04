@@ -61,9 +61,10 @@ test("a session started on CLEAR is signed in on TRADE, and TRADE opens with rol
 
   // 5. Verify TRADE shell and role-based navigation are visible
   await expect(page.getByRole("heading", { name: "My Learning Plan" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Modules" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Portfolio" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Pipeline" })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await expect(nav.getByRole("link", { name: "Modules" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Portfolio" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Pipeline" })).toBeVisible();
 
   // 6. Verify platform switcher in account menu
   await page.getByRole("button", { name: "Account menu" }).click();
