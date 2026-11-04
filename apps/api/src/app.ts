@@ -10,6 +10,7 @@ import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
 import { organizations } from "./routes/organizations";
+import { smes } from "./routes/smes";
 import { jobs } from "./routes/jobs";
 import { files } from "./routes/files";
 import { auditRouter } from "./routes/audit";
@@ -63,6 +64,7 @@ export const app = base
   .route("/v1", health)
   .route("/v1", me)
   .route("/v1", organizations)
+  .route("/v1", smes)
   .route("/v1", jobs)
   .route("/v1", files)
   .route("/v1", auditRouter)
