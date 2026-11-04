@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
-import { getDb, schema } from "@entrust/db";
+import { getDb, schema, type Database } from "@entrust/db";
 import { sendEmail } from "@entrust/notify";
 import { InvitationEmail, PasswordResetEmail, VerificationEmail } from "@entrust/notify/templates";
 import { getClearAppUrl } from "./url";
@@ -16,12 +16,22 @@ const trustedOrigins = (process.env.CORS_ORIGINS ?? "")
 // so the session cookie is scoped to it. Locally, every port shares "localhost".
 const cookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
+// Better Auth is built once, at import time, but a Worker needs the database of the request
+// being handled (see runWithRequestDb). So hand it a stand-in that resolves getDb() on every use.
+const db = new Proxy({} as Database, {
+  get(_target, property) {
+    const current = getDb();
+    const value = Reflect.get(current, property, current);
+    return typeof value === "function" ? value.bind(current) : value;
+  },
+});
+
 // One auth instance for every Entrust platform, served by apps/api. Organisations
 // are SME companies and the Entrust team; platform access is granted per organisation.
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   trustedOrigins,
-  database: drizzleAdapter(getDb(), {
+  database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
       user: schema.user,
