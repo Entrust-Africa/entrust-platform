@@ -21,6 +21,7 @@ import { tradePractice } from "./routes/trade/practice";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSponsors } from "./routes/trade/sponsors";
 import { summit, summitPublic } from "./routes/summit";
+import { summitCommerce, summitCommercePublic } from "./routes/summit-commerce";
 
 export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
@@ -77,7 +78,9 @@ export const app = base
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)
   .route("/v1/summit", summitPublic)
-  .route("/v1/summit", summit);
+  .route("/v1/summit/commerce", summitCommercePublic)
+  .route("/v1/summit", summit)
+  .route("/v1/summit/commerce", summitCommerce);
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",
