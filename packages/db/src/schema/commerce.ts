@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import {
   BOOKING_STATUSES,
+  ENQUIRY_STATUSES,
   PAYMENT_STATUSES,
   PAYMENT_SUBJECTS,
   PRODUCT_KINDS,
@@ -200,5 +201,58 @@ export const commercePayment = summit.table(
     uniqueIndex("commerce_payment_subject_uidx").on(t.subjectType, t.subjectId),
     index("commerce_payment_edition_idx").on(t.editionId, t.status),
     check("commerce_payment_amounts_check", sql`${t.amountDueCents} >= 0 and (${t.amountReceivedCents} is null or ${t.amountReceivedCents} >= 0)`),
+  ],
+);
+
+// Sponsorship enquiries take their reference from here: SPN-0001, in the order they came in.
+export const sponsorEnquiryNumberSeq = summit.sequence("sponsor_enquiry_number_seq");
+
+// An organisation's interest in a sponsorship level or another opportunity, from the public form (no sign-in). The
+// organisers take it through the pipeline; confirming it makes the organisation a sponsor and opens a payment for the value.
+export const sponsorEnquiry = summit.table(
+  "sponsor_enquiry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: text("number")
+      .notNull()
+      .unique()
+      .default(sql`'SPN-' || lpad(nextval('summit.sponsor_enquiry_number_seq')::text, 4, '0')`),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => commerceEdition.id),
+    // A sponsorship level or an additional opportunity.
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => commerceProduct.id),
+    status: text("status", { enum: ENQUIRY_STATUSES }).notNull().default("new"),
+    organisationName: text("organisation_name").notNull(),
+    // ISO 3166-1 alpha-2 code.
+    country: text("country").notNull(),
+    contactName: text("contact_name").notNull(),
+    position: text("position").notNull(),
+    // Lower case.
+    email: text("email").notNull(),
+    phone: text("phone").notNull(),
+    sector: text("sector").notNull(),
+    objectives: text("objectives").notNull(),
+    requirements: text("requirements"),
+    // What the sponsorship is worth: the product's price when the enquiry came in, changed if the deal is negotiated.
+    valueCents: integer("value_cents").notNull(),
+    // For the organisers only.
+    notes: text("notes"),
+    statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).defaultNow().notNull(),
+    receiptSentAt: timestamp("receipt_sent_at", { withTimezone: true }),
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("sponsor_enquiry_edition_idx").on(t.editionId, t.status),
+    index("sponsor_enquiry_product_idx").on(t.productId, t.status),
+    index("sponsor_enquiry_email_idx").on(t.email),
+    check("sponsor_enquiry_value_check", sql`${t.valueCents} >= 0`),
   ],
 );
