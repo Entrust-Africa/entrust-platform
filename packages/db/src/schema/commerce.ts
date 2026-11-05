@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import {
   BOOKING_STATUSES,
+  DELEGATE_STATUSES,
   ENQUIRY_STATUSES,
   PAYMENT_STATUSES,
   PAYMENT_SUBJECTS,
@@ -13,7 +14,7 @@ import {
 } from "@entrust/summit-engine";
 import { user } from "./auth";
 import { file } from "./core";
-import { applicationPeriod, summit } from "./summit";
+import { application, applicationPeriod, summit } from "./summit";
 
 // The commercial side of ADTIS (exhibition, sponsorship, delegates), in the summit schema. Everything an edition
 // sells is rows here, so the organisers change prices, benefits and inventory without a developer, and the next
@@ -254,5 +255,64 @@ export const sponsorEnquiry = summit.table(
     index("sponsor_enquiry_product_idx").on(t.productId, t.status),
     index("sponsor_enquiry_email_idx").on(t.email),
     check("sponsor_enquiry_value_check", sql`${t.valueCents} >= 0`),
+  ],
+);
+
+// Delegate registrations take their reference from here: DEL-00001, in the order people registered.
+export const delegateNumberSeq = summit.sequence("delegate_number_seq");
+
+// A person registered to attend. A paid category's registration is pending until an administrator verifies the payment; a
+// selected SME registers free against its application. The badge token is what the QR code holds, so it is long and random.
+export const delegateRegistration = summit.table(
+  "delegate_registration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: text("number")
+      .notNull()
+      .unique()
+      .default(sql`'DEL-' || lpad(nextval('summit.delegate_number_seq')::text, 5, '0')`),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => commerceEdition.id),
+    // The delegate category.
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => commerceProduct.id),
+    status: text("status", { enum: DELEGATE_STATUSES }).notNull().default("registered"),
+    fullName: text("full_name").notNull(),
+    // Lower case.
+    email: text("email").notNull(),
+    phone: text("phone"),
+    organisation: text("organisation").notNull(),
+    jobTitle: text("job_title").notNull(),
+    // ISO 3166-1 alpha-2 code.
+    country: text("country").notNull(),
+    sector: text("sector"),
+    // Dietary or accessibility needs, for the organisers.
+    needs: text("needs"),
+    // The selected SME this free registration belongs to.
+    applicationId: uuid("application_id").references(() => application.id, { onDelete: "set null" }),
+    // The price when the person registered.
+    amountCents: integer("amount_cents").notNull(),
+    badgeToken: text("badge_token").notNull().unique(),
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+    checkedInBy: text("checked_in_by").references(() => user.id, { onDelete: "set null" }),
+    // When the confirmation email was last queued.
+    confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    // One live registration per person per edition.
+    uniqueIndex("delegate_registration_email_uidx")
+      .on(t.editionId, t.email)
+      .where(sql`${t.status} = 'registered'`),
+    index("delegate_registration_edition_idx").on(t.editionId, t.status),
+    index("delegate_registration_product_idx").on(t.productId, t.status),
+    index("delegate_registration_application_idx").on(t.applicationId),
   ],
 );

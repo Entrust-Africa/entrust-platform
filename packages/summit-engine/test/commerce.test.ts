@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   BENEFIT_AREAS,
+  badgeProblems,
+  badgeState,
+  parseBadgeCode,
   ENQUIRY_OPEN,
   ENQUIRY_STATUSES,
   ENQUIRY_STATUS_LABELS,
@@ -205,5 +208,35 @@ describe("sponsorship enquiries", () => {
     }
     expect(ENQUIRY_TRANSITIONS.confirmed).toEqual(["declined"]);
     expect(ENQUIRY_TRANSITIONS.declined).toEqual(["new", "contacted", "negotiation", "proposal_sent"]);
+  });
+});
+
+describe("delegate badges", () => {
+  const registered = { status: "registered" as const, checkedInAt: null };
+
+  it("is valid only for a registered delegate whose payment is verified", () => {
+    expect(badgeProblems(registered, "confirmed")).toEqual([]);
+    expect(badgeState(registered, "confirmed")).toBe("valid");
+    expect(badgeProblems(registered, "pending")).toEqual(["The payment has not been verified."]);
+    expect(badgeProblems(registered, "awaiting_verification")).toEqual(["The payment has not been verified."]);
+    expect(badgeProblems(registered, null)).toEqual(["The payment has not been verified."]);
+    expect(badgeProblems(registered, "refunded")).toEqual(["The payment was refunded."]);
+    expect(badgeProblems({ status: "cancelled", checkedInAt: null }, "confirmed")).toEqual(["This registration was cancelled."]);
+  });
+
+  it("shows a badge already used", () => {
+    expect(badgeState({ status: "registered", checkedInAt: new Date() }, "confirmed")).toBe("already_checked_in");
+    expect(badgeState({ status: "registered", checkedInAt: new Date() }, "pending")).toBe("not_valid");
+  });
+
+  it("reads a scanned address, a bare token or a reference", () => {
+    const token = "Zk3b9XqL2mNp7RsTuVwY4a";
+    expect(parseBadgeCode(`https://adtis.entrust-africa.com/badge/${token}`)).toEqual({ token });
+    expect(parseBadgeCode(`  http://localhost:3002/badge/${token}/?x=1 `)).toEqual({ token });
+    expect(parseBadgeCode(token)).toEqual({ token });
+    expect(parseBadgeCode("del-00042")).toEqual({ number: "DEL-00042" });
+    expect(parseBadgeCode("")).toBeNull();
+    expect(parseBadgeCode("hello world")).toBeNull();
+    expect(parseBadgeCode("https://example.com/other/path")).toBeNull();
   });
 });

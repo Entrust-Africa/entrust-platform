@@ -7,6 +7,7 @@ import { requireStaff, type Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { getStorageProvider } from "./storage";
+import { announcePaymentConfirmed } from "./summit-commerce-receipts";
 import { recordSummitChange } from "./summit-status";
 
 // Payments for bookings, sponsorships and delegate registrations (section 12). Money arrives outside the platform (a bank
@@ -99,6 +100,7 @@ async function requireEvidenceFile(db: Executor, fileId: string): Promise<void> 
 export async function updatePayment(ctx: Ctx, id: string, patch: z.infer<typeof PaymentPatch>): Promise<PaymentView> {
   requirePayments(ctx, "record payments");
   if (patch.amountDueCents !== undefined) requireStaff(ctx.principal, ["admin"], "change the amount owed");
+  let becameConfirmed = false;
   const row = await ctx.db.transaction(async (tx) => {
     const [current] = await tx.select().from(schema.commercePayment).where(eq(schema.commercePayment.id, id)).for("update");
     if (!current) throw new ServiceError("not_found", "No such payment.");
@@ -132,6 +134,7 @@ export async function updatePayment(ctx: Ctx, id: string, patch: z.infer<typeof 
 
     const changed = Object.entries(set).filter(([key, value]) => JSON.stringify((current as Record<string, unknown>)[key]) !== JSON.stringify(value));
     if (changed.length === 0) return current;
+    becameConfirmed = status === "confirmed" && current.status !== "confirmed";
     const [updated] = await tx.update(schema.commercePayment).set(set).where(eq(schema.commercePayment.id, id)).returning();
     if (!updated) throw new Error("The payment was not saved.");
     await recordSummitChange(tx, ctx.principal.userId, {
@@ -144,6 +147,14 @@ export async function updatePayment(ctx: Ctx, id: string, patch: z.infer<typeof 
     });
     return updated;
   });
+  // Told once the payment is saved, so a queue that is down can't undo a verified payment.
+  if (becameConfirmed) {
+    try {
+      await announcePaymentConfirmed(ctx.db, row);
+    } catch (error) {
+      console.error(`[summit] The payment confirmation email for ${row.subjectType} ${row.subjectId} could not be sent`, error);
+    }
+  }
   return paymentView(ctx.db, row);
 }
 

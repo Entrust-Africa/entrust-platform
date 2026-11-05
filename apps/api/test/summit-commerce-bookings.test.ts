@@ -309,6 +309,7 @@ describe("confirming a booth", () => {
     const res = await act(w.admin, a.id, "approve", {});
     return { ...a, paymentId: res.body.payment.id as string };
   };
+  let approvedNumber = "";
 
   it("is refused for an application that has not been approved", async () => {
     const { id } = await applied();
@@ -318,7 +319,8 @@ describe("confirming a booth", () => {
   });
 
   it("is refused until the payment is verified and a booth number is given, and then sends the confirmation", async () => {
-    const { id, email, paymentId } = await approved();
+    const { id, email, paymentId, number } = await approved();
+    approvedNumber = number;
     queue.jobs.length = 0;
 
     let res = await act(w.admin, id, "confirm");
@@ -352,10 +354,10 @@ describe("confirming a booth", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body).toMatchObject({ status: "confirmed", boothNumber: "B-07", zone: "Hall B", blockers: ["Only an approved application can be confirmed."] });
     expect(res.body.confirmedAt).toBeTruthy();
+    // The payment's verification and the booth's confirmation are two emails.
     const mail = to(email);
-    expect(mail).toHaveLength(1);
-    expect(mail[0].subject).toMatch(/booth is confirmed/);
-    expect(mail[0].props.details).toContainEqual({ label: "Booth", value: "B-07" });
+    expect(mail.map((m) => m.subject)).toEqual([`Payment received for your ADTIS booth (${approvedNumber})`, expect.stringMatching(/booth is confirmed/)]);
+    expect(mail[1].props.details).toContainEqual({ label: "Booth", value: "B-07" });
     expect((await act(w.admin, id, "confirm")).status).toBe(409);
   });
 
