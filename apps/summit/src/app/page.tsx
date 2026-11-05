@@ -3,7 +3,8 @@ import { ArrowUpRight, Handshake, Landmark, Ticket, Users } from "lucide-react";
 import { HostedBy, SectionLabel, SiteFooter, SiteHeader, amberButton, outlineOnDark } from "@/components/site";
 import { getCatalogue, type Product } from "@/lib/commerce";
 import { EVENT_LINE, HEADLINE, INTRO, OBJECTIVES, WHO, WHY } from "@/lib/content";
-import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
+import { joinOptions, type JoinKey } from "@/lib/join";
+import { applicationsLine, countryNames, getPeriod } from "@/lib/period";
 
 // The application window and the prices change when Entrust edits them, so every visit asks the API.
 export const dynamic = "force-dynamic";
@@ -17,7 +18,6 @@ function fromPrice(products: Product[]): string | null {
 
 export default async function SummitLandingPage() {
   const [period, catalogue] = await Promise.all([getPeriod(), getCatalogue()]);
-  const apply = applyUrl();
   const statusLine = applicationsLine(period);
   const countries = period ? countryNames(period.countries) : [];
 
@@ -27,12 +27,8 @@ export default async function SummitLandingPage() {
     { href: "/participate", label: "Participate", text: "Register as a business, premium, diaspora or investor and buyer delegate.", price: fromPrice(catalogue?.delegates ?? []) },
   ];
 
-  const actions = [
-    { href: apply, icon: Handshake, title: "Register as an SME", text: "Apply to be one of the 100 selected African businesses. Free to apply; an assessment decides." },
-    { href: "/participate/register?category=investor-buyer", icon: Landmark, title: "Register as a buyer or investor", text: "Meet selected SMEs through priority B2B matchmaking and facilitated introductions." },
-    { href: "/participate/register?category=diaspora-business", icon: Users, title: "Participate as a diaspora partner", text: "Invest, partner and bring your expertise home: the Brain Gain agenda." },
-    { href: "/sponsor", icon: Ticket, title: "Become a sponsor or institutional partner", text: "Sponsorship levels, pavilions and sessions for organisations and institutions." },
-  ];
+  const icons: Record<JoinKey, typeof Handshake> = { sme: Handshake, "buyer-investor": Landmark, diaspora: Users, sponsor: Ticket };
+  const actions = joinOptions();
 
   return (
     <>
@@ -40,19 +36,22 @@ export default async function SummitLandingPage() {
       <section className="relative isolate flex min-h-[44rem] flex-col overflow-hidden bg-ink text-white lg:min-h-[53.5rem]">
         {/* Placeholder photo: the African Union Conference Centre sent by Entrust; swap for the event's own. */}
         <img src="/images/aicc.jpg" alt="" className="absolute inset-0 -z-30 size-full object-cover grayscale contrast-110" />
-        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.55)_0%,rgb(26_21_18/0.3)_28%,rgb(26_21_18/0.78)_55%,rgb(26_21_18/0.95)_100%)]" />
+        {/* Two scrims keep the white type readable on the bright buildings: one heavy under the text column on the left that
+            fades out toward the flags, and one under the nav and the foot of the hero. */}
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_right,rgb(26_21_18/0.92)_0%,rgb(26_21_18/0.82)_38%,rgb(26_21_18/0.5)_72%,rgb(26_21_18/0.3)_100%)]" />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.65)_0%,rgb(26_21_18/0)_22%,rgb(26_21_18/0)_60%,rgb(26_21_18/0.85)_100%)]" />
         <div aria-hidden className="halftone absolute inset-0 -z-10" />
 
         <SiteHeader overHero />
 
         <div id="top" className="relative z-10 mt-auto px-6 pb-16 lg:px-16 lg:pb-20">
           <div className="mx-auto max-w-[82rem]">
-            <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/80 uppercase">
+            <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/90 uppercase">
               <span aria-hidden className="h-px w-10 shrink-0 bg-amber" />
               {EVENT_LINE}
             </p>
             <h1 className="mt-6 max-w-4xl font-display text-[clamp(2.25rem,5.4vw,4.5rem)] leading-[1.02] uppercase">{HEADLINE}</h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/80">{INTRO}</p>
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/90">{INTRO}</p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/participate/register" className={amberButton}>
                 Register as a Delegate
@@ -136,15 +135,22 @@ export default async function SummitLandingPage() {
             <p className="max-w-xs text-sm leading-relaxed text-ink/70">SME registration and assessment is separate from general summit registration.</p>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {actions.map((a) => (
-              <a key={a.title} href={a.href} className="group flex flex-col gap-3 bg-ink p-8 text-white transition-colors hover:bg-ink-deep">
-                <span className="flex items-center gap-3">
-                  <a.icon aria-hidden className="size-5 shrink-0 text-amber" />
-                  <span className="font-display text-2xl leading-tight uppercase">{a.title}</span>
-                </span>
-                <span className="text-sm leading-relaxed text-white/70">{a.text}</span>
-              </a>
-            ))}
+            {actions.map((a) => {
+              const Icon = icons[a.key];
+              return (
+                <a key={a.key} href={a.href} className="group flex flex-col gap-3 bg-ink p-8 text-white transition-colors hover:bg-ink-deep">
+                  <span className="flex items-center gap-3">
+                    <Icon aria-hidden className="size-5 shrink-0 text-amber" />
+                    <span className="font-display text-2xl leading-tight uppercase">{a.title}</span>
+                  </span>
+                  <span className="flex-1 text-sm leading-relaxed text-white/70">{a.text}</span>
+                  <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold">
+                    <span className="border-b border-amber pb-0.5 group-hover:text-amber">{a.cta}</span>
+                    <ArrowUpRight aria-hidden className="size-4 text-amber transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </span>
+                </a>
+              );
+            })}
           </div>
           {(statusLine || countries.length > 0) && (
             <div className="mt-6 space-y-2">

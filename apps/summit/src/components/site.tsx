@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { RegisterMenu } from "@/components/register-menu";
 import { HOST, SUPPORT_EMAIL } from "@/lib/content";
+import { joinOptions } from "@/lib/join";
 import { signInUrl } from "@/lib/period";
 
 // The frame every ADTIS page shares: the header with EXHIBIT | SPONSOR | PARTICIPATE, the host's credit and the footer.
@@ -18,11 +20,12 @@ const COMMERCE_LINKS = [
 
 /**
  * The header. On the home page it sits over the hero photo; on other pages it is a dark bar. The commercial section is one
- * nav item, "EXHIBIT | SPONSOR | PARTICIPATE", each word a link.
+ * nav item, "EXHIBIT | SPONSOR | PARTICIPATE", each word a link. The Register button opens the four ways to take part. The
+ * header sits above the page's content so that menu does.
  */
 export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
   return (
-    <header className={overHero ? "relative z-10 px-6 py-6 lg:px-16" : "bg-ink px-6 py-5 text-white lg:px-16"}>
+    <header className={overHero ? "relative z-30 px-6 py-6 lg:px-16" : "relative z-30 bg-ink px-6 py-5 text-white lg:px-16"}>
       <div className="mx-auto flex max-w-[82rem] flex-wrap items-center justify-between gap-x-8 gap-y-4 text-white">
         <Link href="/" className="font-display text-2xl leading-none tracking-wide">
           ADTIS-27
@@ -55,9 +58,7 @@ export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
             Contact
           </Link>
         </nav>
-        <Link href="/participate/register" className="inline-flex h-10 items-center bg-amber px-5 text-xs font-semibold text-ink hover:brightness-110">
-          Register
-        </Link>
+        <RegisterMenu items={joinOptions().map(({ href, menuLabel }) => ({ href, label: menuLabel }))} />
       </div>
     </header>
   );

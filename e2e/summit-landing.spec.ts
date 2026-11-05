@@ -22,6 +22,33 @@ test("the landing page loads without signing in, leads with the ADTIS headline a
   await expect(page.getByRole("link", { name: /Register as a buyer or investor/ })).toHaveAttribute("href", /category=investor-buyer/);
 });
 
+test("the header's Register menu offers the four ways to take part, and each card has its own call to action", async ({ page }) => {
+  await page.goto(`${SITE}/`);
+
+  const register = page.getByRole("button", { name: "Register" });
+  await expect(register).toHaveAttribute("aria-expanded", "false");
+  await register.click();
+  await expect(register).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: "An SME", exact: true })).toHaveAttribute("href", /\/summit\/apply$/);
+  await expect(page.getByRole("link", { name: "A buyer or investor", exact: true })).toHaveAttribute("href", /category=investor-buyer/);
+  await expect(page.getByRole("link", { name: "A diaspora partner", exact: true })).toHaveAttribute("href", /category=diaspora-business/);
+  await expect(page.getByRole("link", { name: "A sponsor or institutional partner", exact: true })).toHaveAttribute("href", "/sponsor");
+
+  // Escape closes it, and each of the four cards in "How would you like to join us?" carries a visible CTA.
+  await page.keyboard.press("Escape");
+  await expect(register).toHaveAttribute("aria-expanded", "false");
+  const section = page.locator("#register");
+  for (const cta of ["Apply as an SME", "Register to meet SMEs", "Join as a diaspora partner", "See sponsorship options"]) {
+    await expect(section.getByText(cta, { exact: true })).toBeVisible();
+  }
+});
+
+test("support is info@entrustafrica.com", async ({ page }) => {
+  await page.goto(`${SITE}/contact`);
+  await expect(page.getByRole("link", { name: "info@entrustafrica.com" })).toHaveAttribute("href", "mailto:info@entrustafrica.com");
+  expect(await page.locator("body").innerText()).not.toContain("support@entrust-africa.com");
+});
+
 test("the page says January 2027 with dates to be announced, and never an October date", async ({ page }) => {
   await page.goto(`${SITE}/`);
   const text = await page.locator("body").innerText();

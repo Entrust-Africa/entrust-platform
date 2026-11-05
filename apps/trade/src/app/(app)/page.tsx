@@ -26,7 +26,7 @@ export default async function TradeHomePage() {
             You aren't enrolled in a TRADE program
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-2">
-            Your current organisation does not currently have access to the TRADE platform. If your organisation has been admitted to a cohort or pilot program, switch to that organisation using the switcher above, or contact your Entrust facilitator or support team at support@entrust-africa.com.
+            Your current organisation does not currently have access to the TRADE platform. If your organisation has been admitted to a cohort or pilot program, switch to that organisation using the switcher above, or contact your Entrust facilitator or support team at info@entrustafrica.com.
           </p>
           <p className="mt-4 text-sm text-ink-2">
             Applying to the Africa Diaspora Trade and Investment Summit?{" "}
