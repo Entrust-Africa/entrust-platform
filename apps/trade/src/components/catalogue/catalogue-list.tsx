@@ -19,7 +19,14 @@ function Card_({ sme, cohortNames }: { sme: CatalogueSme; cohortNames: Record<nu
   return (
     <Card className="flex h-full flex-col gap-3 p-4">
       <div className="min-w-0">
-        <h3 className="break-words font-display text-base font-bold text-ink">{sme.name}</h3>
+        <h3 className="break-words font-display text-base font-bold text-ink">
+          <Link
+            href={sme.cohort === 1 ? `/register/${sme.id}` : `/register/applications/${sme.id}`}
+            className="text-brand-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
+          >
+            {sme.name}
+          </Link>
+        </h3>
         <p className="text-sm text-ink-2">{sme.contactName ?? "No contact recorded"}</p>
         {sme.reference && <p className="text-xs text-ink-3">{sme.reference}</p>}
       </div>
@@ -72,10 +79,10 @@ function Card_({ sme, cohortNames }: { sme: CatalogueSme; cohortNames: Record<nu
         ))}
       </div>
       <Link
-        href={sme.cohort === 1 ? "/register" : "/register?view=applications"}
+        href={sme.cohort === 1 ? `/register/${sme.id}` : `/register/applications/${sme.id}`}
         className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
       >
-        {sme.cohort === 1 ? "Open in the register" : "Open the application"}
+        {sme.cohort === 1 ? "Open the register record" : "Open the application"}
       </Link>
     </Card>
   );
