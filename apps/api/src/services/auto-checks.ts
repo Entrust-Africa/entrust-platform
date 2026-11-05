@@ -9,7 +9,7 @@ import {
 } from "@entrust/gate-engine";
 import { EVIDENCE_TYPES, type StepId } from "@entrust/rules";
 import { recordChange } from "./audit";
-import { evaluate, evidenceRecord, latestEvidence, loadOneCaseData, type CaseRow, type EvidenceRow } from "./case-data";
+import { evaluate, evidenceRecord, latestEvidence, loadOneCaseData, type CaseData, type CaseRow, type EvidenceRow } from "./case-data";
 import type { Executor } from "./db";
 import { fromEngine } from "./errors";
 import { writeStepTransition } from "./step-record";
@@ -31,33 +31,39 @@ export interface PassedCheck {
  * that come with each. It waits until the step's prerequisites are done and nothing holds it,
  * because evidence approved early would stand if the facts changed before the step could be
  * completed. It does nothing for a step that is already completed or doesn't apply. Run it in the
- * transaction that changed the case, with the case locked. `current` is the case as evaluated.
+ * transaction that changed the case, with the case locked. `data` is the case as loaded and
+ * `current` its evaluation. Returns whether it changed the case's evidence or steps.
  */
 export async function passCheck(
   tx: Executor,
-  row: CaseRow,
+  data: CaseData,
   now: Date,
   current: CaseEvaluation,
   check: PassedCheck,
-): Promise<void> {
+): Promise<boolean> {
+  const { row } = data;
   const step = current.steps.find((s) => s.id === check.stepId);
-  if (!step || step.applicability !== "applicable" || step.status === "completed" || step.status === "not_applicable") return;
-  if (step.blockedBy.length || step.heldBy.length) return;
+  if (!step || step.applicability !== "applicable" || step.status === "completed" || step.status === "not_applicable") return false;
+  if (step.blockedBy.length || step.heldBy.length) return false;
 
-  const data = await loadOneCaseData(tx, row);
-  await approveEvidence(tx, row, latestEvidence(data.evidence, check.evidenceType), check, now);
+  const approved = await approveEvidence(tx, row, latestEvidence(data.evidence, check.evidenceType), check, now);
 
-  const ready = evaluate(await loadOneCaseData(tx, row), now).steps.find((s) => s.id === check.stepId);
+  // Approving the evidence can make the step ready; otherwise the case is as it was evaluated.
+  const evaluation = approved ? evaluate(await loadOneCaseData(tx, row), now) : current;
+  const ready = evaluation.steps.find((s) => s.id === check.stepId);
   if (ready?.canComplete) {
     const transition = fromEngine(() => transitionStep(ready, { to: "completed", actor: "system" }));
     await writeStepTransition(tx, row, ready, transition, { userId: null, now });
+    return true;
   }
+  return approved;
 }
 
 /**
  * Records the check's evidence as approved. It goes through the same transitions a person's would
  * (submit, review, approve), so the engine decides what CLEAR may do. A submission still waiting
- * for review is approved in place; otherwise this is a new submission.
+ * for review is approved in place; otherwise this is a new submission. Returns false when the
+ * evidence was already approved and nothing was written.
  */
 async function approveEvidence(
   tx: Executor,
@@ -65,13 +71,13 @@ async function approveEvidence(
   current: EvidenceRow | undefined,
   check: PassedCheck,
   now: Date,
-): Promise<void> {
+): Promise<boolean> {
   const type = EVIDENCE_TYPES.find((t) => t.id === check.evidenceType);
   if (!type) throw new Error(`${check.evidenceType} is not an evidence type`);
 
   const asOf = now.toISOString();
   const from: EvidenceStatus = evidenceStatusOn(current && evidenceRecord(current), asOf);
-  if (from === "approved") return;
+  if (from === "approved") return false;
   const hops =
     from === "submitted"
       ? (["under_review", "approved"] as const)
@@ -119,4 +125,5 @@ async function approveEvidence(
       data: { type: type.id, action: "approve", from, to: "approved", automatic: true },
     },
   });
+  return true;
 }

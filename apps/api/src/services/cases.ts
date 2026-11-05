@@ -79,8 +79,8 @@ export async function createCase(ctx: Ctx, input: CreateCaseInput): Promise<Case
       after: { reference, facts, rulePack, cadCap: cadCap && { withinCap: cadCap.withinCap, excessUsd: cadCap.excessUsd } },
       event: { type: "case_created", data: { facts, rulePack, cadAmountUsd: input.cadAmountUsd ?? null } },
     });
-    await syncFlags(tx, row, ctx.now);
-    return { ...(await buildDetail(tx, row, actor, ctx.now)), cadCap };
+    const { data } = await syncFlags(tx, row, ctx.now);
+    return { ...(await buildDetail(tx, row, actor, ctx.now, data)), cadCap };
   });
 }
 
