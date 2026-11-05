@@ -6,8 +6,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { callV1, cleanup, COUNTRY, createOrganization, db, makeFile, PREFIX, signUp, type Json, type TestUser } from "./support";
 import { completeAnswers as completeFor } from "./summit-form";
 
-// The real application form is still a draft until Entrust confirms the questions, and a period needs a published
-// one. These tests publish a copy of it.
+// The real application form 0.1.0 is published now. These tests still stand a copy of it in, so they keep working
+// if a later draft is added.
 // The factory runs before the imports above are ready, so it loads the helper itself.
 vi.mock("../src/services/summit-forms", async (importOriginal) => (await import("./summit-form")).withPublishedForm(await importOriginal()));
 

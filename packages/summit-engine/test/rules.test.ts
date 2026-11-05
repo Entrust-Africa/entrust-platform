@@ -16,7 +16,9 @@ const withCategory = (id: string, change: Partial<Category>, base: SummitRules =
 const PUBLISHED_RULES: Record<string, string> = {
   "1.0.0": "9b1c84dbc04fe340320ef047f506b3228b6c5618297828a5a02ff904ed7d599e",
 };
-const PUBLISHED_TEMPLATES: Record<string, string> = {};
+const PUBLISHED_TEMPLATES: Record<string, string> = {
+  "0.1.0": "065baaded01d704f7f5547cb92ed7498ad23bba01f358870f97194a2308429e1",
+};
 
 const sha256 = async (value: unknown) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value))))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -37,20 +39,20 @@ describe("the Summit rules", () => {
     expect(Object.fromEntries(await Promise.all(published.map(async (t) => [t.version, await sha256(t)])))).toEqual(PUBLISHED_TEMPLATES);
   });
 
-  it("start with a placeholder draft that nobody can score against, then the scorecard's approved version", () => {
+  it("start with a placeholder rules draft that nobody can score against, then the scorecard's approved version", () => {
     expect(draftRules.status).toBe("draft");
     expect(canAssess(draftRules)).toBe(false);
     expect(canAssess(approvedRules)).toBe(true);
     expect(latestApprovedRules()?.version).toBe("1.0.0");
     expect(canAssess(latestApprovedRules() as SummitRules)).toBe(true);
-    expect(latestPublishedTemplate()).toBeUndefined();
+    expect(latestPublishedTemplate()?.version).toBe("0.1.0");
   });
 
   it("finds a version", () => {
     expect(findSummitRules("0.1.0")).toBe(draftRules);
     expect(findSummitRules("1.0.0")?.status).toBe("approved");
     expect(findSummitRules("9.9.9")).toBeUndefined();
-    expect(findApplicationTemplate("0.1.0")?.status).toBe("draft");
+    expect(findApplicationTemplate("0.1.0")?.status).toBe("published");
   });
 
   it("have the seven categories and the maximums of section 6", () => {
