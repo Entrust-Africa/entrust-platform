@@ -15,3 +15,5 @@ export {
   confirmationBlockers,
 } from "./booking";
 export type { BookingStatus, PaymentSubject } from "./booking";
+export { ENQUIRY_OPEN, ENQUIRY_STATUSES, ENQUIRY_STATUS_LABELS, ENQUIRY_TRANSITIONS } from "./enquiry";
+export type { EnquiryStatus } from "./enquiry";

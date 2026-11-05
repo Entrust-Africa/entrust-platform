@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BENEFIT_AREAS,
+  ENQUIRY_OPEN,
+  ENQUIRY_STATUSES,
+  ENQUIRY_STATUS_LABELS,
+  ENQUIRY_TRANSITIONS,
   BOOKING_HOLDS_BOOTH,
   BOOKING_TRANSITIONS,
   BUSINESS_SECTORS,
@@ -186,5 +190,20 @@ describe("booking and payment rules", () => {
   it("lists the eleven target sectors and Other", () => {
     expect(BUSINESS_SECTORS).toHaveLength(12);
     expect(BUSINESS_SECTORS.at(-1)).toBe("Other");
+  });
+});
+
+describe("sponsorship enquiries", () => {
+  it("has the six statuses of the instructions, in pipeline order", () => {
+    expect(ENQUIRY_STATUSES.map((s) => ENQUIRY_STATUS_LABELS[s])).toEqual(["New enquiry", "Contacted", "Negotiation", "Proposal sent", "Confirmed", "Declined"]);
+  });
+
+  it("lets an open enquiry move to any other status, a confirmed sponsor only withdraw, and a declined one reopen", () => {
+    for (const status of ENQUIRY_OPEN) {
+      const others = ENQUIRY_STATUSES.filter((s) => s !== status);
+      expect([...ENQUIRY_TRANSITIONS[status]].sort()).toEqual([...others].sort());
+    }
+    expect(ENQUIRY_TRANSITIONS.confirmed).toEqual(["declined"]);
+    expect(ENQUIRY_TRANSITIONS.declined).toEqual(["new", "contacted", "negotiation", "proposal_sent"]);
   });
 });
