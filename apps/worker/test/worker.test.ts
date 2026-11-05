@@ -84,6 +84,31 @@ describe("Worker Runtime End-to-End Handlers", () => {
     expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["visitor@example.test"] });
   });
 
+  it("sends a Summit commercial notice through the worker", async () => {
+    const jobId = await enqueue(JOB_NAMES.SEND_EMAIL, {
+      to: ["exhibitor@example.test"],
+      subject: "Your ADTIS exhibition application EXH-0007 is approved",
+      template: "summit-notice",
+      props: {
+        heading: "Your application is approved",
+        greeting: "Hello Amina,",
+        paragraphs: ["Your application for a Standard SME Booth is approved. Payment is the next step."],
+        details: [{ label: "Reference", value: "EXH-0007" }, { label: "Amount due", value: "$500" }],
+        action: { label: "Open the ADTIS site", url: "https://adtis.entrust-africa.com" },
+      },
+    });
+
+    let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    const startTime = Date.now();
+    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+      await new Promise((r) => setTimeout(r, 200));
+      status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    }
+
+    expect(status?.state).toBe("completed");
+    expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["exhibitor@example.test"] });
+  });
+
   it("sends the Summit result email through the worker", async () => {
     const jobId = await enqueue(JOB_NAMES.SEND_EMAIL, {
       to: ["applicant@example.test"],
