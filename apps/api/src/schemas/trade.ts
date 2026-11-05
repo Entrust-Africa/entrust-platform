@@ -514,3 +514,41 @@ export const ApplicationsImported = z
   .openapi("TradeApplicationsImported");
 export type ApplicationListView = z.infer<typeof ApplicationList>;
 export type ApplicationsImportedView = z.infer<typeof ApplicationsImported>;
+
+// ---- The catalogue of pilot SMEs ----
+
+const CatalogueSme = z
+  .object({
+    key: z.string(),
+    cohort: z.number().int(),
+    name: z.string(),
+    contactName: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    location: z.string().nullable(),
+    product: z.string().nullable().openapi({ description: "What it makes or sells, on one line." }),
+    employees: z.string().nullable().openapi({ description: "As typed: a form's answer isn't always a number." }),
+    bank: z.string().nullable(),
+    reference: z.string().nullable().openapi({ description: "The diagnostic workbook's SME ID (cohort 1). Cohort 2 has none yet." }),
+    readinessLevel: LevelOrNull,
+    readinessScore: z.number().int().nullable(),
+    exportedBefore: z.boolean().nullable(),
+    wantsZemenFinancing: z.boolean().nullable(),
+    alsoInCohorts: z.array(z.number().int()).openapi({ description: "The other cohorts the same business is in, found by its phone number or email address." }),
+  })
+  .openapi("TradeCatalogueSme");
+
+export const Catalogue = z
+  .object({
+    cohorts: z.array(
+      z.object({
+        number: z.number().int(),
+        name: z.string(),
+        description: z.string(),
+        count: z.number().int(),
+        smes: z.array(CatalogueSme),
+      }),
+    ),
+  })
+  .openapi("TradeCatalogue");
+export type CatalogueView = z.infer<typeof Catalogue>;

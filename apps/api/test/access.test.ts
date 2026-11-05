@@ -375,6 +375,7 @@ describe("API documentation", () => {
         "/v1/trade/applications",
         "/v1/trade/applications/import",
         "/v1/trade/assessments",
+        "/v1/trade/catalogue",
         "/v1/trade/assessments/template",
         "/v1/trade/assessments/{id}",
         "/v1/trade/assessments/{id}/responses",
