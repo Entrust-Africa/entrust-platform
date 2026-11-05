@@ -82,7 +82,7 @@ function Card_({ sme, cohortNames }: { sme: CatalogueSme; cohortNames: Record<nu
         href={sme.cohort === 1 ? `/register/${sme.id}` : `/register/applications/${sme.id}`}
         className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
       >
-        {sme.cohort === 1 ? "Open the register record" : "Open the application"}
+        Open SME details
       </Link>
     </Card>
   );
