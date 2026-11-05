@@ -12,9 +12,9 @@ const changed = (change: Partial<ApplicationTemplate>): ApplicationTemplate => (
 const INVESTMENT = ["S4.2", "S4.3", "S4.4", "S4.5", "S4.6", "S4.7"];
 
 describe("the Summit application form", () => {
-  it("validates, and is a draft until Entrust confirms the questions", () => {
+  it("validates, and is published so a period can open on it", () => {
     expect(errorsFor(template)).toEqual([]);
-    expect(template.status).toBe("draft");
+    expect(template.status).toBe("published");
   });
 
   it("has the nine sections of the specification", () => {

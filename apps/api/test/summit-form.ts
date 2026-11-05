@@ -4,8 +4,8 @@ import { visibleQuestions, type Answers, type FormDefinition, type FormQuestion 
 // loads it while the app itself is still being imported.
 
 /**
- * The real application form is still a draft until Entrust confirms the questions, and a period needs a published
- * one. The tests stand a published copy of version 0.1.0 in for it.
+ * Version 0.1.0 of the application form is published, and a period needs a published form. The tests stand a published
+ * copy of it in anyway, so they keep working if the real one is ever a draft again.
  */
 export function withPublishedForm<T extends { findApplicationTemplate: (version: string) => any }>(original: T) {
   const published = { ...original.findApplicationTemplate("0.1.0"), status: "published" as const };
