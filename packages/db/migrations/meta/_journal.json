@@ -176,6 +176,13 @@
       "when": 1793903392066,
       "tag": "0024_summit_sponsor_enquiry",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793903693794,
+      "tag": "0025_summit_delegate_registration",
+      "breakpoints": true
     }
   ]
 }
