@@ -148,7 +148,8 @@ export function summariseRegister(records: readonly RegisterRecord[]): RegisterS
 export const MASTER_SHEET = "Master SME Database";
 export const SERVICE_SHEET = "Entrust Service Pipeline";
 
-const letters = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** A heading or name as lower-case words, for matching. */
+export const letters = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 type TextField = "participantName" | "phone" | "location" | "currentBank" | "mainProduct" | "currentMarkets" | "targetExportMarket" | "cashflowStability" | "entrustSupportNeeded" | "bankOpportunity";
 type MoneyField = "monthlyProductionCapacity" | "averageMonthlyRevenue" | "largestOrderCompleted" | "monthlyOperatingCost" | "estimatedMonthlyProfit" | "loanAmount" | (typeof CAPITAL_GAP_PARTS)[number];
@@ -225,7 +226,8 @@ const EMPTY_INPUT = (code: string, companyName: string): RegisterInput => ({
   serviceNotes: null,
 });
 
-const asText = (cell: Cell): string | null => {
+/** A cell as one line of trimmed text, or null when it is blank. */
+export const asText = (cell: Cell): string | null => {
   if (cell === null || cell === undefined) return null;
   const text = (typeof cell === "number" ? String(cell) : cell).replace(/\s+/g, " ").trim();
   return text === "" ? null : text;
