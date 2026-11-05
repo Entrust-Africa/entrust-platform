@@ -125,6 +125,38 @@ jobs:
           API_URL: https://entrust-api.sw-minasefikadu.workers.dev
         run: pnpm --filter @entrust/trade run deploy
 
+  deploy-summit:
+    name: Deploy Summit Landing (OpenNext)
+    needs: deploy-api
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build & Deploy apps/summit
+        env:
+          CI: "true"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The page runs on a Worker, so its settings are Worker variables, set at deploy time.
+          # SUMMIT_APP_URL and SUMMIT_REGISTRATION_URL are the GitHub repository variables of the same names;
+          # empty ones are left unset and the page uses its defaults.
+          SUMMIT_APP_URL: ${{ vars.SUMMIT_APP_URL }}
+          SUMMIT_REGISTRATION_URL: ${{ vars.SUMMIT_REGISTRATION_URL }}
+        run: |
+          vars=(--var API_URL:https://entrust-api.sw-minasefikadu.workers.dev)
+          if [ -n "${SUMMIT_APP_URL}" ]; then vars+=(--var "SUMMIT_APP_URL:${SUMMIT_APP_URL}"); fi
+          if [ -n "${SUMMIT_REGISTRATION_URL}" ]; then vars+=(--var "SUMMIT_REGISTRATION_URL:${SUMMIT_REGISTRATION_URL}"); fi
+          pnpm --filter @entrust/summit run deploy "${vars[@]}"
+
   deploy-website:
     name: Deploy Website (OpenNext)
     needs: migrate-db
@@ -150,7 +182,7 @@ jobs:
 
   smoke-test:
     name: Post-Deployment Smoke Verification
-    needs: [deploy-api, deploy-clear, deploy-trade, deploy-website]
+    needs: [deploy-api, deploy-clear, deploy-trade, deploy-summit, deploy-website]
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -178,6 +210,15 @@ jobs:
           echo "TRADE Sign-in status: $status"
           if [ "$status" != "200" ]; then
             echo "TRADE check failed with status $status"
+            exit 1
+          fi
+
+      - name: Verify Summit Landing Endpoint
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-summit.sw-minasefikadu.workers.dev")
+          echo "Summit landing status: $status"
+          if [ "$status" != "200" ]; then
+            echo "Summit landing check failed with status $status"
             exit 1
           fi
 
