@@ -39,7 +39,10 @@ test("the page names the host, the Pan African Chamber of Commerce", async ({ pa
   expect(await logos.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 });
 
-for (const path of ["/exhibit", "/exhibit/apply", "/sponsor", "/sponsor/enquire", "/participate", "/participate/register", "/smes"]) {
+for (const path of [
+  "/exhibit", "/exhibit/apply", "/sponsor", "/sponsor/enquire", "/participate", "/participate/register", "/smes",
+  "/about", "/programme", "/sme-participation", "/buyers-investors", "/diaspora", "/speakers", "/partners", "/news", "/contact",
+]) {
   test(`${path} loads without signing in and has a heading`, async ({ page }) => {
     const response = await page.goto(`${SITE}${path}`);
     expect(response?.status()).toBe(200);
@@ -56,9 +59,19 @@ test("a badge or a business that doesn't exist is a 404, not an error", async ({
 
 test("the pages fit a phone: nothing scrolls sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ["/", "/exhibit", "/sponsor", "/participate", "/participate/register", "/smes"]) {
+  for (const path of ["/", "/exhibit", "/sponsor", "/participate", "/participate/register", "/smes", "/about", "/programme", "/sme-participation", "/contact"]) {
     await page.goto(`${SITE}${path}`);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);
   }
+});
+
+test("the information pages invent no speakers, sponsors or partners, and the programme says its details are to come", async ({ page }) => {
+  await page.goto(`${SITE}/speakers`);
+  await expect(page.getByText(/will be announced as arrangements are finalised/)).toBeVisible();
+  await page.goto(`${SITE}/partners`);
+  await expect(page.getByText(/will be listed here once they are confirmed/)).toBeVisible();
+  await page.goto(`${SITE}/programme`);
+  await expect(page.getByText(/will be announced as arrangements are finalised/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Opening, policy dialogue and strategic partnerships/i })).toBeVisible();
 });
