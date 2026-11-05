@@ -613,3 +613,33 @@ export const smeRegister = trade.table(
     ),
   ],
 );
+
+// A response to a programme's application form (a Google Form exported as a workbook), kept as it was sent. The fields staff
+// search on are columns; the answers to every question are kept as typed in `answers` (an object of text by question), so a
+// form that changes still loads. `country` is worked out when the response is loaded, from where the business says it is,
+// its email address and its phone number: null when that can't be told. Only responses from Ethiopia are shown to anyone
+// (the API filters on it); the rest are kept here and never listed. A re-import matches a response on programme, time and email.
+export const programApplication = trade.table(
+  "program_application",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    program: text("program").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+    email: text("email").notNull(),
+    businessName: text("business_name").notNull(),
+    contactName: text("contact_name"),
+    phone: text("phone"),
+    location: text("location"),
+    country: text("country"),
+    answers: jsonb("answers").$type<Record<string, string>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_program_application_response_uidx").on(t.program, t.submittedAt, t.email),
+    index("trade_program_application_country_idx").on(t.country),
+  ],
+);
