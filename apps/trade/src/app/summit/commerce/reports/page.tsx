@@ -2,7 +2,7 @@ import { Download } from "lucide-react";
 import { Card } from "@entrust/ui";
 import { ok, apiUrl } from "@/lib/summit-api";
 import { load } from "@/lib/summit-server";
-import { PageTitle } from "@/components/commerce/ui";
+import { NoEdition, PageTitle } from "@/components/commerce/ui";
 
 export const metadata = { title: "ADTIS reports" };
 
@@ -13,7 +13,12 @@ const FORMATS = [
 ] as const;
 
 export default async function ReportsPage() {
-  const { items } = await load("/summit/commerce/reports", (api) => ok(api.v1.summit.commerce.reports.$get()));
+  const [{ items }, editions] = await Promise.all([
+    load("/summit/commerce/reports", (api) => ok(api.v1.summit.commerce.reports.$get())),
+    load("/summit/commerce/reports", (api) => ok(api.v1.summit.commerce.editions.$get())),
+  ]);
+  // Every report is of an edition, so with none a download would only fail.
+  if (editions.items.length === 0) return <NoEdition />;
   return (
     <div className="space-y-5">
       <PageTitle title="Reports" intro="Each report is made when you ask for it, from the live records, for the current edition. They hold personal details, so keep the files safe. Every download is logged." />

@@ -3,7 +3,7 @@ import { ok } from "@/lib/summit-api";
 import { load } from "@/lib/summit-server";
 import { B2B_INTEREST_LABELS, when } from "@/lib/commerce";
 import { HandledButton } from "@/components/commerce/directory-actions";
-import { DataTable, FilterBar, PageTitle, Pager, cell } from "@/components/commerce/ui";
+import { DataTable, FilterBar, NoEdition, PageTitle, Pager, cell } from "@/components/commerce/ui";
 
 export const metadata = { title: "ADTIS B2B enquiries" };
 
@@ -13,9 +13,13 @@ export default async function B2bPage({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   const offset = Math.max(0, Number(sp.offset) || 0);
   const status = sp.status === "new" || sp.status === "handled" ? sp.status : undefined;
-  const list = await load("/summit/commerce/directory/enquiries", (api) =>
-    ok(api.v1.summit.commerce.directory.enquiries.$get({ query: { limit: String(LIMIT), offset: String(offset), ...(status ? { status } : {}), ...(sp.q ? { q: sp.q } : {}) } })),
-  );
+  const [list, editions] = await Promise.all([
+    load("/summit/commerce/directory/enquiries", (api) =>
+      ok(api.v1.summit.commerce.directory.enquiries.$get({ query: { limit: String(LIMIT), offset: String(offset), ...(status ? { status } : {}), ...(sp.q ? { q: sp.q } : {}) } })),
+    ),
+    load("/summit/commerce/directory/enquiries", (api) => ok(api.v1.summit.commerce.editions.$get())),
+  ]);
+  if (editions.items.length === 0) return <NoEdition />;
   return (
     <div className="space-y-5">
       <Link href="/summit/commerce/directory" className="text-sm font-semibold text-brand-700 underline underline-offset-2">

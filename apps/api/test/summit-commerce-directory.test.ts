@@ -414,3 +414,21 @@ describe("a profile follows the selection", () => {
     await db.update(schema.application).set({ status: "selected" }).where(eq(schema.application.id, w.leather.applicationId));
   });
 });
+
+describe("before any edition exists", () => {
+  it("lists nothing, not a 404, so the staff screens can say there is no edition yet", async () => {
+    await db.update(schema.commerceEdition).set({ isCurrent: false }).where(eq(schema.commerceEdition.id, w.edition.id));
+    try {
+      const profiles = await admin("GET", "/profiles");
+      expect(profiles.status, JSON.stringify(profiles.body)).toBe(200);
+      expect(profiles.body).toMatchObject({ items: [], total: 0, byStatus: { draft: 0, published: 0 }, selectedWithoutProfile: 0 });
+      const enquiries = await admin("GET", "/enquiries");
+      expect(enquiries.status, JSON.stringify(enquiries.body)).toBe(200);
+      expect(enquiries.body).toMatchObject({ items: [], total: 0, byStatus: { new: 0, handled: 0 } });
+      // An edition that was asked for by name and isn't there is still a 404.
+      expect((await admin("GET", "/profiles?editionId=00000000-0000-4000-8000-000000000000")).status).toBe(404);
+    } finally {
+      await db.update(schema.commerceEdition).set({ isCurrent: true }).where(eq(schema.commerceEdition.id, w.edition.id));
+    }
+  });
+});

@@ -1,26 +1,14 @@
-import Link from "next/link";
-import { Card } from "@entrust/ui";
 import { ok } from "@/lib/summit-api";
 import { load } from "@/lib/summit-server";
 import { usd } from "@/lib/commerce";
-import { DataTable, PageTitle, Section, Stat, cell } from "@/components/commerce/ui";
+import { DataTable, NoEdition, PageTitle, Section, Stat, cell } from "@/components/commerce/ui";
 
 export const metadata = { title: "ADTIS dashboard" };
 
 export default async function DashboardPage() {
   const path = "/summit/commerce";
   const editions = await load(path, (api) => ok(api.v1.summit.commerce.editions.$get()));
-  if (editions.items.length === 0) {
-    return (
-      <Card className="space-y-3 p-6">
-        <h1 className="font-display text-2xl font-bold text-ink">No edition yet</h1>
-        <p className="text-base text-ink-2">Start the first edition from the standard ADTIS catalogue, then everything here fills in as people register.</p>
-        <Link href="/summit/commerce/settings" className="font-semibold text-brand-700 underline underline-offset-2">
-          Go to Settings
-        </Link>
-      </Card>
-    );
-  }
+  if (editions.items.length === 0) return <NoEdition />;
   const d = await load(path, (api) => ok(api.v1.summit.commerce.dashboard.$get({ query: {} })));
   const r = d.registrations;
   const x = d.exhibition;
