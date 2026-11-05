@@ -16,6 +16,7 @@
     "@entrust/account": "workspace:*",
     "@entrust/api": "workspace:*",
     "@entrust/auth": "workspace:*",
+    "@entrust/forms": "workspace:*",
     "@entrust/roles": "workspace:*",
     "@entrust/trade-engine": "workspace:*",
     "@entrust/trade-rules": "workspace:*",

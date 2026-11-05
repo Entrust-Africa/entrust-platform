@@ -354,6 +354,9 @@ importers:
       '@entrust/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@entrust/forms':
+        specifier: workspace:*
+        version: link:../../packages/forms
       '@entrust/roles':
         specifier: workspace:*
         version: link:../../packages/roles
