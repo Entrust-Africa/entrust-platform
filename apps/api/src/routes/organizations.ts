@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@entrust/db";
-import { auth } from "@entrust/auth";
+import { auth, trustedOrigins } from "@entrust/auth";
 import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, SME_ROLES } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
@@ -22,10 +22,7 @@ function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
 
 function requireTrustedOrigin(c: { req: { header: (name: string) => string | undefined } }) {
   const origin = c.req.header("origin");
-  const defaultTrusted = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
-  const envTrusted = (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
-  const trusted = Array.from(new Set([...defaultTrusted, ...envTrusted]));
-  if (origin && !trusted.includes(origin)) throw new ServiceError("forbidden", "That request origin is not allowed.");
+  if (origin && !trustedOrigins.includes(origin)) throw new ServiceError("forbidden", "That request origin is not allowed.");
 }
 
 async function membership(organizationId: string, userId: string) {

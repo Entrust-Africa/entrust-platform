@@ -121,8 +121,8 @@ jobs:
           CI: "true"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          NEXT_PUBLIC_API_URL: https://entrust-api.sw-minasefikadu.workers.dev
-          API_URL: https://entrust-api.sw-minasefikadu.workers.dev
+          NEXT_PUBLIC_API_URL: https://api.entrust-africa.com
+          API_URL: https://api.entrust-africa.com
         run: pnpm --filter @entrust/trade run deploy
 
   deploy-summit:
