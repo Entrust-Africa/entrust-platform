@@ -18,7 +18,8 @@ const FIELDS = [
   "financialRecordKeeping", "marketReadiness", "entrustSupportNeeded", "bankOpportunity", "serviceNotes",
 ] as const satisfies readonly (keyof RegisterInput)[];
 
-const toInput = (row: typeof schema.smeRegister.$inferSelect): RegisterInput => ({
+/** A stored row as the record it was loaded from. */
+export const toInput = (row: typeof schema.smeRegister.$inferSelect): RegisterInput => ({
   code: row.code,
   ...Object.fromEntries(FIELDS.map((f) => [f, row[f]])),
 } as RegisterInput);

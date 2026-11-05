@@ -1,0 +1,165 @@
+import { describe, expect, it } from "vitest";
+import { buildCatalogue, catalogueFromApplications, catalogueFromRegister, deriveRegister, markSharedBusinesses, type ApplicationRow, type RegisterInput } from "../src";
+
+const register = (over: Partial<RegisterInput> = {}) =>
+  deriveRegister({
+    code: "TRADE-TST-LEA-002",
+    companyName: "Acme Leather Plc",
+    participantName: "Abebe Kebede",
+    phone: "911000001",
+    email: null,
+    yearEstablished: 2017,
+    location: "AA (Bole)",
+    employees: 20,
+    exportLicence: true,
+    currentBank: "CBE",
+    mainProduct: "Bags",
+    monthlyProductionCapacity: 2000,
+    averageMonthlyRevenue: 1_000_000,
+    largestOrderCompleted: null,
+    currentMarkets: "Local/Export",
+    targetExportMarket: "Africa",
+    monthlyOperatingCost: null,
+    estimatedMonthlyProfit: null,
+    existingLoan: false,
+    loanAmount: null,
+    cashflowStability: null,
+    workingCapitalGap: 100,
+    equipmentInvestmentNeeded: null,
+    exportLogisticsGap: null,
+    costingKnowledge: 4,
+    productionCapacityStrength: 5,
+    documentationKnowledge: 4,
+    financialRecordKeeping: 4,
+    marketReadiness: 5,
+    entrustSupportNeeded: null,
+    bankOpportunity: null,
+    serviceNotes: null,
+    ...over,
+  });
+
+const application = (over: Partial<ApplicationRow> = {}): ApplicationRow => ({
+  id: "a1",
+  submittedAt: "2026-03-27T12:00:00.000Z",
+  email: "owner@firm.test",
+  businessName: "Acme Foods PLC",
+  contactName: "Almaz",
+  phone: "+251911105926",
+  location: "Addis Ababa",
+  answers: { mainProducts: "1. Dried mango\n2. Mango juice", category: "Food processing", employees: "10", bank: "Awash", exportedBefore: "No", zemenInterest: "Yes" },
+  ...over,
+});
+
+describe("a leather business as a catalogue entry", () => {
+  it("is in cohort 1 with its SME ID, readiness and a tidied phone number", () => {
+    expect(catalogueFromRegister(register())).toEqual({
+      key: "register:TRADE-TST-LEA-002",
+      cohort: 1,
+      name: "Acme Leather Plc",
+      contactName: "Abebe Kebede",
+      phone: "+251911000001",
+      email: null,
+      location: "AA (Bole)",
+      product: "Bags",
+      employees: "20",
+      bank: "CBE",
+      reference: "TRADE-TST-LEA-002",
+      readinessLevel: "high",
+      readinessScore: 22,
+      exportedBefore: null,
+      wantsZemenFinancing: null,
+      alsoInCohorts: [],
+    });
+  });
+
+  it("leaves readiness out for a business that hasn't been scored", () => {
+    const sme = catalogueFromRegister(register({ costingKnowledge: null, employees: null }));
+    expect(sme).toMatchObject({ readinessLevel: null, readinessScore: null, employees: null });
+  });
+});
+
+describe("an agro application as a catalogue entry", () => {
+  it("is in cohort 2, with the products on one line and the yes and no answers read", () => {
+    expect(catalogueFromApplications([application()])).toEqual([
+      {
+        key: "application:a1",
+        cohort: 2,
+        name: "Acme Foods PLC",
+        contactName: "Almaz",
+        phone: "+251911105926",
+        email: "owner@firm.test",
+        location: "Addis Ababa",
+        product: "1. Dried mango; 2. Mango juice",
+        employees: "10",
+        bank: "Awash",
+        reference: null,
+        readinessLevel: null,
+        readinessScore: null,
+        exportedBefore: false,
+        wantsZemenFinancing: true,
+        alsoInCohorts: [],
+      },
+    ]);
+  });
+
+  it("falls back to what it produces, then its category, when no products are listed, and cuts a long list short", () => {
+    expect(catalogueFromApplications([application({ answers: { produces: "Honey", category: "Food" } })])[0]!.product).toBe("Honey");
+    expect(catalogueFromApplications([application({ answers: { category: "Food" } })])[0]!.product).toBe("Food");
+    const long = catalogueFromApplications([application({ answers: { mainProducts: "x".repeat(300) } })])[0]!.product!;
+    expect(long).toHaveLength(140);
+    expect(long.endsWith("…")).toBe(true);
+    expect(catalogueFromApplications([application({ answers: {} })])[0]).toMatchObject({ product: null, exportedBefore: null, wantsZemenFinancing: null });
+  });
+
+  it("lists a business once when it applied more than once, from its latest response", () => {
+    const smes = catalogueFromApplications([
+      application({ id: "old", submittedAt: "2026-03-27T12:00:00.000Z", location: "Addis Ababa" }),
+      application({ id: "other", email: "other@firm.test", businessName: "Other Co" }),
+      // Same email, different spelling of the name.
+      application({ id: "new", submittedAt: "2026-04-08T12:00:00.000Z", businessName: "ACME  Foods plc", location: "Addis Ababa / Dukem" }),
+      // Same name, a different email.
+      application({ id: "third", submittedAt: "2026-04-09T12:00:00.000Z", email: "second@firm.test", location: "Bole" }),
+    ]);
+    expect(smes.map((s) => [s.key, s.location])).toEqual([["application:third", "Bole"], ["application:other", "Addis Ababa"]]);
+  });
+});
+
+describe("the same business in two cohorts", () => {
+  it("is found by its phone number, however it was written, or its email address", () => {
+    const leather = catalogueFromRegister(register({ phone: "913362262", companyName: "TTGI leather plc" }));
+    const agro = catalogueFromApplications([application({ phone: "+251913362262", businessName: "TTG Leather & Shema" })])[0]!;
+    const byEmail = { ...catalogueFromApplications([application({ id: "z", phone: null, email: "same@firm.test", businessName: "Z Foods" })])[0]! };
+    const leatherByEmail = { ...catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", phone: null, email: "SAME@firm.test" })) };
+    const unrelated = catalogueFromRegister(register({ code: "TRADE-TST-LEA-004", phone: "911999999", companyName: "Unrelated" }));
+    const marked = markSharedBusinesses([leather, agro, byEmail, leatherByEmail, unrelated]);
+    expect(marked.map((s) => [s.name, s.alsoInCohorts])).toEqual([
+      ["TTGI leather plc", [2]],
+      ["TTG Leather & Shema", [1]],
+      ["Z Foods", [1]],
+      ["Acme Leather Plc", [2]],
+      ["Unrelated", []],
+    ]);
+  });
+
+  it("doesn't count two businesses in the same cohort that share a number", () => {
+    const a = catalogueFromRegister(register());
+    const b = catalogueFromRegister(register({ code: "TRADE-TST-LEA-009", companyName: "Twin Plc" }));
+    expect(markSharedBusinesses([a, b]).map((s) => s.alsoInCohorts)).toEqual([[], []]);
+  });
+});
+
+describe("the catalogue", () => {
+  it("has the two cohorts, with their businesses by name", () => {
+    const catalogue = buildCatalogue([
+      catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", companyName: "zeta Leather", phone: null })),
+      catalogueFromRegister(register({ companyName: "Alpha Leather", phone: null })),
+      ...catalogueFromApplications([application({ businessName: "Mango Co", email: "m@firm.test", phone: null })]),
+    ]);
+    expect(catalogue.map((c) => [c.number, c.name, c.count])).toEqual([[1, "Leather", 2], [2, "Agro-processing", 1]]);
+    expect(catalogue[0]!.smes.map((s) => s.name)).toEqual(["Alpha Leather", "zeta Leather"]);
+  });
+
+  it("keeps both cohorts when one is empty", () => {
+    expect(buildCatalogue([]).map((c) => [c.number, c.count])).toEqual([[1, 0], [2, 0]]);
+  });
+});
