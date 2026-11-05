@@ -28,8 +28,21 @@ export default async function PeriodsPage() {
       <div>
         <p className="text-sm font-bold tracking-wider text-brand-600 uppercase">Summit</p>
         <h1 className="mt-1 font-display text-3xl font-bold text-ink">Application periods</h1>
-        <p className="mt-2 text-base text-ink-2">Set when businesses can apply and which countries can take part.</p>
+        <p className="mt-2 text-base text-ink-2">Set when businesses can apply to the Summit and which countries can take part.</p>
       </div>
+      <Card className="space-y-3 p-5 sm:p-6">
+        <h2 className="font-display text-xl font-bold text-ink">What this page does</h2>
+        <p className="text-base text-ink-2">
+          Businesses can apply to the Summit only while an application period is open. A period is a name, the time it opens, the time it closes and the countries whose businesses may apply. Outside a period,
+          the Summit page shows "Dates to come" or "Closed" and nobody can start or send an application.
+        </p>
+        <ul className="list-disc space-y-1 pl-5 text-base text-ink-2">
+          <li>Once the dates are decided, fill in the form below and open the period. The name and dates are what businesses see on the Summit page.</li>
+          <li>You can change a period's dates or countries later, for example to extend the deadline. Periods can't overlap.</li>
+          <li>A period uses the latest published application form and approved scoring rules at the moment it is opened.</li>
+          <li>Opening a period doesn't email anyone. Reviewing the applications that come in is a separate step.</li>
+        </ul>
+      </Card>
       <PeriodsAdmin periods={items} />
     </div>
   );
