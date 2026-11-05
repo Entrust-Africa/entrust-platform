@@ -28,8 +28,11 @@ export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
           ADTIS-27
         </Link>
         <nav aria-label="Main" className="order-3 flex w-full flex-wrap items-center gap-x-8 gap-y-3 font-mono text-xs tracking-wide md:order-none md:w-auto">
-          <Link href="/#about" className="text-white/85 hover:text-white">
+          <Link href="/about" className="text-white/85 hover:text-white">
             About
+          </Link>
+          <Link href="/programme" className="text-white/85 hover:text-white">
+            Programme
           </Link>
           <span className="flex items-center gap-2" role="group" aria-label="Exhibit, sponsor or participate">
             {COMMERCE_LINKS.map(([label, href], i) => (
@@ -47,6 +50,9 @@ export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
           </span>
           <Link href="/smes" className="text-white/85 hover:text-white">
             African SMEs
+          </Link>
+          <Link href="/contact" className="text-white/85 hover:text-white">
+            Contact
           </Link>
         </nav>
         <Link href="/participate/register" className="inline-flex h-10 items-center bg-amber px-5 text-xs font-semibold text-ink hover:brightness-110">
@@ -80,22 +86,17 @@ export function SiteFooter() {
           </p>
           <HostedBy className="mt-6" />
         </div>
-        <nav aria-label="Footer" className="flex flex-wrap gap-x-8 gap-y-3 font-mono text-[11px] tracking-wide text-white/65">
-          <Link href="/exhibit" className="hover:text-white">
-            Exhibit
-          </Link>
-          <Link href="/sponsor" className="hover:text-white">
-            Sponsor
-          </Link>
-          <Link href="/participate" className="hover:text-white">
-            Participate
-          </Link>
-          <Link href="/smes" className="hover:text-white">
-            African SMEs
-          </Link>
-          <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-white">
-            Contact
-          </a>
+        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-10 gap-y-3 font-mono text-[11px] tracking-wide text-white/65 sm:grid-cols-3">
+          {[
+            ["About", "/about"], ["Programme", "/programme"], ["SME participation", "/sme-participation"],
+            ["Buyers & investors", "/buyers-investors"], ["Diaspora engagement", "/diaspora"], ["Speakers", "/speakers"],
+            ["Partners", "/partners"], ["News & updates", "/news"], ["Contact", "/contact"],
+            ["Exhibit", "/exhibit"], ["Sponsor", "/sponsor"], ["Participate", "/participate"], ["African SMEs", "/smes"],
+          ].map(([label, href]) => (
+            <Link key={href} href={href!} className="hover:text-white">
+              {label}
+            </Link>
+          ))}
           <a href={signInUrl()} className="hover:text-white">
             Applicant sign in
           </a>
