@@ -15,7 +15,7 @@ export const EVENT_LINE = "Addis Ababa · Ethiopia · January";
 export const HIGHLIGHTS = [
   {
     title: "Buyer-seller matchmaking",
-    text: "Vetted buyers meet verified Black-owned sellers in scheduled 1:1 deal meetings.",
+    text: "Vetted buyers meet verified sellers in scheduled 1:1 deal meetings.",
   },
   {
     title: "Market briefings",

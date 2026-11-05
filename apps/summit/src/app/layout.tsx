@@ -9,7 +9,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variab
 export const metadata: Metadata = {
   title: "Diaspora Trade Summit · Addis Ababa, Ethiopia",
   description:
-    "Where Black-owned business meets the world. Three days of structured trade meetings, market briefings and deal-making in Addis Ababa.",
+    "Where business meets the world. Three days of structured trade meetings, market briefings and deal-making in Addis Ababa.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

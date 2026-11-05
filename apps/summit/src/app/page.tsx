@@ -87,7 +87,7 @@ export default async function SummitLandingPage() {
             {EVENT_LINE}
           </p>
           <h1 className="mt-6 max-w-3xl font-display text-[clamp(3rem,8vw,6rem)] leading-[0.98] uppercase">
-            Where Black-owned business meets the world
+            Where business meets the world
           </h1>
           <div className="mt-10 flex flex-wrap gap-4">
             <a href="#register" className={amberButton}>
@@ -110,11 +110,11 @@ export default async function SummitLandingPage() {
           <SectionLabel>01 — Why this summit</SectionLabel>
           <div className="mt-8 grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
             <h2 className="font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">
-              The global marketplace for Black-owned business
+              The global marketplace for businesses
             </h2>
             <div>
               <p className="text-base leading-[1.8] text-ink/70">
-                Diaspora Trade Summit connects buyers and sellers from Black-owned businesses across Africa and the
+                Diaspora Trade Summit connects buyers and sellers from businesses across Africa and the
                 global diaspora. Three days of structured trade meetings, market briefings and deal-making in Addis
                 Ababa — built to move products, services and capital across borders.
               </p>
@@ -250,7 +250,7 @@ export default async function SummitLandingPage() {
             Seats are limited. The network is not.
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-sm leading-relaxed text-white/80">
-            Join buyers and sellers from Black-owned businesses across Africa and the diaspora — live in Addis Ababa this
+            Join buyers and sellers from businesses across Africa and the diaspora — live in Addis Ababa this
             January.
           </p>
           <a href="#register" className={`${amberButton} mt-10`}>

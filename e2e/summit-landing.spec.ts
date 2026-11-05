@@ -5,7 +5,7 @@ test("the Summit landing page loads without signing in and sends buyers and sell
   const response = await page.goto("http://localhost:3002/");
   expect(response?.status()).toBe(200);
 
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Black-owned business meets the world");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("business meets the world");
   await expect(page.getByRole("heading", { name: "Two ways to take part" })).toBeVisible();
 
   const nav = page.getByRole("navigation", { name: "Main" });
