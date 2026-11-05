@@ -53,3 +53,4 @@ export function latestPublishedTemplate(): ApplicationTemplate | undefined {
   const published = APPLICATION_TEMPLATES.filter((t) => t.status === "published");
   return published.length ? newest(published) : undefined;
 }
+export * from "./passes";

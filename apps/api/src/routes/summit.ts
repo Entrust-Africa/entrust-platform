@@ -42,6 +42,10 @@ import {
   PeriodPatch,
   RecommendationBody,
   RecordScoresBody,
+  RegistrationBody,
+  RegistrationList,
+  RegistrationQuery,
+  RegistrationReceipt,
   RespondBody,
   ReportCatalogue,
   ReportParam,
@@ -75,6 +79,7 @@ import { getDashboard, setSelectionTarget } from "../services/summit-dashboard";
 import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
 import { makeProfile } from "../services/summit-profile";
+import { listRegistrations, register } from "../services/summit-registrations";
 import { exportReport, listReports, viewReport } from "../services/summit-reports";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
 
@@ -94,7 +99,13 @@ const adminWrites = { ...listErrors, 403: problem("Only Entrust administrators c
 
 // ---- Public ----
 
-const publicRouter = new OpenAPIHono<AppEnv>();
+const publicRouter = new OpenAPIHono<AppEnv>({
+  defaultHook: (result, c) => {
+    if (result.success) return;
+    const error = result.error.issues.map((i) => `${i.path.join(".") || "request"}: ${i.message}`).join("; ");
+    return c.json({ error, code: "invalid" as const }, 400);
+  },
+});
 
 const currentRoute = createRoute({
   method: "get",
@@ -106,9 +117,20 @@ const currentRoute = createRoute({
   responses: { 200: { description: "The period, or null before any is set", content: json(CurrentPeriod) } },
 });
 
-export const summitPublic = publicRouter.openapi(currentRoute, async (c) =>
-  c.json({ period: await currentPeriod({ db: getDb(), now: new Date() }) }, 200),
-);
+const registerRoute = createRoute({
+  method: "post",
+  path: "/registrations",
+  tags,
+  summary: "Register to attend",
+  description:
+    "For the public Summit page's registration form: a visitor asks for a ticket tier. It needs no sign-in. It records the request and emails a confirmation; nothing is charged. One registration per email address: sending the form again with the same address replaces the details and the pass. A confirmation email is not sent twice within a day.",
+  request: { body: { required: true, content: json(RegistrationBody) } },
+  responses: { 201: { description: "The registration was recorded", content: json(RegistrationReceipt) }, 400: problem("The form isn't complete or valid") },
+});
+
+export const summitPublic = publicRouter
+  .openapi(currentRoute, async (c) => c.json({ period: await currentPeriod({ db: getDb(), now: new Date() }) }, 200))
+  .openapi(registerRoute, async (c) => c.json(await register({ db: getDb(), now: new Date() }, c.req.valid("json")), 201));
 
 // ---- Signed in ----
 
@@ -142,6 +164,16 @@ const updatePeriodRoute = createRoute({
   description: "The name, the window and the countries. The form and rules versions stay, since applications already use them. A super administrator only.",
   request: { params: PeriodParam, body: { required: true, content: json(PeriodPatch) } },
   responses: { 200: { description: "The period", content: json(Period) }, ...adminWrites },
+});
+
+const listRegistrationsRoute = createRoute({
+  method: "get",
+  path: "/registrations",
+  tags,
+  summary: "List the participant registrations",
+  description: "Newest first, with the totals for each pass. Entrust administrators and facilitators only.",
+  request: { query: RegistrationQuery },
+  responses: { 200: { description: "The registrations", content: json(RegistrationList) }, ...listErrors, 403: problem("Not an Entrust administrator or facilitator") },
 });
 
 const formRoute = createRoute({
@@ -588,6 +620,7 @@ export const summit = router
   .openapi(updatePeriodRoute, async (c) =>
     c.json(await updatePeriod(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
   )
+  .openapi(listRegistrationsRoute, async (c) => c.json(await listRegistrations(await contextFor(c.get("user")), c.req.valid("query")), 200))
   .openapi(formRoute, async (c) => {
     const ctx = await contextFor(c.get("user"));
     const form = findApplicationTemplate(c.req.valid("param").version);
