@@ -19,7 +19,8 @@ const envOrigins = (process.env.CORS_ORIGINS ?? "")
   .map((o) => o.trim())
   .filter(Boolean);
 
-const trustedOrigins = Array.from(
+// The origins the API answers with credentials: the dev ports, `CORS_ORIGINS`, and the CLEAR and TRADE app URLs.
+export const trustedOrigins = Array.from(
   new Set([
     ...defaultDevOrigins,
     ...envOrigins,

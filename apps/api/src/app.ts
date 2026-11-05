@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
-import { auth, APIError, type Session } from "@entrust/auth";
+import { auth, APIError, trustedOrigins, type Session } from "@entrust/auth";
 import { health } from "./routes/health";
 import { clearCases } from "./routes/clear/cases";
 import { clearMinimumPrices } from "./routes/clear/minimum-prices";
@@ -23,16 +23,13 @@ export type AppEnv = {
   Variables: { user: Session["user"] | null; session: Session["session"] | null };
 };
 
-const defaultDevOrigins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
-const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
-const origins = Array.from(new Set([...defaultDevOrigins, ...envOrigins]));
 
 const base = new OpenAPIHono<AppEnv>();
 
 base.use(
   "*",
   cors({
-    origin: origins,
+    origin: trustedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
