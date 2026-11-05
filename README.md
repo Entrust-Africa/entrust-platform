@@ -222,6 +222,14 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   "awaiting verification"; only an explicit change to "confirmed" marks it paid, and that needs a reference or proof and an
   amount that covers what is owed. Only an administrator changes the amount owed. The edition's payment methods and tax note
   are what the approval email says; none are invented. `SUMMIT_SITE_URL` (the public ADTIS site) gives the emails a button.
+- **Sponsorship and opportunity enquiries.** `POST /v1/summit/commerce/sponsor-enquiries` is the public form: an organisation names a
+  sponsorship level or an additional opportunity, gives its contact and sector and what it wants from sponsoring, and receives a
+  receipt that promises nothing (benefits are confirmed in a signed sponsorship agreement). Administrators and facilitators
+  move each enquiry through the pipeline under `/sponsor-enquiries`: new enquiry, contacted, negotiation, proposal sent, confirmed
+  or declined, with a history of who moved it and why, the organisers' private notes, and the value (the listed price, changed
+  if negotiated). The list totals what is still open and what is confirmed. **Confirming** makes the organisation a sponsor: it is
+  refused when the option's capacity is taken (set a title partner's capacity to 1 for exclusivity), opens a payment for the value,
+  and emails the payment instructions; **declining** cancels a payment nobody paid.
 
 ## Website deployment
 
