@@ -3,23 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@entrust/ui";
-import { apiUrl } from "@/lib/summit-api";
+import { createBusiness } from "@/lib/summit-business";
 import { countryName } from "@/lib/summit";
 import { textInput } from "@/components/form-runner/styles";
-
-/**
- * Which platform the new organisation is given with its first access: the Summit alone, so TRADE's learner screens
- * stay out of an applicant's way. Entrust can add TRADE later, for a selected SME.
- */
-const FIRST_PLATFORM = "summit";
-
-const slugOf = (name: string) =>
-  name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
 
 /** A new visitor's business: its name and country, so it has an organisation to apply as. */
 export function CreateOrganisation({ countries }: { countries: string[] }) {
@@ -28,30 +14,19 @@ export function CreateOrganisation({ countries }: { countries: string[] }) {
   const [error, setError] = useState<string>();
 
   async function create(form: FormData) {
-    const name = String(form.get("name") ?? "").trim();
-    const legalName = String(form.get("legalName") ?? "").trim() || name;
-    const country = String(form.get("country") ?? "");
-    const slug = `${slugOf(name) || "business"}-${Math.random().toString(36).slice(2, 7)}`;
     setPending(true);
     setError(undefined);
-    try {
-      const response = await fetch(`${apiUrl}/v1/organizations`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, legalName, slug, country, platform: FIRST_PLATFORM }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: unknown } | null;
-        setError(typeof data?.error === "string" ? data.error : "We couldn't save your business. Please try again.");
-        setPending(false);
-        return;
-      }
-      router.refresh();
-    } catch {
-      setError("We couldn't reach the server. Check your internet connection and try again.");
+    const result = await createBusiness({
+      name: String(form.get("name") ?? ""),
+      legalName: String(form.get("legalName") ?? ""),
+      country: String(form.get("country") ?? ""),
+    });
+    if (!result.ok) {
+      setError(result.error);
       setPending(false);
+      return;
     }
+    router.refresh();
   }
 
   return (

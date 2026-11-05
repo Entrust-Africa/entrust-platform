@@ -163,8 +163,10 @@ prices are in `apps/summit/src/lib/content.ts`. It deploys as the Cloudflare Wor
 job) and has no sign-in of its own:
 
 - It reads the public `GET /v1/summit/period` to show where the application window stands and which countries can apply.
-- "Register as a buyer / seller" goes to `SUMMIT_APP_URL` + `/summit/apply`, the SME application in the TRADE app (a visitor is
-  sent to sign in first).
+- "Register as a buyer / seller" goes to `SUMMIT_APP_URL` + `/summit/apply`, the SME application in the TRADE app. A visitor with
+  no account sees its first step straight away (business, country, and the account's name, email and password), not a sign-in
+  screen; the link in the confirmation email brings them back, signed in, to carry on with the application. The footer's
+  "Applicant sign in" goes to TRADE's sign-in page instead.
 - The ticket buttons and "Register as a participant" open one modal with the registration form (pass, name, email,
   organisation, job title, country, optional phone and notes, and consent to be contacted). A server action posts it to the
   public `POST /v1/summit/registrations`, which stores one row per email address in `summit.registration` (registering again
