@@ -180,7 +180,7 @@ export function MobileNav({ user }: MobileNavProps) {
                 {/* Navigation links */}
                 <div className="bg-surface p-4">
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Menu</p>
-                  <NavLinks orientation="vertical" onNavigate={() => setIsOpen(false)} user={user} />
+                  <NavLinks onNavigate={() => setIsOpen(false)} user={user} />
                 </div>
               </div>
 

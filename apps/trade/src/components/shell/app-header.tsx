@@ -1,66 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { Patchwork } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { AccountMenu } from "./account-menu";
+import { Brand } from "./brand";
 import { MobileNav } from "./mobile-nav";
-import { NavLinks } from "./nav-links";
-import { OrgSwitcher } from "./org-switcher";
+import { switchablePlatforms } from "./platforms";
 
-interface AppHeaderProps {
-  user: UserProfile;
-}
-
-export function AppHeader({ user }: AppHeaderProps) {
-  // The account menu's platform switcher only knows CLEAR and TRADE. An organisation with just the Summit has neither,
-  // so give it an empty list rather than a "Platforms" heading with nothing under it.
-  const activeOrg = user.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user.organizations?.[0];
-  const switchable = user.staffRole
-    ? undefined
-    : (activeOrg?.platforms ?? []).filter((platform) => platform === "clear" || platform === "trade");
+/** The bar across the top on a phone: the menu button, the name and the account. On a computer the sidebar does all of this. */
+export function AppHeader({ user }: { user: UserProfile }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-xs">
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-brand-600 focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold focus:text-white focus:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500"
-      >
-        Skip to content
-      </a>
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-xs md:hidden">
       <Patchwork />
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-        {/* Left: Mobile trigger + Logo Wordmark + Desktop Org Switcher */}
+      <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-2.5 sm:gap-3">
           <MobileNav user={user} />
-          <Link
-            href="/"
-            aria-label="TRADE Platform"
-            className="flex items-center gap-2.5 rounded-md transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-brand-500"
-          >
-            <span className="flex size-9 items-center justify-center rounded-md bg-brand-600 font-display text-sm font-black text-white shadow-xs">
-              TR
-            </span>
-            <span className="font-display text-base font-extrabold tracking-tight text-ink">
-              TRADE
-            </span>
-          </Link>
-
-          <span className="hidden h-6 w-px bg-line sm:block" aria-hidden="true" />
-
-          <div className="hidden sm:block">
-            <OrgSwitcher initialOrgId={user.activeOrganizationId ?? user.organizations?.[0]?.id} />
-          </div>
+          <Brand />
         </div>
-
-        {/* Center: Desktop Navigation */}
-        <div className="hidden md:flex md:items-center">
-          <NavLinks orientation="horizontal" user={user} />
-        </div>
-
-        {/* Right: Account Menu with platform switcher */}
-        <div className="flex items-center gap-2">
-          <AccountMenu user={user} currentPlatform="trade" platforms={switchable} />
-        </div>
+        <AccountMenu user={user} currentPlatform="trade" platforms={switchablePlatforms(user)} />
       </div>
     </header>
   );

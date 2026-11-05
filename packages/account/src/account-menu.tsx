@@ -19,6 +19,11 @@ export interface AccountMenuProps {
   platforms?: string[];
   clearAppUrl?: string;
   tradeAppUrl?: string;
+  /**
+   * Where the menu sits. "bottom" (the default) is a compact button in a header with the menu hanging under it; "top" is a
+   * full-width button at the foot of a sidebar, always showing the name, with the menu opening upward.
+   */
+  placement?: "bottom" | "top";
 }
 
 function getInitials(name?: string, email?: string): string {
@@ -45,6 +50,7 @@ export function AccountMenu({
   platforms,
   clearAppUrl,
   tradeAppUrl,
+  placement = "bottom",
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -103,6 +109,7 @@ export function AccountMenu({
   }
 
   const initials = getInitials(user.name, user.email);
+  const upward = placement === "top";
 
   return (
     <div
@@ -120,6 +127,7 @@ export function AccountMenu({
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
           "inline-flex h-9 items-center gap-2 rounded-md border border-line bg-surface px-2 text-xs font-semibold text-ink shadow-xs transition-colors",
+          upward && "h-11 w-full",
           "hover:border-line-strong hover:bg-canvas focus-visible:outline-2 focus-visible:outline-brand-500",
           isOpen && "border-line-strong bg-canvas ring-1 ring-line-strong",
         )}
@@ -130,7 +138,7 @@ export function AccountMenu({
         >
           {initials}
         </span>
-        <span className="hidden max-w-[120px] truncate lg:inline">{user.name || user.email}</span>
+        <span className={cn("truncate", upward ? "min-w-0 flex-1 text-left" : "hidden max-w-[120px] lg:inline")}>{user.name || user.email}</span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 text-ink-3 transition-transform duration-150", isOpen && "rotate-180")}
           aria-hidden="true"
@@ -140,7 +148,10 @@ export function AccountMenu({
       {isOpen && (
         <div
           id="account-menu-popover"
-          className="absolute right-0 z-50 mt-1.5 w-60 origin-top-right rounded-lg border border-line bg-surface p-1 shadow-lg ring-1 ring-black/5"
+          className={cn(
+            "absolute z-50 w-60 rounded-lg border border-line bg-surface p-1 shadow-lg ring-1 ring-black/5",
+            upward ? "bottom-full left-0 mb-1.5 w-full origin-bottom-left" : "right-0 mt-1.5 origin-top-right",
+          )}
         >
           <div className="border-b border-line px-3 py-2.5">
             <p className="truncate text-xs font-semibold text-ink">{user.name || "User"}</p>
