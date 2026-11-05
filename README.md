@@ -188,6 +188,28 @@ To put it on a domain: add the domain to the Cloudflare account, then attach it 
 `apps/summit/wrangler.jsonc`). The session cookie is scoped to `.entrust-africa.com`, so any screen that needs a
 signed-in user has to stay on an Entrust subdomain or be proxied through the Summit domain to the API.
 
+## ADTIS commercial system
+
+The commercial side of the Africa Diaspora Trade & Investment Summit (exhibition booths, sponsorship, delegate registration,
+payments, the SME directory) is built in stages; issue #128 tracks them. What exists so far is the catalogue.
+
+- An **edition** (`summit.commerce_edition`) is one summit: its name, venue, the dates note ("January 2027, exact dates to be
+  announced": no exact dates are published), the tax note, how applicants pay, and the assessment period whose selected SMEs
+  register free. Exactly one edition is **current**, the one the website sells. The next summit is a copy of this one.
+- A **product** (`summit.commerce_product`) is something an edition sells: an exhibition package, a sponsorship level, a
+  delegate category or an additional opportunity. Each has its price in US dollars (kept in cents), its benefits, a capacity
+  (booths or passes; empty means no limit has been set), a sold-out mark, and a status: a draft or archived product is not
+  shown. Sponsorship levels have their own benefit text for each area (logo, speaking, exhibition space, delegate passes, digital,
+  social, B2B, networking, exclusivity), so no two levels share a benefit unless an administrator writes it twice.
+- The standard catalogue of the website instructions (prices, booth sizes, what each delegate category and package includes)
+  is data in `packages/summit-engine/src/commerce/catalogue.ts`. An administrator starts an edition from it with
+  `POST /v1/summit/commerce/editions` (`"from": "standard"`), or copies an earlier edition (`"from": <edition id>`), then changes
+  anything with `PATCH /v1/summit/commerce/editions/{id}` and `/products/{id}`. Entrust administrators change things;
+  facilitators can look. Every change is in the audit log with what it was before. The sponsorship benefit text, the
+  descriptions of the additional opportunities, and having no capacity set are proposals in that file for the organisers to confirm.
+- `GET /v1/summit/commerce/catalogue` is public: the current edition's published products with prices ("Complimentary" for
+  zero), what is left, and the tax note. It holds no payment instructions, no draft and nothing about who has booked.
+
 ## Website deployment
 
 entrust-africa.com still deploys from the old `AfriConnectTechnologies/entrust-africa`

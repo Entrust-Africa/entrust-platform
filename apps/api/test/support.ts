@@ -112,6 +112,14 @@ export async function cleanup() {
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, tableIds));
     await db.delete(schema.minimumPriceTable).where(inArray(schema.minimumPriceTable.id, tableIds));
   }
+  // Commerce editions belong to no organisation, so the tests' own go by their address, and their products with them.
+  const editions = await db.select({ id: schema.commerceEdition.id }).from(schema.commerceEdition).where(like(schema.commerceEdition.slug, `${PREFIX}%`));
+  if (editions.length) {
+    const editionIds = editions.map((e) => e.id);
+    const products = await db.select({ id: schema.commerceProduct.id }).from(schema.commerceProduct).where(inArray(schema.commerceProduct.editionId, editionIds));
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, [...editionIds, ...products.map((p) => p.id)]));
+    await db.delete(schema.commerceEdition).where(inArray(schema.commerceEdition.id, editionIds));
+  }
   // Summit registrations come from a public form and belong to no organisation, so the tests' own go by their address.
   await db.delete(schema.registration).where(like(schema.registration.email, `${PREFIX}%`));
   // Summit periods belong to no organisation. An organisation's applications go with it, so the periods are free to go.
