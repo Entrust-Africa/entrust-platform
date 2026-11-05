@@ -1,6 +1,6 @@
 import { evaluateCondition } from "./conditions";
 import type { Facts } from "./conditions";
-import { CURRENCIES, NO, YES, isNotKnown } from "./types";
+import { CURRENCIES, NO, YES, isNotApplicable, isNotKnown } from "./types";
 import type { Answer, AnswerProblem, Answers, FormCheck, FormDefinition, FormQuestion, Money } from "./types";
 
 const SHORT_TEXT_MAX = 300;
@@ -31,7 +31,7 @@ function isAnswered(answer: Answer | undefined): answer is Answer {
 
 /** The value a condition sees for a question: only choices can be tested, and "not known" tests as unknown. */
 function factValue(question: FormQuestion, answer: Answer | undefined): string | readonly string[] | undefined {
-  if (!isAnswered(answer) || isNotKnown(answer)) return undefined;
+  if (!isAnswered(answer) || isNotKnown(answer) || isNotApplicable(answer)) return undefined;
   if (question.type === "multiple_choice") return Array.isArray(answer) ? answer : undefined;
   if (question.type === "single_choice" || question.type === "yes_no") return typeof answer === "string" ? answer : undefined;
   return undefined;
@@ -76,6 +76,12 @@ export function renderText(text: string, values: Readonly<Record<string, string>
 /** What is wrong with an answer to a question, as a sentence, or undefined if it is fine. */
 function answerProblem(q: FormQuestion, answer: Answer, today: string | undefined): string | undefined {
   if (isNotKnown(answer)) return q.mustBe ? `answer ${q.mustBe}` : undefined;
+  if (isNotApplicable(answer)) {
+    if (!q.allowNotApplicable) return "this question can't be marked as not applying";
+    const reason = typeof answer.reason === "string" ? answer.reason.trim() : "";
+    if (!reason) return "say in a few words why it doesn't apply";
+    return reason.length > 300 ? "keep the reason to 300 characters" : undefined;
+  }
   switch (q.type) {
     case "single_choice":
       return typeof answer === "string" && q.options?.some((o) => o.value === answer) ? undefined : "choose one of the options";

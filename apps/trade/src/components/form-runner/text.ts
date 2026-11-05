@@ -1,4 +1,4 @@
-import { isNotKnown, renderText } from "@entrust/forms";
+import { isNotApplicable, isNotKnown, renderText } from "@entrust/forms";
 import type { Answer, AnswerProblem, FormQuestion } from "@entrust/forms";
 
 /** A question's text with its {names} filled in. A name with no value stays as written rather than breaking the page. */
@@ -26,6 +26,7 @@ const date = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", y
 export function answerLines(question: FormQuestion, answer: Answer | undefined): string[] | null {
   if (answer === undefined) return null;
   if (isNotKnown(answer)) return ["I don't know"];
+  if (isNotApplicable(answer)) return [`Doesn't apply to us: ${answer.reason}`];
   if (typeof answer === "number") return [number.format(answer)];
   if (typeof answer === "string") {
     if (answer.trim() === "") return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOT_KNOWN, canSubmit, checkAnswers, compareVersions, conditionFacts, effectiveAnswers, evaluateCondition, formDefinitionErrors, isDate, options, renderText, sectionBuilder, validateFormDefinitions, visibleQuestions, whenAnswered } from "../src";
+import { NOT_KNOWN, isNotApplicable, canSubmit, checkAnswers, compareVersions, conditionFacts, effectiveAnswers, evaluateCondition, formDefinitionErrors, isDate, options, renderText, sectionBuilder, validateFormDefinitions, visibleQuestions, whenAnswered } from "../src";
 import type { Answers, FormDefinition, FormQuestion, FormSection } from "../src";
 
 const FORM: FormDefinition = {
@@ -385,5 +385,48 @@ describe("compareVersions", () => {
     expect(compareVersions("0.2.0", "0.10.0")).toBeLessThan(0);
     expect(compareVersions("1.2.3", "1.2.3")).toBe(0);
     expect(compareVersions("1.0.1", "1.0.0")).toBeGreaterThan(0);
+  });
+});
+
+describe("\"does not apply to us\"", () => {
+  const SCALE: FormDefinition = {
+    id: "test.scale",
+    version: "1.0.0",
+    title: "Scale",
+    sections: [{ id: "S1", title: "One" }],
+    questions: [
+      { id: "B1", section: "S1", type: "single_choice", text: "Do you track costs?", options: [{ value: "0", label: "No" }, { value: "1", label: "A little" }], allowNotApplicable: true },
+      { id: "B2", section: "S1", type: "single_choice", text: "Do you ship?", options: [{ value: "0", label: "No" }, { value: "1", label: "Yes" }] },
+      { id: "B3", section: "S1", type: "short_text", text: "Which port?", showIf: { fact: "B1", in: ["1"] }, optional: true },
+    ],
+  };
+
+  it("counts as an answer, with a reason, on a question that allows it", () => {
+    const check = checkAnswers(SCALE, { B1: { notApplicable: true, reason: "We sell only at home." }, B2: "1" });
+    expect(check.errors).toEqual([]);
+    expect(check.incomplete).toEqual([]);
+    expect(canSubmit(check)).toBe(true);
+    expect(check.progress.answered).toBe(2);
+  });
+
+  it("needs a reason, and not a long one", () => {
+    expect(checkAnswers(SCALE, { B1: { notApplicable: true, reason: "  " } }).errors.map((e) => e.message)).toEqual(["B1: say in a few words why it doesn't apply"]);
+    expect(checkAnswers(SCALE, { B1: { notApplicable: true, reason: "x".repeat(301) } }).errors.map((e) => e.message)).toEqual(["B1: keep the reason to 300 characters"]);
+  });
+
+  it("is refused on a question that doesn't allow it", () => {
+    expect(checkAnswers(SCALE, { B2: { notApplicable: true, reason: "No." } }).errors.map((e) => e.message)).toEqual(["B2: this question can't be marked as not applying"]);
+  });
+
+  it("makes a condition on that question unknown, so what depends on it stays hidden", () => {
+    expect(visibleQuestions(SCALE, { B1: { notApplicable: true, reason: "Home sales only." } }).map((q) => q.id)).toEqual(["B1", "B2"]);
+    expect(visibleQuestions(SCALE, { B1: "1" }).map((q) => q.id)).toEqual(["B1", "B2", "B3"]);
+  });
+
+  it("is recognised only in its own shape", () => {
+    expect(isNotApplicable({ notApplicable: true, reason: "x" })).toBe(true);
+    expect(isNotApplicable({ notKnown: true })).toBe(false);
+    expect(isNotApplicable("not_applicable")).toBe(false);
+    expect(isNotApplicable(null)).toBe(false);
   });
 });

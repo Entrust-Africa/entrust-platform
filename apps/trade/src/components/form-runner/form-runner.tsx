@@ -30,6 +30,8 @@ export function FormRunner(props: FormRunnerProps) {
   const autosave = useAutosave(props.onSave, { enabled: !readOnly });
   const [attempted, setAttempted] = useState<ReadonlySet<string>>(new Set());
   const [listOpen, setListOpen] = useState(false);
+  const [documents, setDocuments_] = useState<Record<string, boolean>>(() => ({ ...props.documents }));
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
 
   // Which questions are shown is worked out here, from the answers in front of the person, so a question appears or
   // goes the moment the answer it depends on changes.
@@ -109,6 +111,18 @@ export function FormRunner(props: FormRunnerProps) {
   }
 
   const notKnownAllowed = props.allowNotKnown ?? ((q: FormQuestion) => !q.mustBe);
+
+  async function setDocuments(questionId: string, available: boolean) {
+    const before = documents[questionId] ?? false;
+    setDocuments_({ ...documents, [questionId]: available });
+    setDocumentsError(null);
+    try {
+      await props.onDocumentsChange?.(questionId, available);
+    } catch (error) {
+      setDocuments_({ ...documents, [questionId]: before });
+      setDocumentsError(error instanceof Error ? error.message : "Couldn't save that. Try again.");
+    }
+  }
   const submit = props.onSubmit
     ? async () => {
         const saved = await autosave.flush();
@@ -189,6 +203,11 @@ export function FormRunner(props: FormRunnerProps) {
             </p>
             <SaveStatus state={autosave.state} onRetry={() => void autosave.flush()} readOnly={readOnly} />
           </div>
+          {documentsError && (
+            <p role="alert" className="text-sm font-medium text-danger">
+              {documentsError}
+            </p>
+          )}
           <div
             role="progressbar"
             aria-label="Questions answered"
@@ -266,6 +285,9 @@ export function FormRunner(props: FormRunnerProps) {
                         onChange={(value) => change(question, value)}
                         disabled={readOnly}
                         notKnownAllowed={notKnownAllowed(question) && !readOnly}
+                        {...(props.onDocumentsChange && !readOnly
+                          ? { documentsAvailable: documents[question.id] ?? false, onDocumentsChange: (available: boolean) => void setDocuments(question.id, available) }
+                          : {})}
                         error={error}
                         variables={variables}
                         today={today}
