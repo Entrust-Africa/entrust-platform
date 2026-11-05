@@ -40,19 +40,22 @@ export default async function SummitLandingPage() {
       <section className="relative isolate flex min-h-[44rem] flex-col overflow-hidden bg-ink text-white lg:min-h-[53.5rem]">
         {/* Placeholder photo: the African Union Conference Centre sent by Entrust; swap for the event's own. */}
         <img src="/images/aicc.jpg" alt="" className="absolute inset-0 -z-30 size-full object-cover grayscale contrast-110" />
-        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.55)_0%,rgb(26_21_18/0.3)_28%,rgb(26_21_18/0.78)_55%,rgb(26_21_18/0.95)_100%)]" />
+        {/* Two scrims keep the white type readable on the bright buildings: one heavy under the text column on the left that
+            fades out toward the flags, and one under the nav and the foot of the hero. */}
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_right,rgb(26_21_18/0.92)_0%,rgb(26_21_18/0.82)_38%,rgb(26_21_18/0.5)_72%,rgb(26_21_18/0.3)_100%)]" />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.65)_0%,rgb(26_21_18/0)_22%,rgb(26_21_18/0)_60%,rgb(26_21_18/0.85)_100%)]" />
         <div aria-hidden className="halftone absolute inset-0 -z-10" />
 
         <SiteHeader overHero />
 
         <div id="top" className="relative z-10 mt-auto px-6 pb-16 lg:px-16 lg:pb-20">
           <div className="mx-auto max-w-[82rem]">
-            <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/80 uppercase">
+            <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/90 uppercase">
               <span aria-hidden className="h-px w-10 shrink-0 bg-amber" />
               {EVENT_LINE}
             </p>
             <h1 className="mt-6 max-w-4xl font-display text-[clamp(2.25rem,5.4vw,4.5rem)] leading-[1.02] uppercase">{HEADLINE}</h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/80">{INTRO}</p>
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/90">{INTRO}</p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/participate/register" className={amberButton}>
                 Register as a Delegate
