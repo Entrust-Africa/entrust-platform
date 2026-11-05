@@ -10,6 +10,7 @@ import {
   FolderGit2,
   GraduationCap,
   LayoutDashboard,
+  ShieldCheck,
   Mic2,
   TrendingUp,
   User,
@@ -61,6 +62,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
     }
   } else if (isSponsor) {
     navItems = [
+      { href: "/sponsor", label: "Cohorts", icon: Users, match: (path: string) => path.startsWith("/sponsor") },
       { href: "/reports", label: "Reports", icon: TrendingUp, match: (path: string) => path.startsWith("/reports") },
     ];
   } else if (access?.summitOnly) {
@@ -72,6 +74,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
       { href: "/modules", label: "Modules", icon: GraduationCap, match: (path: string) => path.startsWith("/modules") },
       { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path: string) => path.startsWith("/portfolio") },
       { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path: string) => path.startsWith("/pipeline") },
+      { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path: string) => path.startsWith("/consent") },
     ];
     if (access?.hasSummit) navItems.push(summitItem);
   }
