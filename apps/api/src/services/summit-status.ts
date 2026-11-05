@@ -61,7 +61,7 @@ export function publicStatus(status: ApplicationStatus, published = false): Publ
 export interface SummitChange {
   /** For the audit log, such as "summit.application.submitted". */
   action: string;
-  entityType: "summit_application" | "summit_period" | "commerce_edition" | "commerce_product" | "exhibitor_booking" | "commerce_payment" | "sponsor_enquiry" | "delegate_registration";
+  entityType: "summit_application" | "summit_period" | "commerce_edition" | "commerce_product" | "exhibitor_booking" | "commerce_payment" | "sponsor_enquiry" | "delegate_registration" | "sme_public_profile" | "b2b_enquiry";
   entityId: string;
   /** The applicant's organisation. A period has none. */
   organizationId: string | null;

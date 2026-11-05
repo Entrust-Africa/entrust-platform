@@ -252,6 +252,20 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   package has no capacity set. `GET /reports` lists six exports (delegates, exhibitors, sponsorship, payments, revenue, countries
   and sectors) and `GET /reports/{report}?format=xlsx|csv|pdf|json` makes one. They hold personal details, so they are for
   administrators and facilitators only, every export is in the audit log, and a CSV protects against formula injection.
+- **The SME digital directory.** A selected SME's public page is its own record (`summit.sme_public_profile`), never the application
+  itself. `POST /v1/summit/commerce/directory/profiles/prefill` (administrators and facilitators) makes a draft for each SME the
+  committee selected in the edition's assessment period (the final list must be approved), built from the public-facing answers only:
+  name, country, industry, products and services, capacity, export readiness, target markets, the investment it seeks, and the
+  contact's name and position. Revenue, employees, finances, documents, scores, findings and committee notes are never read, and
+  the contact's email and telephone are left empty for the business to decide on. Staff edit a draft with
+  `PATCH /directory/profiles/{id}`, record that **the business approved it** (`businessApproved`, with a note of how), and
+  **publish** it, which needs a complete profile the business approved, of an SME that is still selected. Changing the text of an
+  approved profile clears the approval and takes it off the site, because the business approved a different text, unless the change
+  is sent as a `minorCorrection`. The public reads only published profiles: `GET /v1/summit/commerce/smes` filters by country,
+  industry, product or service, target market and whether the business seeks investment, and lists what there is to filter by;
+  `GET /smes/{slug}` is one profile, with the address its QR code holds. `POST /smes/{slug}/enquiries` is the **B2B enquiry**
+  ("Request B2B Matchmaking"): the message goes to the business's owners by email, the sender gets a receipt, a sender is limited to a
+  few enquiries a day, and the organisers see and follow up each one under `/directory/enquiries`.
 
 ## Website deployment
 

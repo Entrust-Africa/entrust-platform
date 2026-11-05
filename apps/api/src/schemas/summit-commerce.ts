@@ -1,7 +1,12 @@
 import { z } from "@hono/zod-openapi";
 import {
+  B2B_INTERESTS,
+  B2B_STATUSES,
   BENEFIT_AREA_IDS,
   BOOKING_STATUSES,
+  PROFILE_STATUSES,
+  PROFILE_VERIFICATION,
+  PROFILE_TEXT_LIMITS,
   COMMERCE_REPORT_IDS,
   DELEGATE_STATUSES,
   REVENUE_STREAMS,
@@ -689,3 +694,198 @@ export const CommerceReportTable = z
     rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
   })
   .openapi("SummitCommerceReportTable");
+
+
+// ---- The SME directory ----
+
+const VerificationEnum = z.enum(PROFILE_VERIFICATION);
+const ProfileStatusEnum = z.enum(PROFILE_STATUSES);
+const listOf = (max: number) => z.array(z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.listItem)).max(max);
+
+export const DirectoryQuery = z.object({
+  country: CountryCode.optional(),
+  sector: z.string().trim().min(1).max(120).optional().openapi({ description: "An industry, as listed in the facets." }),
+  market: z.string().trim().min(1).max(120).optional().openapi({ description: "A target market, as listed in the facets." }),
+  q: z.string().trim().min(1).max(100).optional().openapi({ description: "Part of a name, a product or service, the industry or the description." }),
+  investment: z.enum(["true"]).optional().openapi({ description: "Only businesses seeking investment." }),
+  limit: z.coerce.number().int().min(1).max(100).default(24),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const DirectoryCard = z
+  .object({
+    slug: z.string(),
+    name: z.string(),
+    country: z.string(),
+    countryName: z.string(),
+    city: z.string().nullable(),
+    sector: z.string(),
+    summary: z.string(),
+    productsServices: z.array(z.string()),
+    targetMarkets: z.array(z.string()),
+    seeksInvestment: z.boolean(),
+    verification: VerificationEnum,
+    verificationLabel: z.string(),
+  })
+  .openapi("SummitDirectoryCard");
+
+export const DirectoryList = z
+  .object({
+    items: z.array(DirectoryCard),
+    total: Count.openapi({ description: "Businesses that match the filters." }),
+    facets: z
+      .object({
+        countries: z.array(z.object({ code: z.string(), name: z.string(), count: Count })),
+        sectors: z.array(z.object({ value: z.string(), count: Count })),
+        markets: z.array(z.object({ value: z.string(), count: Count })),
+        investment: Count.openapi({ description: "Businesses seeking investment." }),
+        all: Count.openapi({ description: "Every business in the directory." }),
+      })
+      .openapi({ description: "What there is to filter by, across the whole directory, whatever the filters." }),
+  })
+  .openapi("SummitDirectoryList");
+
+export const PublicProfileView = DirectoryCard.extend({
+  edition: z.object({ name: z.string(), venue: z.string(), datesNote: z.string() }),
+  productionCapacity: z.string().nullable(),
+  exportReadiness: z.string().nullable(),
+  investmentRequirements: z.string().nullable(),
+  website: z.string().nullable(),
+  contact: z.object({ name: z.string().nullable(), position: z.string().nullable(), email: z.string().nullable(), phone: z.string().nullable() }),
+  url: z.string().openapi({ description: "The profile's address: what its QR code holds." }),
+}).openapi("SummitPublicProfile");
+
+export const SlugParam = z.object({ slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN) });
+
+export const B2bEnquiryBody = z
+  .object({
+    interest: z.enum(B2B_INTERESTS),
+    name: z.string().trim().min(2).max(120),
+    email: Email,
+    phone: optionalText(40),
+    organisation: z.string().trim().min(1).max(160),
+    role: optionalText(120),
+    message: z.string().trim().min(10).max(2000),
+    consent: z.literal(true).openapi({ description: "The sender agreed to share these details with the business and the organisers. Must be true." }),
+    nickname: z.string().optional().openapi({ description: "A trap for bots: people leave it empty. Anything in it is discarded without a trace." }),
+  })
+  .openapi("SummitB2bEnquiryBody");
+
+export const B2bReceipt = z.object({ number: z.string().openapi({ example: "B2B-0012" }), businessName: z.string() }).openapi("SummitB2bReceipt");
+
+const ProfileContentFields = z.object({
+  displayName: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.name),
+  country: CountryCode,
+  city: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.short).nullable(),
+  sector: z.string().trim().min(1).max(120),
+  summary: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.summary),
+  productsServices: listOf(PROFILE_TEXT_LIMITS.list),
+  productionCapacity: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.short).nullable(),
+  exportReadiness: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.short).nullable(),
+  targetMarkets: listOf(PROFILE_TEXT_LIMITS.list),
+  seeksInvestment: z.boolean(),
+  investmentRequirements: z.string().trim().min(1).max(PROFILE_TEXT_LIMITS.short).nullable(),
+  verification: VerificationEnum,
+  website: z.string().trim().min(1).max(200).nullable(),
+  contactName: z.string().trim().min(1).max(120).nullable(),
+  contactPosition: z.string().trim().min(1).max(120).nullable(),
+  contactEmail: z.string().trim().max(254).pipe(z.email()).nullable(),
+  contactPhone: z.string().trim().min(5).max(40).nullable(),
+});
+
+export const ProfileItem = z
+  .object({
+    id: z.uuid(),
+    slug: z.string(),
+    status: ProfileStatusEnum,
+    displayName: z.string(),
+    country: z.string(),
+    sector: z.string(),
+    verification: VerificationEnum,
+    applicationNumber: z.string(),
+    businessApproved: z.boolean(),
+    publishedAt: Timestamp.nullable(),
+    updatedAt: Timestamp,
+    enquiries: Count,
+  })
+  .openapi("SummitProfileItem");
+
+export const ProfileDetail = ProfileContentFields.extend({
+  id: z.uuid(),
+  slug: z.string(),
+  status: ProfileStatusEnum,
+  application: z.object({ id: z.uuid(), number: z.string() }),
+  businessApprovedAt: Timestamp.nullable(),
+  businessApprovedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  approvalNote: z.string().nullable(),
+  publishedAt: Timestamp.nullable(),
+  publishedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  updatedAt: Timestamp,
+  problems: z.array(z.string()).openapi({ description: "What the profile still lacks before it can be approved and published." }),
+  url: z.string(),
+}).openapi("SummitProfileDetail");
+
+export const ProfileQuery = z.object({
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+  status: ProfileStatusEnum.optional(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const ProfileList = z
+  .object({ items: z.array(ProfileItem), total: Count, byStatus: z.record(z.string(), Count), selectedWithoutProfile: Count.openapi({ description: "Selected SMEs that have no profile yet." }) })
+  .openapi("SummitProfileList");
+
+export const ProfileParam = z.object({ id: z.uuid() });
+
+export const ProfilePatch = ProfileContentFields.partial()
+  .extend({
+    businessApproved: z.boolean().optional().openapi({ description: "Record that the business has seen the profile as it will appear and approved it. Needs a complete profile." }),
+    approvalNote: z.string().trim().min(1).max(1000).nullable().optional().openapi({ description: "How the business approved it: who, and by what means." }),
+    minorCorrection: z.boolean().optional().openapi({ description: "A typo or formatting fix: the business's approval stands. Without it, changing the text clears the approval and takes the profile off the site." }),
+  })
+  .openapi("SummitProfilePatch");
+
+export const PrefillBody = z
+  .object({ applicationId: z.uuid().optional().openapi({ description: "One selected SME's application. Default: every selected SME of the edition's assessment period." }) })
+  .openapi("SummitProfilePrefillBody");
+
+export const PrefillResult = z
+  .object({ created: Count, existing: Count, skipped: z.array(z.object({ number: z.string(), reason: z.string() })) })
+  .openapi("SummitProfilePrefillResult");
+
+export const B2bItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    status: z.enum(B2B_STATUSES),
+    interest: z.enum(B2B_INTERESTS),
+    profileId: z.uuid(),
+    businessName: z.string(),
+    fromName: z.string(),
+    fromEmail: z.string(),
+    fromPhone: z.string().nullable(),
+    fromOrganisation: z.string(),
+    fromRole: z.string().nullable(),
+    message: z.string(),
+    forwarded: z.boolean(),
+    handledBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+    handledAt: Timestamp.nullable(),
+    handlingNote: z.string().nullable(),
+    createdAt: Timestamp,
+  })
+  .openapi("SummitB2bItem");
+
+export const B2bQuery = z.object({
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+  status: z.enum(B2B_STATUSES).optional(),
+  profileId: z.uuid().optional(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const B2bList = z.object({ items: z.array(B2bItem), total: Count, byStatus: z.record(z.string(), Count) }).openapi("SummitB2bList");
+export const B2bParam = z.object({ id: z.uuid() });
+export const B2bHandledBody = z.object({ note: z.string().trim().min(1).max(1000).optional() }).openapi("SummitB2bHandledBody");
