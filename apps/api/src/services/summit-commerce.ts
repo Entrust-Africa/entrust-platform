@@ -114,6 +114,7 @@ export async function publicCatalogue(ctx: Pick<Ctx, "db">): Promise<CatalogueVi
       currency: edition.currency,
       pricesIncludeTax: edition.pricesIncludeTax,
       taxNote: edition.taxNote,
+      exhibitionZones: edition.exhibitionZones,
     },
     ...base,
     ...grouped,
@@ -144,6 +145,7 @@ const editionView = (row: EditionRow, productCount: number): EditionView => ({
   pricesIncludeTax: row.pricesIncludeTax,
   taxNote: row.taxNote,
   paymentMethods: row.paymentMethods,
+  exhibitionZones: row.exhibitionZones,
   applicationPeriodId: row.applicationPeriodId,
   complimentaryPerSme: row.complimentaryPerSme,
   isCurrent: row.isCurrent,
@@ -245,6 +247,7 @@ export async function createEdition(ctx: Ctx, body: z.infer<typeof EditionBody>)
         pricesIncludeTax: s.pricesIncludeTax,
         taxNote: s.taxNote,
         paymentMethods: [...s.paymentMethods],
+        exhibitionZones: [],
         complimentaryPerSme: s.complimentaryPerSme,
       };
       products = STANDARD_PRODUCTS.map((p) => ({ ...p }));
@@ -260,6 +263,7 @@ export async function createEdition(ctx: Ctx, body: z.infer<typeof EditionBody>)
         pricesIncludeTax: source.pricesIncludeTax,
         taxNote: source.taxNote,
         paymentMethods: source.paymentMethods,
+        exhibitionZones: source.exhibitionZones,
         complimentaryPerSme: source.complimentaryPerSme,
       };
       const rows = await tx

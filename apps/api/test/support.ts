@@ -117,7 +117,12 @@ export async function cleanup() {
   if (editions.length) {
     const editionIds = editions.map((e) => e.id);
     const products = await db.select({ id: schema.commerceProduct.id }).from(schema.commerceProduct).where(inArray(schema.commerceProduct.editionId, editionIds));
-    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, [...editionIds, ...products.map((p) => p.id)]));
+    const bookings = await db.select({ id: schema.exhibitorBooking.id }).from(schema.exhibitorBooking).where(inArray(schema.exhibitorBooking.editionId, editionIds));
+    const payments = await db.select({ id: schema.commercePayment.id }).from(schema.commercePayment).where(inArray(schema.commercePayment.editionId, editionIds));
+    const entityIds = [...editionIds, ...products.map((p) => p.id), ...bookings.map((b) => b.id), ...payments.map((p) => p.id)];
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, entityIds));
+    await db.delete(schema.commercePayment).where(inArray(schema.commercePayment.editionId, editionIds));
+    await db.delete(schema.exhibitorBooking).where(inArray(schema.exhibitorBooking.editionId, editionIds));
     await db.delete(schema.commerceEdition).where(inArray(schema.commerceEdition.id, editionIds));
   }
   // Summit registrations come from a public form and belong to no organisation, so the tests' own go by their address.

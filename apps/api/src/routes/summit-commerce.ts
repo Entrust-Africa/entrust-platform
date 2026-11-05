@@ -3,7 +3,20 @@ import { getDb } from "@entrust/db";
 import type { AppEnv } from "../app";
 import {
   AdminProduct,
+  AllocationBody,
+  ApproveBody,
+  BookingDetail,
+  BookingList,
+  BookingParam,
+  BookingQuery,
   Catalogue,
+  EvidenceUrl,
+  ExhibitorApplicationBody,
+  ExhibitorApplicationReceipt,
+  Payment,
+  PaymentParam,
+  PaymentPatch,
+  ReasonBody,
   EditionBody,
   EditionDetail,
   EditionList,
@@ -13,6 +26,8 @@ import {
   ProductParam,
   ProductPatch,
 } from "../schemas/summit-commerce";
+import { allocateBooth, applyForBooth, approveBooking, cancelBooking, confirmBooking, getBooking, listBookings, rejectBooking } from "../services/summit-commerce-bookings";
+import { evidenceUrl, updatePayment } from "../services/summit-commerce-payments";
 import { createEdition, createProduct, getEdition, listEditions, publicCatalogue, updateEdition, updateProduct } from "../services/summit-commerce";
 import { clearRouter, contextFor, json, listErrors, problem, writeErrors } from "./clear/shared";
 
@@ -41,7 +56,25 @@ const catalogueRoute = createRoute({
   responses: { 200: { description: "The catalogue; its edition is null before one is set up", content: json(Catalogue) } },
 });
 
-export const summitCommercePublic = publicRouter.openapi(catalogueRoute, async (c) => c.json(await publicCatalogue({ db: getDb() }), 200));
+const exhibitorApplicationRoute = createRoute({
+  method: "post",
+  path: "/exhibitor-applications",
+  tags,
+  summary: "Apply for exhibition space",
+  description:
+    "For the public exhibitor form: a business asks for one of the current edition's exhibition packages. It needs no sign-in. It records the application and emails a receipt; no booth is held and nothing is due until an administrator approves it. A second application from the same address for the same package replaces the first while it is waiting. A sold-out package takes no applications.",
+  request: { body: { required: true, content: json(ExhibitorApplicationBody) } },
+  responses: {
+    201: { description: "The application was recorded", content: json(ExhibitorApplicationReceipt) },
+    400: problem("The form isn't complete or valid"),
+    404: problem("Applications aren't open, or there is no such package"),
+    422: problem("The package is sold out"),
+  },
+});
+
+export const summitCommercePublic = publicRouter
+  .openapi(catalogueRoute, async (c) => c.json(await publicCatalogue({ db: getDb() }), 200))
+  .openapi(exhibitorApplicationRoute, async (c) => c.json(await applyForBooth({ db: getDb(), now: new Date() }, c.req.valid("json")), 201));
 
 // ---- Administrators ----
 
@@ -115,6 +148,102 @@ const updateProductRoute = createRoute({
   responses: { 200: { description: "The product", content: json(AdminProduct) }, ...admin, 422: writeErrors[422] },
 });
 
+const listBookingsRoute = createRoute({
+  method: "get",
+  path: "/exhibitor-bookings",
+  tags,
+  summary: "List the exhibitor applications and bookings",
+  description: "Newest first, for the current edition unless another is named, with how many are in each status. Entrust administrators and facilitators.",
+  request: { query: BookingQuery },
+  responses: { 200: { description: "The bookings", content: json(BookingList) }, ...listErrors, 403: admin[403] },
+});
+
+const getBookingRoute = createRoute({
+  method: "get",
+  path: "/exhibitor-bookings/{id}",
+  tags,
+  summary: "One exhibitor booking",
+  description: "Everything the applicant gave, the booth, the payment, and what still stops it being confirmed. Entrust administrators and facilitators.",
+  request: { params: BookingParam },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...admin },
+});
+
+const bookingActions = { ...admin, 409: writeErrors[409], 422: writeErrors[422] };
+
+const approveRoute = createRoute({
+  method: "post",
+  path: "/exhibitor-bookings/{id}/approve",
+  tags,
+  summary: "Approve an application",
+  description:
+    "Holds a booth of the package, opens a payment for the price the applicant applied at, and emails the payment instructions. Refused when the package has no booth left or is marked sold out. It does not confirm the booth: that waits for a verified payment.",
+  request: { params: BookingParam, body: { required: true, content: json(ApproveBody) } },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...bookingActions },
+});
+
+const rejectRoute = createRoute({
+  method: "post",
+  path: "/exhibitor-bookings/{id}/reject",
+  tags,
+  summary: "Reject an application",
+  description: "Releases any booth held, cancels an unpaid payment, and emails the applicant the reason.",
+  request: { params: BookingParam, body: { required: true, content: json(ReasonBody) } },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...bookingActions },
+});
+
+const cancelRoute = createRoute({
+  method: "post",
+  path: "/exhibitor-bookings/{id}/cancel",
+  tags,
+  summary: "Cancel a booking",
+  description:
+    "Releases the booth and cancels a payment that was never verified. A payment that was already confirmed is left as it is, for an administrator to refund. An applicant who held a booth is emailed.",
+  request: { params: BookingParam, body: { required: true, content: json(ReasonBody) } },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...bookingActions },
+});
+
+const allocationRoute = createRoute({
+  method: "put",
+  path: "/exhibitor-bookings/{id}/allocation",
+  tags,
+  summary: "Assign a booth number and zone",
+  description: "For an approved or confirmed booking. A booth number belongs to one held booking of the edition; a zone must be one of the edition's zones when it lists any. Send nulls to clear (not on a confirmed booking).",
+  request: { params: BookingParam, body: { required: true, content: json(AllocationBody) } },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...bookingActions },
+});
+
+const confirmRoute = createRoute({
+  method: "post",
+  path: "/exhibitor-bookings/{id}/confirm",
+  tags,
+  summary: "Confirm the booth",
+  description:
+    "Only for an approved booking whose payment has been verified and which has a booth number. Emails the exhibitor the booking confirmation. Nothing confirms a booking on its own.",
+  request: { params: BookingParam },
+  responses: { 200: { description: "The booking", content: json(BookingDetail) }, ...bookingActions },
+});
+
+const paymentRoute = createRoute({
+  method: "patch",
+  path: "/payments/{id}",
+  tags,
+  summary: "Record a payment",
+  description:
+    "The reference, method, amount received and proof of payment, and the status. Recording a reference or proof on a pending payment moves it to awaiting verification. Confirming needs a reference or proof and an amount that covers what is owed. Only an administrator changes the amount owed.",
+  request: { params: PaymentParam, body: { required: true, content: json(PaymentPatch) } },
+  responses: { 200: { description: "The payment", content: json(Payment) }, ...bookingActions },
+});
+
+const evidenceRoute = createRoute({
+  method: "get",
+  path: "/payments/{id}/evidence-url",
+  tags,
+  summary: "A link to the proof of payment",
+  description: "A short-lived download link. Entrust administrators and facilitators.",
+  request: { params: PaymentParam },
+  responses: { 200: { description: "The link", content: json(EvidenceUrl) }, ...admin },
+});
+
 export const summitCommerce = router
   .openapi(listEditionsRoute, async (c) => c.json(await listEditions(await contextFor(c.get("user"))), 200))
   .openapi(createEditionRoute, async (c) => c.json(await createEdition(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -127,4 +256,23 @@ export const summitCommerce = router
   )
   .openapi(updateProductRoute, async (c) =>
     c.json(await updateProduct(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
-  );
+  )
+  .openapi(listBookingsRoute, async (c) => c.json(await listBookings(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(getBookingRoute, async (c) => c.json(await getBooking(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(approveRoute, async (c) =>
+    c.json(await approveBooking(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(rejectRoute, async (c) =>
+    c.json(await rejectBooking(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(cancelRoute, async (c) =>
+    c.json(await cancelBooking(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(allocationRoute, async (c) =>
+    c.json(await allocateBooth(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(confirmRoute, async (c) => c.json(await confirmBooking(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(paymentRoute, async (c) =>
+    c.json(await updatePayment(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(evidenceRoute, async (c) => c.json(await evidenceUrl(await contextFor(c.get("user")), c.req.valid("param").id), 200));

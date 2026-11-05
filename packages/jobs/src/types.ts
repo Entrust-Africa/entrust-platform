@@ -58,6 +58,18 @@ export const SummitRegistrationEmailPropsSchema = z.object({
   number: z.string().min(1),
 });
 
+/**
+ * A message from the Summit's commercial side (bookings, sponsorship, delegates, payments): a heading, paragraphs, optional
+ * rows of details (reference, amount, booth) and an optional button. The service writes the words; one template draws them.
+ */
+export const SummitNoticeEmailPropsSchema = z.object({
+  heading: z.string().min(1),
+  greeting: z.string().min(1),
+  paragraphs: z.array(z.string().min(1)).min(1),
+  details: z.array(z.object({ label: z.string().min(1), value: z.string().min(1) })).default([]),
+  action: z.object({ label: z.string().min(1), url: z.string().url() }).optional(),
+});
+
 const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("test"),
@@ -86,6 +98,10 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("summit-registration"),
     props: SummitRegistrationEmailPropsSchema,
+  }),
+  BaseEmailSchema.extend({
+    template: z.literal("summit-notice"),
+    props: SummitNoticeEmailPropsSchema,
   }),
 ]);
 

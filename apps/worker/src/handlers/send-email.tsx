@@ -6,6 +6,7 @@ import {
   InvitationEmail,
   PasswordResetEmail,
   SummitClarificationEmail,
+  SummitNoticeEmail,
   SummitRegistrationEmail,
   SummitResultEmail,
   VerificationEmail,
@@ -68,6 +69,17 @@ export async function handleSendEmail(jobData: SendEmailJobData) {
       break;
     case "summit-registration":
       reactElement = <SummitRegistrationEmail fullName={data.props.fullName} passName={data.props.passName} number={data.props.number} />;
+      break;
+    case "summit-notice":
+      reactElement = (
+        <SummitNoticeEmail
+          heading={data.props.heading}
+          greeting={data.props.greeting}
+          paragraphs={data.props.paragraphs}
+          details={data.props.details}
+          {...(data.props.action ? { action: data.props.action } : {})}
+        />
+      );
       break;
     case "test":
     default:

@@ -1,5 +1,15 @@
 import { z } from "@hono/zod-openapi";
-import { BENEFIT_AREA_IDS, MAX_FEATURES, MAX_PRICE_CENTS, PRODUCT_KINDS, PRODUCT_STATUSES, SLUG_PATTERN } from "@entrust/summit-engine";
+import {
+  BENEFIT_AREA_IDS,
+  BOOKING_STATUSES,
+  MAX_FEATURES,
+  MAX_PRICE_CENTS,
+  PAYMENT_STATUSES,
+  PAYMENT_SUBJECTS,
+  PRODUCT_KINDS,
+  PRODUCT_STATUSES,
+  SLUG_PATTERN,
+} from "@entrust/summit-engine";
 
 // What the commercial endpoints take and give: the catalogue the website shows, and the administrators' editing of
 // editions and products. The services build these shapes.
@@ -48,6 +58,7 @@ export const PublicEdition = z
     currency: z.string().openapi({ example: "USD" }),
     pricesIncludeTax: z.boolean().nullable().openapi({ description: "Null until the organisers confirm whether prices include taxes." }),
     taxNote: z.string(),
+    exhibitionZones: z.array(z.string()).openapi({ description: "The zones an exhibitor can ask for. Empty: the form takes free text." }),
   })
   .openapi("SummitPublicEdition");
 
@@ -86,6 +97,7 @@ export const Edition = z
     pricesIncludeTax: z.boolean().nullable(),
     taxNote: z.string(),
     paymentMethods: z.array(PaymentMethodBody),
+    exhibitionZones: z.array(z.string()),
     applicationPeriodId: z.uuid().nullable(),
     complimentaryPerSme: z.number().int(),
     isCurrent: z.boolean(),
@@ -148,6 +160,7 @@ export const EditionPatch = z
     pricesIncludeTax: z.boolean().nullable(),
     taxNote: z.string().trim().min(1).max(600),
     paymentMethods: z.array(PaymentMethodBody).max(10),
+    exhibitionZones: z.array(z.string().trim().min(1).max(80)).max(40),
     applicationPeriodId: z.uuid().nullable(),
     complimentaryPerSme: z.number().int().min(0).max(20),
     isCurrent: z.literal(true).openapi({ description: "Makes this the edition the website sells. The previous current edition stops being it." }),
@@ -188,3 +201,154 @@ export const ProductPatch = productFields
   .partial()
   .extend({ markedSoldOut: z.boolean().optional() })
   .openapi("SummitProductPatch");
+
+
+// ---- Exhibitor bookings ----
+
+const CountryCode = z.string().trim().toUpperCase().pipe(z.string().regex(/^[A-Z]{2}$/, "Use a two-letter country code.")).openapi({ example: "ET" });
+const Email = z.string().trim().max(254).pipe(z.email());
+const BookingStatusEnum = z.enum(BOOKING_STATUSES);
+const PaymentStatusEnum = z.enum(PAYMENT_STATUSES);
+const optionalText = (max: number) => z.string().trim().max(max).optional();
+
+export const ExhibitorApplicationBody = z
+  .object({
+    packageSlug: z.string().trim().min(1).max(60).openapi({ example: "standard-sme-booth", description: "The exhibition package, by its address in the catalogue." }),
+    companyName: z.string().trim().min(1).max(160),
+    country: CountryCode,
+    registrationDetails: z.string().trim().min(2).max(500).openapi({ description: "The business registration number and registering authority." }),
+    contactName: z.string().trim().min(2).max(120),
+    position: z.string().trim().min(1).max(120),
+    email: Email,
+    phone: z.string().trim().min(5).max(40).openapi({ description: "Telephone or WhatsApp." }),
+    sector: z.string().trim().min(1).max(120),
+    productsServices: z.string().trim().min(2).max(1000),
+    website: optionalText(200),
+    preferredZone: optionalText(80),
+    boothRequirements: optionalText(1000),
+    comments: optionalText(1000),
+    consent: z.literal(true).openapi({ description: "The applicant agreed to be contacted about the application. Must be true." }),
+    nickname: z.string().optional().openapi({ description: "A trap for bots: people leave it empty. Anything in it is discarded without a trace." }),
+  })
+  .openapi("SummitExhibitorApplicationBody");
+
+export const ExhibitorApplicationReceipt = z
+  .object({
+    number: z.string().openapi({ example: "EXH-0007" }),
+    packageName: z.string(),
+    amountCents: z.number().int(),
+    price: z.string().openapi({ example: "$500" }),
+  })
+  .openapi("SummitExhibitorApplicationReceipt");
+
+export const Payment = z
+  .object({
+    id: z.uuid(),
+    subjectType: z.enum(PAYMENT_SUBJECTS),
+    subjectId: z.uuid(),
+    status: PaymentStatusEnum,
+    amountDueCents: z.number().int(),
+    amountReceivedCents: z.number().int().nullable(),
+    method: z.string().nullable(),
+    reference: z.string().nullable(),
+    evidence: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+    note: z.string().nullable(),
+    verifiedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+    verifiedAt: Timestamp.nullable(),
+    updatedAt: Timestamp,
+  })
+  .openapi("SummitPayment");
+
+export const BookingItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string().openapi({ example: "EXH-0007" }),
+    status: BookingStatusEnum,
+    productId: z.uuid(),
+    packageName: z.string(),
+    packageSlug: z.string(),
+    companyName: z.string(),
+    country: z.string(),
+    sector: z.string(),
+    contactName: z.string(),
+    email: z.string(),
+    phone: z.string(),
+    amountCents: z.number().int(),
+    boothNumber: z.string().nullable(),
+    zone: z.string().nullable(),
+    paymentStatus: PaymentStatusEnum.nullable().openapi({ description: "Null until the application is approved and a payment is opened." }),
+    createdAt: Timestamp,
+    decidedAt: Timestamp.nullable(),
+  })
+  .openapi("SummitBookingItem");
+
+export const BookingDetail = BookingItem.extend({
+  registrationDetails: z.string(),
+  position: z.string(),
+  productsServices: z.string(),
+  website: z.string().nullable(),
+  preferredZone: z.string().nullable(),
+  boothRequirements: z.string().nullable(),
+  comments: z.string().nullable(),
+  decisionNote: z.string().nullable(),
+  decidedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+  confirmedAt: Timestamp.nullable(),
+  payment: Payment.nullable(),
+  blockers: z.array(z.string()).openapi({ description: "Why this booking can't be confirmed yet. Empty when it can." }),
+  packageAvailability: ProductAvailability,
+}).openapi("SummitBookingDetail");
+
+export const BookingQuery = z.object({
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+  status: BookingStatusEnum.optional(),
+  productId: z.uuid().optional(),
+  q: z.string().trim().max(100).optional().openapi({ description: "Part of the company name, contact, email or reference." }),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const BookingList = z
+  .object({
+    items: z.array(BookingItem),
+    total: z.number().int(),
+    byStatus: z.record(z.string(), z.number().int()).openapi({ description: "How many bookings of the edition are in each status, across all of them." }),
+  })
+  .openapi("SummitBookingList");
+
+export const BookingParam = z.object({ id: z.uuid() });
+
+export const ApproveBody = z
+  .object({
+    note: optionalText(1000).openapi({ description: "Sent to the applicant with the approval." }),
+    boothNumber: optionalText(20),
+    zone: optionalText(80),
+  })
+  .openapi("SummitBookingApproveBody");
+
+export const ReasonBody = z.object({ reason: z.string().trim().min(2).max(1000) }).openapi("SummitBookingReasonBody");
+
+export const AllocationBody = z
+  .object({
+    boothNumber: z.string().trim().min(1).max(20).nullable(),
+    zone: z.string().trim().min(1).max(80).nullable(),
+  })
+  .openapi("SummitBookingAllocationBody");
+
+export const PaymentParam = z.object({ id: z.uuid() });
+
+export const PaymentPatch = z
+  .object({
+    status: PaymentStatusEnum,
+    amountDueCents: z.number().int().min(0).max(MAX_PRICE_CENTS).openapi({ description: "Administrators only: what is owed, if it was negotiated." }),
+    amountReceivedCents: z.number().int().min(0).max(MAX_PRICE_CENTS).nullable(),
+    method: z.string().trim().min(1).max(40).nullable().openapi({ description: "The id of one of the edition's payment methods." }),
+    reference: z.string().trim().min(1).max(200).nullable(),
+    note: z.string().trim().min(1).max(1000).nullable(),
+    evidenceFileId: z.uuid().nullable().openapi({ description: "A file uploaded to Entrust's organisation through the files API: the proof of payment." }),
+  })
+  .partial()
+  .openapi("SummitPaymentPatch");
+
+export const EvidenceUrl = z
+  .object({ downloadUrl: z.string(), expiresInSeconds: z.number().int(), fileName: z.string(), contentType: z.string() })
+  .openapi("SummitPaymentEvidenceUrl");

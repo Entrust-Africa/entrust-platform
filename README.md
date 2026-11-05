@@ -209,6 +209,19 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   descriptions of the additional opportunities, and having no capacity set are proposals in that file for the organisers to confirm.
 - `GET /v1/summit/commerce/catalogue` is public: the current edition's published products with prices ("Complimentary" for
   zero), what is left, and the tax note. It holds no payment instructions, no draft and nothing about who has booked.
+- **Exhibitor bookings and payments.** `POST /v1/summit/commerce/exhibitor-applications` is the public form: it records an
+  application at today's price and emails a receipt, and holds no booth. Then an administrator (or facilitator) works the
+  booking, under `/exhibitor-bookings`: **approve** (holds one of the package's booths, opens a payment, emails the payment
+  instructions from the edition's payment methods; refused when the package is full or marked sold out), assign a booth
+  number and zone (**allocation**; a number belongs to one held booking), and **confirm**, which is refused until the booking
+  is approved, its payment is verified and it has a booth number, and then emails the booking confirmation. **Reject** and
+  **cancel** release the booth and cancel an unpaid payment; a confirmed payment is left for a person to refund. Only
+  approved and confirmed bookings count against a package's capacity, so a package shows sold out as soon as they fill it.
+- A **payment** (`PATCH /payments/{id}`) is recorded by a person: the reference, method, amount received and the proof of
+  payment (a file uploaded to Entrust's organisation through the files API). Recording a reference or proof moves it to
+  "awaiting verification"; only an explicit change to "confirmed" marks it paid, and that needs a reference or proof and an
+  amount that covers what is owed. Only an administrator changes the amount owed. The edition's payment methods and tax note
+  are what the approval email says; none are invented. `SUMMIT_SITE_URL` (the public ADTIS site) gives the emails a button.
 
 ## Website deployment
 
