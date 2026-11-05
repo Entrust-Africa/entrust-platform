@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BENEFIT_AREAS,
+  COMMERCE_REPORTS,
+  boothFigures,
+  boothTotals,
+  revenueOf,
   badgeProblems,
   badgeState,
   parseBadgeCode,
@@ -238,5 +242,47 @@ describe("delegate badges", () => {
     expect(parseBadgeCode("")).toBeNull();
     expect(parseBadgeCode("hello world")).toBeNull();
     expect(parseBadgeCode("https://example.com/other/path")).toBeNull();
+  });
+});
+
+describe("dashboard figures", () => {
+  const f = (status: "pending" | "awaiting_verification" | "confirmed" | "cancelled" | "refunded", dueCents: number, receivedCents = dueCents, count = 1) => ({ status, count, dueCents, receivedCents });
+
+  it("counts only verified payments as received, and the unverified as outstanding", () => {
+    const r = revenueOf([f("confirmed", 50000), f("pending", 90000), f("awaiting_verification", 25000), f("confirmed", 6500)]);
+    expect(r).toEqual({ expectedCents: 171500, receivedCents: 56500, outstandingCents: 115000, refundedCents: 0 });
+  });
+
+  it("leaves cancelled payments out of the expected revenue, and shows refunds on their own", () => {
+    const r = revenueOf([f("cancelled", 100000), f("refunded", 40000), f("confirmed", 10000)]);
+    expect(r).toEqual({ expectedCents: 10000, receivedCents: 10000, outstandingCents: 0, refundedCents: 40000 });
+  });
+
+  it("expects nothing from nothing", () => {
+    expect(revenueOf([])).toEqual({ expectedCents: 0, receivedCents: 0, outstandingCents: 0, refundedCents: 0 });
+  });
+
+  it("is not thrown by an overpayment: the expected revenue is what was due", () => {
+    expect(revenueOf([f("confirmed", 50000, 55000)])).toMatchObject({ expectedCents: 50000, receivedCents: 55000 });
+  });
+
+  it("works out what is left in a package, and sold out at capacity or when marked", () => {
+    const base = { submitted: 4, reserved: 2, confirmed: 1, markedSoldOut: false };
+    expect(boothFigures({ ...base, capacity: 10 })).toMatchObject({ available: 7, soldOut: false });
+    expect(boothFigures({ ...base, capacity: 3 })).toMatchObject({ available: 0, soldOut: true });
+    expect(boothFigures({ ...base, capacity: 2 })).toMatchObject({ available: 0, soldOut: true });
+    expect(boothFigures({ ...base, capacity: null })).toMatchObject({ available: null, soldOut: false });
+    expect(boothFigures({ ...base, capacity: 50, markedSoldOut: true }).soldOut).toBe(true);
+  });
+
+  it("totals the booths of the packages that have a capacity, and says when some have none", () => {
+    const pkg = (capacity: number | null, reserved: number, confirmed: number) => ({ capacity, submitted: 0, reserved, confirmed, markedSoldOut: false });
+    expect(boothTotals([pkg(10, 2, 1), pkg(5, 0, 0)])).toEqual({ capacitySet: true, totalBooths: 15, available: 12 });
+    expect(boothTotals([pkg(10, 2, 1), pkg(null, 3, 0)])).toEqual({ capacitySet: false, totalBooths: 10, available: 7 });
+    expect(boothTotals([pkg(null, 0, 0)])).toEqual({ capacitySet: false, totalBooths: null, available: null });
+  });
+
+  it("lists the six reports of the instructions", () => {
+    expect(COMMERCE_REPORTS.map((r) => r.id)).toEqual(["delegates", "exhibitors", "sponsorship", "payments", "revenue", "country_sector"]);
   });
 });

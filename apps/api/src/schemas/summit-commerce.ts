@@ -2,7 +2,9 @@ import { z } from "@hono/zod-openapi";
 import {
   BENEFIT_AREA_IDS,
   BOOKING_STATUSES,
+  COMMERCE_REPORT_IDS,
   DELEGATE_STATUSES,
+  REVENUE_STREAMS,
   ENQUIRY_STATUSES,
   MAX_FEATURES,
   MAX_PRICE_CENTS,
@@ -584,3 +586,106 @@ export const DelegatePatch = z
 export const CheckInQuery = z.object({
   code: z.string().trim().min(1).max(300).openapi({ description: "What the QR code holds (the badge's address), the token in it, or the registration reference." }),
 });
+
+
+// ---- The dashboard and the reports ----
+
+const Count = z.number().int();
+const Cents = z.number().int();
+const Stream = z.enum(REVENUE_STREAMS);
+
+export const DashboardQuery = z.object({ editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }) });
+
+export const CommerceDashboard = z
+  .object({
+    edition: z.object({ id: z.uuid(), slug: z.string(), name: z.string(), expectedAttendance: Count.nullable(), selectedSmes: Count.nullable() }),
+    generatedAt: Timestamp,
+    registrations: z.object({
+      total: Count.openapi({ description: "Registered delegates, not counting cancelled ones." }),
+      confirmed: Count.openapi({ description: "Registered delegates whose payment is verified (or who owe nothing)." }),
+      pending: Count.openapi({ description: "Registered delegates whose payment is pending or awaiting verification." }),
+      cancelled: Count,
+      checkedIn: Count,
+      byCategory: z.array(z.object({ productId: z.uuid(), name: z.string(), registered: Count, confirmed: Count, pending: Count })),
+      byCountry: z.array(z.object({ country: z.string(), name: z.string(), count: Count })),
+      bySector: z.array(z.object({ sector: z.string(), count: Count })),
+    }),
+    exhibition: z.object({
+      capacitySet: z.boolean().openapi({ description: "False while any package has no capacity set, so the totals below are partial." }),
+      totalBooths: Count.nullable(),
+      available: Count.nullable(),
+      submitted: Count.openapi({ description: "Applications waiting for a decision." }),
+      reserved: Count.openapi({ description: "Approved: a booth is held, payment not yet verified." }),
+      confirmed: Count.openapi({ description: "Payment verified and booth confirmed." }),
+      byPackage: z.array(
+        z.object({
+          productId: z.uuid(),
+          name: z.string(),
+          capacity: Count.nullable(),
+          submitted: Count,
+          reserved: Count,
+          confirmed: Count,
+          available: Count.nullable(),
+          soldOut: z.boolean(),
+        }),
+      ),
+    }),
+    sponsorship: z.object({
+      enquiries: Count.openapi({ description: "All enquiries, whatever their status." }),
+      confirmed: Count,
+      valueCents: Cents.openapi({ description: "What the confirmed sponsorships are worth." }),
+      pipelineCount: Count.openapi({ description: "Enquiries still being worked." }),
+      pipelineValueCents: Cents,
+      byStatus: z.record(z.string(), Count),
+      byProduct: z.array(
+        z.object({ productId: z.uuid(), name: z.string(), kind: Kind, enquiries: Count, confirmed: Count, confirmedValueCents: Cents, openValueCents: Cents }),
+      ),
+    }),
+    revenue: z.object({
+      expectedCents: Cents.openapi({ description: "Committed: payments pending, awaiting verification or confirmed." }),
+      receivedCents: Cents.openapi({ description: "Only payments an administrator has verified." }),
+      outstandingCents: Cents,
+      refundedCents: Cents,
+      potentialCents: Cents.openapi({ description: "Applications and enquiries still being worked. Not part of the expected revenue." }),
+      byStream: z.array(z.object({ stream: Stream, label: z.string(), expectedCents: Cents, receivedCents: Cents, outstandingCents: Cents, refundedCents: Cents })),
+      byProduct: z.array(
+        z.object({
+          productId: z.uuid(),
+          name: z.string(),
+          kind: Kind,
+          stream: Stream,
+          count: Count,
+          expectedCents: Cents,
+          receivedCents: Cents,
+          outstandingCents: Cents,
+          refundedCents: Cents,
+        }),
+      ),
+    }),
+  })
+  .openapi("SummitCommerceDashboard");
+
+export const CommerceReportKind = z
+  .object({ id: z.enum(COMMERCE_REPORT_IDS), number: Count, title: z.string(), purpose: z.string(), classification: z.string() })
+  .openapi("SummitCommerceReportKind");
+
+export const CommerceReportCatalogue = z.object({ items: z.array(CommerceReportKind) }).openapi("SummitCommerceReportCatalogue");
+
+export const CommerceReportParam = z.object({ report: z.enum(COMMERCE_REPORT_IDS) });
+
+export const CommerceReportQuery = z.object({
+  format: z.enum(["csv", "xlsx", "pdf", "json"]).default("json").openapi({ description: "csv and xlsx for analysis, pdf for formal reporting, json for a screen." }),
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+});
+
+export const CommerceReportTable = z
+  .object({
+    report: CommerceReportKind,
+    edition: z.object({ id: z.uuid(), name: z.string() }),
+    generatedAt: Timestamp,
+    generatedBy: z.string(),
+    records: Count,
+    columns: z.array(z.object({ key: z.string(), label: z.string(), numeric: z.boolean() })),
+    rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
+  })
+  .openapi("SummitCommerceReportTable");

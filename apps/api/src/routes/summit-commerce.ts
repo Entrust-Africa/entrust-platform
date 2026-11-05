@@ -1,4 +1,4 @@
-import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import type { AppEnv } from "../app";
 import {
@@ -12,6 +12,12 @@ import {
   BadgeParam,
   Catalogue,
   CheckInQuery,
+  CommerceDashboard,
+  CommerceReportCatalogue,
+  CommerceReportParam,
+  CommerceReportQuery,
+  CommerceReportTable,
+  DashboardQuery,
   DelegateDetail,
   DelegateList,
   DelegateParam,
@@ -45,6 +51,8 @@ import {
   ProductPatch,
 } from "../schemas/summit-commerce";
 import { allocateBooth, applyForBooth, approveBooking, cancelBooking, confirmBooking, getBooking, listBookings, rejectBooking } from "../services/summit-commerce-bookings";
+import { getCommerceDashboard } from "../services/summit-commerce-dashboard";
+import { exportCommerceReport, listCommerceReports, viewCommerceReport } from "../services/summit-commerce-reports";
 import { changeEnquiryStatus, getEnquiry, listEnquiries, submitEnquiry, updateEnquiry } from "../services/summit-commerce-enquiries";
 import { cancelDelegate, checkIn, getDelegate, listDelegates, lookupDelegate, publicBadge, registerDelegate, resendConfirmation, updateDelegate } from "../services/summit-commerce-delegates";
 import { evidenceUrl, updatePayment } from "../services/summit-commerce-payments";
@@ -424,6 +432,47 @@ const checkInRoute = createRoute({
   responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
 });
 
+const FILE_CONTENT = {
+  "text/csv": { schema: z.string() },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { schema: z.string().openapi({ format: "binary" }) },
+  "application/pdf": { schema: z.string().openapi({ format: "binary" }) },
+};
+
+const dashboardRoute = createRoute({
+  method: "get",
+  path: "/dashboard",
+  tags,
+  summary: "The commercial dashboard",
+  description:
+    "Registrations (confirmed, pending, by category, country and sector), exhibition space (booths available, reserved, confirmed, by package), sponsorship (enquiries, confirmed sponsors, value, pipeline) and revenue (expected, received, outstanding, by stream and item) for one edition. Received counts only payments an administrator has verified. Entrust administrators and facilitators.",
+  request: { query: DashboardQuery },
+  responses: { 200: { description: "The dashboard", content: json(CommerceDashboard) }, ...listErrors, 403: admin[403] },
+});
+
+const reportsRoute = createRoute({
+  method: "get",
+  path: "/reports",
+  tags,
+  summary: "The commercial reports",
+  description: "The six reports an administrator can export: delegates, exhibitors, sponsorship, payments, revenue, and countries and sectors.",
+  responses: { 200: { description: "The reports", content: json(CommerceReportCatalogue) }, ...listErrors, 403: admin[403] },
+});
+
+const reportRoute = createRoute({
+  method: "get",
+  path: "/reports/{report}",
+  tags,
+  summary: "One commercial report",
+  description:
+    "As Excel, CSV or PDF, or as JSON for a screen. The reports hold personal details, so they are for Entrust administrators and facilitators, and every export, JSON included, is written to the audit log. A CSV protects against formula injection.",
+  request: { params: CommerceReportParam, query: CommerceReportQuery },
+  responses: {
+    200: { description: "The report", content: { ...json(CommerceReportTable), ...FILE_CONTENT } },
+    ...listErrors,
+    403: admin[403],
+  },
+});
+
 export const summitCommerce = router
   .openapi(listEditionsRoute, async (c) => c.json(await listEditions(await contextFor(c.get("user"))), 200))
   .openapi(createEditionRoute, async (c) => c.json(await createEdition(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -474,4 +523,23 @@ export const summitCommerce = router
     c.json(await cancelDelegate(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
   )
   .openapi(resendRoute, async (c) => c.json(await resendConfirmation(await contextFor(c.get("user")), c.req.valid("param").id), 200))
-  .openapi(checkInRoute, async (c) => c.json(await checkIn(await contextFor(c.get("user")), c.req.valid("param").id), 200));
+  .openapi(checkInRoute, async (c) => c.json(await checkIn(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(dashboardRoute, async (c) => c.json(await getCommerceDashboard(await contextFor(c.get("user")), c.req.valid("query").editionId), 200))
+  .openapi(reportsRoute, async (c) => c.json(await listCommerceReports(await contextFor(c.get("user"))), 200))
+  .openapi(reportRoute, async (c) => {
+    const ctx = await contextFor(c.get("user"));
+    const { report } = c.req.valid("param");
+    const { format, editionId } = c.req.valid("query");
+    if (format === "json") return c.json(await viewCommerceReport(ctx, report, editionId), 200);
+    const file = await exportCommerceReport(ctx, report, format, editionId);
+    // The file is for the person who asked, so no shared cache may keep it.
+    return new Response(new Uint8Array(file.body), {
+      status: 200,
+      headers: {
+        "Content-Type": file.contentType,
+        "Content-Disposition": `attachment; filename="${file.filename}"`,
+        "Content-Length": String(file.body.byteLength),
+        "Cache-Control": "private, no-store",
+      },
+    }) as never;
+  });
