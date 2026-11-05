@@ -61,6 +61,26 @@ export function PageTitle({ title, intro, children }: { title: string; intro?: s
   );
 }
 
+/** What a screen says while no edition exists, so that its lists aren't just empty. */
+export function NoEdition() {
+  return (
+    <Card className="space-y-3 p-6">
+      <h1 className="font-display text-2xl font-bold text-ink">No edition yet</h1>
+      <p className="max-w-2xl text-base text-ink-2">
+        An edition is one year of ADTIS: its exhibition packages, sponsorship levels and delegate passes with their prices, the booths and passes on sale, and everyone who registers for it.
+        None has been set up, so there is nothing to show on these screens yet.
+      </p>
+      <p className="max-w-2xl text-base text-ink-2">
+        An Entrust administrator starts one in Settings, by choosing the standard ADTIS catalogue. After that, every exhibitor application, sponsorship enquiry and delegate registration from the website
+        appears here.
+      </p>
+      <Link href="/summit/commerce/settings" className="inline-block font-semibold text-brand-700 underline underline-offset-2">
+        Go to Settings
+      </Link>
+    </Card>
+  );
+}
+
 export function Pill({ look }: { look: Look | undefined }) {
   return look ? <StatusBadge tone={look.tone}>{look.label}</StatusBadge> : null;
 }

@@ -74,7 +74,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     const summit: NavItem[] = [];
     // Only an administrator sets application periods.
     if (user?.staffRole === "admin") {
-      summit.push({ href: "/summit/admin/periods", label: "Applications", icon: FileText, match: (path) => path.startsWith("/summit") && !path.startsWith("/summit/commerce") });
+      summit.push({ href: "/summit/admin/periods", label: "Application periods", icon: FileText, match: (path) => path.startsWith("/summit") && !path.startsWith("/summit/commerce") });
     }
     // The ADTIS exhibition, sponsorship and delegate screens are for administrators and facilitators.
     if (user?.staffRole === "admin" || user?.staffRole === "facilitator") {

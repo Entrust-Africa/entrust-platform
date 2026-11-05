@@ -15,11 +15,11 @@ export interface PilotCohort {
   status: CohortStatus;
 }
 
-// Fixed in code, like the split itself: the leather pilot came first and is over, the agro-processing cohort is the current one.
+// Fixed in code, like the split itself: both pilot cohorts are over, so none is active. A new cohort will be the first active one.
 // When cohorts and enrolments are managed in the database (#56), the status should come from a cohort's dates instead.
 export const PILOT_COHORTS: readonly PilotCohort[] = [
   { number: 1, name: "Leather", description: "The leather businesses in the export readiness diagnostic.", status: "previous" },
-  { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme.", status: "active" },
+  { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme.", status: "previous" },
 ];
 
 /** An application belongs to cohort 2 when the programme it was loaded for has "agro" in its name. */

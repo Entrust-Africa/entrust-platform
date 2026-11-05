@@ -328,9 +328,16 @@ const toItem = (row: ProfileRow, applicationNumber: string, enquiries: number) =
   enquiries,
 });
 
+/** The edition asked for (a 404 if it doesn't exist), else the current one, else none. */
+async function editionToList(db: Executor, editionId?: string) {
+  return editionId ? pickEdition(db, editionId) : currentEdition(db);
+}
+
 export async function listProfiles(ctx: Ctx, query: z.infer<typeof ProfileQuery>): Promise<z.infer<typeof ProfileList>> {
   requireHandler(ctx, "list directory profiles");
-  const edition = await pickEdition(ctx.db, query.editionId);
+  // No edition yet: an empty list, as the bookings, delegates and sponsor lists give, not a 404.
+  const edition = await editionToList(ctx.db, query.editionId);
+  if (!edition) return { items: [], total: 0, byStatus: Object.fromEntries(PROFILE_STATUSES.map((s) => [s, 0])), selectedWithoutProfile: 0 };
   const p = schema.smePublicProfile;
   const where = and(
     eq(p.editionId, edition.id),
@@ -554,7 +561,8 @@ const b2bItem = (r: { e: typeof schema.b2bEnquiry.$inferSelect; business: string
 
 export async function listB2bEnquiries(ctx: Ctx, query: z.infer<typeof B2bQuery>): Promise<z.infer<typeof B2bList>> {
   requireHandler(ctx, "list B2B enquiries");
-  const edition = await pickEdition(ctx.db, query.editionId);
+  const edition = await editionToList(ctx.db, query.editionId);
+  if (!edition) return { items: [], total: 0, byStatus: Object.fromEntries(B2B_STATUSES.map((s) => [s, 0])) };
   const e = schema.b2bEnquiry;
   const where = and(
     eq(e.editionId, edition.id),

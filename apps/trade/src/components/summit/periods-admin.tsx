@@ -70,7 +70,7 @@ function PeriodForm({ period, onDone }: { period?: SummitPeriod; onDone: () => v
         <label htmlFor={`p-name-${id}`} className="block text-base font-semibold text-ink">
           Name
         </label>
-        <input id={`p-name-${id}`} value={name} onChange={(e) => setName(e.target.value)} required maxLength={160} className={textInput(false)} />
+        <input id={`p-name-${id}`} value={name} onChange={(e) => setName(e.target.value)} required maxLength={160} placeholder="ADTIS 2027 applications" className={textInput(false)} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -137,7 +137,7 @@ export function PeriodsAdmin({ periods }: { periods: SummitPeriod[] }) {
         <h2 id="periods-title" className="font-display text-xl font-bold text-ink">
           Periods
         </h2>
-        {periods.length === 0 && <p className="text-base text-ink-2">No period has been set yet.</p>}
+        {periods.length === 0 && <p className="text-base text-ink-2">No period has been set yet, so businesses can't apply. Open one above when the dates are decided.</p>}
         {periods.map((period) => (
           <Card key={period.id} className="space-y-3 p-5">
             <div className="flex flex-wrap items-center gap-2">

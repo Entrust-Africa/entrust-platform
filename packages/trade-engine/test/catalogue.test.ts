@@ -165,9 +165,9 @@ describe("the catalogue", () => {
     expect(buildCatalogue([]).map((c) => [c.number, c.count])).toEqual([[1, 0], [2, 0]]);
   });
 
-  it("says which cohort is active and which is previous", () => {
-    expect(buildCatalogue([]).map((c) => [c.number, c.status])).toEqual([[1, "previous"], [2, "active"]]);
-    expect(PILOT_COHORTS.map((c) => c.status)).toEqual(["previous", "active"]);
+  it("says both pilot cohorts are previous, with none active", () => {
+    expect(buildCatalogue([]).map((c) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"]]);
+    expect(PILOT_COHORTS.map((c) => c.status)).toEqual(["previous", "previous"]);
   });
 });
 
