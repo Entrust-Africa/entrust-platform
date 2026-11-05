@@ -3,10 +3,10 @@
 
 export const SUPPORT_EMAIL = "support@entrust-africa.com";
 
-/** The organisation hosting the event. Its logo is public/images/pacci-logo.png, from the landscape logo on pacci.org. */
+/** The organisation hosting the event. Its logo is public/images/pan-african-chamber-logo.png, from panafricanchamber.com. */
 export const HOST = {
-  name: "Pan African Chamber of Commerce and Industry",
-  url: "https://www.pacci.org",
+  name: "Pan African Chamber of Commerce",
+  url: "https://panafricanchamber.com",
 } as const;
 
 /** The line above the headline. The design gives exact days, too small to read in the screenshot we were sent. */

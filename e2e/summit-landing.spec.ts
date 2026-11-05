@@ -15,9 +15,9 @@ test("the Summit landing page loads without signing in and sends buyers and sell
   await expect(buyerSeller).toHaveAttribute("href", /\/summit\/apply$/);
 });
 
-test("the page names the host, the Pan African Chamber of Commerce and Industry", async ({ page }) => {
+test("the page names the host, the Pan African Chamber of Commerce", async ({ page }) => {
   await page.goto("http://localhost:3002/");
-  const logos = page.getByRole("img", { name: "Pan African Chamber of Commerce and Industry" });
+  const logos = page.getByRole("img", { name: "Pan African Chamber of Commerce", exact: true });
   await expect(logos.first()).toBeVisible();
   // The hero and the footer each carry it, and the picture really loads.
   await expect(logos).toHaveCount(2);

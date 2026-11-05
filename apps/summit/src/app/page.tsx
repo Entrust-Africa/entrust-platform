@@ -20,15 +20,15 @@ function HostedBy({ className = "" }: { className?: string }) {
       <span className="font-mono text-[11px] tracking-[0.2em] text-white/70 uppercase">Hosted by</span>
       <a
         href={HOST.url}
-        className="bg-white px-3 py-2 transition-[filter] hover:brightness-95"
+        className="bg-white p-2 transition-[filter] hover:brightness-95"
         aria-label={`${HOST.name} (opens their website)`}
       >
         <img
-          src="/images/pacci-logo.png"
+          src="/images/pan-african-chamber-logo.png"
           alt={HOST.name}
-          width={636}
-          height={209}
-          className="h-12 w-auto sm:h-14"
+          width={300}
+          height={300}
+          className="size-24 sm:size-28"
         />
       </a>
     </div>

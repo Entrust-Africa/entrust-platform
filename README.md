@@ -173,8 +173,8 @@ job) and has no sign-in of its own:
   with the same address replaces the details), queues a confirmation email, and answers with a reference like `DTS-00042`.
   Entrust staff read them at `GET /v1/summit/registrations`. It records interest in a pass and takes no payment: nothing in
   this repo sells tickets yet.
-- The Pan African Chamber of Commerce and Industry, the host, is credited with its logo (`public/images/pacci-logo.png`, cropped
-  from the landscape logo on pacci.org without the ISO badges) in the hero and the footer; the name and link are `HOST` in
+- The Pan African Chamber of Commerce (panafricanchamber.com), the host, is credited with its logo (`public/images/pan-african-chamber-logo.png`,
+  the round seal from its website, trimmed) in the hero and the footer; the name and link are `HOST` in
   `src/lib/content.ts`.
 - Both photos are placeholders in `apps/summit/public/images`: the hero is the African Union Conference Centre picture Entrust
   sent (784 px wide, so soft at full width), and the closing band is the African Union Conference Centre by Andrew Moore
