@@ -230,6 +230,19 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   if negotiated). The list totals what is still open and what is confirmed. **Confirming** makes the organisation a sponsor: it is
   refused when the option's capacity is taken (set a title partner's capacity to 1 for exclusivity), opens a payment for the value,
   and emails the payment instructions; **declining** cancels a payment nobody paid.
+- **Delegate registration.** `POST /v1/summit/commerce/delegates` is the public form. The five categories are products like any other
+  (General Business $65, Premium $160, Diaspora Business $150, Investor / International Buyer $250, and the complimentary Selected
+  SME Delegate). A paid registration gets a reference (`DEL-00042`), opens a pending payment, and is emailed the payment instructions
+  and a link to its **badge**. The badge page (`GET /v1/summit/commerce/badges/{token}`) shows the name, organisation, category
+  and reference, and the address its QR code holds; it is **valid only once an administrator verifies the payment**, and the
+  delegate is emailed when that happens. One live registration per email address and edition; a verified registration can't be
+  rewritten from the public form. **A selected SME registers free** with its application number (`SUM-000123`) and the email of a
+  member of the business: its business, country and sector come from the assessment, so no second application is filled in. It needs
+  the application to be `selected` in the assessment period the edition points at, with the final list approved; every other case
+  gets the same refusal, so the form tells nobody who was selected. Each selected SME has `complimentaryPerSme` free places (default
+  1). Administrators and facilitators list, correct and cancel registrations under `/delegates`, and **check delegates in** at the
+  door: `/check-in/lookup?code=` takes what the QR code holds (the badge's address), the token or the `DEL-` reference, and
+  `POST /delegates/{id}/check-in` marks the arrival, refusing a cancelled registration, an unverified payment, or a badge already used.
 
 ## Website deployment
 
