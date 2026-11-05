@@ -16,7 +16,7 @@ export async function getCatalogue(ctx: Ctx): Promise<CatalogueView> {
   ]);
 
   const smes: CatalogueSme[] = [
-    ...leather.map((row) => catalogueFromRegister(deriveRegister(toInput(row)))),
+    ...leather.map((row) => catalogueFromRegister(deriveRegister(toInput(row)), row.id)),
     ...catalogueFromApplications(
       applications
         .filter((a) => AGRO_PROGRAMME.test(a.program))

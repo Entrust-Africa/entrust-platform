@@ -5,15 +5,21 @@ import { letters } from "./register";
 // The catalogue of pilot SMEs, one list a cohort. Cohort 1 is the leather businesses, from the diagnostic workbook; cohort 2 is
 // the agro-processing businesses that applied to the training programme. Both are put in one shape so a screen can list them alike.
 
+/** A cohort is active while it is running or about to, and previous once it has finished. */
+export type CohortStatus = "active" | "previous";
+
 export interface PilotCohort {
   number: number;
   name: string;
   description: string;
+  status: CohortStatus;
 }
 
+// Fixed in code, like the split itself: the leather pilot came first and is over, the agro-processing cohort is the current one.
+// When cohorts and enrolments are managed in the database (#56), the status should come from a cohort's dates instead.
 export const PILOT_COHORTS: readonly PilotCohort[] = [
-  { number: 1, name: "Leather", description: "The leather businesses in the export readiness diagnostic." },
-  { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme." },
+  { number: 1, name: "Leather", description: "The leather businesses in the export readiness diagnostic.", status: "previous" },
+  { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme.", status: "active" },
 ];
 
 /** An application belongs to cohort 2 when the programme it was loaded for has "agro" in its name. */
@@ -22,6 +28,8 @@ export const AGRO_PROGRAMME = /agro/i;
 export interface CatalogueSme {
   /** Stable across loads, so a list can key on it. */
   key: string;
+  /** The stored record's id: the register row for cohort 1, the (latest) application for cohort 2. A detail page is opened with it. */
+  id: string;
   cohort: number;
   name: string;
   contactName: string | null;
@@ -53,9 +61,10 @@ const oneLine = (text: string | null | undefined, max = 140): string | null => {
 
 const yesNo = (answer: string | undefined): boolean | null => (answer === undefined ? null : isYes(answer) ? true : /^\s*n/i.test(answer) ? false : null);
 
-export function catalogueFromRegister(record: RegisterRecord): CatalogueSme {
+export function catalogueFromRegister(record: RegisterRecord, id: string): CatalogueSme {
   return {
     key: `register:${record.code}`,
+    id,
     cohort: 1,
     name: record.companyName,
     contactName: record.participantName,
@@ -101,6 +110,7 @@ export function catalogueFromApplications(applications: readonly ApplicationRow[
   }
   return [...latest.values()].map((a) => ({
     key: `application:${a.id}`,
+    id: a.id,
     cohort: 2,
     name: a.businessName,
     contactName: a.contactName,
@@ -119,13 +129,22 @@ export function catalogueFromApplications(applications: readonly ApplicationRow[
   }));
 }
 
-const identities = (sme: CatalogueSme): string[] => {
+/** How a business is recognised across the register and the applications: the last nine digits of its phone number, or its email address. */
+export const identityKeys = ({ phone, email }: { phone: string | null; email: string | null }): string[] => {
   const ids: string[] = [];
-  const digits = (sme.phone ?? "").replace(/\D/g, "");
+  const digits = (phone ?? "").replace(/\D/g, "");
   if (digits.length >= 9) ids.push(`p:${digits.slice(-9)}`);
-  if (sme.email) ids.push(`e:${sme.email.toLowerCase()}`);
+  if (email) ids.push(`e:${email.toLowerCase()}`);
   return ids;
 };
+
+/** Whether two records are one business, by phone number or email address. */
+export const sameBusiness = (a: { phone: string | null; email: string | null }, b: { phone: string | null; email: string | null }): boolean => {
+  const keys = new Set(identityKeys(a));
+  return identityKeys(b).some((k) => keys.has(k));
+};
+
+const identities = identityKeys;
 
 /** Fills in `alsoInCohorts`: a business in more than one cohort shares a phone number or email address across them. */
 export function markSharedBusinesses(smes: CatalogueSme[]): CatalogueSme[] {

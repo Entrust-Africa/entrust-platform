@@ -425,6 +425,15 @@ export const RegisterItem = z
   })
   .openapi("TradeRegisterItem");
 
+export const RegisterParam = z.object({ id: z.uuid().openapi({ description: "The register record's id (not the SME ID)." }) });
+
+export const RegisterDetail = RegisterItem.extend({
+  alsoApplied: z
+    .array(z.object({ id: z.uuid(), program: z.string(), submittedAt: z.iso.datetime(), businessName: z.string() }))
+    .openapi({ description: "Responses from Ethiopia to a programme's form that come from the same business, found by its phone number or email address. Newest first." }),
+}).openapi("TradeRegisterDetail");
+export type RegisterDetailView = z.infer<typeof RegisterDetail>;
+
 export const RegisterList = z
   .object({
     items: z.array(RegisterItem),
@@ -480,6 +489,18 @@ export const ApplicationItem = z
   })
   .openapi("TradeApplicationItem");
 
+export const ApplicationParam = z.object({ id: z.uuid() });
+
+export const ApplicationDetail = ApplicationItem.extend({
+  otherResponses: z
+    .array(z.object({ id: z.uuid(), submittedAt: z.iso.datetime() }))
+    .openapi({ description: "The business's other responses from Ethiopia, found by its email address or its name. Newest first." }),
+  alsoInRegister: z
+    .array(z.object({ id: z.uuid(), code: z.string(), companyName: z.string() }))
+    .openapi({ description: "Businesses in the SME register that are the same business, found by phone number or email address." }),
+}).openapi("TradeApplicationDetail");
+export type ApplicationDetailView = z.infer<typeof ApplicationDetail>;
+
 export const ApplicationList = z
   .object({
     items: z.array(ApplicationItem),
@@ -520,6 +541,7 @@ export type ApplicationsImportedView = z.infer<typeof ApplicationsImported>;
 const CatalogueSme = z
   .object({
     key: z.string(),
+    id: z.uuid().openapi({ description: "The stored record: the register row (cohort 1) or the latest application (cohort 2). Open its detail page with it." }),
     cohort: z.number().int(),
     name: z.string(),
     contactName: z.string().nullable(),
@@ -545,6 +567,7 @@ export const Catalogue = z
         number: z.number().int(),
         name: z.string(),
         description: z.string(),
+        status: z.enum(["active", "previous"]).openapi({ description: "Active while the cohort is running or about to, previous once it has finished." }),
         count: z.number().int(),
         smes: z.array(CatalogueSme),
       }),

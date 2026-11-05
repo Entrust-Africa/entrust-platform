@@ -90,6 +90,21 @@ describe("the cohorts", () => {
     expect(body.cohorts.every((c: Json) => c.count === c.smes.length)).toBe(true);
   });
 
+  it("says cohort 1 is previous and cohort 2 active", async () => {
+    const { body } = await get(w.admin);
+    expect(body.cohorts.map((c: Json) => [c.number, c.status])).toEqual([[1, "previous"], [2, "active"]]);
+  });
+
+  it("gives each business the id of its stored record, so its page can be opened", async () => {
+    const { body } = await get(w.admin);
+    for (const sme of mine(cohort(body, 1).smes)) {
+      expect((await callV1(w.admin, "GET", `/trade/register/${sme.id}`)).body.code).toBe(sme.reference);
+    }
+    for (const sme of mine(cohort(body, 2).smes)) {
+      expect((await callV1(w.admin, "GET", `/trade/applications/${sme.id}`)).body.businessName).toBe(sme.name);
+    }
+  });
+
   it("lists the leather businesses in the register by name, with their SME ID and readiness", async () => {
     const smes = mine(cohort((await get(w.admin)).body, 1).smes);
     expect(smes.map((s: Json) => s.name)).toEqual(["Alpha Leather", "Unscored Leather", "Zeta Leather"]);

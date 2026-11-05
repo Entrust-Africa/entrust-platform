@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationCountry, isApplicationResponses, isYes, readApplications, tidyPhone, timesApplied, type Cell } from "../src";
+import { applicationCountry, isApplicationResponses, isYes, readApplications, sameApplicant, tidyPhone, timesApplied, type Cell } from "../src";
 
 const country = (location: string | null, phone: string | null = null, email: string | null = null) => applicationCountry({ location, email, phone });
 
@@ -158,6 +158,12 @@ describe("counting", () => {
         { email: "c@x.test", businessName: "  maheder   FOODS " },
       ]),
     ).toEqual([3, 1, 3, 3]);
+  });
+
+  it("knows two responses are from one business by email or by name, but not otherwise", () => {
+    expect(sameApplicant({ email: "a@x.test", businessName: "One" }, { email: "a@x.test", businessName: "Two" })).toBe(true);
+    expect(sameApplicant({ email: "a@x.test", businessName: "Maheder Foods" }, { email: "b@x.test", businessName: " maheder  FOODS" })).toBe(true);
+    expect(sameApplicant({ email: "a@x.test", businessName: "One" }, { email: "b@x.test", businessName: "Two" })).toBe(false);
   });
 
   it("tells a yes from other answers", () => {

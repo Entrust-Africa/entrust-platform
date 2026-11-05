@@ -1,7 +1,7 @@
-import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { isDiagnosticWorkbook, isYes, readApplications, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
-import type { ApplicationListView, ApplicationsImportedView } from "../schemas/trade";
+import { isDiagnosticWorkbook, isYes, readApplications, sameApplicant, sameBusiness, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
+import type { ApplicationDetailView, ApplicationListView, ApplicationsImportedView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { readUploadedWorkbook } from "./register-workbook";
@@ -27,19 +27,7 @@ export async function listApplications(ctx: Ctx): Promise<ApplicationListView> {
   ]);
   const times = timesApplied(rows);
   return {
-    items: rows.map((row, i) => ({
-      id: row.id,
-      program: row.program,
-      submittedAt: row.submittedAt.toISOString(),
-      email: row.email,
-      businessName: row.businessName,
-      contactName: row.contactName,
-      phone: row.phone,
-      location: row.location,
-      country: SHOWN,
-      answers: row.answers,
-      timesApplied: times[i] ?? 1,
-    })),
+    items: rows.map((row, i) => toItem(row, times[i] ?? 1)),
     summary: {
       shown: rows.length,
       notShown: others?.n ?? 0,
@@ -47,6 +35,51 @@ export async function listApplications(ctx: Ctx): Promise<ApplicationListView> {
       interestedInZemen: rows.filter((r) => isYes(r.answers.zemenInterest)).length,
       repeatApplications: times.filter((t) => t > 1).length,
     },
+  };
+}
+
+const toItem = (row: typeof schema.programApplication.$inferSelect, times: number) => ({
+  id: row.id,
+  program: row.program,
+  submittedAt: row.submittedAt.toISOString(),
+  email: row.email,
+  businessName: row.businessName,
+  contactName: row.contactName,
+  phone: row.phone,
+  location: row.location,
+  country: SHOWN,
+  answers: row.answers,
+  timesApplied: times,
+});
+
+/**
+ * One response, with the business's other responses and, if it is in the SME register, which record. A response from outside Ethiopia
+ * is asked for by country like the list is, so it is not found: the same 404 as an id that doesn't exist.
+ */
+export async function getApplication(ctx: Ctx, id: string): Promise<ApplicationDetailView> {
+  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see applications");
+  const [row] = await ctx.db
+    .select()
+    .from(schema.programApplication)
+    .where(and(eq(schema.programApplication.id, id), eq(schema.programApplication.country, SHOWN)));
+  if (!row) throw new ServiceError("not_found", "That application isn't here.");
+
+  const [others, register] = await Promise.all([
+    ctx.db
+      .select({ id: schema.programApplication.id, email: schema.programApplication.email, businessName: schema.programApplication.businessName, submittedAt: schema.programApplication.submittedAt })
+      .from(schema.programApplication)
+      .where(and(eq(schema.programApplication.country, SHOWN), ne(schema.programApplication.id, id)))
+      .orderBy(desc(schema.programApplication.submittedAt), desc(schema.programApplication.id)),
+    ctx.db
+      .select({ id: schema.smeRegister.id, code: schema.smeRegister.code, companyName: schema.smeRegister.companyName, phone: schema.smeRegister.phone, email: schema.smeRegister.email })
+      .from(schema.smeRegister)
+      .orderBy(asc(schema.smeRegister.code)),
+  ]);
+  const same = others.filter((o) => sameApplicant(o, row));
+  return {
+    ...toItem(row, same.length + 1),
+    otherResponses: same.map((o) => ({ id: o.id, submittedAt: o.submittedAt.toISOString() })),
+    alsoInRegister: register.filter((r) => sameBusiness(r, row)).map((r) => ({ id: r.id, code: r.code, companyName: r.companyName })),
   };
 }
 

@@ -50,7 +50,7 @@ export type {
   RegisterSummary,
   SheetGrid,
 } from "./register";
-export { APPLICATION_QUESTIONS, applicationCountry, isApplicationResponses, isYes, readApplications, tidyPhone, timesApplied } from "./applications";
+export { APPLICATION_QUESTIONS, applicationCountry, isApplicationResponses, isYes, readApplications, sameApplicant, tidyPhone, timesApplied } from "./applications";
 export type { ApplicationInput, ApplicationQuestionKey, ReadApplicationsResult } from "./applications";
-export { AGRO_PROGRAMME, PILOT_COHORTS, buildCatalogue, catalogueFromApplications, catalogueFromRegister, markSharedBusinesses } from "./catalogue";
-export type { ApplicationRow, CatalogueCohort, CatalogueSme, PilotCohort } from "./catalogue";
+export { AGRO_PROGRAMME, PILOT_COHORTS, buildCatalogue, catalogueFromApplications, catalogueFromRegister, identityKeys, markSharedBusinesses, sameBusiness } from "./catalogue";
+export type { ApplicationRow, CatalogueCohort, CatalogueSme, CohortStatus, PilotCohort } from "./catalogue";
