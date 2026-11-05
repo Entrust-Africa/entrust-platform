@@ -62,7 +62,11 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
     ];
     // Only an administrator sets application periods.
     if (user?.staffRole === "admin") {
-      navItems.push({ ...summitItem, href: "/summit/admin/periods", match: (path: string) => path.startsWith("/summit") });
+      navItems.push({ ...summitItem, href: "/summit/admin/periods", match: (path: string) => path.startsWith("/summit") && !path.startsWith("/summit/commerce") });
+    }
+    // The ADTIS exhibition, sponsorship and delegate screens are for administrators and facilitators.
+    if (user?.staffRole === "admin" || user?.staffRole === "facilitator") {
+      navItems.push({ href: "/summit/commerce", label: "ADTIS", icon: Store, match: (path: string) => path.startsWith("/summit/commerce") });
     }
   } else if (isSponsor) {
     navItems = [
