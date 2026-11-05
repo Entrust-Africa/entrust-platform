@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { auth } from "@entrust/auth";
 import { getDb, schema } from "@entrust/db";
 import { EVIDENCE_TYPES, STEPS, type StepId } from "@entrust/rules";
@@ -123,6 +123,12 @@ export async function cleanup() {
     const periodIds = periods.map((p) => p.id);
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, periodIds));
     await db.delete(schema.applicationPeriod).where(inArray(schema.applicationPeriod.id, periodIds));
+  }
+  // The register of pilot SMEs belongs to no organisation, so the tests' own businesses go by their code, and the audit rows of the people who loaded them with the people.
+  await db.delete(schema.smeRegister).where(like(schema.smeRegister.code, `${PREFIX.toUpperCase()}%`));
+  const people = await db.select({ id: schema.user.id }).from(schema.user).where(like(schema.user.email, `${PREFIX}%`));
+  if (people.length) {
+    await db.delete(schema.auditLog).where(and(eq(schema.auditLog.entityType, "sme_register"), inArray(schema.auditLog.actorUserId, people.map((p) => p.id))));
   }
   await db.delete(schema.user).where(like(schema.user.email, `${PREFIX}%`));
   await db.delete(schema.caseReferenceCounter).where(eq(schema.caseReferenceCounter.country, COUNTRY));

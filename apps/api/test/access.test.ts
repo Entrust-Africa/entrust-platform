@@ -398,6 +398,8 @@ describe("API documentation", () => {
         "/v1/trade/practice-cases/{id}/reset",
         "/v1/trade/practice-cases/{id}/steps/{stepId}/transition",
         "/v1/trade/practice-scenarios",
+        "/v1/trade/register",
+        "/v1/trade/register/import",
         "/v1/trade/sponsor/cohorts",
         "/v1/trade/sponsor/cohorts/{id}",
         "/v1/trade/sponsor/cohorts/{id}/smes/{organizationId}",

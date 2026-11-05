@@ -377,3 +377,87 @@ export const GrantConsentBody = z
   .openapi("GrantTradeConsentBody");
 
 export const ConsentParam = z.object({ id: z.uuid() });
+
+// ---- The register of pilot SMEs ----
+
+const LevelOrNull = z.enum(["high", "medium", "low"]).nullable();
+
+export const RegisterItem = z
+  .object({
+    id: z.uuid(),
+    code: z.string().openapi({ example: "TRADE-ETH-LEA-002", description: "The SME ID the diagnostic workbook gives the business." }),
+    companyName: z.string(),
+    participantName: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    yearEstablished: z.number().int().nullable(),
+    location: z.string().nullable(),
+    employees: z.number().int().nullable(),
+    exportLicence: z.boolean().nullable(),
+    currentBank: z.string().nullable(),
+    mainProduct: z.string().nullable(),
+    monthlyProductionCapacity: z.number().nullable(),
+    averageMonthlyRevenue: z.number().nullable(),
+    largestOrderCompleted: z.number().nullable(),
+    currentMarkets: z.string().nullable(),
+    targetExportMarket: z.string().nullable(),
+    monthlyOperatingCost: z.number().nullable(),
+    estimatedMonthlyProfit: z.number().nullable(),
+    existingLoan: z.boolean().nullable(),
+    loanAmount: z.number().nullable(),
+    cashflowStability: z.string().nullable(),
+    workingCapitalGap: z.number().nullable(),
+    equipmentInvestmentNeeded: z.number().nullable(),
+    exportLogisticsGap: z.number().nullable(),
+    costingKnowledge: z.number().int().nullable(),
+    productionCapacityStrength: z.number().int().nullable(),
+    documentationKnowledge: z.number().int().nullable(),
+    financialRecordKeeping: z.number().int().nullable(),
+    marketReadiness: z.number().int().nullable(),
+    entrustSupportNeeded: z.string().nullable(),
+    bankOpportunity: z.string().nullable(),
+    serviceNotes: z.string().nullable(),
+    totalCapitalGap: z.number().nullable().openapi({ description: "The three gaps added up." }),
+    exportReadinessScore: z.number().int().nullable().openapi({ description: "The five scores added up (5 to 25); null until all five are recorded." }),
+    financeReadinessLevel: LevelOrNull.openapi({ description: "From the score: 20 or more high, 15 or more medium, otherwise low." }),
+    financePriority: LevelOrNull.openapi({ description: "From the capital gap: 500,000 or more high, 200,000 or more medium, otherwise low." }),
+    updatedAt: z.iso.datetime(),
+  })
+  .openapi("TradeRegisterItem");
+
+export const RegisterList = z
+  .object({
+    items: z.array(RegisterItem),
+    summary: z.object({
+      total: z.number().int(),
+      assessed: z.number().int().openapi({ description: "How many have all five scores." }),
+      averageReadiness: z.number().nullable(),
+      totalCapitalGap: z.number(),
+      byLevel: z.object({ high: z.number().int(), medium: z.number().int(), low: z.number().int(), notAssessed: z.number().int() }),
+      banks: z.array(z.object({ bank: z.string(), count: z.number().int() })),
+    }),
+  })
+  .openapi("TradeRegisterList");
+
+export const ImportRegisterBody = z
+  .object({
+    fileName: z.string().trim().max(200).optional(),
+    contentBase64: z
+      .string()
+      .min(1)
+      .max(14_000_000)
+      .openapi({ description: "The .xlsx file's bytes, base64 encoded. At most about 10 MB." }),
+  })
+  .openapi("ImportTradeRegisterBody");
+
+export const RegisterImported = z
+  .object({
+    total: z.number().int().openapi({ description: "Businesses read from the workbook." }),
+    created: z.number().int(),
+    updated: z.number().int(),
+    unchanged: z.number().int(),
+    warnings: z.array(z.string()).openapi({ description: "Values that were left out and totals that disagreed with their parts, for staff to check in the workbook." }),
+  })
+  .openapi("TradeRegisterImported");
+export type RegisterListView = z.infer<typeof RegisterList>;
+export type RegisterImportedView = z.infer<typeof RegisterImported>;
