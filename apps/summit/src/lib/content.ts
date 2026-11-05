@@ -1,7 +1,7 @@
 // The site's copy. Dates, prices and what each package includes come from the API's catalogue (the organisers edit them in the
 // admin screens), so the only prices on the pages are the ones it sends. Change the words here and nowhere else.
 
-export const SUPPORT_EMAIL = "support@entrust-africa.com";
+export const SUPPORT_EMAIL = "info@entrustafrica.com";
 
 /** The organisation hosting the event. Its logo is public/images/pan-african-chamber-logo.png, from panafricanchamber.com. */
 export const HOST = {

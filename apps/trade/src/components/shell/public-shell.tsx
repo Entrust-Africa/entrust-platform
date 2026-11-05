@@ -38,8 +38,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-line bg-surface">
         <div className="mx-auto max-w-7xl px-4 py-6 text-sm text-ink-3 sm:px-6">
           TRADE is part of Entrust Africa. Questions? Write to{" "}
-          <a className="font-semibold text-brand-700 underline underline-offset-4" href="mailto:support@entrust-africa.com">
-            support@entrust-africa.com
+          <a className="font-semibold text-brand-700 underline underline-offset-4" href="mailto:info@entrustafrica.com">
+            info@entrustafrica.com
           </a>
           .
         </div>
