@@ -1,11 +1,15 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import {
+  B2B_INTERESTS,
+  B2B_STATUSES,
   BOOKING_STATUSES,
   DELEGATE_STATUSES,
   ENQUIRY_STATUSES,
   PAYMENT_STATUSES,
   PAYMENT_SUBJECTS,
+  PROFILE_STATUSES,
+  PROFILE_VERIFICATION,
   PRODUCT_KINDS,
   PRODUCT_STATUSES,
   type Benefits,
@@ -315,4 +319,97 @@ export const delegateRegistration = summit.table(
     index("delegate_registration_product_idx").on(t.productId, t.status),
     index("delegate_registration_application_idx").on(t.applicationId),
   ],
+);
+
+// The public page of a selected SME in the ADTIS directory. It is its own record, made from the application as a draft, so the
+// public sees only what staff wrote and the business approved: nothing here is copied from the assessment except what the
+// draft is built from, and no score, finding or financial record has a column.
+export const smePublicProfile = summit.table(
+  "sme_public_profile",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => commerceEdition.id),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => application.id, { onDelete: "cascade" }),
+    // The profile's address: /smes/zebu-coffee.
+    slug: text("slug").notNull(),
+    status: text("status", { enum: PROFILE_STATUSES }).notNull().default("draft"),
+    displayName: text("display_name").notNull(),
+    // ISO 3166-1 alpha-2 code.
+    country: text("country").notNull(),
+    city: text("city"),
+    sector: text("sector").notNull(),
+    summary: text("summary").notNull(),
+    productsServices: text("products_services").array().notNull().default(sql`'{}'::text[]`),
+    productionCapacity: text("production_capacity"),
+    exportReadiness: text("export_readiness"),
+    targetMarkets: text("target_markets").array().notNull().default(sql`'{}'::text[]`),
+    seeksInvestment: boolean("seeks_investment").notNull().default(false),
+    investmentRequirements: text("investment_requirements"),
+    verification: text("verification", { enum: PROFILE_VERIFICATION }).notNull().default("pending"),
+    website: text("website"),
+    contactName: text("contact_name"),
+    contactPosition: text("contact_position"),
+    // Shown only if filled in: the business decides.
+    contactEmail: text("contact_email"),
+    contactPhone: text("contact_phone"),
+    // The business has seen the profile as it will appear and agreed to it. Editing the text clears this.
+    businessApprovedAt: timestamp("business_approved_at", { withTimezone: true }),
+    businessApprovedBy: text("business_approved_by").references(() => user.id, { onDelete: "set null" }),
+    approvalNote: text("approval_note"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    publishedBy: text("published_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("sme_public_profile_application_uidx").on(t.editionId, t.applicationId),
+    uniqueIndex("sme_public_profile_slug_uidx").on(t.editionId, t.slug),
+    index("sme_public_profile_status_idx").on(t.editionId, t.status),
+  ],
+);
+
+// B2B enquiries take their reference from here: B2B-0001.
+export const b2bEnquiryNumberSeq = summit.sequence("b2b_enquiry_number_seq");
+
+// A buyer, investor or partner asking to be put in touch with a directory business ("Request B2B Matchmaking"). It is passed
+// to the business's owners by email and shown to the organisers, who can follow it up.
+export const b2bEnquiry = summit.table(
+  "b2b_enquiry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: text("number")
+      .notNull()
+      .unique()
+      .default(sql`'B2B-' || lpad(nextval('summit.b2b_enquiry_number_seq')::text, 4, '0')`),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => commerceEdition.id),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => smePublicProfile.id, { onDelete: "cascade" }),
+    status: text("status", { enum: B2B_STATUSES }).notNull().default("new"),
+    interest: text("interest", { enum: B2B_INTERESTS }).notNull(),
+    fromName: text("from_name").notNull(),
+    // Lower case.
+    fromEmail: text("from_email").notNull(),
+    fromPhone: text("from_phone"),
+    fromOrganisation: text("from_organisation").notNull(),
+    fromRole: text("from_role"),
+    message: text("message").notNull(),
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    // When the business's owners were emailed.
+    forwardedAt: timestamp("forwarded_at", { withTimezone: true }),
+    handledBy: text("handled_by").references(() => user.id, { onDelete: "set null" }),
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    handlingNote: text("handling_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("b2b_enquiry_profile_idx").on(t.profileId, t.createdAt), index("b2b_enquiry_edition_idx").on(t.editionId, t.status), index("b2b_enquiry_email_idx").on(t.fromEmail, t.createdAt)],
 );
