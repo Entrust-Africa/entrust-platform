@@ -117,9 +117,12 @@ export const auth = betterAuth({
       },
     }),
   ],
-  advanced: cookieDomain
-    ? { crossSubDomainCookies: { enabled: true, domain: cookieDomain } }
-    : undefined,
+  advanced: {
+    // Every API request checks its session. With joins the session and its user come back in one
+    // query rather than two, through the session-to-user relation in @entrust/db's schema.
+    database: { joins: true },
+    ...(cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: cookieDomain } } : {}),
+  },
 });
 
 export type Session = typeof auth.$Infer.Session;
