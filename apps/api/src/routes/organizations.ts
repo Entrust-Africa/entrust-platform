@@ -69,7 +69,8 @@ const createOrganization = z.object({
   legalName: z.string().trim().min(1).max(200),
   tin: z.string().trim().max(80).optional(),
   country: z.string().trim().length(2).default("ET"),
-  platform: z.enum(["clear", "trade"]).optional(),
+  // The platform the new organisation gets first. A Summit applicant gets `summit` alone, so TRADE's learner screens stay out of their way.
+  platform: z.enum(["clear", "trade", "summit"]).optional(),
   kind: z.enum(ORGANIZATION_KINDS).default("sme"),
 });
 // Better Auth's configured organization roles are member/admin/owner. Staff roles
