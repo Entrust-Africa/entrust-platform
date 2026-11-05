@@ -119,11 +119,15 @@ export async function cleanup() {
     const products = await db.select({ id: schema.commerceProduct.id }).from(schema.commerceProduct).where(inArray(schema.commerceProduct.editionId, editionIds));
     const bookings = await db.select({ id: schema.exhibitorBooking.id }).from(schema.exhibitorBooking).where(inArray(schema.exhibitorBooking.editionId, editionIds));
     const enquiries = await db.select({ id: schema.sponsorEnquiry.id }).from(schema.sponsorEnquiry).where(inArray(schema.sponsorEnquiry.editionId, editionIds));
+    const profiles = await db.select({ id: schema.smePublicProfile.id }).from(schema.smePublicProfile).where(inArray(schema.smePublicProfile.editionId, editionIds));
+    const enquiriesB2b = await db.select({ id: schema.b2bEnquiry.id }).from(schema.b2bEnquiry).where(inArray(schema.b2bEnquiry.editionId, editionIds));
     const delegates = await db.select({ id: schema.delegateRegistration.id }).from(schema.delegateRegistration).where(inArray(schema.delegateRegistration.editionId, editionIds));
     const payments = await db.select({ id: schema.commercePayment.id }).from(schema.commercePayment).where(inArray(schema.commercePayment.editionId, editionIds));
-    const entityIds = [...editionIds, ...products.map((p) => p.id), ...bookings.map((b) => b.id), ...enquiries.map((e) => e.id), ...delegates.map((d) => d.id), ...payments.map((p) => p.id)];
+    const entityIds = [...editionIds, ...products.map((p) => p.id), ...bookings.map((b) => b.id), ...enquiries.map((e) => e.id), ...delegates.map((d) => d.id), ...profiles.map((x) => x.id), ...enquiriesB2b.map((x) => x.id), ...payments.map((p) => p.id)];
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, entityIds));
     await db.delete(schema.commercePayment).where(inArray(schema.commercePayment.editionId, editionIds));
+    await db.delete(schema.b2bEnquiry).where(inArray(schema.b2bEnquiry.editionId, editionIds));
+    await db.delete(schema.smePublicProfile).where(inArray(schema.smePublicProfile.editionId, editionIds));
     await db.delete(schema.exhibitorBooking).where(inArray(schema.exhibitorBooking.editionId, editionIds));
     await db.delete(schema.sponsorEnquiry).where(inArray(schema.sponsorEnquiry.editionId, editionIds));
     await db.delete(schema.delegateRegistration).where(inArray(schema.delegateRegistration.editionId, editionIds));

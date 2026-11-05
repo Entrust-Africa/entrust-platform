@@ -9,6 +9,13 @@ import {
   BookingList,
   BookingParam,
   BookingQuery,
+  B2bEnquiryBody,
+  B2bHandledBody,
+  B2bItem,
+  B2bList,
+  B2bParam,
+  B2bQuery,
+  B2bReceipt,
   BadgeParam,
   Catalogue,
   CheckInQuery,
@@ -18,6 +25,8 @@ import {
   CommerceReportQuery,
   CommerceReportTable,
   DashboardQuery,
+  DirectoryList,
+  DirectoryQuery,
   DelegateDetail,
   DelegateList,
   DelegateParam,
@@ -37,8 +46,17 @@ import {
   Payment,
   PaymentParam,
   PaymentPatch,
+  PrefillBody,
+  PrefillResult,
+  ProfileDetail,
+  ProfileList,
+  ProfileParam,
+  ProfilePatch,
+  ProfileQuery,
   PublicBadge,
+  PublicProfileView,
   ReasonBody,
+  SlugParam,
   SponsorEnquiryBody,
   SponsorEnquiryReceipt,
   EditionBody,
@@ -51,6 +69,19 @@ import {
   ProductPatch,
 } from "../schemas/summit-commerce";
 import { allocateBooth, applyForBooth, approveBooking, cancelBooking, confirmBooking, getBooking, listBookings, rejectBooking } from "../services/summit-commerce-bookings";
+import {
+  getProfile,
+  listB2bEnquiries,
+  listProfiles,
+  markB2bHandled,
+  prefillProfiles,
+  publicDirectory,
+  publicProfile,
+  publishProfile,
+  submitB2bEnquiry,
+  unpublishProfile,
+  updateProfile,
+} from "../services/summit-commerce-directory";
 import { getCommerceDashboard } from "../services/summit-commerce-dashboard";
 import { exportCommerceReport, listCommerceReports, viewCommerceReport } from "../services/summit-commerce-reports";
 import { changeEnquiryStatus, getEnquiry, listEnquiries, submitEnquiry, updateEnquiry } from "../services/summit-commerce-enquiries";
@@ -143,7 +174,48 @@ const badgeRoute = createRoute({
   responses: { 200: { description: "The badge", content: json(PublicBadge) }, 400: problem("The address is malformed"), 404: problem("No such badge") },
 });
 
+const directoryRoute = createRoute({
+  method: "get",
+  path: "/smes",
+  tags,
+  summary: "The SME directory",
+  description:
+    "For the public ADTIS pages: the selected SMEs whose profile the business approved and the organisers published, filterable by country, industry, product or service, target market and whether the business seeks investment. It also lists what there is to filter by. It needs no sign-in and holds only the approved public text of each profile.",
+  request: { query: DirectoryQuery },
+  responses: { 200: { description: "The businesses", content: json(DirectoryList) }, 400: problem("A filter is malformed") },
+});
+
+const profileRoute = createRoute({
+  method: "get",
+  path: "/smes/{slug}",
+  tags,
+  summary: "One business in the SME directory",
+  description:
+    "The approved public profile of a selected SME: name, country, industry, products and services, production capacity, export readiness, target markets, investment requirements, verification status, website and the contact details the business chose to show, and the address its QR code holds. It never holds an assessment score, a finding, a financial record or the business's private contact details.",
+  request: { params: SlugParam },
+  responses: { 200: { description: "The profile", content: json(PublicProfileView) }, 400: problem("The address is malformed"), 404: problem("No such business in the directory") },
+});
+
+const b2bRoute = createRoute({
+  method: "post",
+  path: "/smes/{slug}/enquiries",
+  tags,
+  summary: "Request B2B matchmaking with a business",
+  description:
+    "A buyer, investor, distributor or partner asks to be put in touch with a business in the directory. It needs no sign-in. The message and the sender's contact details go to the business's owners by email and are shown to the organisers; the sender gets a receipt. A sender is limited to a few enquiries a day.",
+  request: { params: SlugParam, body: { required: true, content: json(B2bEnquiryBody) } },
+  responses: {
+    201: { description: "The enquiry was sent", content: json(B2bReceipt) },
+    400: problem("The form isn't complete or valid"),
+    404: problem("No such business in the directory"),
+    422: problem("The sender has made too many enquiries today"),
+  },
+});
+
 export const summitCommercePublic = publicRouter
+  .openapi(directoryRoute, async (c) => c.json(await publicDirectory({ db: getDb() }, c.req.valid("query")), 200))
+  .openapi(profileRoute, async (c) => c.json(await publicProfile({ db: getDb() }, c.req.valid("param").slug), 200))
+  .openapi(b2bRoute, async (c) => c.json(await submitB2bEnquiry({ db: getDb(), now: new Date() }, c.req.valid("param").slug, c.req.valid("json")), 201))
   .openapi(delegateRoute, async (c) => c.json(await registerDelegate({ db: getDb(), now: new Date() }, c.req.valid("json")), 201))
   .openapi(badgeRoute, async (c) => c.json(await publicBadge({ db: getDb() }, c.req.valid("param").token), 200))
   .openapi(catalogueRoute, async (c) => c.json(await publicCatalogue({ db: getDb() }), 200))
@@ -432,6 +504,89 @@ const checkInRoute = createRoute({
   responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
 });
 
+const profileActions = { ...admin, 409: writeErrors[409], 422: writeErrors[422] };
+
+const prefillRoute = createRoute({
+  method: "post",
+  path: "/directory/profiles/prefill",
+  tags,
+  summary: "Make draft directory profiles for the selected SMEs",
+  description:
+    "From the applications of the edition's assessment period that the committee selected (all of them, or one): a draft for each that has none, built from the application's public-facing answers only. It needs the committee's final list to be approved. A profile that exists is left alone. Entrust administrators and facilitators.",
+  request: { body: { required: true, content: json(PrefillBody) } },
+  responses: { 200: { description: "What was made", content: json(PrefillResult) }, ...profileActions },
+});
+
+const listProfilesRoute = createRoute({
+  method: "get",
+  path: "/directory/profiles",
+  tags,
+  summary: "List the directory profiles, drafts included",
+  description: "With how many are drafts and published, and how many selected SMEs have none yet. Entrust administrators and facilitators.",
+  request: { query: ProfileQuery },
+  responses: { 200: { description: "The profiles", content: json(ProfileList) }, ...listErrors, 403: admin[403] },
+});
+
+const getProfileRoute = createRoute({
+  method: "get",
+  path: "/directory/profiles/{id}",
+  tags,
+  summary: "One directory profile, as staff see it",
+  description: "Every public field, whether the business approved it, and what the profile still lacks before it can be published.",
+  request: { params: ProfileParam },
+  responses: { 200: { description: "The profile", content: json(ProfileDetail) }, ...admin },
+});
+
+const patchProfileRoute = createRoute({
+  method: "patch",
+  path: "/directory/profiles/{id}",
+  tags,
+  summary: "Edit a directory profile, or record the business's approval",
+  description:
+    "Changing what the public reads clears the business's approval and takes a published profile off the site, because the business approved a different text; send `minorCorrection` for a typo to keep both. `businessApproved` records that the business has seen the profile as it will appear and approved it, and needs a complete profile.",
+  request: { params: ProfileParam, body: { required: true, content: json(ProfilePatch) } },
+  responses: { 200: { description: "The profile", content: json(ProfileDetail) }, ...profileActions },
+});
+
+const publishRoute = createRoute({
+  method: "post",
+  path: "/directory/profiles/{id}/publish",
+  tags,
+  summary: "Publish a directory profile",
+  description: "Only a complete profile the business has approved, of an SME that is still selected.",
+  request: { params: ProfileParam },
+  responses: { 200: { description: "The profile", content: json(ProfileDetail) }, ...profileActions },
+});
+
+const unpublishRoute = createRoute({
+  method: "post",
+  path: "/directory/profiles/{id}/unpublish",
+  tags,
+  summary: "Take a directory profile off the site",
+  description: "It goes back to a draft, keeping the business's approval.",
+  request: { params: ProfileParam },
+  responses: { 200: { description: "The profile", content: json(ProfileDetail) }, ...profileActions },
+});
+
+const listB2bRoute = createRoute({
+  method: "get",
+  path: "/directory/enquiries",
+  tags,
+  summary: "List the B2B enquiries",
+  description: "Every request to be put in touch with a directory business, newest first. Entrust administrators and facilitators.",
+  request: { query: B2bQuery },
+  responses: { 200: { description: "The enquiries", content: json(B2bList) }, ...listErrors, 403: admin[403] },
+});
+
+const handledRoute = createRoute({
+  method: "post",
+  path: "/directory/enquiries/{id}/handled",
+  tags,
+  summary: "Mark a B2B enquiry as followed up",
+  request: { params: B2bParam, body: { required: true, content: json(B2bHandledBody) } },
+  responses: { 200: { description: "The enquiry", content: json(B2bItem) }, ...profileActions },
+});
+
 const FILE_CONTENT = {
   "text/csv": { schema: z.string() },
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { schema: z.string().openapi({ format: "binary" }) },
@@ -542,4 +697,16 @@ export const summitCommerce = router
         "Cache-Control": "private, no-store",
       },
     }) as never;
-  });
+  })
+  .openapi(prefillRoute, async (c) => c.json(await prefillProfiles(await contextFor(c.get("user")), c.req.valid("json")), 200))
+  .openapi(listProfilesRoute, async (c) => c.json(await listProfiles(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(getProfileRoute, async (c) => c.json(await getProfile(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(patchProfileRoute, async (c) =>
+    c.json(await updateProfile(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(publishRoute, async (c) => c.json(await publishProfile(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(unpublishRoute, async (c) => c.json(await unpublishProfile(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(listB2bRoute, async (c) => c.json(await listB2bEnquiries(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(handledRoute, async (c) =>
+    c.json(await markB2bHandled(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  );
