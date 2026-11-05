@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { isYes, readApplications, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
+import { isDiagnosticWorkbook, isYes, readApplications, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
 import type { ApplicationListView, ApplicationsImportedView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
@@ -57,6 +57,9 @@ export async function importApplications(
 ): Promise<ApplicationsImportedView> {
   requireStaff(ctx.principal, ["admin", "facilitator"], "load application responses");
   const sheets = readUploadedWorkbook(input.contentBase64);
+  if (isDiagnosticWorkbook(sheets)) {
+    throw new ServiceError("invalid", "That is the diagnostic workbook, not a form's responses. Load it on the Register tab.");
+  }
   let read: ReturnType<typeof readApplications>;
   try {
     read = readApplications(sheets);

@@ -33,6 +33,7 @@ export {
   deriveRegister,
   exportReadinessScore,
   financePriority,
+  isDiagnosticWorkbook,
   readRegister,
   readinessLevel,
   summariseRegister,
@@ -49,5 +50,5 @@ export type {
   RegisterSummary,
   SheetGrid,
 } from "./register";
-export { APPLICATION_QUESTIONS, applicationCountry, isYes, readApplications, tidyPhone, timesApplied } from "./applications";
+export { APPLICATION_QUESTIONS, applicationCountry, isApplicationResponses, isYes, readApplications, tidyPhone, timesApplied } from "./applications";
 export type { ApplicationInput, ApplicationQuestionKey, ReadApplicationsResult } from "./applications";

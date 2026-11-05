@@ -189,6 +189,9 @@ function findResponses(sheets: Readonly<Record<string, SheetGrid>>): { grid: She
   return null;
 }
 
+/** Whether the sheets are a form's responses: one has "Timestamp" and "Business Name" headings. */
+export const isApplicationResponses = (sheets: Readonly<Record<string, SheetGrid>>): boolean => findResponses(sheets) !== null;
+
 /** Reads the responses from a Google Forms export. Throws a sentence fit to show when the sheet isn't one. */
 export function readApplications(sheets: Readonly<Record<string, SheetGrid>>): ReadApplicationsResult {
   const found = findResponses(sheets);

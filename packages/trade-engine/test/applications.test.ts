@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationCountry, isYes, readApplications, tidyPhone, timesApplied, type Cell } from "../src";
+import { applicationCountry, isApplicationResponses, isYes, readApplications, tidyPhone, timesApplied, type Cell } from "../src";
 
 const country = (location: string | null, phone: string | null = null, email: string | null = null) => applicationCountry({ location, email, phone });
 
@@ -163,5 +163,14 @@ describe("counting", () => {
   it("tells a yes from other answers", () => {
     expect(["Yes", "yes", " Yes, please", "Y"].map(isYes)).toEqual([true, true, true, true]);
     expect(["No", "Not yet", "Maybe", undefined, ""].map(isYes)).toEqual([false, false, false, false, false]);
+  });
+});
+
+describe("telling a form's responses from other files", () => {
+  it("knows them by the Timestamp and Business Name headings, whatever the sheet is called", () => {
+    expect(isApplicationResponses(sheets(response()))).toBe(true);
+    expect(isApplicationResponses({ Responses: [HEADINGS] })).toBe(true);
+    expect(isApplicationResponses({ "Master SME Database": [["SME ID", "Company Name"]] })).toBe(false);
+    expect(isApplicationResponses({})).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { asc, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { deriveRegister, readRegister, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
+import { deriveRegister, isApplicationResponses, readRegister, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
 import type { RegisterImportedView, RegisterListView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
@@ -38,6 +38,9 @@ export async function listRegister(ctx: Ctx): Promise<RegisterListView> {
 export async function importRegister(ctx: Ctx, input: { fileName?: string | undefined; contentBase64: string }): Promise<RegisterImportedView> {
   requireStaff(ctx.principal, ["admin", "facilitator"], "load the SME register");
   const sheets = readUploadedWorkbook(input.contentBase64);
+  if (isApplicationResponses(sheets)) {
+    throw new ServiceError("invalid", "That is a form's responses, not the diagnostic workbook. Load it on the Applications tab.");
+  }
 
   let read: ReturnType<typeof readRegister>;
   try {

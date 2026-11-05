@@ -3,6 +3,7 @@ import {
   bankNames,
   deriveRegister,
   financePriority,
+  isDiagnosticWorkbook,
   readRegister,
   readinessLevel,
   summariseRegister,
@@ -281,5 +282,13 @@ describe("the summary", () => {
 
   it("is empty for nobody", () => {
     expect(summariseRegister([])).toEqual({ total: 0, assessed: 0, averageReadiness: null, totalCapitalGap: 0, byLevel: { high: 0, medium: 0, low: 0, notAssessed: 0 }, banks: [] });
+  });
+});
+
+describe("telling the workbook from other files", () => {
+  it("knows the diagnostic workbook by its master sheet, however its name is written", () => {
+    expect(isDiagnosticWorkbook(workbook([business()]))).toBe(true);
+    expect(isDiagnosticWorkbook({ "master  SME database": [] })).toBe(true);
+    expect(isDiagnosticWorkbook({ "Form Responses 1": [] })).toBe(false);
   });
 });
