@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import {
   BENEFIT_AREA_IDS,
   BOOKING_STATUSES,
+  DELEGATE_STATUSES,
   ENQUIRY_STATUSES,
   MAX_FEATURES,
   MAX_PRICE_CENTS,
@@ -451,3 +452,135 @@ export const EnquiryPatch = z
 export const EnquiryStatusBody = z
   .object({ status: EnquiryStatusEnum, note: z.string().trim().min(1).max(1000).optional() })
   .openapi("SummitEnquiryStatusBody");
+
+
+// ---- Delegates ----
+
+const DelegateStatusEnum = z.enum(DELEGATE_STATUSES);
+const BadgeStateEnum = z.enum(["valid", "already_checked_in", "not_valid"]);
+
+export const DelegateRegistrationBody = z
+  .object({
+    categorySlug: z.string().trim().min(1).max(60).openapi({ example: "general-business", description: "The delegate category, by its address in the catalogue." }),
+    fullName: z.string().trim().min(2).max(120),
+    email: Email,
+    phone: optionalText(40),
+    organisation: optionalText(160).openapi({ description: "Required, except for a selected SME, whose business is taken from its application." }),
+    jobTitle: z.string().trim().min(1).max(120),
+    country: CountryCode.optional().openapi({ description: "Required, except for a selected SME, whose country is taken from its application." }),
+    sector: optionalText(120),
+    needs: optionalText(500).openapi({ description: "Dietary or accessibility needs." }),
+    applicationNumber: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^SUM-\d{4,}$/, "Use the application number from your ADTIS application, like SUM-000123.")
+      .optional()
+      .openapi({ example: "SUM-000123", description: "A selected SME's application number: it registers free, with no second application." }),
+    consent: z.literal(true).openapi({ description: "The delegate agreed to be contacted about the summit. Must be true." }),
+    nickname: z.string().optional().openapi({ description: "A trap for bots: people leave it empty. Anything in it is discarded without a trace." }),
+  })
+  .openapi("SummitDelegateRegistrationBody");
+
+export const DelegateReceipt = z
+  .object({
+    number: z.string().openapi({ example: "DEL-00042" }),
+    categoryName: z.string(),
+    price: z.string().openapi({ example: "$65" }),
+    paymentRequired: z.boolean().openapi({ description: "False for a complimentary registration." }),
+    alreadyRegistered: z.boolean().openapi({ description: "This address was registered and paid already, so nothing was changed." }),
+  })
+  .openapi("SummitDelegateReceipt");
+
+export const PublicBadge = z
+  .object({
+    number: z.string(),
+    fullName: z.string(),
+    organisation: z.string(),
+    country: z.string(),
+    category: z.string(),
+    edition: z.object({ name: z.string(), venue: z.string(), datesNote: z.string() }),
+    valid: z.boolean().openapi({ description: "False while the payment is unverified, or if the registration was cancelled." }),
+    reason: z.string().nullable().openapi({ description: "Why the badge is not valid yet." }),
+    url: z.string().nullable().openapi({ description: "The badge's address: what the QR code holds." }),
+  })
+  .openapi("SummitPublicBadge");
+
+export const BadgeParam = z.object({ token: z.string().min(16).max(64).regex(/^[A-Za-z0-9_-]+$/) });
+
+export const DelegateItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    status: DelegateStatusEnum,
+    productId: z.uuid(),
+    categoryName: z.string(),
+    fullName: z.string(),
+    email: z.string(),
+    organisation: z.string(),
+    country: z.string(),
+    sector: z.string().nullable(),
+    amountCents: z.number().int(),
+    paymentStatus: PaymentStatusEnum.nullable(),
+    selectedSme: z.boolean(),
+    checkedInAt: Timestamp.nullable(),
+    createdAt: Timestamp,
+  })
+  .openapi("SummitDelegateItem");
+
+export const DelegateDetail = DelegateItem.extend({
+  phone: z.string().nullable(),
+  jobTitle: z.string(),
+  needs: z.string().nullable(),
+  application: z.object({ id: z.uuid(), number: z.string() }).nullable(),
+  payment: Payment.nullable(),
+  badge: z.object({ state: BadgeStateEnum, problems: z.array(z.string()), url: z.string().nullable() }),
+  checkedInBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+}).openapi("SummitDelegateDetail");
+
+export const DelegateQuery = z.object({
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+  status: DelegateStatusEnum.optional(),
+  productId: z.uuid().optional(),
+  paymentStatus: PaymentStatusEnum.optional(),
+  checkedIn: z.enum(["true", "false"]).optional(),
+  country: CountryCode.optional(),
+  q: z.string().trim().max(100).optional().openapi({ description: "Part of the name, organisation, email or reference." }),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const DelegateList = z
+  .object({
+    items: z.array(DelegateItem),
+    total: z.number().int(),
+    totals: z
+      .object({
+        registered: z.number().int(),
+        cancelled: z.number().int(),
+        paymentConfirmed: z.number().int().openapi({ description: "Registered delegates whose payment is verified (or who owe nothing)." }),
+        paymentPending: z.number().int().openapi({ description: "Registered delegates whose payment is pending or awaiting verification." }),
+        checkedIn: z.number().int(),
+      })
+      .openapi({ description: "For the whole edition, whatever the filters." }),
+  })
+  .openapi("SummitDelegateList");
+
+export const DelegateParam = z.object({ id: z.uuid() });
+
+export const DelegatePatch = z
+  .object({
+    fullName: z.string().trim().min(2).max(120),
+    phone: z.string().trim().min(5).max(40).nullable(),
+    organisation: z.string().trim().min(1).max(160),
+    jobTitle: z.string().trim().min(1).max(120),
+    country: CountryCode,
+    sector: z.string().trim().min(1).max(120).nullable(),
+    needs: z.string().trim().min(1).max(500).nullable(),
+  })
+  .partial()
+  .openapi("SummitDelegatePatch");
+
+export const CheckInQuery = z.object({
+  code: z.string().trim().min(1).max(300).openapi({ description: "What the QR code holds (the badge's address), the token in it, or the registration reference." }),
+});

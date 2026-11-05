@@ -5,7 +5,7 @@ import type { Executor } from "./db";
 
 /**
  * How many of each product of an edition are taken: the approved and confirmed exhibitor bookings for a package, and
- * confirmed sponsors for a level or opportunity and (as that flow is added) the registered delegates for a category. A pending application takes nothing, so it can't use up a booth before an administrator approves it.
+ * confirmed sponsors for a level or opportunity and the registered delegates for a category. A pending application takes nothing, so it can't use up a booth before an administrator approves it.
  */
 export async function takenCounts(db: Executor, editionId: string): Promise<Map<string, number>> {
   const booths = await db
@@ -18,7 +18,13 @@ export async function takenCounts(db: Executor, editionId: string): Promise<Map<
     .from(schema.sponsorEnquiry)
     .where(and(eq(schema.sponsorEnquiry.editionId, editionId), eq(schema.sponsorEnquiry.status, "confirmed")))
     .groupBy(schema.sponsorEnquiry.productId);
+  const delegates = await db
+    .select({ productId: schema.delegateRegistration.productId, n: count() })
+    .from(schema.delegateRegistration)
+    .where(and(eq(schema.delegateRegistration.editionId, editionId), eq(schema.delegateRegistration.status, "registered")))
+    .groupBy(schema.delegateRegistration.productId);
   const taken = new Map(booths.map((row) => [row.productId, row.n]));
+  for (const row of delegates) taken.set(row.productId, (taken.get(row.productId) ?? 0) + row.n);
   for (const row of sponsors) taken.set(row.productId, (taken.get(row.productId) ?? 0) + row.n);
   return taken;
 }

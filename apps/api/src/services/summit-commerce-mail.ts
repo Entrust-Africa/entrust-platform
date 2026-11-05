@@ -15,10 +15,11 @@ export interface Notice {
   action?: { label: string; url: string };
 }
 
-/** The public ADTIS site, for the buttons in the emails. Unset, the emails have no button. */
-export function siteUrl(path = ""): string | null {
-  const base = process.env.SUMMIT_SITE_URL?.trim().replace(/\/+$/, "");
-  return base ? `${base}${path}` : null;
+/** The public ADTIS site, for the buttons in the emails and the address in a badge's QR code. */
+export function siteUrl(path = ""): string {
+  const configured = process.env.SUMMIT_SITE_URL?.trim().replace(/\/+$/, "");
+  const base = configured || (process.env.NODE_ENV === "production" ? "https://adtis.entrust-africa.com" : "http://localhost:3002");
+  return `${base}${path}`;
 }
 
 /** Queues a notice. Returns whether it was queued. */

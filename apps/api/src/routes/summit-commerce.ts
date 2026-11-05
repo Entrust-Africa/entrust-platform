@@ -9,7 +9,16 @@ import {
   BookingList,
   BookingParam,
   BookingQuery,
+  BadgeParam,
   Catalogue,
+  CheckInQuery,
+  DelegateDetail,
+  DelegateList,
+  DelegateParam,
+  DelegatePatch,
+  DelegateQuery,
+  DelegateReceipt,
+  DelegateRegistrationBody,
   EnquiryDetail,
   EnquiryList,
   EnquiryParam,
@@ -22,6 +31,7 @@ import {
   Payment,
   PaymentParam,
   PaymentPatch,
+  PublicBadge,
   ReasonBody,
   SponsorEnquiryBody,
   SponsorEnquiryReceipt,
@@ -36,6 +46,7 @@ import {
 } from "../schemas/summit-commerce";
 import { allocateBooth, applyForBooth, approveBooking, cancelBooking, confirmBooking, getBooking, listBookings, rejectBooking } from "../services/summit-commerce-bookings";
 import { changeEnquiryStatus, getEnquiry, listEnquiries, submitEnquiry, updateEnquiry } from "../services/summit-commerce-enquiries";
+import { cancelDelegate, checkIn, getDelegate, listDelegates, lookupDelegate, publicBadge, registerDelegate, resendConfirmation, updateDelegate } from "../services/summit-commerce-delegates";
 import { evidenceUrl, updatePayment } from "../services/summit-commerce-payments";
 import { createEdition, createProduct, getEdition, listEditions, publicCatalogue, updateEdition, updateProduct } from "../services/summit-commerce";
 import { clearRouter, contextFor, json, listErrors, problem, writeErrors } from "./clear/shared";
@@ -97,7 +108,36 @@ const sponsorEnquiryRoute = createRoute({
   },
 });
 
+const delegateRoute = createRoute({
+  method: "post",
+  path: "/delegates",
+  tags,
+  summary: "Register as a delegate",
+  description:
+    "For the public registration form. It needs no sign-in. A paid category records the registration, opens a payment and emails the reference, the payment instructions and the badge link; the badge becomes valid when an administrator verifies the payment. The Selected SME category registers free, with the application number and the email of a member of the selected business: its business, country and sector are taken from the assessment, so no second application is needed. One live registration per email address and edition.",
+  request: { body: { required: true, content: json(DelegateRegistrationBody) } },
+  responses: {
+    201: { description: "The registration was recorded", content: json(DelegateReceipt) },
+    400: problem("The form isn't complete or valid"),
+    404: problem("Registration isn't open, or there is no such category"),
+    422: problem("The category is sold out, the selected-SME details don't match, or the business has used its free registration"),
+  },
+});
+
+const badgeRoute = createRoute({
+  method: "get",
+  path: "/badges/{token}",
+  tags,
+  summary: "A delegate's badge",
+  description:
+    "For the badge page the registration email links to: the delegate's name, organisation, category and reference, whether the badge is valid yet, and the address its QR code holds. The token in the address is the only key; it holds no email, phone or payment detail.",
+  request: { params: BadgeParam },
+  responses: { 200: { description: "The badge", content: json(PublicBadge) }, 400: problem("The address is malformed"), 404: problem("No such badge") },
+});
+
 export const summitCommercePublic = publicRouter
+  .openapi(delegateRoute, async (c) => c.json(await registerDelegate({ db: getDb(), now: new Date() }, c.req.valid("json")), 201))
+  .openapi(badgeRoute, async (c) => c.json(await publicBadge({ db: getDb() }, c.req.valid("param").token), 200))
   .openapi(catalogueRoute, async (c) => c.json(await publicCatalogue({ db: getDb() }), 200))
   .openapi(sponsorEnquiryRoute, async (c) => c.json(await submitEnquiry({ db: getDb(), now: new Date() }, c.req.valid("json")), 201))
   .openapi(exhibitorApplicationRoute, async (c) => c.json(await applyForBooth({ db: getDb(), now: new Date() }, c.req.valid("json")), 201));
@@ -311,6 +351,79 @@ const enquiryStatusRoute = createRoute({
   responses: { 200: { description: "The enquiry", content: json(EnquiryDetail) }, ...admin, 409: writeErrors[409], 422: writeErrors[422] },
 });
 
+const listDelegatesRoute = createRoute({
+  method: "get",
+  path: "/delegates",
+  tags,
+  summary: "List the delegate registrations",
+  description: "Newest first, for the current edition unless another is named, with the totals for the whole edition. Entrust administrators and facilitators.",
+  request: { query: DelegateQuery },
+  responses: { 200: { description: "The delegates", content: json(DelegateList) }, ...listErrors, 403: admin[403] },
+});
+
+const delegateActions = { ...admin, 409: writeErrors[409], 422: writeErrors[422] };
+
+const getDelegateRoute = createRoute({
+  method: "get",
+  path: "/delegates/{id}",
+  tags,
+  summary: "One delegate registration",
+  description: "The details, the payment, whether the badge is valid and why not, and the badge address. Entrust administrators and facilitators.",
+  request: { params: DelegateParam },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...admin },
+});
+
+const patchDelegateRoute = createRoute({
+  method: "patch",
+  path: "/delegates/{id}",
+  tags,
+  summary: "Correct a delegate's details",
+  description: "Name, phone, organisation, job title, country, sector and needs, such as a misspelt name before the badge is printed. Entrust administrators and facilitators.",
+  request: { params: DelegateParam, body: { required: true, content: json(DelegatePatch) } },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
+});
+
+const cancelDelegateRoute = createRoute({
+  method: "post",
+  path: "/delegates/{id}/cancel",
+  tags,
+  summary: "Cancel a registration",
+  description: "The badge stops being valid and an unpaid payment is cancelled. A verified payment is left for an administrator to refund. Not possible after check-in.",
+  request: { params: DelegateParam, body: { required: true, content: json(ReasonBody) } },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
+});
+
+const resendRoute = createRoute({
+  method: "post",
+  path: "/delegates/{id}/resend",
+  tags,
+  summary: "Send the confirmation again",
+  description: "Emails the delegate the reference, payment instructions and badge link again.",
+  request: { params: DelegateParam },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
+});
+
+const lookupRoute = createRoute({
+  method: "get",
+  path: "/check-in/lookup",
+  tags,
+  summary: "Find a delegate at the door",
+  description: "From a scanned QR code (the badge's address), the token in it, or the registration reference. Shows whether the badge is valid. Entrust administrators and facilitators.",
+  request: { query: CheckInQuery },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...admin, 422: writeErrors[422] },
+});
+
+const checkInRoute = createRoute({
+  method: "post",
+  path: "/delegates/{id}/check-in",
+  tags,
+  summary: "Check a delegate in",
+  description:
+    "Marks the delegate as arrived. Refused, with the reasons, for a cancelled registration or one whose payment has not been verified, and for a badge already used.",
+  request: { params: DelegateParam },
+  responses: { 200: { description: "The delegate", content: json(DelegateDetail) }, ...delegateActions },
+});
+
 export const summitCommerce = router
   .openapi(listEditionsRoute, async (c) => c.json(await listEditions(await contextFor(c.get("user"))), 200))
   .openapi(createEditionRoute, async (c) => c.json(await createEdition(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -350,4 +463,15 @@ export const summitCommerce = router
   )
   .openapi(enquiryStatusRoute, async (c) =>
     c.json(await changeEnquiryStatus(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
-  );
+  )
+  .openapi(listDelegatesRoute, async (c) => c.json(await listDelegates(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(lookupRoute, async (c) => c.json(await lookupDelegate(await contextFor(c.get("user")), c.req.valid("query").code), 200))
+  .openapi(getDelegateRoute, async (c) => c.json(await getDelegate(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(patchDelegateRoute, async (c) =>
+    c.json(await updateDelegate(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(cancelDelegateRoute, async (c) =>
+    c.json(await cancelDelegate(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(resendRoute, async (c) => c.json(await resendConfirmation(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(checkInRoute, async (c) => c.json(await checkIn(await contextFor(c.get("user")), c.req.valid("param").id), 200));
