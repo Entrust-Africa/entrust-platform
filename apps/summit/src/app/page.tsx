@@ -59,7 +59,7 @@ export default async function SummitLandingPage() {
 
         <header className="relative z-10 flex items-center justify-between gap-6 px-6 py-6 lg:px-16">
           <a href="#top" className="font-display text-2xl leading-none tracking-wide">
-            DTS-26
+            ADTIS-27
           </a>
           <nav aria-label="Main" className="hidden items-center gap-10 md:flex">
             {[
