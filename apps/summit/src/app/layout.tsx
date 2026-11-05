@@ -7,9 +7,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
-  title: "Diaspora Trade Summit · Addis Ababa, Ethiopia",
+  title: "Africa Diaspora Trade & Investment Summit 2027 · Addis Ababa, Ethiopia",
   description:
-    "Where business meets the world. Three days of structured trade meetings, market briefings and deal-making in Addis Ababa.",
+    "Connecting Africa and its global diaspora through trade, investment and business partnerships. Three days in Addis Ababa, January 2027 (dates to be announced).",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

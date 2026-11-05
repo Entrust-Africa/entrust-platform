@@ -1,235 +1,155 @@
-import { ArrowUpRight, Check, Handshake, Ticket } from "lucide-react";
-import { OpenRegistration, RegistrationDialog } from "@/components/registration";
-import { EVENT_LINE, HIGHLIGHTS, HOST, PASSES, SUPPORT_EMAIL } from "@/lib/content";
-import { applicationsLine, applyUrl, countryNames, getPeriod, signInUrl } from "@/lib/period";
+import Link from "next/link";
+import { ArrowUpRight, Handshake, Landmark, Ticket, Users } from "lucide-react";
+import { HostedBy, SectionLabel, SiteFooter, SiteHeader, amberButton, outlineOnDark } from "@/components/site";
+import { getCatalogue, type Product } from "@/lib/commerce";
+import { EVENT_LINE, HEADLINE, INTRO, OBJECTIVES, WHO, WHY } from "@/lib/content";
+import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
 
-// The application window changes when Entrust edits the period, so every visit asks the API.
+// The application window and the prices change when Entrust edits them, so every visit asks the API.
 export const dynamic = "force-dynamic";
 
-const amberButton =
-  "inline-flex h-14 items-center justify-center bg-amber px-8 text-sm font-semibold text-ink transition-[filter] hover:brightness-110";
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="font-mono text-[11px] tracking-[0.2em] text-amber-ink uppercase">{children}</p>;
-}
-
-/** The host's logo on a white plate, since the logo's red and green only read on a light ground. */
-function HostedBy({ className = "" }: { className?: string }) {
-  return (
-    <div className={`flex flex-wrap items-center gap-x-4 gap-y-3 ${className}`}>
-      <span className="font-mono text-[11px] tracking-[0.2em] text-white/70 uppercase">Hosted by</span>
-      <a
-        href={HOST.url}
-        className="bg-white p-2 transition-[filter] hover:brightness-95"
-        aria-label={`${HOST.name} (opens their website)`}
-      >
-        <img
-          src="/images/pan-african-chamber-logo.png"
-          alt={HOST.name}
-          width={300}
-          height={300}
-          className="size-24 sm:size-28"
-        />
-      </a>
-    </div>
-  );
+/** "From $250", the lowest price among products, or null if there are none. */
+function fromPrice(products: Product[]): string | null {
+  const priced = products.filter((p) => !p.complimentary);
+  if (priced.length === 0) return null;
+  return `From ${priced.reduce((min, p) => (p.priceCents < min.priceCents ? p : min)).price}`;
 }
 
 export default async function SummitLandingPage() {
-  const period = await getPeriod();
+  const [period, catalogue] = await Promise.all([getPeriod(), getCatalogue()]);
   const apply = applyUrl();
   const statusLine = applicationsLine(period);
   const countries = period ? countryNames(period.countries) : [];
+
+  const tiles = [
+    { href: "/exhibit", label: "Exhibit", text: "Book a booth and show your products to buyers and investors.", price: fromPrice(catalogue?.exhibition ?? []) },
+    { href: "/sponsor", label: "Sponsor", text: "Partner with ADTIS, or sponsor a pavilion, a session or the investor reception.", price: fromPrice([...(catalogue?.sponsorship ?? []), ...(catalogue?.opportunities ?? [])]) },
+    { href: "/participate", label: "Participate", text: "Register as a business, premium, diaspora or investor and buyer delegate.", price: fromPrice(catalogue?.delegates ?? []) },
+  ];
+
+  const actions = [
+    { href: apply, icon: Handshake, title: "Register as an SME", text: "Apply to be one of the 100 selected African businesses. Free to apply; an assessment decides." },
+    { href: "/participate/register?category=investor-buyer", icon: Landmark, title: "Register as a buyer or investor", text: "Meet selected SMEs through priority B2B matchmaking and facilitated introductions." },
+    { href: "/participate/register?category=diaspora-business", icon: Users, title: "Participate as a diaspora partner", text: "Invest, partner and bring your expertise home: the Brain Gain agenda." },
+    { href: "/sponsor", icon: Ticket, title: "Become a sponsor or institutional partner", text: "Sponsorship levels, pavilions and sessions for organisations and institutions." },
+  ];
 
   return (
     <>
       {/* Hero */}
       <section className="relative isolate flex min-h-[44rem] flex-col overflow-hidden bg-ink text-white lg:min-h-[53.5rem]">
         {/* Placeholder photo: the African Union Conference Centre sent by Entrust; swap for the event's own. */}
-        <img
-          src="/images/aicc.jpg"
-          alt=""
-          className="absolute inset-0 -z-30 size-full object-cover grayscale contrast-110"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.55)_0%,rgb(26_21_18/0.3)_28%,rgb(26_21_18/0.78)_55%,rgb(26_21_18/0.95)_100%)]"
-        />
+        <img src="/images/aicc.jpg" alt="" className="absolute inset-0 -z-30 size-full object-cover grayscale contrast-110" />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(to_bottom,rgb(26_21_18/0.55)_0%,rgb(26_21_18/0.3)_28%,rgb(26_21_18/0.78)_55%,rgb(26_21_18/0.95)_100%)]" />
         <div aria-hidden className="halftone absolute inset-0 -z-10" />
 
-        <header className="relative z-10 flex items-center justify-between gap-6 px-6 py-6 lg:px-16">
-          <a href="#top" className="font-display text-2xl leading-none tracking-wide">
-            ADTIS-27
-          </a>
-          <nav aria-label="Main" className="hidden items-center gap-10 md:flex">
-            {[
-              ["About", "#about"],
-              ["Register", "#register"],
-              ["Tickets", "#tickets"],
-            ].map(([label, href]) => (
-              <a
-                key={href}
-                href={href}
-                className="font-mono text-xs tracking-wide text-white/85 hover:text-white"
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
-          <a href="#register" className="inline-flex h-10 items-center bg-amber px-5 text-xs font-semibold text-ink hover:brightness-110">
-            Register
-          </a>
-        </header>
+        <SiteHeader overHero />
 
         <div id="top" className="relative z-10 mt-auto px-6 pb-16 lg:px-16 lg:pb-20">
-          <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/80 uppercase">
-            <span aria-hidden className="h-px w-10 bg-amber" />
-            {EVENT_LINE}
-          </p>
-          <h1 className="mt-6 max-w-3xl font-display text-[clamp(3rem,8vw,6rem)] leading-[0.98] uppercase">
-            Where business meets the world
-          </h1>
-          <div className="mt-10 flex flex-wrap gap-4">
-            <a href="#register" className={amberButton}>
-              Reserve Your Seat
-            </a>
-            <a
-              href="#about"
-              className="inline-flex h-14 items-center justify-center border border-white/35 px-8 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10"
-            >
-              View the Program
-            </a>
+          <div className="mx-auto max-w-[82rem]">
+            <p className="flex items-center gap-4 font-mono text-xs tracking-[0.2em] text-white/80 uppercase">
+              <span aria-hidden className="h-px w-10 shrink-0 bg-amber" />
+              {EVENT_LINE}
+            </p>
+            <h1 className="mt-6 max-w-4xl font-display text-[clamp(2.25rem,5.4vw,4.5rem)] leading-[1.02] uppercase">{HEADLINE}</h1>
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/80">{INTRO}</p>
+            <div className="mt-10 flex flex-wrap gap-4">
+              <Link href="/participate/register" className={amberButton}>
+                Register as a Delegate
+              </Link>
+              <Link href="/smes" className={outlineOnDark}>
+                Explore African SMEs
+              </Link>
+            </div>
+            <HostedBy className="mt-12" />
           </div>
-          <HostedBy className="mt-12" />
         </div>
       </section>
 
-      {/* 01 Why this summit */}
+      {/* 01 What it is and why it matters */}
       <section id="about" className="bg-white px-6 py-20 lg:px-16 lg:py-28">
         <div className="mx-auto max-w-[82rem]">
-          <SectionLabel>01 — Why this summit</SectionLabel>
+          <SectionLabel>01 — Why ADTIS matters</SectionLabel>
           <div className="mt-8 grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
-            <h2 className="font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">
-              The global marketplace for businesses
-            </h2>
-            <div>
-              <p className="text-base leading-[1.8] text-ink/70">
-                Diaspora Trade Summit connects buyers and sellers from businesses across Africa and the
-                global diaspora. Three days of structured trade meetings, market briefings and deal-making in Addis
-                Ababa — built to move products, services and capital across borders.
-              </p>
-              <ul className="mt-8 space-y-6">
-                {HIGHLIGHTS.map(({ title, text }) => (
-                  <li key={title} className="flex gap-3">
-                    <ArrowUpRight aria-hidden className="mt-0.5 size-4 shrink-0 text-amber" />
-                    <div>
-                      <p className="text-sm font-semibold">{title}</p>
-                      <p className="mt-1 text-sm leading-relaxed text-ink/60">{text}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <h2 className="font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">A practical bridge between African businesses and the world</h2>
+            <div className="space-y-5 text-base leading-[1.8] text-ink/70">
+              {WHY.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
             </div>
           </div>
+          <ul className="mt-14 grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-4">
+            {OBJECTIVES.map(({ title, text }) => (
+              <li key={title} className="bg-white p-6">
+                <ArrowUpRight aria-hidden className="size-4 text-amber" />
+                <p className="mt-3 text-sm font-semibold">{title}</p>
+                <p className="mt-2 text-sm leading-relaxed text-ink/60">{text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
-      {/* 02 Tickets */}
-      <section id="tickets" className="bg-paper px-6 py-20 lg:px-16 lg:py-28">
+      {/* 02 Who should take part */}
+      <section className="bg-paper px-6 py-20 lg:px-16 lg:py-28">
         <div className="mx-auto max-w-[82rem]">
-          <SectionLabel>02 — Tickets</SectionLabel>
-          <p className="mt-8 max-w-xs text-sm leading-relaxed text-ink/70">
-            All passes include full program access, catering and the welcome reception.
-          </p>
+          <SectionLabel>02 — Who should take part</SectionLabel>
+          <h2 className="mt-8 max-w-3xl font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">From Africa, the Caribbean, Europe, North America, the Middle East and beyond</h2>
+          <ul className="mt-12 grid gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+            {WHO.map((who) => (
+              <li key={who} className="flex gap-3 border-t border-line pt-3 text-sm leading-relaxed text-ink/80">
+                <span aria-hidden className="mt-2 size-1.5 shrink-0 bg-amber" />
+                {who}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* 03 Exhibit, sponsor, participate */}
+      <section id="tickets" className="bg-ink px-6 py-20 text-white lg:px-16 lg:py-28">
+        <div className="mx-auto max-w-[82rem]">
+          <SectionLabel onDark>03 — Commercial opportunities</SectionLabel>
+          <h2 className="mt-8 font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">Exhibit | Sponsor | Participate</h2>
           <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {PASSES.map((pass) => (
-              <article
-                key={pass.id}
-                className={
-                  pass.featured
-                    ? "flex flex-col border border-amber bg-ink text-white"
-                    : "flex flex-col border border-line bg-white"
-                }
-              >
-                <div className="p-8">
-                  <p className="font-mono text-[11px] tracking-[0.2em] text-amber uppercase">{pass.name}</p>
-                  <p className="mt-5 font-display text-6xl leading-none">{pass.price}</p>
-                  <p className={pass.featured ? "mt-5 text-sm text-white/70" : "mt-5 text-sm text-ink/70"}>
-                    {pass.audience}
-                  </p>
-                </div>
-                <ul
-                  className={
-                    pass.featured
-                      ? "flex-1 space-y-3 border-t border-white/15 px-8 py-6"
-                      : "flex-1 space-y-3 border-t border-line px-8 py-6"
-                  }
-                >
-                  {pass.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-sm">
-                      <Check aria-hidden className="size-4 shrink-0 text-amber" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <OpenRegistration
-                  pass={pass.id}
-                  className={
-                    pass.featured
-                      ? "h-14 bg-amber text-sm font-semibold text-ink transition-[filter] hover:brightness-110"
-                      : "h-14 bg-ink text-sm font-semibold text-white transition-colors hover:bg-ink-deep"
-                  }
-                >
-                  Get {pass.name}
-                </OpenRegistration>
-              </article>
+            {tiles.map((t) => (
+              <Link key={t.href} href={t.href} className="group flex flex-col border border-white/20 p-8 transition-colors hover:border-amber hover:bg-white/5">
+                <span className="font-display text-4xl leading-none uppercase">{t.label}</span>
+                <span className="mt-4 flex-1 text-sm leading-relaxed text-white/70">{t.text}</span>
+                {t.price && <span className="mt-6 font-mono text-xs tracking-wide text-amber uppercase">{t.price} · USD</span>}
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold">
+                  See the options <ArrowUpRight aria-hidden className="size-4 text-amber" />
+                </span>
+              </Link>
             ))}
           </div>
+          {catalogue?.edition && <p className="mt-8 max-w-2xl text-xs leading-relaxed text-white/55">{catalogue.edition.taxNote}</p>}
         </div>
       </section>
 
-      {/* 03 Register */}
+      {/* 04 Four ways to take part */}
       <section id="register" className="bg-white px-6 py-20 lg:px-16 lg:py-28">
         <div className="mx-auto max-w-[82rem]">
-          <SectionLabel>03 — Register</SectionLabel>
+          <SectionLabel>04 — Take part</SectionLabel>
           <div className="mt-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <h2 className="font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">
-              Two ways to take part
-            </h2>
-            <p className="max-w-xs text-sm leading-relaxed text-ink/70">Choose how you&apos;ll join us in Addis Ababa.</p>
+            <h2 className="font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] uppercase">How would you like to join us?</h2>
+            <p className="max-w-xs text-sm leading-relaxed text-ink/70">SME registration and assessment is separate from general summit registration.</p>
           </div>
-
-          <div className="mt-12 grid gap-6 lg:grid-cols-2">
-            <OpenRegistration className="group flex flex-col gap-3 bg-ink p-8 text-left text-white transition-colors hover:bg-ink-deep">
-              <span className="flex items-center gap-3">
-                <Ticket aria-hidden className="size-5 text-amber" />
-                <span className="font-display text-2xl leading-none uppercase">Register as a participant</span>
-              </span>
-              <span className="text-sm text-white/70">Attend all three days with a ticket tier of your choice.</span>
-            </OpenRegistration>
-
-            <a
-              href={apply}
-              className="group flex flex-col gap-3 border border-amber bg-ink p-8 text-white transition-colors hover:bg-ink-deep"
-            >
-              <span className="flex items-center gap-3">
-                <Handshake aria-hidden className="size-5 text-amber" />
-                <span className="font-display text-2xl leading-none uppercase">Register as a buyer / seller</span>
-              </span>
-              <span className="text-sm text-white/70">Apply to the verified trade program. Free to apply — vetting required.</span>
-            </a>
+          <div className="mt-12 grid gap-6 md:grid-cols-2">
+            {actions.map((a) => (
+              <a key={a.title} href={a.href} className="group flex flex-col gap-3 bg-ink p-8 text-white transition-colors hover:bg-ink-deep">
+                <span className="flex items-center gap-3">
+                  <a.icon aria-hidden className="size-5 shrink-0 text-amber" />
+                  <span className="font-display text-2xl leading-tight uppercase">{a.title}</span>
+                </span>
+                <span className="text-sm leading-relaxed text-white/70">{a.text}</span>
+              </a>
+            ))}
           </div>
-
           {(statusLine || countries.length > 0) && (
-            <div className="mt-6 space-y-2 lg:ml-auto lg:max-w-[calc(50%-0.75rem)]">
-              {statusLine && (
-                <p className="font-mono text-[11px] tracking-[0.16em] text-amber-ink uppercase">
-                  Buyer / seller applications: {statusLine.replace(/^Applications /, "")}
-                </p>
-              )}
-              {countries.length > 0 && (
-                <p className="text-xs leading-relaxed text-ink/60">Open to businesses in {countries.join(", ")}.</p>
-              )}
+            <div className="mt-6 space-y-2">
+              {statusLine && <p className="font-mono text-[11px] tracking-[0.16em] text-amber-ink uppercase">SME applications: {statusLine.replace(/^Applications /, "")}</p>}
+              {countries.length > 0 && <p className="text-xs leading-relaxed text-ink/60">Open to businesses in {countries.join(", ")}.</p>}
             </div>
           )}
         </div>
@@ -238,59 +158,30 @@ export default async function SummitLandingPage() {
       {/* Closing call to action */}
       <section className="relative isolate overflow-hidden px-6 py-28 text-center text-white lg:py-40">
         {/* Placeholder photo: the African Union Conference Centre, Addis Ababa (credit in the footer); swap for the event's own. */}
-        <img
-          src="/images/au-conference-centre.jpg"
-          alt=""
-          className="absolute inset-0 -z-30 size-full object-cover object-[50%_45%]"
-        />
+        <img src="/images/au-conference-centre.jpg" alt="" className="absolute inset-0 -z-30 size-full object-cover object-[50%_45%]" />
         <div aria-hidden className="absolute inset-0 -z-20 bg-[#152a2f]/55" />
         <div aria-hidden className="absolute inset-0 -z-10 bg-ink/15" />
         <div className="mx-auto max-w-3xl">
-          <h2 className="font-display text-[clamp(2.5rem,6vw,4.25rem)] leading-[1.02] uppercase">
-            Seats are limited. The network is not.
-          </h2>
+          <h2 className="font-display text-[clamp(2.5rem,6vw,4.25rem)] leading-[1.02] uppercase">Seats are limited. The network is not.</h2>
           <p className="mx-auto mt-6 max-w-xl text-sm leading-relaxed text-white/80">
-            Join buyers and sellers from businesses across Africa and the diaspora — live in Addis Ababa this
-            January.
+            Join buyers, investors and businesses from across Africa and the diaspora, live in Addis Ababa in January 2027.
           </p>
-          <a href="#register" className={`${amberButton} mt-10`}>
+          <Link href="/participate/register" className={`${amberButton} mt-10`}>
             Register Now
-          </a>
+          </Link>
         </div>
       </section>
 
-      <footer className="bg-ink-deep px-6 py-12 text-white lg:px-16">
-        <div className="mx-auto flex max-w-[82rem] flex-col gap-8 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="font-display text-xl leading-none uppercase">Diaspora Trade Summit</p>
-            <p className="mt-4 font-mono text-[11px] leading-relaxed tracking-wide text-white/55">
-              © 2026 Diaspora Trade Summit · Addis Ababa, Ethiopia
-            </p>
-            <HostedBy className="mt-6" />
-          </div>
-          <nav aria-label="Footer" className="flex flex-wrap gap-x-8 gap-y-3 font-mono text-[11px] tracking-wide text-white/65">
-            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-white">
-              Contact
-            </a>
-            <a href={signInUrl()} className="hover:text-white">
-              Applicant sign in
-            </a>
-          </nav>
-        </div>
-        <p className="mx-auto mt-10 max-w-[82rem] font-mono text-[10px] leading-relaxed tracking-wide text-white/40">
-          Placeholder photos: African Union Conference Centre (hero, supplied by Entrust); African Union Conference Centre
-          building by{" "}
-          <a
-            href="https://commons.wikimedia.org/wiki/File:African_Union_Conference_Centre_building.jpg"
-            className="underline underline-offset-2 hover:text-white/70"
-          >
+      <SiteFooter />
+      <p className="bg-ink-deep px-6 pb-10 font-mono text-[10px] leading-relaxed tracking-wide text-white/40 lg:px-16">
+        <span className="mx-auto block max-w-[82rem]">
+          Placeholder photos: African Union Conference Centre (hero, supplied by Entrust); African Union Conference Centre building by{" "}
+          <a href="https://commons.wikimedia.org/wiki/File:African_Union_Conference_Centre_building.jpg" className="underline underline-offset-2 hover:text-white/70">
             Andrew Moore
           </a>
           , CC BY-SA 2.0, via Wikimedia Commons.
-        </p>
-      </footer>
-
-      <RegistrationDialog />
+        </span>
+      </p>
     </>
   );
 }

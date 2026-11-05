@@ -167,12 +167,17 @@ job) and has no sign-in of its own:
   no account sees its first step straight away (business, country, and the account's name, email and password), not a sign-in
   screen; the link in the confirmation email brings them back, signed in, to carry on with the application. The footer's
   "Applicant sign in" goes to TRADE's sign-in page instead.
-- The ticket buttons and "Register as a participant" open one modal with the registration form (pass, name, email,
-  organisation, job title, country, optional phone and notes, and consent to be contacted). A server action posts it to the
-  public `POST /v1/summit/registrations`, which stores one row per email address in `summit.registration` (registering again
-  with the same address replaces the details), queues a confirmation email, and answers with a reference like `DTS-00042`.
-  Entrust staff read them at `GET /v1/summit/registrations`. It records interest in a pass and takes no payment: nothing in
-  this repo sells tickets yet.
+- The commercial pages (step 8 of #128) read the current edition from the API's public endpoints, so every price, benefit and
+  how many are left comes from what the organisers set in the admin screens, never from the page. The header's **EXHIBIT | SPONSOR |
+  PARTICIPATE** leads to `/exhibit` (the five packages, a comparison table, and the application form `/exhibit/apply`), `/sponsor`
+  (the six levels with their benefits, a comparison by benefit area, the additional opportunities, and the enquiry form
+  `/sponsor/enquire`) and `/participate` (the delegate categories and `/participate/register`, where a selected SME enters its
+  application number instead of its organisation). `/smes` is the SME directory (search, and filters by country, industry,
+  target market and investment; a profile page `/smes/{slug}` with a QR code and a "Request B2B Matchmaking" form), and
+  `/badge/{token}` is a delegate's QR badge, printable and valid only once the payment is verified. Forms post through server
+  actions to the API, so the site needs only `API_URL`. Before an edition is set up the pages say they open soon. The old
+  participant-pass modal and its `POST /v1/summit/registrations` use are gone from the site (the endpoint and its table stay, so
+  nothing already recorded is lost). The QR codes are drawn on the server with `uqr`.
 - The Pan African Chamber of Commerce (panafricanchamber.com), the host, is credited with its logo (`public/images/pan-african-chamber-logo.png`,
   the round seal from its website, trimmed) in the hero and the footer; the name and link are `HOST` in
   `src/lib/content.ts`.
@@ -266,6 +271,7 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   `GET /smes/{slug}` is one profile, with the address its QR code holds. `POST /smes/{slug}/enquiries` is the **B2B enquiry**
   ("Request B2B Matchmaking"): the message goes to the business's owners by email, the sender gets a receipt, a sender is limited to a
   few enquiries a day, and the organisers see and follow up each one under `/directory/enquiries`.
+- **The administrator guide** for the organising team is `docs/adtis-admin-guide.md`.
 - **The admin screens** are in the TRADE app under `/summit/commerce` (an "ADTIS" link in the staff navigation), for Entrust
   administrators and facilitators: a dashboard, exhibitors (approve, give a booth, verify the payment, confirm), sponsors (the
   pipeline), delegates, a **check-in desk** (scan a badge's QR code, or type the `DEL-` reference: a scanner types into the box like a
