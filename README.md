@@ -243,6 +243,15 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   1). Administrators and facilitators list, correct and cancel registrations under `/delegates`, and **check delegates in** at the
   door: `/check-in/lookup?code=` takes what the QR code holds (the badge's address), the token or the `DEL-` reference, and
   `POST /delegates/{id}/check-in` marks the arrival, refusing a cancelled registration, an unverified payment, or a badge already used.
+- **Dashboard and reports.** `GET /v1/summit/commerce/dashboard` (administrators and facilitators) adds up one edition from the same
+  records: registrations (confirmed and pending, by category, country and sector, checked in), exhibition space (booths
+  available, reserved, confirmed, by package), sponsorship (enquiries, confirmed sponsors and their value, the pipeline) and
+  revenue. **Expected** is what is committed (payments pending, awaiting verification or confirmed), **received** is only what an
+  administrator has verified, **outstanding** is the difference, refunds are shown on their own, and applications and enquiries
+  still being worked are a separate **potential** that never inflates the expected revenue. The booth totals say when some
+  package has no capacity set. `GET /reports` lists six exports (delegates, exhibitors, sponsorship, payments, revenue, countries
+  and sectors) and `GET /reports/{report}?format=xlsx|csv|pdf|json` makes one. They hold personal details, so they are for
+  administrators and facilitators only, every export is in the audit log, and a CSV protects against formula injection.
 
 ## Website deployment
 
