@@ -1,26 +1,37 @@
 import { SignInView } from "@entrust/account";
 import { getMe } from "@/lib/api";
+import { safeNext } from "@/lib/next-path";
+import { RememberNext } from "@/components/summit/clear-next";
 
 export const metadata = { title: "Sign in" };
 
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invitationId?: string }>;
+  searchParams: Promise<{ invitationId?: string; next?: string }>;
 }) {
-  const { invitationId } = await searchParams;
+  const { invitationId, next } = await searchParams;
   const me = await getMe();
+  // A visitor sent here from the Summit comes back to it, even after creating an account and verifying their email.
+  const comeBackTo = safeNext(next);
 
   return (
-    <SignInView
-      appName="TRADE"
-      logoSrc=""
-      logoAlt="TRADE logo"
-      tagline="Building export capability for African SMEs."
-      description="TRADE equips African businesses to assess export readiness, close capability gaps, and navigate global trade."
-      homePath="/"
-      currentUser={me}
-      invitationId={invitationId}
-    />
+    <>
+      {comeBackTo && <RememberNext next={comeBackTo} />}
+      <SignInView
+        appName="TRADE"
+        logoSrc=""
+        logoAlt="TRADE logo"
+        tagline={comeBackTo ? "Apply to the Africa Diaspora Trade and Investment Summit." : "Building export capability for African SMEs."}
+        description={
+          comeBackTo
+            ? "Sign in, or create an account, to start your application. You will come straight back to it."
+            : "TRADE equips African businesses to assess export readiness, close capability gaps, and navigate global trade."
+        }
+        homePath={comeBackTo ?? "/"}
+        currentUser={me}
+        invitationId={invitationId}
+      />
+    </>
   );
 }

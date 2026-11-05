@@ -14,6 +14,9 @@ export default async function TradeHomePage() {
   const isStaff = Boolean(me.staffRole);
   const hasTradeAccess = isStaff || (activeOrg?.platforms.includes("trade") ?? false);
 
+  // An organisation that has the Summit and not TRADE has nothing here: send it to the Summit instead of an empty plan.
+  if (!hasTradeAccess && activeOrg?.platforms.includes("summit")) redirect("/summit/apply");
+
   if (!hasTradeAccess) {
     return (
       <div className="mx-auto max-w-xl py-12">
@@ -23,6 +26,13 @@ export default async function TradeHomePage() {
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-2">
             Your current organisation does not currently have access to the TRADE platform. If your organisation has been admitted to a cohort or pilot program, switch to that organisation using the switcher above, or contact your Entrust facilitator or support team at support@entrust-africa.com.
+          </p>
+          <p className="mt-4 text-sm text-ink-2">
+            Applying to the Africa Diaspora Trade and Investment Summit?{" "}
+            <Link href="/summit" className="font-semibold text-brand-600 hover:underline">
+              Go to the Summit application
+            </Link>
+            .
           </p>
         </Card>
       </div>
