@@ -1,4 +1,3 @@
-import { render } from "@react-email/components";
 import { emailTheme } from "@entrust/ui";
 import type { ReactElement } from "react";
 import { Resend } from "resend";
@@ -29,6 +28,15 @@ export function hasUsableFrom(value: string | undefined): value is string {
 
 let resend: Resend | undefined;
 
+/**
+ * The email renderer, loaded when the first email is sent. It is imported like this (as Resend does for its own use)
+ * because the Cloudflare Worker's bundle sets the renderer up lazily and only runs that setup at a dynamic import: a
+ * top-level `import { render }` is still undefined there, and every send failed with "render2 is not a function".
+ */
+async function loadRender() {
+  return (await import("@react-email/render")).render;
+}
+
 function emailConfig() {
   const mode = process.env.EMAIL_MODE ?? (process.env.NODE_ENV === "production" ? "send" : "log");
   const apiKey = process.env.RESEND_API_KEY;
@@ -40,6 +48,7 @@ function emailConfig() {
 /** Sends an HTML email through Resend, or logs it locally when running without credentials. */
 export async function sendEmail(input: EmailInput): Promise<{ id: string | null; logged: boolean }> {
   const { mode, apiKey, from } = emailConfig();
+  const render = await loadRender();
   const html = await render(input.react);
   const recipients = Array.isArray(input.to) ? input.to : [input.to];
   const text = input.text ?? (await render(input.react, { plainText: true }));
