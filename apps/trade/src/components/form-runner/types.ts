@@ -35,6 +35,12 @@ export interface FormRunnerProps {
   renderAttachments?: (section: FormSection) => ReactNode;
 
   allowNotKnown?: (question: FormQuestion) => boolean;
+  /**
+   * For a question with `evidenceBased` set: whether the person says documents are available, by question ID, and how
+   * to tell the server when they change it. Without `onDocumentsChange` no such control is shown.
+   */
+  documents?: Readonly<Record<string, boolean>>;
+  onDocumentsChange?: (questionId: string, available: boolean) => Promise<void>;
   variables?: Readonly<Record<string, string>>;
   initialSectionId?: string;
   onSectionChange?: (step: string) => void;

@@ -27,10 +27,10 @@ function Choices({ question, answer, onChange, disabled, domId, describedBy }: I
   const multiple = question.type === "multiple_choice";
   const choices = question.type === "yes_no"
     ? [
-        { value: "yes", label: "Yes", exclusive: false },
-        { value: "no", label: "No", exclusive: false },
+        { value: "yes", label: "Yes", exclusive: false, description: undefined as string | undefined },
+        { value: "no", label: "No", exclusive: false, description: undefined as string | undefined },
       ]
-    : (question.options ?? []).map((o) => ({ value: o.value, label: o.label, exclusive: Boolean(o.exclusive) }));
+    : (question.options ?? []).map((o) => ({ value: o.value, label: o.label, exclusive: Boolean(o.exclusive), description: o.description }));
   const chosen = multiple ? asArray(answer) : [asString(answer)];
 
   function pick(choice: { value: string; exclusive: boolean }) {
@@ -67,7 +67,10 @@ function Choices({ question, answer, onChange, disabled, domId, describedBy }: I
               onChange={() => pick(choice)}
               className="size-5 shrink-0 accent-brand-600"
             />
-            <span className={cn("min-w-0 flex-1", compact && "text-center font-semibold")}>{choice.label}</span>
+            <span className={cn("min-w-0 flex-1", compact && "text-center font-semibold")}>
+              {choice.label}
+              {choice.description && <span className="mt-0.5 block text-sm font-normal leading-snug text-ink-2">{choice.description}</span>}
+            </span>
           </label>
         );
       })}
