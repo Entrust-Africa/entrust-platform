@@ -3,7 +3,8 @@ import { ArrowUpRight, Handshake, Landmark, Ticket, Users } from "lucide-react";
 import { HostedBy, SectionLabel, SiteFooter, SiteHeader, amberButton, outlineOnDark } from "@/components/site";
 import { getCatalogue, type Product } from "@/lib/commerce";
 import { EVENT_LINE, HEADLINE, INTRO, OBJECTIVES, WHO, WHY } from "@/lib/content";
-import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
+import { joinOptions, type JoinKey } from "@/lib/join";
+import { applicationsLine, countryNames, getPeriod } from "@/lib/period";
 
 // The application window and the prices change when Entrust edits them, so every visit asks the API.
 export const dynamic = "force-dynamic";
@@ -17,7 +18,6 @@ function fromPrice(products: Product[]): string | null {
 
 export default async function SummitLandingPage() {
   const [period, catalogue] = await Promise.all([getPeriod(), getCatalogue()]);
-  const apply = applyUrl();
   const statusLine = applicationsLine(period);
   const countries = period ? countryNames(period.countries) : [];
 
@@ -27,12 +27,8 @@ export default async function SummitLandingPage() {
     { href: "/participate", label: "Participate", text: "Register as a business, premium, diaspora or investor and buyer delegate.", price: fromPrice(catalogue?.delegates ?? []) },
   ];
 
-  const actions = [
-    { href: apply, icon: Handshake, title: "Register as an SME", text: "Apply to be one of the 100 selected African businesses. Free to apply; an assessment decides." },
-    { href: "/participate/register?category=investor-buyer", icon: Landmark, title: "Register as a buyer or investor", text: "Meet selected SMEs through priority B2B matchmaking and facilitated introductions." },
-    { href: "/participate/register?category=diaspora-business", icon: Users, title: "Participate as a diaspora partner", text: "Invest, partner and bring your expertise home: the Brain Gain agenda." },
-    { href: "/sponsor", icon: Ticket, title: "Become a sponsor or institutional partner", text: "Sponsorship levels, pavilions and sessions for organisations and institutions." },
-  ];
+  const icons: Record<JoinKey, typeof Handshake> = { sme: Handshake, "buyer-investor": Landmark, diaspora: Users, sponsor: Ticket };
+  const actions = joinOptions();
 
   return (
     <>
@@ -139,15 +135,22 @@ export default async function SummitLandingPage() {
             <p className="max-w-xs text-sm leading-relaxed text-ink/70">SME registration and assessment is separate from general summit registration.</p>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {actions.map((a) => (
-              <a key={a.title} href={a.href} className="group flex flex-col gap-3 bg-ink p-8 text-white transition-colors hover:bg-ink-deep">
-                <span className="flex items-center gap-3">
-                  <a.icon aria-hidden className="size-5 shrink-0 text-amber" />
-                  <span className="font-display text-2xl leading-tight uppercase">{a.title}</span>
-                </span>
-                <span className="text-sm leading-relaxed text-white/70">{a.text}</span>
-              </a>
-            ))}
+            {actions.map((a) => {
+              const Icon = icons[a.key];
+              return (
+                <a key={a.key} href={a.href} className="group flex flex-col gap-3 bg-ink p-8 text-white transition-colors hover:bg-ink-deep">
+                  <span className="flex items-center gap-3">
+                    <Icon aria-hidden className="size-5 shrink-0 text-amber" />
+                    <span className="font-display text-2xl leading-tight uppercase">{a.title}</span>
+                  </span>
+                  <span className="flex-1 text-sm leading-relaxed text-white/70">{a.text}</span>
+                  <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold">
+                    <span className="border-b border-amber pb-0.5 group-hover:text-amber">{a.cta}</span>
+                    <ArrowUpRight aria-hidden className="size-4 text-amber transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </span>
+                </a>
+              );
+            })}
           </div>
           {(statusLine || countries.length > 0) && (
             <div className="mt-6 space-y-2">
