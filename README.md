@@ -165,14 +165,21 @@ job) and has no sign-in of its own:
 - It reads the public `GET /v1/summit/period` to show where the application window stands and which countries can apply.
 - "Register as a buyer / seller" goes to `SUMMIT_APP_URL` + `/summit/apply`, the SME application in the TRADE app (a visitor is
   sent to sign in first).
-- The ticket buttons and "Register as a participant" open one modal. It frames `SUMMIT_REGISTRATION_URL` (https only, with
-  `?pass=` added) when that is set; otherwise it says registration isn't open yet and gives an email address. Nothing in this
-  repo sells tickets.
+- The ticket buttons and "Register as a participant" open one modal with the registration form (pass, name, email,
+  organisation, job title, country, optional phone and notes, and consent to be contacted). A server action posts it to the
+  public `POST /v1/summit/registrations`, which stores one row per email address in `summit.registration` (registering again
+  with the same address replaces the details), queues a confirmation email, and answers with a reference like `DTS-00042`.
+  Entrust staff read them at `GET /v1/summit/registrations`. It records interest in a pass and takes no payment: nothing in
+  this repo sells tickets yet.
+- The Pan African Chamber of Commerce and Industry, the host, is credited with its logo (`public/images/pacci-logo.png`, cropped
+  from the landscape logo on pacci.org without the ISO badges) in the hero and the footer; the name and link are `HOST` in
+  `src/lib/content.ts`.
 - Both photos are placeholders in `apps/summit/public/images`: the hero is the African Union Conference Centre picture Entrust
   sent (784 px wide, so soft at full width), and the closing band is the African Union Conference Centre by Andrew Moore
   (CC BY-SA 2.0, credited in the footer). Replace both with the event's own photography and drop the credit line.
 
-The page only calls the API from the server, so it needs no `CORS_ORIGINS` entry and no cookie domain.
+The page only calls the API from the server (the period, and the registration form's server action), so it needs no
+`CORS_ORIGINS` entry and no cookie domain. It does need `API_URL`.
 
 To put it on a domain: add the domain to the Cloudflare account, then attach it to the Worker under Workers & Pages,
 `entrust-summit`, Settings, Domains & Routes (or add a `routes` entry with `custom_domain: true` to
