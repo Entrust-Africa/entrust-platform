@@ -203,15 +203,18 @@ describe("a file that isn't a form's responses", () => {
   };
 
   it("is refused with the reason", async () => {
-    await refused(workbook({ "Master SME Database": [["SME ID", "Company Name"], ["X", "Y"]] }), /no sheet has "Timestamp" and "Business Name" headings/);
+    await refused(workbook({ Sheet1: [["a", "b"]] }), /no sheet has "Timestamp" and "Business Name" headings/);
     await refused(workbook({ "Form Responses 1": [HEADINGS] }), /no responses/);
     await refused("not a workbook", /isn't an Excel workbook|couldn't be read/);
   });
 
-  it("is refused by the register's loader too, and the register's file by this one", async () => {
-    const res = await callV1(w.admin, "POST", "/trade/register/import", { contentBase64: Buffer.from(sheet(response())).toString("base64") });
-    expect(res).toMatchObject({ status: 422, body: { code: "invalid" } });
-    expect(res.body.error).toMatch(/no sheet called "Master SME Database"/);
+  it("says which tab a file belongs on when it goes in the wrong one", async () => {
+    // A form's responses sent to the register's loader.
+    const toRegister = await callV1(w.admin, "POST", "/trade/register/import", { contentBase64: Buffer.from(sheet(response())).toString("base64") });
+    expect(toRegister).toMatchObject({ status: 422, body: { code: "invalid" } });
+    expect(toRegister.body.error).toMatch(/form's responses, not the diagnostic workbook.*Applications tab/);
+    // The diagnostic workbook sent to this one.
+    await refused(workbook({ "Master SME Database": [["SME ID", "Company Name"], ["X", "Y"]] }), /diagnostic workbook, not a form's responses.*Register tab/);
   });
 
   it("refuses a request with no programme or file", async () => {

@@ -271,6 +271,9 @@ const sheetNamed = (sheets: Readonly<Record<string, SheetGrid>>, name: string): 
   return key === undefined ? null : (sheets[key] ?? null);
 };
 
+/** Whether the sheets are the diagnostic workbook, which has the master sheet. */
+export const isDiagnosticWorkbook = (sheets: Readonly<Record<string, SheetGrid>>): boolean => sheetNamed(sheets, MASTER_SHEET) !== null;
+
 const same = (a: number, b: number) => Math.abs(a - b) < 0.5;
 const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
