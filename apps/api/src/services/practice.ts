@@ -99,9 +99,9 @@ async function openPracticeCase(
     after: { reference: row.reference, facts, rulePack, practiceScenario: scenario.id },
     event: { type: "case_created", data: { facts, rulePack, practiceScenario: scenario.id } },
   });
-  await syncFlags(tx, row, ctx.now);
+  const { data } = await syncFlags(tx, row, ctx.now);
   // The learner starts as the SME. They pick another party's role to take that party's turn.
-  return { ...(await buildDetail(tx, row, "owner", ctx.now)), cadCap: null };
+  return { ...(await buildDetail(tx, row, "owner", ctx.now, data)), cadCap: null };
 }
 
 /**

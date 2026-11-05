@@ -10,6 +10,7 @@ import {
   loadEvents,
   loadOneCaseData,
   organizationNames,
+  type CaseData,
   type CaseRow,
 } from "./case-data";
 import type { Executor } from "./db";
@@ -20,9 +21,19 @@ import { loadDocuments, loadReconciliation } from "./reconciliation";
 import { caseRulePackView, rulePackUpdate } from "./rule-packs";
 import { detailOf } from "./views";
 
-/** The case as the caller sees it: facts, the workflow the engine works out, evidence, deadlines and its rule pack. */
-export async function buildDetail(db: Executor, row: CaseRow, actor: Actor, now: Date): Promise<CaseDetailView> {
-  const data = await loadOneCaseData(db, row);
+/**
+ * The case as the caller sees it: facts, the workflow the engine works out, evidence, deadlines and its rule pack.
+ * Pass `loaded` when the case's steps, evidence and flags were just read in the same transaction and nothing has
+ * changed them since, to save reading them again.
+ */
+export async function buildDetail(
+  db: Executor,
+  row: CaseRow,
+  actor: Actor,
+  now: Date,
+  loaded?: Omit<CaseData, "row">,
+): Promise<CaseDetailView> {
+  const data = loaded ? { ...loaded, row } : await loadOneCaseData(db, row);
   const events = await loadEvents(db, row.id);
   const names = await organizationNames(db, [row.organizationId]);
   const evaluation = evaluate(data, now);
@@ -66,8 +77,8 @@ export function mutateCase(
     const [current] = await tx.select().from(schema.exportCase).where(eq(schema.exportCase.id, caseId));
     if (!current) throw new Error("The case disappeared during the change");
     // Flags first: they hold steps, so the phase and the response must see them.
-    await syncFlags(tx, current, ctx.now);
-    const evaluation = evaluate(await loadOneCaseData(tx, current), ctx.now);
+    const { data } = await syncFlags(tx, current, ctx.now);
+    const evaluation = evaluate(data, ctx.now);
     const [row] = await tx
       .update(schema.exportCase)
       .set({
@@ -79,6 +90,7 @@ export function mutateCase(
       .where(eq(schema.exportCase.id, caseId))
       .returning();
     if (!row) throw new Error("The case disappeared during the change");
-    return buildDetail(tx, row, found.actor, ctx.now);
+    // Only the case row changed after the flags were synced (amendments touch neither steps, evidence nor flags).
+    return buildDetail(tx, row, found.actor, ctx.now, data);
   });
 }

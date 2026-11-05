@@ -10,6 +10,7 @@ import {
   loadEvents,
   loadOneCaseData,
   toCaseState,
+  type CaseData,
   type CaseRow,
 } from "./case-data";
 import type { Executor } from "./db";
@@ -19,6 +20,8 @@ import { syncReconciliation } from "./reconciliation";
 export interface FlagSync {
   raised: number;
   resolved: number;
+  /** The case's steps, evidence and flags once the sync is done, so the caller needn't load them again. */
+  data: CaseData;
 }
 
 /**
@@ -32,11 +35,18 @@ export interface FlagSync {
  *
  * The rules read the case as it would be without its flags. Otherwise a flag holding a step would
  * change the step's status, switch its own cause off, resolve, and raise again.
+ *
+ * The case is loaded once and loaded again only after something here changes it: each of these
+ * reads is a round trip to the database, and they run one after another.
  */
 export async function syncFlags(tx: Executor, row: CaseRow, now: Date): Promise<FlagSync> {
-  const minimumPrice = await syncPriceCheck(tx, row, now);
-  const reconciliation = await syncReconciliation(tx, row, now);
-  const data = await loadOneCaseData(tx, row);
+  let data = await loadOneCaseData(tx, row);
+  const price = await syncPriceCheck(tx, data, now);
+  if (price.changed) data = await loadOneCaseData(tx, row);
+  const audit = await syncReconciliation(tx, data, now);
+  if (audit.changed) data = await loadOneCaseData(tx, row);
+  const minimumPrice = price.check;
+  const reconciliation = audit.reconciliation;
   const events = await loadEvents(tx, row.id);
   const input = deadlineInput(data, events);
   const triggered = checkFailureRules(
@@ -81,7 +91,12 @@ export async function syncFlags(tx: Executor, row: CaseRow, now: Date): Promise<
       event: { type: "flag_updated", data: { rule: flag.rule } },
     });
   }
-  return { raised: changes.raise.length, resolved: changes.resolve.length };
+  const changed = changes.raise.length + changes.resolve.length + changes.refresh.length > 0;
+  return {
+    raised: changes.raise.length,
+    resolved: changes.resolve.length,
+    data: changed ? await loadOneCaseData(tx, row) : data,
+  };
 }
 
 async function raise(tx: Executor, row: CaseRow, flag: TriggeredFlag, now: Date): Promise<void> {

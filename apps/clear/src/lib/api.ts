@@ -1,5 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
+import { cache } from "react";
 import { createApiClient } from "@entrust/api/client";
 
 /** Server-side API client that forwards the visitor's cookies. */
@@ -8,11 +9,14 @@ export async function serverApi() {
   return createApiClient(process.env.API_URL ?? "http://localhost:4000", { headers: { cookie } });
 }
 
-/** The signed-in user, or null. */
-export async function getMe() {
+/**
+ * The signed-in user, or null. Once per page render: the layout and the page both ask, and each
+ * call is a request to the API.
+ */
+export const getMe = cache(async () => {
   const res = await (await serverApi()).v1.me.$get();
   return res.status === 200 ? res.json() : null;
-}
+});
 
 /**
  * The organisations the signed-in user belongs to, from the auth service's organisation plugin.

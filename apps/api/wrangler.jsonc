@@ -6,6 +6,23 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  // Run next to the database (Neon, AWS us-east-2) rather than next to the caller. A request runs
+  // its queries one after another, so each round trip to the database has to be short; from a
+  // European location each one took about 120 ms, from here about 15.
+  "placement": {
+    "region": "aws:us-east-2"
+  },
+  // Hyperdrive (config entrust-api-db) keeps connections to the database open between requests;
+  // worker.ts hands its connection string to the request's pool. Query caching is off, because a
+  // cached read would show a case as it was before the change the visitor just made.
+  // `wrangler dev` connects to the local database instead.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "6175f81f297e4508b522c8895b54da12",
+      "localConnectionString": "postgres://entrust:entrust@localhost:5432/entrust_platform"
+    }
+  ],
   "observability": {
     "enabled": true
   }

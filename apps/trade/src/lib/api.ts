@@ -1,5 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
+import { cache } from "react";
 import { createApiClient } from "@entrust/api/client";
 import type { UserProfile } from "./types";
 
@@ -9,11 +10,14 @@ export async function serverApi() {
   return createApiClient(process.env.API_URL ?? "http://localhost:4000", { headers: { cookie } });
 }
 
-/** The signed-in user, or null. */
-export async function getMe(): Promise<UserProfile | null> {
+/**
+ * The signed-in user, or null. Once per page render: the layout and the page both ask, and each
+ * call is a request to the API.
+ */
+export const getMe = cache(async (): Promise<UserProfile | null> => {
   const res = await (await serverApi()).v1.me.$get();
   return res.status === 200 ? ((await res.json()) as unknown as UserProfile) : null;
-}
+});
 
 /** The organisations the signed-in user belongs to. */
 export async function listOrganizations(): Promise<{ id: string; name: string }[]> {

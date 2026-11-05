@@ -34,9 +34,13 @@ export function getDb(): Database {
  * process, as getDb() does elsewhere, therefore fails every other request on a Worker. Inside
  * this scope getDb() returns the request's own database. The pool is closed before the response
  * is returned because the runtime closes the request's sockets as soon as it ends.
+ *
+ * `connectionString` defaults to DATABASE_URL. The Worker passes its Hyperdrive binding's when it
+ * has one: Hyperdrive keeps the connections to the database open between requests, so a request
+ * doesn't pay for a new connection (TCP, TLS and the password exchange) before its first query.
  */
-export function runWithRequestDb<T>(run: () => Promise<T>): Promise<T> {
-  const pool = new Pool({ connectionString: connectionUrl(), max: 5 });
+export function runWithRequestDb<T>(run: () => Promise<T>, connectionString = connectionUrl()): Promise<T> {
+  const pool = new Pool({ connectionString, max: 5 });
   let closing = false;
   // A connection dropped by the server would otherwise surface as an unhandled error. Closing the
   // pool makes the Worker's socket report "closed" once per connection; that is not a failure.

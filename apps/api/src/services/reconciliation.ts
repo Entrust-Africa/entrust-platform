@@ -9,7 +9,7 @@ import {
 } from "@entrust/gate-engine";
 import type { DocumentFieldKey, StepId } from "@entrust/rules";
 import { passCheck } from "./auto-checks";
-import { evaluate, loadOneCaseData, type CaseRow } from "./case-data";
+import { evaluate, type CaseData, type CaseRow } from "./case-data";
 import type { Executor } from "./db";
 
 // The shipping document comparison (STEP-099) on a case: what was entered from each document,
@@ -51,14 +51,18 @@ export async function loadReconciliation(
  * audit's evidence and completes STEP-099 once its prerequisites are done (see passCheck). A
  * difference leaves it open and is the failure rule FL-06's business, and so are fields still to be
  * entered, which keep it open too: a comparison with nothing in it is not a clear one. Run it in the
- * transaction that changed the case, with the case locked; it returns the comparison for the
- * failure rules to read.
+ * transaction that changed the case, with the case locked and `data` loaded; it returns the
+ * comparison for the failure rules to read, and whether it changed the case (so `data` is out of date).
  */
-export async function syncReconciliation(tx: Executor, row: CaseRow, now: Date): Promise<Reconciliation | null> {
-  const current = evaluate(await loadOneCaseData(tx, row), now);
-  const reconciliation = await loadReconciliation(tx, row, current);
-  if (reconciliation?.status === "clear") {
-    await passCheck(tx, row, now, current, { stepId: AUDIT_STEP, evidenceType: AUDIT_EVIDENCE, note: reconciliation.message });
-  }
-  return reconciliation;
+export async function syncReconciliation(
+  tx: Executor,
+  data: CaseData,
+  now: Date,
+): Promise<{ reconciliation: Reconciliation | null; changed: boolean }> {
+  const current = evaluate(data, now);
+  const reconciliation = await loadReconciliation(tx, data.row, current);
+  const changed =
+    reconciliation?.status === "clear" &&
+    (await passCheck(tx, data, now, current, { stepId: AUDIT_STEP, evidenceType: AUDIT_EVIDENCE, note: reconciliation.message }));
+  return { reconciliation, changed };
 }

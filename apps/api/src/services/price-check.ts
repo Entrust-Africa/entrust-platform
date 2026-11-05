@@ -11,7 +11,7 @@ import {
 import type { StepId } from "@entrust/rules";
 import type { ContractView } from "../schemas/clear";
 import { passCheck } from "./auto-checks";
-import { evaluate, loadOneCaseData, type CaseRow } from "./case-data";
+import { evaluate, type CaseData, type CaseRow } from "./case-data";
 import type { Executor } from "./db";
 
 // The minimum export price check (STEP-024) on a case: the contract's unit price against the price
@@ -111,13 +111,18 @@ export async function loadPriceCheck(db: Executor, row: CaseRow, evaluation: Cas
  * (see passCheck). Every other result leaves the step open (the case detail says why), and a price
  * below the floor is the failure rule FL-03's business. Nothing is ever undone: a step completed on
  * a price that later changes is caught by FL-03 instead. Run it in the transaction that changed
- * the case, with the case locked; it returns the check for the failure rules to read.
+ * the case, with the case locked and `data` loaded; it returns the check for the failure rules to
+ * read, and whether it changed the case (so `data` is out of date).
  */
-export async function syncPriceCheck(tx: Executor, row: CaseRow, now: Date): Promise<MinimumPriceCheck | null> {
-  const current = evaluate(await loadOneCaseData(tx, row), now);
-  const check = await loadPriceCheck(tx, row, current);
-  if (check?.status === "met") {
-    await passCheck(tx, row, now, current, { stepId: PRICE_CHECK_STEP, evidenceType: PRICE_CHECK_EVIDENCE, note: check.message });
-  }
-  return check;
+export async function syncPriceCheck(
+  tx: Executor,
+  data: CaseData,
+  now: Date,
+): Promise<{ check: MinimumPriceCheck | null; changed: boolean }> {
+  const current = evaluate(data, now);
+  const check = await loadPriceCheck(tx, data.row, current);
+  const changed =
+    check?.status === "met" &&
+    (await passCheck(tx, data, now, current, { stepId: PRICE_CHECK_STEP, evidenceType: PRICE_CHECK_EVIDENCE, note: check.message }));
+  return { check, changed };
 }
