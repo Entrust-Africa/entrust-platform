@@ -12,6 +12,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   ShieldCheck,
+  Store,
   Mic2,
   TrendingUp,
   User,
@@ -54,6 +55,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
   if (isStaff) {
     navItems = [
       { href: "/cohorts", label: "Cohorts", icon: Users, match: (path: string) => path === "/cohorts" || path.startsWith("/cohorts/") },
+      { href: "/catalogue", label: "SME catalogue", icon: Store, match: (path: string) => path.startsWith("/catalogue") },
       { href: "/register", label: "SME register", icon: ClipboardList, match: (path: string) => path.startsWith("/register") },
       { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path: string) => path.startsWith("/review-queue") },
       { href: "/reports", label: "Reports", icon: TrendingUp, match: (path: string) => path.startsWith("/reports") },
