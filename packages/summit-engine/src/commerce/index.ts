@@ -29,3 +29,16 @@ export {
   revenueOf,
 } from "./dashboard";
 export type { BoothFigures, CommerceReportId, PaymentFigures, Revenue, RevenueStream } from "./dashboard";
+export {
+  B2B_INTERESTS,
+  B2B_INTEREST_LABELS,
+  B2B_STATUSES,
+  PROFILE_STATUSES,
+  PROFILE_TEXT_LIMITS,
+  PROFILE_VERIFICATION,
+  PROFILE_VERIFICATION_LABELS,
+  directoryDraft,
+  profileProblems,
+  slugify,
+} from "./directory";
+export type { B2bInterest, B2bStatus, ProfileContent, ProfileStatus, ProfileVerification } from "./directory";
