@@ -377,3 +377,140 @@ export const GrantConsentBody = z
   .openapi("GrantTradeConsentBody");
 
 export const ConsentParam = z.object({ id: z.uuid() });
+
+// ---- The register of pilot SMEs ----
+
+const LevelOrNull = z.enum(["high", "medium", "low"]).nullable();
+
+export const RegisterItem = z
+  .object({
+    id: z.uuid(),
+    code: z.string().openapi({ example: "TRADE-ETH-LEA-002", description: "The SME ID the diagnostic workbook gives the business." }),
+    companyName: z.string(),
+    participantName: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    yearEstablished: z.number().int().nullable(),
+    location: z.string().nullable(),
+    employees: z.number().int().nullable(),
+    exportLicence: z.boolean().nullable(),
+    currentBank: z.string().nullable(),
+    mainProduct: z.string().nullable(),
+    monthlyProductionCapacity: z.number().nullable(),
+    averageMonthlyRevenue: z.number().nullable(),
+    largestOrderCompleted: z.number().nullable(),
+    currentMarkets: z.string().nullable(),
+    targetExportMarket: z.string().nullable(),
+    monthlyOperatingCost: z.number().nullable(),
+    estimatedMonthlyProfit: z.number().nullable(),
+    existingLoan: z.boolean().nullable(),
+    loanAmount: z.number().nullable(),
+    cashflowStability: z.string().nullable(),
+    workingCapitalGap: z.number().nullable(),
+    equipmentInvestmentNeeded: z.number().nullable(),
+    exportLogisticsGap: z.number().nullable(),
+    costingKnowledge: z.number().int().nullable(),
+    productionCapacityStrength: z.number().int().nullable(),
+    documentationKnowledge: z.number().int().nullable(),
+    financialRecordKeeping: z.number().int().nullable(),
+    marketReadiness: z.number().int().nullable(),
+    entrustSupportNeeded: z.string().nullable(),
+    bankOpportunity: z.string().nullable(),
+    serviceNotes: z.string().nullable(),
+    totalCapitalGap: z.number().nullable().openapi({ description: "The three gaps added up." }),
+    exportReadinessScore: z.number().int().nullable().openapi({ description: "The five scores added up (5 to 25); null until all five are recorded." }),
+    financeReadinessLevel: LevelOrNull.openapi({ description: "From the score: 20 or more high, 15 or more medium, otherwise low." }),
+    financePriority: LevelOrNull.openapi({ description: "From the capital gap: 500,000 or more high, 200,000 or more medium, otherwise low." }),
+    updatedAt: z.iso.datetime(),
+  })
+  .openapi("TradeRegisterItem");
+
+export const RegisterList = z
+  .object({
+    items: z.array(RegisterItem),
+    summary: z.object({
+      total: z.number().int(),
+      assessed: z.number().int().openapi({ description: "How many have all five scores." }),
+      averageReadiness: z.number().nullable(),
+      totalCapitalGap: z.number(),
+      byLevel: z.object({ high: z.number().int(), medium: z.number().int(), low: z.number().int(), notAssessed: z.number().int() }),
+      banks: z.array(z.object({ bank: z.string(), count: z.number().int() })),
+    }),
+  })
+  .openapi("TradeRegisterList");
+
+export const ImportRegisterBody = z
+  .object({
+    fileName: z.string().trim().max(200).optional(),
+    contentBase64: z
+      .string()
+      .min(1)
+      .max(14_000_000)
+      .openapi({ description: "The .xlsx file's bytes, base64 encoded. At most about 10 MB." }),
+  })
+  .openapi("ImportTradeRegisterBody");
+
+export const RegisterImported = z
+  .object({
+    total: z.number().int().openapi({ description: "Businesses read from the workbook." }),
+    created: z.number().int(),
+    updated: z.number().int(),
+    unchanged: z.number().int(),
+    warnings: z.array(z.string()).openapi({ description: "Values that were left out and totals that disagreed with their parts, for staff to check in the workbook." }),
+  })
+  .openapi("TradeRegisterImported");
+export type RegisterListView = z.infer<typeof RegisterList>;
+export type RegisterImportedView = z.infer<typeof RegisterImported>;
+
+// ---- Applications to a programme ----
+
+export const ApplicationItem = z
+  .object({
+    id: z.uuid(),
+    program: z.string(),
+    submittedAt: z.iso.datetime(),
+    email: z.string(),
+    businessName: z.string(),
+    contactName: z.string().nullable(),
+    phone: z.string().nullable(),
+    location: z.string().nullable(),
+    country: z.literal("ET").openapi({ description: "Always ET: a response from anywhere else is kept but never listed." }),
+    answers: z.record(z.string(), z.string()).openapi({ description: "The answer to each question that has one, as typed, by key." }),
+    timesApplied: z.number().int().openapi({ description: "How many responses came from this business (by email or name); 1 when only one." }),
+  })
+  .openapi("TradeApplicationItem");
+
+export const ApplicationList = z
+  .object({
+    items: z.array(ApplicationItem),
+    summary: z.object({
+      shown: z.number().int(),
+      notShown: z.number().int().openapi({ description: "Responses kept but not listed, because they are from outside Ethiopia or don't say where from. Only the number is given." }),
+      exportedBefore: z.number().int(),
+      interestedInZemen: z.number().int(),
+      repeatApplications: z.number().int().openapi({ description: "Listed responses from a business that applied more than once." }),
+    }),
+  })
+  .openapi("TradeApplicationList");
+
+export const ImportApplicationsBody = z
+  .object({
+    program: z.string().trim().min(1).max(200).openapi({ description: "The programme the form is for. Loading the same programme again updates its responses." }),
+    fileName: z.string().trim().max(200).optional(),
+    contentBase64: z.string().min(1).max(14_000_000).openapi({ description: "The .xlsx file's bytes, base64 encoded. At most about 10 MB." }),
+  })
+  .openapi("ImportTradeApplicationsBody");
+
+export const ApplicationsImported = z
+  .object({
+    total: z.number().int().openapi({ description: "Responses read from the sheet." }),
+    created: z.number().int(),
+    updated: z.number().int(),
+    unchanged: z.number().int(),
+    shown: z.number().int().openapi({ description: "How many are from Ethiopia, so can be listed." }),
+    notShown: z.number().int().openapi({ description: "How many are kept but won't be listed: from outside Ethiopia, or not saying where from." }),
+    warnings: z.array(z.string()).openapi({ description: "Things to check in the sheet. They name businesses in Ethiopia only." }),
+  })
+  .openapi("TradeApplicationsImported");
+export type ApplicationListView = z.infer<typeof ApplicationList>;
+export type ApplicationsImportedView = z.infer<typeof ApplicationsImported>;
