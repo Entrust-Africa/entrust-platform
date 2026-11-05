@@ -266,6 +266,14 @@ payments, the SME directory) is built in stages; issue #128 tracks them. What ex
   `GET /smes/{slug}` is one profile, with the address its QR code holds. `POST /smes/{slug}/enquiries` is the **B2B enquiry**
   ("Request B2B Matchmaking"): the message goes to the business's owners by email, the sender gets a receipt, a sender is limited to a
   few enquiries a day, and the organisers see and follow up each one under `/directory/enquiries`.
+- **The admin screens** are in the TRADE app under `/summit/commerce` (an "ADTIS" link in the staff navigation), for Entrust
+  administrators and facilitators: a dashboard, exhibitors (approve, give a booth, verify the payment, confirm), sponsors (the
+  pipeline), delegates, a **check-in desk** (scan a badge's QR code, or type the `DEL-` reference: a scanner types into the box like a
+  keyboard), the SME directory (drafts, the business's approval, publishing, B2B enquiries), the six reports, and settings. In
+  settings an administrator starts an edition from the standard catalogue or a copy of the last one, and changes prices,
+  benefits, the number of booths and passes, exhibition zones, payment methods, the tax note and the assessment period for the free
+  SME places, with no developer. A payment is marked paid only by the "Verify and confirm payment" button. Proof of payment is
+  uploaded to Entrust's own organisation.
 
 ## Website deployment
 
