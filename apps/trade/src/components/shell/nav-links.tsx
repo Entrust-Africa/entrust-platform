@@ -10,12 +10,15 @@ import {
   FolderGit2,
   GraduationCap,
   LayoutDashboard,
+  ShieldCheck,
+  Mic2,
   TrendingUp,
   User,
   Users,
 } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
+import { summitAccess } from "@/lib/summit";
 
 interface NavLinksProps {
   orientation?: "horizontal" | "vertical";
@@ -31,6 +34,14 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
     user?.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user?.organizations?.[0];
   const isStaff = Boolean(user?.staffRole);
   const isSponsor = activeOrg?.kind === "sponsor";
+  // An organisation with the Summit and not TRADE has no learner pages to go to, so it gets the Summit and nothing else.
+  const access = user ? summitAccess(user) : undefined;
+  const summitItem = {
+    href: "/summit/apply",
+    label: "Summit",
+    icon: Mic2,
+    match: (path: string) => path.startsWith("/summit"),
+  };
 
   let navItems: {
     href: string;
@@ -45,10 +56,17 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
       { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path: string) => path.startsWith("/review-queue") },
       { href: "/reports", label: "Reports", icon: TrendingUp, match: (path: string) => path.startsWith("/reports") },
     ];
+    // Only an administrator sets application periods.
+    if (user?.staffRole === "admin") {
+      navItems.push({ ...summitItem, href: "/summit/admin/periods", match: (path: string) => path.startsWith("/summit") });
+    }
   } else if (isSponsor) {
     navItems = [
+      { href: "/sponsor", label: "Cohorts", icon: Users, match: (path: string) => path.startsWith("/sponsor") },
       { href: "/reports", label: "Reports", icon: TrendingUp, match: (path: string) => path.startsWith("/reports") },
     ];
+  } else if (access?.summitOnly) {
+    navItems = [summitItem];
   } else {
     // SME navigation
     navItems = [
@@ -56,7 +74,9 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
       { href: "/modules", label: "Modules", icon: GraduationCap, match: (path: string) => path.startsWith("/modules") },
       { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path: string) => path.startsWith("/portfolio") },
       { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path: string) => path.startsWith("/pipeline") },
+      { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path: string) => path.startsWith("/consent") },
     ];
+    if (access?.hasSummit) navItems.push(summitItem);
   }
 
   // Account is available to all

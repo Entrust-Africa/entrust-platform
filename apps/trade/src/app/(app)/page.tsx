@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { getMe } from "@/lib/api";
+import { tradeGet } from "@/lib/trade-api";
 
 export const metadata = { title: "My plan" };
 
@@ -14,6 +15,9 @@ export default async function TradeHomePage() {
   const isStaff = Boolean(me.staffRole);
   const hasTradeAccess = isStaff || (activeOrg?.platforms.includes("trade") ?? false);
 
+  // An organisation that has the Summit and not TRADE has nothing here: send it to the Summit instead of an empty plan.
+  if (!hasTradeAccess && activeOrg?.platforms.includes("summit")) redirect("/summit/apply");
+
   if (!hasTradeAccess) {
     return (
       <div className="mx-auto max-w-xl py-12">
@@ -23,6 +27,13 @@ export default async function TradeHomePage() {
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-2">
             Your current organisation does not currently have access to the TRADE platform. If your organisation has been admitted to a cohort or pilot program, switch to that organisation using the switcher above, or contact your Entrust facilitator or support team at support@entrust-africa.com.
+          </p>
+          <p className="mt-4 text-sm text-ink-2">
+            Applying to the Africa Diaspora Trade and Investment Summit?{" "}
+            <Link href="/summit" className="font-semibold text-brand-600 hover:underline">
+              Go to the Summit application
+            </Link>
+            .
           </p>
         </Card>
       </div>
@@ -93,6 +104,12 @@ export default async function TradeHomePage() {
   }
 
   // SME User View: My Plan
+  const list = activeOrg ? await tradeGet<{ items: AssessmentSummary[] }>(`/assessments?organizationId=${encodeURIComponent(activeOrg.id)}`) : null;
+  const live = (kind: "diagnostic" | "placement") => list?.data?.items.find((item) => item.kind === kind && item.status !== "superseded");
+  const diagnostic = live("diagnostic");
+  const placement = live("placement");
+  const pathway = diagnostic?.pathway ?? null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -102,15 +119,23 @@ export default async function TradeHomePage() {
             Tailored capability roadmap for {activeOrg?.name ?? "your organisation"}.
           </p>
         </div>
-        <StatusBadge tone="info">Pathway A: Export Readiness</StatusBadge>
+        {pathway && (
+          <StatusBadge tone="info">
+            {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+          </StatusBadge>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="p-6 md:col-span-2">
-          <h2 className="font-display text-lg font-bold text-ink">Placement Diagnostic</h2>
+          <h2 className="font-display text-lg font-bold text-ink">Get started</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-2">
-            Complete the 7-section diagnostic assessment to score your company's export execution, identify capability gaps, and unlock priority learning modules.
+            Two short forms place you on the right learning path. Your answers save as you go, so you can stop and come back.
           </p>
+          <ul className="mt-4 divide-y divide-line">
+            <Task title="Onboarding diagnostic" detail="Tell us about your business. This sets your learning path." href="/diagnostic" assessment={diagnostic} />
+            <Task title="Placement assessment" detail="Check where your business stands today. This decides which modules you start with." href="/assessment" assessment={placement} />
+          </ul>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/modules"
@@ -131,8 +156,12 @@ export default async function TradeHomePage() {
           <h2 className="font-display text-base font-bold text-ink">Milestones</h2>
           <ul className="mt-4 space-y-3 text-sm text-ink-2">
             <li className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand-600" />
-              <span>Diagnostic assessment</span>
+              <span className={`size-2 rounded-full ${diagnostic && diagnostic.status !== "draft" ? "bg-brand-600" : "bg-line"}`} />
+              <span>Onboarding diagnostic</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className={`size-2 rounded-full ${placement && placement.status !== "draft" ? "bg-brand-600" : "bg-line"}`} />
+              <span>Placement assessment</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-line" />
@@ -150,5 +179,33 @@ export default async function TradeHomePage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+interface AssessmentSummary {
+  kind: "diagnostic" | "placement";
+  status: string;
+  pathway: "A" | "B" | null;
+  pathwayStatus: "provisional" | "confirmed" | null;
+}
+
+const PATHWAY_NAMES = { A: "Export Entry and Readiness", B: "Export Execution and Scale" } as const;
+
+function Task({ title, detail, href, assessment }: { title: string; detail: string; href: string; assessment: AssessmentSummary | undefined }) {
+  const done = assessment !== undefined && assessment.status !== "draft";
+  const label = !assessment ? "Start" : done ? "View" : "Continue";
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <p className="font-semibold text-ink">{title}</p>
+        <p className="text-sm text-ink-2">{detail}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <StatusBadge tone={done ? "ok" : assessment ? "warn" : "idle"}>{done ? "Done" : assessment ? "In progress" : "Not started"}</StatusBadge>
+        <Link href={href} className="inline-flex h-10 items-center rounded-md border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-canvas">
+          {label}
+        </Link>
+      </div>
+    </li>
   );
 }

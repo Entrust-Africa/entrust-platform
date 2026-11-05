@@ -11,3 +11,14 @@ export { evaluatePlacement } from "./placement";
 export type { PlacementInput, PlacementOutcome } from "./placement";
 export { PATHWAY_NAMES, buildPlacementReport } from "./report";
 export type { PlacementReport, ReportBaseline, ReportDomain, ReportInput, ReportModule, ReportObjectives, ReportReason } from "./report";
+export { PLACEMENT_FORM_ID, isNotApplicable, placementAnswerFromForm, placementAnswerToForm, placementAsForm } from "./placement-form";
+export type { NotApplicable } from "./placement-form";
+export {
+  CONSENT_WORDING_VERSION,
+  DATA_KINDS,
+  SPONSOR_DATA_KINDS,
+  SPONSOR_DISCLAIMER,
+  consentWording,
+  isSponsorDataKind,
+} from "./consent";
+export type { DataKindInfo, SponsorDataKind } from "./consent";

@@ -13,6 +13,12 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ user }: AppHeaderProps) {
+  // The account menu's platform switcher only knows CLEAR and TRADE. An organisation with just the Summit has neither,
+  // so give it an empty list rather than a "Platforms" heading with nothing under it.
+  const activeOrg = user.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user.organizations?.[0];
+  const switchable = user.staffRole
+    ? undefined
+    : (activeOrg?.platforms ?? []).filter((platform) => platform === "clear" || platform === "trade");
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-xs">
       <a
@@ -53,7 +59,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
         {/* Right: Account Menu with platform switcher */}
         <div className="flex items-center gap-2">
-          <AccountMenu user={user} currentPlatform="trade" />
+          <AccountMenu user={user} currentPlatform="trade" platforms={switchable} />
         </div>
       </div>
     </header>

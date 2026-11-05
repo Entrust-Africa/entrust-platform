@@ -19,6 +19,8 @@ export interface FormOption {
   label: string;
   /** In a multiple-choice question: if chosen, no other option can be ("none of these"). */
   exclusive?: boolean;
+  /** A line under the label that says what choosing it means. */
+  description?: string;
 }
 
 export interface FormQuestion {
@@ -51,6 +53,10 @@ export interface FormQuestion {
   maxItems?: number;
   /** Date: can't be after the day the form is checked on. Only enforced when that day is passed in. */
   notFuture?: boolean;
+  /** The form asks whether supporting documents are available for this question. Screens only; no check reads it. */
+  evidenceBased?: boolean;
+  /** A "does not apply to us" answer is offered, and it needs a short reason. Screens only; the API stores it apart from the answer. */
+  allowNotApplicable?: boolean;
 }
 
 export interface FormSection {
@@ -87,11 +93,20 @@ export interface NotKnown {
 }
 export const NOT_KNOWN: NotKnown = { notKnown: true };
 
+/** "This doesn't apply to us", with a short reason. Only for a question that sets `allowNotApplicable`. */
+export interface NotApplicable {
+  notApplicable: true;
+  reason: string;
+}
+
+export const isNotApplicable = (answer: unknown): answer is NotApplicable =>
+  typeof answer === "object" && answer !== null && !Array.isArray(answer) && (answer as { notApplicable?: unknown }).notApplicable === true;
+
 /**
  * One answer. A single choice, a yes/no ("yes" or "no"), text and a date (YYYY-MM-DD) are strings; a
  * number is a number; a multiple choice and a list are arrays of strings.
  */
-export type Answer = string | number | readonly string[] | Money | NotKnown;
+export type Answer = string | number | readonly string[] | Money | NotKnown | NotApplicable;
 /** Answers by question ID. */
 export type Answers = Readonly<Record<string, Answer>>;
 

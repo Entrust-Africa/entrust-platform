@@ -170,6 +170,49 @@ describe("Organisation kinds, roles and platform access (#50)", () => {
     });
   });
 
+  describe("a Summit applicant's organisation", () => {
+    it("gets Summit access alone when it is created for the Summit", async () => {
+      const user = await signUp("summit-first-user");
+      const createRes = await callV1(user, "POST", "/organizations", {
+        name: "Summit First Traders",
+        slug: `summit-first-${Date.now()}`,
+        legalName: "Summit First PLC",
+        country: "ET",
+        platform: "summit",
+      });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.platform).toBe("summit");
+      const { id: orgId } = createRes.body;
+      try {
+        const grants = await db.select({ platform: schema.platformAccess.platform }).from(schema.platformAccess).where(eq(schema.platformAccess.organizationId, orgId));
+        expect(grants.map((g) => g.platform)).toEqual(["summit"]);
+        // TRADE's learner screens and CLEAR stay closed to it.
+        expect((await callV1(user, "GET", `/trade/modules?organizationId=${orgId}`)).status).toBe(404);
+        expect((await call(user, "GET", `/cases?organizationId=${orgId}`)).status).toBe(404);
+        // And it still has the same organisation record as any other SME.
+        const orgs = await callV1(user, "GET", "/organizations");
+        expect(orgs.body.organizations.find((o: { id: string }) => o.id === orgId)).toMatchObject({ kind: "sme", platforms: ["summit"] });
+      } finally {
+        await db.delete(schema.auditLog).where(eq(schema.auditLog.organizationId, orgId));
+        await db.delete(schema.platformAccess).where(eq(schema.platformAccess.organizationId, orgId));
+        await db.delete(schema.smeProfile).where(eq(schema.smeProfile.organizationId, orgId));
+        await db.delete(schema.organization).where(eq(schema.organization.id, orgId));
+      }
+    });
+
+    it("refuses a platform that doesn't exist", async () => {
+      const user = await signUp("bad-platform-user");
+      const res = await callV1(user, "POST", "/organizations", {
+        name: "Nowhere Ltd",
+        slug: `nowhere-${Date.now()}`,
+        legalName: "Nowhere Ltd",
+        country: "ET",
+        platform: "mizan",
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe("SME lifecycle: joined via TRADE then given CLEAR", () => {
     it("maintains the same user, organisation and SME ID across both platforms", async () => {
       // 1. SME signs up and creates organisation for TRADE

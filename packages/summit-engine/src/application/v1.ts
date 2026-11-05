@@ -2,12 +2,12 @@ import { options, sectionBuilder, whenAnswered } from "@entrust/forms";
 import type { Condition, FormOption } from "@entrust/forms";
 import type { ApplicationTemplate } from "./types";
 
-// The Summit application form, version 0.1.0, a DRAFT. Section 4 of the specification names the nine
-// sections and what each collects, and gives the conditional rules, but lists no questions. The
-// questions below are drafted from the specification's scoring guidance (section 6), the opportunity
-// profile (section 9) and the matching preparation (section 10), so that an officer has something to
-// judge each category on. Entrust has to confirm or replace them before the form is published, and a
-// published version never changes.
+// The Summit application form, version 0.1.0, published on 5 November 2026. Section 4 of the specification
+// names the nine sections and what each collects, and gives the conditional rules, but lists no questions. The
+// questions below are drafted from the specification's scoring guidance (section 6), the opportunity profile
+// (section 9) and the matching preparation (section 10), so that an officer has something to judge each category
+// on. Entrust gave no further wording, so these stand. A published version never changes: a correction is a new
+// version, and a period that is already open keeps the version it opened with.
 
 const section = (n: number) => sectionBuilder(`S${n}`);
 const s1 = section(1);
@@ -60,7 +60,7 @@ const hasActiveBuyer = whenAnswered("S3.5");
 export const APPLICATION_0_1_0: ApplicationTemplate = {
   id: "summit.application",
   version: "0.1.0",
-  status: "draft",
+  status: "published",
   title: "Africa Diaspora Trade and Investment Summit: SME application",
   registry: ["S1.1", "S1.2", "S1.3", "S1.5", "S1.6", "S1.7", "S1.8"],
   inputs: {

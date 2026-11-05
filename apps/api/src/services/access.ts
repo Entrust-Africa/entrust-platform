@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { schema, type Database } from "@entrust/db";
 import { ENTRUST_ROLES, SME_ROLES, ORGANIZATION_KINDS, type Actor, type EntrustRole, type SmeRole, type OrganizationKind } from "@entrust/gate-engine";
+import { SPONSOR_ROLES, type SponsorRole } from "@entrust/roles";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 
@@ -16,6 +17,8 @@ export interface Principal {
    * role, so it grants nothing in CLEAR or TRADE and only the Summit's committee endpoints know it.
    */
   committee: boolean;
+  /** Roles in sponsor organisations (#70), by organisation id. A sponsor sees only the cohorts it sponsors and what an SME has agreed to share. */
+  sponsorRoles: ReadonlyMap<string, SponsorRole>;
 }
 
 /**
@@ -39,6 +42,7 @@ export const COMMITTEE_ROLE = "committee";
 
 const isEntrustRole = (role: string): role is EntrustRole => (ENTRUST_ROLES as readonly string[]).includes(role);
 const isSmeRole = (role: string): role is SmeRole => (SME_ROLES as readonly string[]).includes(role);
+const isSponsorRole = (role: string): role is SponsorRole => (SPONSOR_ROLES as readonly string[]).includes(role);
 
 /**
  * Entrust staff are the members of the organisation in ENTRUST_ORG_ID (#18) whose role is one of
@@ -56,7 +60,22 @@ export async function loadPrincipal(db: Executor, userId: string): Promise<Princ
   let staffRole: EntrustRole | null = null;
   let committee = false;
   const smeRoles = new Map<string, SmeRole>();
+  const sponsorRoles = new Map<string, SponsorRole>();
+  const sponsorOrganizations = new Set<string>();
+  const sponsorCandidates = memberships.filter((m) => isSponsorRole(m.role));
+  if (sponsorCandidates.length) {
+    // A sponsor role counts only in an organisation of the sponsor kind, so it can't be claimed anywhere else.
+    const rows = await db
+      .select({ id: schema.organization.id, metadata: schema.organization.metadata })
+      .from(schema.organization)
+      .where(inArray(schema.organization.id, sponsorCandidates.map((m) => m.organizationId)));
+    for (const row of rows) if (organizationKind(row.metadata) === "sponsor") sponsorOrganizations.add(row.id);
+  }
   for (const { organizationId, role } of memberships) {
+    if (isSponsorRole(role) && sponsorOrganizations.has(organizationId)) {
+      sponsorRoles.set(organizationId, role);
+      continue;
+    }
     if (entrustOrganizationId && organizationId === entrustOrganizationId) {
       if (isEntrustRole(role)) staffRole = role;
       else if (role === COMMITTEE_ROLE) committee = true;
@@ -64,7 +83,18 @@ export async function loadPrincipal(db: Executor, userId: string): Promise<Princ
       smeRoles.set(organizationId, role);
     }
   }
-  return { userId, staffRole, smeRoles, committee };
+  return { userId, staffRole, smeRoles, committee, sponsorRoles };
+}
+
+/** The kind stored in an organisation's metadata, or null. */
+export function organizationKind(metadata: unknown): OrganizationKind | null {
+  try {
+    const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+    const kind = (parsed as { kind?: unknown } | null)?.kind;
+    return typeof kind === "string" && (ORGANIZATION_KINDS as readonly string[]).includes(kind) ? (kind as OrganizationKind) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The role the caller acts in on an organisation's cases, or null if they can't see them. */
