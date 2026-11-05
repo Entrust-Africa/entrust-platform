@@ -7,6 +7,7 @@ import {
   DOCUMENT_KINDS,
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
+  PARTICIPANT_PASS_IDS,
   RESULT_STATUSES,
   VERIFICATION_CLASSES,
   type CategoryId,
@@ -438,3 +439,40 @@ export const selectionTarget = summit.table("selection_target", {
   updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Registrations take their number from here: DTS-00001, in the order they came in.
+export const registrationNumberSeq = summit.sequence("registration_number_seq");
+
+// A participant's registration to attend the Summit, from the public form on the landing page (no sign-in). It records
+// interest in a ticket tier, not a purchase: nothing here takes payment. One row per email address; registering again
+// with the same address replaces the details and the pass, so a visitor can correct a mistake.
+export const registration = summit.table(
+  "registration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: text("number")
+      .notNull()
+      .unique()
+      .default(sql`'DTS-' || lpad(nextval('summit.registration_number_seq')::text, 5, '0')`),
+    // Lower case, so the same address in another case is the same registration.
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull(),
+    phone: text("phone"),
+    organisation: text("organisation").notNull(),
+    jobTitle: text("job_title").notNull(),
+    // ISO 3166-1 alpha-2 code of where the participant is based.
+    country: text("country").notNull(),
+    pass: text("pass", { enum: PARTICIPANT_PASS_IDS }).notNull(),
+    notes: text("notes"),
+    // When the visitor ticked the box agreeing to be contacted about the Summit.
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    // When the confirmation email was last queued, so repeat submissions can't be used to flood an inbox.
+    confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [uniqueIndex("summit_registration_email_uidx").on(t.email), index("summit_registration_created_idx").on(t.createdAt)],
+);

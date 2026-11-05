@@ -11,11 +11,15 @@ export interface SummitPeriod {
   state: "upcoming" | "open" | "closed";
 }
 
+/** The Entrust platform API, server side only. */
+export function apiBase(): string {
+  return (process.env.API_URL?.trim() || "http://localhost:4000").replace(/\/+$/, "");
+}
+
 /** The period open now, else the next to open, else the latest to close. Null before any is set, or if the API can't be reached. */
 export async function getPeriod(): Promise<SummitPeriod | null> {
-  const base = process.env.API_URL ?? "http://localhost:4000";
   try {
-    const res = await fetch(`${base}/v1/summit/period`, {
+    const res = await fetch(`${apiBase()}/v1/summit/period`, {
       cache: "no-store",
       signal: AbortSignal.timeout(4000),
     });
@@ -36,13 +40,6 @@ export function platformUrl(): string {
 /** The SME application. A visitor who isn't signed in is sent to sign in first and comes back to it. */
 export function applyUrl(): string {
   return `${platformUrl()}/summit/apply`;
-}
-
-/** The ticket registration form that opens in the page's modal. Unset until Entrust decides where tickets are sold. */
-export function registrationUrl(): string | null {
-  const value = process.env.SUMMIT_REGISTRATION_URL?.trim();
-  // It is framed in the page, so only a secure address is accepted.
-  return value && /^https:\/\//i.test(value) ? value : null;
 }
 
 /** One line on where the application window stands, or null before a period is set. */

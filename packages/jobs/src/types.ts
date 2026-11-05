@@ -50,6 +50,14 @@ export const SummitResultEmailPropsSchema = z.object({
   url: z.string().url().optional(),
 });
 
+export const SummitRegistrationEmailPropsSchema = z.object({
+  fullName: z.string().min(1),
+  /** The ticket tier the visitor registered for, by name. */
+  passName: z.string().min(1),
+  /** The registration's reference, like DTS-00042. */
+  number: z.string().min(1),
+});
+
 const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("test"),
@@ -74,6 +82,10 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("summit-result"),
     props: SummitResultEmailPropsSchema,
+  }),
+  BaseEmailSchema.extend({
+    template: z.literal("summit-registration"),
+    props: SummitRegistrationEmailPropsSchema,
   }),
 ]);
 

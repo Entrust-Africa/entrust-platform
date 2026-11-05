@@ -330,6 +330,7 @@ describe("API documentation", () => {
         "/v1/summit/period",
         "/v1/summit/periods",
         "/v1/summit/periods/{id}",
+        "/v1/summit/registrations",
         "/v1/summit/periods/{id}/final-list",
         "/v1/summit/periods/{id}/final-list/notifications",
         "/v1/summit/periods/{id}/selection-target",

@@ -112,6 +112,8 @@ export async function cleanup() {
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, tableIds));
     await db.delete(schema.minimumPriceTable).where(inArray(schema.minimumPriceTable.id, tableIds));
   }
+  // Summit registrations come from a public form and belong to no organisation, so the tests' own go by their address.
+  await db.delete(schema.registration).where(like(schema.registration.email, `${PREFIX}%`));
   // Summit periods belong to no organisation. An organisation's applications go with it, so the periods are free to go.
   const periods = await db
     .select({ id: schema.applicationPeriod.id })

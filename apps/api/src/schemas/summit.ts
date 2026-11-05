@@ -9,6 +9,7 @@ import {
   ELIGIBILITY_CRITERIA,
   ELIGIBILITY_OUTCOMES,
   OPPORTUNITY_PATHWAYS,
+  PARTICIPANT_PASS_IDS,
   RECOMMENDATIONS,
   REPORT_IDS,
   RESULT_STATUSES,
@@ -782,3 +783,60 @@ export type ApplicationListView = z.infer<typeof ApplicationList>;
 export type OfficerListView = z.infer<typeof OfficerList>;
 export type AssessmentViewType = z.infer<typeof AssessmentView>;
 export type ClarificationView = z.infer<typeof Clarification>;
+
+// ---- Participant registrations ----
+
+export const RegistrationBody = z
+  .object({
+    fullName: z.string().trim().min(2).max(120),
+    email: z.string().trim().max(254).pipe(z.email()),
+    phone: z.string().trim().max(40).optional(),
+    organisation: z.string().trim().min(1).max(160),
+    jobTitle: z.string().trim().min(1).max(120),
+    country: z.string().trim().toUpperCase().pipe(z.string().regex(/^[A-Z]{2}$/, "Use a two-letter country code.")).openapi({ example: "KE" }),
+    pass: z.enum(PARTICIPANT_PASS_IDS),
+    notes: z.string().trim().max(1000).optional(),
+    consent: z.literal(true).openapi({ description: "The visitor agreed to be contacted about the Summit. Must be true." }),
+    website: z.string().optional().openapi({ description: "A trap for bots: people leave it empty. Anything in it is discarded without a trace." }),
+  })
+  .openapi("SummitRegistrationBody");
+
+export const RegistrationReceipt = z
+  .object({
+    number: z.string().openapi({ example: "DTS-00042" }),
+    pass: z.enum(PARTICIPANT_PASS_IDS),
+    passName: z.string().openapi({ example: "Investor Pass" }),
+  })
+  .openapi("SummitRegistrationReceipt");
+
+export const RegistrationItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    email: z.string(),
+    fullName: z.string(),
+    phone: z.string().nullable(),
+    organisation: z.string(),
+    jobTitle: z.string(),
+    country: z.string(),
+    pass: z.enum(PARTICIPANT_PASS_IDS),
+    notes: z.string().nullable(),
+    consentedAt: Timestamp,
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
+  })
+  .openapi("SummitRegistration");
+
+export const RegistrationQuery = z.object({
+  pass: z.enum(PARTICIPANT_PASS_IDS).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const RegistrationList = z
+  .object({
+    items: z.array(RegistrationItem),
+    total: z.number().int(),
+    byPass: z.record(z.string(), z.number().int()).openapi({ description: "How many registrations there are for each pass, across all of them." }),
+  })
+  .openapi("SummitRegistrationList");

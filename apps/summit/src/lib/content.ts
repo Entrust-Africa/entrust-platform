@@ -3,13 +3,19 @@
 
 export const SUPPORT_EMAIL = "support@entrust-africa.com";
 
+/** The organisation hosting the event. Its logo is public/images/pacci-logo.png, from the landscape logo on pacci.org. */
+export const HOST = {
+  name: "Pan African Chamber of Commerce and Industry",
+  url: "https://www.pacci.org",
+} as const;
+
 /** The line above the headline. The design gives exact days, too small to read in the screenshot we were sent. */
 export const EVENT_LINE = "Addis Ababa · Ethiopia · January";
 
 export const HIGHLIGHTS = [
   {
     title: "Buyer-seller matchmaking",
-    text: "Vetted buyers meet verified Black-owned sellers in scheduled 1:1 deal meetings.",
+    text: "Vetted buyers meet verified sellers in scheduled 1:1 deal meetings.",
   },
   {
     title: "Market briefings",
