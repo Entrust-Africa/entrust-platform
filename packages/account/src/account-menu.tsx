@@ -6,6 +6,7 @@ import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@entrust/ui";
 import { PLATFORMS, type Platform } from "@entrust/roles";
 import type { UserProfile } from "./types";
+import { platformUrl } from "./platform-url";
 import { useSignOut } from "./use-sign-out";
 
 export interface AccountMenuProps {
@@ -55,21 +56,22 @@ export function AccountMenu({
     platforms ?? user.platforms ?? (user.staffRole ? ["clear", "trade"] : activeOrg?.platforms ?? []);
   const availablePlatforms = activePlatforms.filter((p: string) => (PLATFORMS as readonly string[]).includes(p));
 
-  const clearUrl =
-    currentPlatform === "clear"
-      ? "/"
-      : clearAppUrl ||
-        (typeof window !== "undefined" && window.location.origin.includes(":3000")
-          ? "/"
-          : process.env.NEXT_PUBLIC_CLEAR_APP_URL || "http://localhost:3000");
-
-  const tradeUrl =
-    currentPlatform === "trade"
-      ? "/"
-      : tradeAppUrl ||
-        (typeof window !== "undefined" && window.location.origin.includes(":3001")
-          ? "/"
-          : process.env.NEXT_PUBLIC_TRADE_APP_URL || "http://localhost:3001");
+  // The address of each platform comes from the app, then the deployment's setting, then the page's own address.
+  const here = typeof window !== "undefined" ? window.location : undefined;
+  const clearUrl = platformUrl({
+    platform: "clear",
+    current: currentPlatform,
+    explicit: clearAppUrl,
+    configured: process.env.NEXT_PUBLIC_CLEAR_APP_URL,
+    location: here,
+  });
+  const tradeUrl = platformUrl({
+    platform: "trade",
+    current: currentPlatform,
+    explicit: tradeAppUrl,
+    configured: process.env.NEXT_PUBLIC_TRADE_APP_URL,
+    location: here,
+  });
 
   const { signOut, signingOut, signOutError } = useSignOut(signOutRedirect);
 
