@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* The Diaspora Trade Summit's own look (from the pen.dev design "Diaspora Trade Summit - Landing"):
+   warm near-black, one amber, light grey paper, square corners, Anton for display and mono for labels. */
+@theme {
+  --color-ink: #1a1512;
+  --color-ink-deep: #120e0b;
+  --color-amber: #c98a2e;
+  /* Amber dark enough to read as small text on white (about 5.4:1). */
+  --color-amber-ink: #8a5a14;
+  --color-paper: #f5f6f7;
+  --color-line: #e6e3de;
+
+  --font-display: var(--font-anton), "Anton", Impact, "Arial Narrow Bold", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4.5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    background: #fff;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 3px;
+  }
+}
+
+/* The hero photo's dot screen: small dark dots over the picture, multiplied in. */
+.halftone {
+  background-image: radial-gradient(circle at center, rgb(0 0 0 / 0.38) 0.9px, transparent 1.4px);
+  background-size: 4px 4px;
+  mix-blend-mode: multiply;
+}
