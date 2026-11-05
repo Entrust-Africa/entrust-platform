@@ -1,8 +1,9 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { getDb } from "@entrust/db";
+import { getDb, type Database } from "@entrust/db";
 import type { AppEnv } from "../../app";
 import { Problem } from "../../schemas/problem";
-import { hasClearAccess, hasTradeAccess, loadPrincipal, type Ctx, type PracticeScope } from "../../services/access";
+import { hasClearAccess, hasTradeAccess, loadPrincipal, type Ctx, type PracticeScope, type Principal } from "../../services/access";
 import { ServiceError } from "../../services/errors";
 
 // What the CLEAR route files share: the error responses every endpoint documents, the router that
@@ -24,6 +25,15 @@ export const writeErrors = {
   422: problem("The values aren't allowed, or the change isn't possible yet"),
 };
 
+/** The principal the router's access check loaded for the request being handled. */
+const requestPrincipal = new AsyncLocalStorage<Principal>();
+
+/** The caller's memberships: the ones the access check already loaded for this request, or a fresh load. */
+async function principalFor(db: Database, userId: string): Promise<Principal> {
+  const loaded = requestPrincipal.getStore();
+  return loaded?.userId === userId ? loaded : loadPrincipal(db, userId);
+}
+
 /** A router whose endpoints all need a signed-in user, and checks platform access (#50). */
 export function clearRouter(platform?: "clear" | "trade") {
   const router = new OpenAPIHono<AppEnv>({
@@ -40,7 +50,7 @@ export function clearRouter(platform?: "clear" | "trade") {
 
     if (platform) {
       const db = getDb();
-      const principal = await loadPrincipal(db, user.id);
+      const principal = await principalFor(db, user.id);
       if (!principal.staffRole) {
         const session = c.get("session");
         const queryOrg = c.req.query("organizationId");
@@ -55,6 +65,8 @@ export function clearRouter(platform?: "clear" | "trade") {
           }
         }
       }
+      // The handler's contextFor uses this principal rather than loading the same memberships again.
+      return requestPrincipal.run(principal, next);
     }
 
     await next();
@@ -66,5 +78,5 @@ export function clearRouter(platform?: "clear" | "trade") {
 export async function contextFor(user: { id: string } | null, practice?: PracticeScope): Promise<Ctx> {
   if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
   const db = getDb();
-  return { db, principal: await loadPrincipal(db, user.id), now: new Date(), ...(practice ? { practice } : {}) };
+  return { db, principal: await principalFor(db, user.id), now: new Date(), ...(practice ? { practice } : {}) };
 }
