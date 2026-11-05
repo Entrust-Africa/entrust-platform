@@ -1,6 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
-import { ApplicationList, ApplicationsImported, ImportApplicationsBody } from "../../schemas/trade";
-import { importApplications, listApplications } from "../../services/trade-applications";
+import { ApplicationDetail, ApplicationList, ApplicationParam, ApplicationsImported, ImportApplicationsBody } from "../../schemas/trade";
+import { getApplication, importApplications, listApplications } from "../../services/trade-applications";
 import { clearRouter, contextFor, json, listErrors, problem } from "../clear/shared";
 
 // Applications to a programme, from the form's responses. Staff only, and only responses from Ethiopia are listed.
@@ -17,6 +17,17 @@ const listRoute = createRoute({
   description:
     "Responses to the application forms, newest first, with every answer as typed. Only responses from Ethiopia are listed; responses from elsewhere are kept but never shown, and `summary.notShown` says how many there are. Entrust staff only.",
   responses: { 200: { description: "The applications", content: json(ApplicationList) }, ...listErrors, 403: forbidden },
+});
+
+const detailRoute = createRoute({
+  method: "get",
+  path: "/applications/{id}",
+  tags,
+  summary: "One application from Ethiopia",
+  description:
+    "The response with every answer as typed, the business's other responses, and the SME register record it matches, if any. A response from outside Ethiopia, or that doesn't say where it is from, is 404 like an id that doesn't exist. Entrust staff only.",
+  request: { params: ApplicationParam },
+  responses: { 200: { description: "The application", content: json(ApplicationDetail) }, ...listErrors, 403: forbidden },
 });
 
 const importRoute = createRoute({
@@ -37,4 +48,5 @@ const importRoute = createRoute({
 
 export const tradeApplications = applications
   .openapi(listRoute, async (c) => c.json(await listApplications(await contextFor(c.get("user"))), 200))
+  .openapi(detailRoute, async (c) => c.json(await getApplication(await contextFor(c.get("user")), c.req.valid("param").id), 200))
   .openapi(importRoute, async (c) => c.json(await importApplications(await contextFor(c.get("user")), c.req.valid("json")), 201));

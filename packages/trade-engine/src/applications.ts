@@ -254,8 +254,12 @@ const keyOf = (text: string) => letters(text);
 
 /** How many times each response's business applied, found by its email address or its name; 1 when only once. */
 export function timesApplied(applications: readonly Pick<ApplicationInput, "email" | "businessName">[]): number[] {
-  return applications.map((a) => applications.filter((b) => b.email === a.email || keyOf(b.businessName) === keyOf(a.businessName)).length);
+  return applications.map((a) => applications.filter((b) => sameApplicant(a, b)).length);
 }
+
+/** Whether two responses are from one business: the same email address, or the same name however it is spelt. */
+export const sameApplicant = (a: Pick<ApplicationInput, "email" | "businessName">, b: Pick<ApplicationInput, "email" | "businessName">): boolean =>
+  a.email === b.email || keyOf(a.businessName) === keyOf(b.businessName);
 
 /** Whether an answer to a yes or no question is a yes. */
 export const isYes = (answer: string | undefined): boolean => /^\s*y(es)?\b/i.test(answer ?? "");

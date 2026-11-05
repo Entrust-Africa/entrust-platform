@@ -1,17 +1,15 @@
+import Link from "next/link";
 import { APPLICATION_QUESTIONS, isYes, type ApplicationQuestionKey } from "@entrust/trade-engine";
 import { Card, StatusBadge } from "@entrust/ui";
 import type { ApplicationItem } from "@/lib/register";
+import { applicationPhoneHref, formatDay } from "./format";
 
 // One card a response, so long free-text answers read well on a phone. The facts staff look at first are up top; the rest of the
 // answers are under "All answers". Only responses from Ethiopia ever get here: the API doesn't send the others.
 
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-
 const FACTS: ApplicationQuestionKey[] = ["category", "mainProducts", "employees", "yearEstablished", "revenue", "exportedBefore", "exportMarkets", "bank", "zemenInterest", "supportNeeded"];
 const LABEL = Object.fromEntries(APPLICATION_QUESTIONS.map((q) => [q.key, q.label])) as Record<ApplicationQuestionKey, string>;
 const REST = APPLICATION_QUESTIONS.map((q) => q.key).filter((k) => !FACTS.includes(k));
-
-const phoneHref = (phone: string) => `tel:${phone.startsWith("+") ? phone : `+${phone}`}`;
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -32,11 +30,15 @@ export function ApplicationCards({ items }: { items: ApplicationItem[] }) {
             <Card className="h-full space-y-4 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="break-words font-display text-lg font-bold text-ink">{a.businessName}</h3>
+                  <h3 className="break-words font-display text-lg font-bold text-ink">
+                    <Link href={`/register/applications/${a.id}`} className="text-brand-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
+                      {a.businessName}
+                    </Link>
+                  </h3>
                   <p className="text-sm text-ink-2">{a.contactName ?? "No contact given"}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 text-right">
-                  <span className="text-xs text-ink-3">Applied {DAY.format(new Date(a.submittedAt))}</span>
+                  <span className="text-xs text-ink-3">Applied {formatDay(a.submittedAt)}</span>
                   {a.timesApplied > 1 && <StatusBadge tone="info">{`Applied ${a.timesApplied} times`}</StatusBadge>}
                 </div>
               </div>
@@ -45,7 +47,7 @@ export function ApplicationCards({ items }: { items: ApplicationItem[] }) {
                 <Fact label="Location">{a.location ?? "–"}</Fact>
                 <Fact label="Phone">
                   {a.phone ? (
-                    <a className="text-brand-600 underline-offset-4 hover:underline" href={phoneHref(a.phone)}>
+                    <a className="text-brand-600 underline-offset-4 hover:underline" href={applicationPhoneHref(a.phone)}>
                       {a.phone}
                     </a>
                   ) : (

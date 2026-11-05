@@ -1,7 +1,7 @@
-import { asc, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { deriveRegister, isApplicationResponses, readRegister, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
-import type { RegisterImportedView, RegisterListView } from "../schemas/trade";
+import { deriveRegister, isApplicationResponses, readRegister, sameBusiness, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
+import type { RegisterDetailView, RegisterImportedView, RegisterListView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { readUploadedWorkbook } from "./register-workbook";
@@ -32,6 +32,30 @@ export async function listRegister(ctx: Ctx): Promise<RegisterListView> {
   return {
     items: records.map((record, i) => ({ ...record, id: rows[i]!.id, updatedAt: rows[i]!.updatedAt.toISOString() })),
     summary: summariseRegister(records),
+  };
+}
+
+/**
+ * One business in the register, with everything recorded about it. If it also applied to a programme (the same phone number or email
+ * address), those responses are listed so staff can open them. Only responses from Ethiopia are ever looked at.
+ */
+export async function getRegisterRecord(ctx: Ctx, id: string): Promise<RegisterDetailView> {
+  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see the SME register");
+  const [row] = await ctx.db.select().from(schema.smeRegister).where(eq(schema.smeRegister.id, id));
+  if (!row) throw new ServiceError("not_found", "That business isn't in the register.");
+
+  const applications = await ctx.db
+    .select({ id: schema.programApplication.id, program: schema.programApplication.program, submittedAt: schema.programApplication.submittedAt, businessName: schema.programApplication.businessName, phone: schema.programApplication.phone, email: schema.programApplication.email })
+    .from(schema.programApplication)
+    .where(eq(schema.programApplication.country, "ET"))
+    .orderBy(desc(schema.programApplication.submittedAt), desc(schema.programApplication.id));
+  return {
+    ...deriveRegister(toInput(row)),
+    id: row.id,
+    updatedAt: row.updatedAt.toISOString(),
+    alsoApplied: applications
+      .filter((a) => sameBusiness(a, row))
+      .map((a) => ({ id: a.id, program: a.program, submittedAt: a.submittedAt.toISOString(), businessName: a.businessName })),
   };
 }
 

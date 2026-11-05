@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { StatusBadge } from "@entrust/ui";
 import type { RegisterItem } from "@/lib/register";
-import { PRIORITY, amount, orDash, readiness, yesNo } from "./format";
+import { PRIORITY, amount, orDash, readiness, registerPhoneHref, yesNo } from "./format";
 
 // The four views of the register, one per sheet of the workbook it comes from. Each is a plain table that scrolls sideways on a
 // phone, with the business in the first column so a row can still be read.
@@ -29,7 +30,12 @@ function Table({ label, head, children }: { label: string; head: { text: string;
 function Business({ item }: { item: RegisterItem }) {
   return (
     <th scope="row" className="min-w-[200px] px-3 py-3 text-left align-top font-normal">
-      <span className="block font-semibold text-ink">{item.companyName}</span>
+      <Link
+        href={`/register/${item.id}`}
+        className="block font-semibold text-brand-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
+      >
+        {item.companyName}
+      </Link>
       <span className="block text-xs text-ink-2">{item.participantName ?? "No contact recorded"}</span>
       <span className="block text-xs text-ink-3">{item.code}</span>
     </th>
@@ -137,7 +143,7 @@ export function ServicesTable({ items }: { items: RegisterItem[] }) {
       {items.map((item) => (
         <tr key={item.id}>
           <Business item={item} />
-          <Td>{item.phone ? <a className="text-brand-600 underline-offset-4 hover:underline" href={`tel:+251${item.phone.replace(/\D/g, "").replace(/^0+/, "")}`}>{item.phone}</a> : "–"}</Td>
+          <Td>{item.phone ? <a className="text-brand-600 underline-offset-4 hover:underline" href={registerPhoneHref(item.phone)}>{item.phone}</a> : "–"}</Td>
           <Td>{item.email ? <a className="break-all text-brand-600 underline-offset-4 hover:underline" href={`mailto:${item.email}`}>{item.email}</a> : "–"}</Td>
           <Td>{orDash(item.entrustSupportNeeded)}</Td>
           <Td>{orDash(item.serviceNotes)}</Td>

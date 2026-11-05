@@ -27,3 +27,14 @@ export const PRIORITY: Record<"high" | "medium" | "low", { label: string; tone: 
   medium: { label: "Medium priority", tone: "warn" },
   low: { label: "Low priority", tone: "idle" },
 };
+
+const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** A date as "27 Mar 2026". */
+export const formatDay = (iso: string): string => DAY.format(new Date(iso));
+
+/** A `tel:` link for a number as the diagnostic workbook has it, which is Ethiopian and usually without the country code. */
+export const registerPhoneHref = (phone: string): string => `tel:+251${phone.replace(/\D/g, "").replace(/^0+/, "")}`;
+
+/** A `tel:` link for a number as an application has it, which is written in full when it can be. */
+export const applicationPhoneHref = (phone: string): string => `tel:${phone.startsWith("+") ? phone : `+${phone}`}`;

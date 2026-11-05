@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCatalogue, catalogueFromApplications, catalogueFromRegister, deriveRegister, markSharedBusinesses, type ApplicationRow, type RegisterInput } from "../src";
+import { PILOT_COHORTS, buildCatalogue, catalogueFromApplications, catalogueFromRegister, deriveRegister, markSharedBusinesses, sameBusiness, type ApplicationRow, type RegisterInput } from "../src";
 
 const register = (over: Partial<RegisterInput> = {}) =>
   deriveRegister({
@@ -52,8 +52,9 @@ const application = (over: Partial<ApplicationRow> = {}): ApplicationRow => ({
 
 describe("a leather business as a catalogue entry", () => {
   it("is in cohort 1 with its SME ID, readiness and a tidied phone number", () => {
-    expect(catalogueFromRegister(register())).toEqual({
+    expect(catalogueFromRegister(register(), "row-1")).toEqual({
       key: "register:TRADE-TST-LEA-002",
+      id: "row-1",
       cohort: 1,
       name: "Acme Leather Plc",
       contactName: "Abebe Kebede",
@@ -73,7 +74,7 @@ describe("a leather business as a catalogue entry", () => {
   });
 
   it("leaves readiness out for a business that hasn't been scored", () => {
-    const sme = catalogueFromRegister(register({ costingKnowledge: null, employees: null }));
+    const sme = catalogueFromRegister(register({ costingKnowledge: null, employees: null }), "row-1");
     expect(sme).toMatchObject({ readinessLevel: null, readinessScore: null, employees: null });
   });
 });
@@ -83,6 +84,7 @@ describe("an agro application as a catalogue entry", () => {
     expect(catalogueFromApplications([application()])).toEqual([
       {
         key: "application:a1",
+        id: "a1",
         cohort: 2,
         name: "Acme Foods PLC",
         contactName: "Almaz",
@@ -126,11 +128,11 @@ describe("an agro application as a catalogue entry", () => {
 
 describe("the same business in two cohorts", () => {
   it("is found by its phone number, however it was written, or its email address", () => {
-    const leather = catalogueFromRegister(register({ phone: "913362262", companyName: "TTGI leather plc" }));
+    const leather = catalogueFromRegister(register({ phone: "913362262", companyName: "TTGI leather plc" }), "row");
     const agro = catalogueFromApplications([application({ phone: "+251913362262", businessName: "TTG Leather & Shema" })])[0]!;
     const byEmail = { ...catalogueFromApplications([application({ id: "z", phone: null, email: "same@firm.test", businessName: "Z Foods" })])[0]! };
-    const leatherByEmail = { ...catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", phone: null, email: "SAME@firm.test" })) };
-    const unrelated = catalogueFromRegister(register({ code: "TRADE-TST-LEA-004", phone: "911999999", companyName: "Unrelated" }));
+    const leatherByEmail = { ...catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", phone: null, email: "SAME@firm.test" }), "row") };
+    const unrelated = catalogueFromRegister(register({ code: "TRADE-TST-LEA-004", phone: "911999999", companyName: "Unrelated" }), "row");
     const marked = markSharedBusinesses([leather, agro, byEmail, leatherByEmail, unrelated]);
     expect(marked.map((s) => [s.name, s.alsoInCohorts])).toEqual([
       ["TTGI leather plc", [2]],
@@ -142,8 +144,8 @@ describe("the same business in two cohorts", () => {
   });
 
   it("doesn't count two businesses in the same cohort that share a number", () => {
-    const a = catalogueFromRegister(register());
-    const b = catalogueFromRegister(register({ code: "TRADE-TST-LEA-009", companyName: "Twin Plc" }));
+    const a = catalogueFromRegister(register(), "row");
+    const b = catalogueFromRegister(register({ code: "TRADE-TST-LEA-009", companyName: "Twin Plc" }), "row");
     expect(markSharedBusinesses([a, b]).map((s) => s.alsoInCohorts)).toEqual([[], []]);
   });
 });
@@ -151,8 +153,8 @@ describe("the same business in two cohorts", () => {
 describe("the catalogue", () => {
   it("has the two cohorts, with their businesses by name", () => {
     const catalogue = buildCatalogue([
-      catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", companyName: "zeta Leather", phone: null })),
-      catalogueFromRegister(register({ companyName: "Alpha Leather", phone: null })),
+      catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", companyName: "zeta Leather", phone: null }), "row"),
+      catalogueFromRegister(register({ companyName: "Alpha Leather", phone: null }), "row"),
       ...catalogueFromApplications([application({ businessName: "Mango Co", email: "m@firm.test", phone: null })]),
     ]);
     expect(catalogue.map((c) => [c.number, c.name, c.count])).toEqual([[1, "Leather", 2], [2, "Agro-processing", 1]]);
@@ -161,5 +163,23 @@ describe("the catalogue", () => {
 
   it("keeps both cohorts when one is empty", () => {
     expect(buildCatalogue([]).map((c) => [c.number, c.count])).toEqual([[1, 0], [2, 0]]);
+  });
+
+  it("says which cohort is active and which is previous", () => {
+    expect(buildCatalogue([]).map((c) => [c.number, c.status])).toEqual([[1, "previous"], [2, "active"]]);
+    expect(PILOT_COHORTS.map((c) => c.status)).toEqual(["previous", "active"]);
+  });
+});
+
+describe("recognising one business in two records", () => {
+  it("matches on the last nine digits of a phone number, however written, or on an email address in any case", () => {
+    expect(sameBusiness({ phone: "0913362262", email: null }, { phone: "+251 913 362 262", email: null })).toBe(true);
+    expect(sameBusiness({ phone: null, email: "A@Firm.test" }, { phone: null, email: "a@firm.test" })).toBe(true);
+    expect(sameBusiness({ phone: "911000001", email: "a@firm.test" }, { phone: "911999999", email: "b@firm.test" })).toBe(false);
+  });
+
+  it("doesn't match on nothing, or on a number too short to be one", () => {
+    expect(sameBusiness({ phone: null, email: null }, { phone: null, email: null })).toBe(false);
+    expect(sameBusiness({ phone: "12345", email: null }, { phone: "12345", email: null })).toBe(false);
   });
 });
