@@ -553,3 +553,63 @@ export const sponsorConsent = trade.table(
     index("trade_sponsor_consent_sponsor_idx").on(t.sponsorOrganizationId),
   ],
 );
+
+// A business in Entrust's register of pilot SMEs: what staff recorded about it in the export readiness diagnostic
+// workbook before it had an account. The code is the workbook's own SME ID (TRADE-ETH-LEA-002) and what a re-import
+// matches on. Totals, the readiness score and levels are worked out when read, from these inputs, so they can't
+// disagree with them. Amounts are as the workbook gives them (Ethiopian birr); the five scores are 1 to 5.
+// Staff only: a sponsor sees none of this unless the SME agrees, through `sponsor_consent`.
+export const smeRegister = trade.table(
+  "sme_register",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: text("code").notNull(),
+    companyName: text("company_name").notNull(),
+    participantName: text("participant_name"),
+    phone: text("phone"),
+    email: text("email"),
+    yearEstablished: integer("year_established"),
+    location: text("location"),
+    employees: integer("employees"),
+    exportLicence: boolean("export_licence"),
+    currentBank: text("current_bank"),
+    mainProduct: text("main_product"),
+    monthlyProductionCapacity: numeric("monthly_production_capacity", { precision: 16, scale: 2, mode: "number" }),
+    averageMonthlyRevenue: numeric("average_monthly_revenue", { precision: 16, scale: 2, mode: "number" }),
+    largestOrderCompleted: numeric("largest_order_completed", { precision: 16, scale: 2, mode: "number" }),
+    currentMarkets: text("current_markets"),
+    targetExportMarket: text("target_export_market"),
+    monthlyOperatingCost: numeric("monthly_operating_cost", { precision: 16, scale: 2, mode: "number" }),
+    estimatedMonthlyProfit: numeric("estimated_monthly_profit", { precision: 16, scale: 2, mode: "number" }),
+    existingLoan: boolean("existing_loan"),
+    loanAmount: numeric("loan_amount", { precision: 16, scale: 2, mode: "number" }),
+    cashflowStability: text("cashflow_stability"),
+    workingCapitalGap: numeric("working_capital_gap", { precision: 16, scale: 2, mode: "number" }),
+    equipmentInvestmentNeeded: numeric("equipment_investment_needed", { precision: 16, scale: 2, mode: "number" }),
+    exportLogisticsGap: numeric("export_logistics_gap", { precision: 16, scale: 2, mode: "number" }),
+    costingKnowledge: integer("costing_knowledge"),
+    productionCapacityStrength: integer("production_capacity_strength"),
+    documentationKnowledge: integer("documentation_knowledge"),
+    financialRecordKeeping: integer("financial_record_keeping"),
+    marketReadiness: integer("market_readiness"),
+    entrustSupportNeeded: text("entrust_support_needed"),
+    bankOpportunity: text("bank_opportunity"),
+    serviceNotes: text("service_notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_sme_register_code_uidx").on(t.code),
+    check(
+      "trade_sme_register_scores_ck",
+      sql`(${t.costingKnowledge} is null or ${t.costingKnowledge} between 1 and 5)
+        and (${t.productionCapacityStrength} is null or ${t.productionCapacityStrength} between 1 and 5)
+        and (${t.documentationKnowledge} is null or ${t.documentationKnowledge} between 1 and 5)
+        and (${t.financialRecordKeeping} is null or ${t.financialRecordKeeping} between 1 and 5)
+        and (${t.marketReadiness} is null or ${t.marketReadiness} between 1 and 5)`,
+    ),
+  ],
+);
