@@ -11,6 +11,7 @@ import {
   DocumentFieldsBody,
   DocumentParam,
   EvidenceParam,
+  ExporterList,
   FlagParam,
   ListCasesQuery,
   ReevaluateRulePackBody,
@@ -28,9 +29,10 @@ import { recordClockInput } from "../../services/clocks";
 import { recordContract } from "../../services/contracts";
 import { documentCatalogue, recordDocumentFields } from "../../services/documents";
 import { reviewEvidence, submitEvidence } from "../../services/evidence";
+import { listExporters } from "../../services/exporters";
 import { waiveFlag } from "../../services/flags";
 import { transitionCaseStep } from "../../services/steps";
-import { clearRouter, contextFor, json, listErrors, readErrors, writeErrors } from "./shared";
+import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./shared";
 
 const tags = ["CLEAR cases"];
 
@@ -45,6 +47,20 @@ const createCaseRoute = createRoute({
     "SME owners and members open cases for their own organisation, Entrust admins and facilitators for any. Needs at least the product and destination country.",
   request: { body: { required: true, content: json(CreateCaseBody) } },
   responses: { 201: { description: "The new case", content: json(CaseCreated) }, ...writeErrors },
+});
+
+const listExportersRoute = createRoute({
+  method: "get",
+  path: "/exporters",
+  tags,
+  summary: "List the exporters a case can be opened for",
+  description:
+    "For Entrust admins and facilitators, who open cases on behalf of any SME. The SME organisations with access to CLEAR, by name. Others, including reviewers, are refused.",
+  responses: {
+    200: { description: "The exporters", content: json(ExporterList) },
+    401: listErrors[401],
+    403: problem("Only Entrust admins and facilitators open cases for other organisations"),
+  },
 });
 
 const listCasesRoute = createRoute({
@@ -198,6 +214,9 @@ export const clearCases = cases
       cadAmountUsd: body.cadAmountUsd,
     });
     return c.json(created, 201);
+  })
+  .openapi(listExportersRoute, async (c) => {
+    return c.json(await listExporters(await contextFor(c.get("user"))), 200);
   })
   .openapi(listCasesRoute, async (c) => {
     return c.json(await listCases(await contextFor(c.get("user")), c.req.valid("query")), 200);

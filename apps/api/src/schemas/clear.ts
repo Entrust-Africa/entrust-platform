@@ -515,6 +515,18 @@ export const CaseList = z
   .object({ items: z.array(CaseSummary), total: z.number().int() })
   .openapi("CaseList");
 
+export const ExporterList = z
+  .object({
+    items: z.array(
+      z.object({
+        id: z.string().openapi({ description: "The organisation id to open the case for." }),
+        name: z.string(),
+        smeId: z.string().nullable().openapi({ description: "The SME ID, such as ET-SME-000001." }),
+      }),
+    ),
+  })
+  .openapi("ExporterList");
+
 // ---- Requests ----
 
 export const CaseIdParam = z.object({ id: z.uuid() });
@@ -710,6 +722,7 @@ export type CaseSummaryView = z.infer<typeof CaseSummary>;
 export type CaseDetailView = z.infer<typeof CaseDetail>;
 export type CaseCreatedView = z.infer<typeof CaseCreated>;
 export type CaseListView = z.infer<typeof CaseList>;
+export type ExporterListView = z.infer<typeof ExporterList>;
 export type ContractView = z.infer<typeof Contract>;
 export type MinimumPriceCheckView = z.infer<typeof MinimumPriceCheck>;
 export type PriceTableSummaryView = z.infer<typeof PriceTableSummary>;
