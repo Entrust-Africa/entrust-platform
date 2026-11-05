@@ -1,22 +1,37 @@
 import { expect, test } from "@playwright/test";
 
-// The Summit landing page is public and runs on its own app (and, in production, its own domain).
-test("the Summit landing page loads without signing in and sends buyers and sellers to the application", async ({ page }) => {
-  const response = await page.goto("http://localhost:3002/");
+// The ADTIS site is public and runs on its own app (and, in production, its own domain). These checks hold whether or not
+// an edition has been set up: the commercial pages then say they open soon instead of showing packages.
+const SITE = "http://localhost:3002";
+
+test("the landing page loads without signing in, leads with the ADTIS headline and keeps SME registration separate", async ({ page }) => {
+  const response = await page.goto(`${SITE}/`);
   expect(response?.status()).toBe(200);
 
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("business meets the world");
-  await expect(page.getByRole("heading", { name: "Two ways to take part" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Connecting Africa and its global diaspora");
 
+  // EXHIBIT | SPONSOR | PARTICIPATE is one item of the main navigation, each word a link.
   const nav = page.getByRole("navigation", { name: "Main" });
-  await expect(nav.getByRole("link", { name: "Tickets" })).toHaveAttribute("href", "#tickets");
+  const group = nav.getByRole("group", { name: "Exhibit, sponsor or participate" });
+  await expect(group.getByRole("link", { name: "Exhibit" })).toHaveAttribute("href", "/exhibit");
+  await expect(group.getByRole("link", { name: "Sponsor" })).toHaveAttribute("href", "/sponsor");
+  await expect(group.getByRole("link", { name: "Participate" })).toHaveAttribute("href", "/participate");
 
-  const buyerSeller = page.getByRole("link", { name: /Register as a buyer \/ seller/ });
-  await expect(buyerSeller).toHaveAttribute("href", /\/summit\/apply$/);
+  // The SME application is TRADE's, not a form on this site.
+  await expect(page.getByRole("link", { name: /Register as an SME/ })).toHaveAttribute("href", /\/summit\/apply$/);
+  await expect(page.getByRole("link", { name: /Register as a buyer or investor/ })).toHaveAttribute("href", /category=investor-buyer/);
+});
+
+test("the page says January 2027 with dates to be announced, and never an October date", async ({ page }) => {
+  await page.goto(`${SITE}/`);
+  const text = await page.locator("body").innerText();
+  expect(text).toMatch(/January 2027/);
+  expect(text).toMatch(/to be announced/i);
+  expect(text).not.toMatch(/October/i);
 });
 
 test("the page names the host, the Pan African Chamber of Commerce", async ({ page }) => {
-  await page.goto("http://localhost:3002/");
+  await page.goto(`${SITE}/`);
   const logos = page.getByRole("img", { name: "Pan African Chamber of Commerce", exact: true });
   await expect(logos.first()).toBeVisible();
   // The hero and the footer each carry it, and the picture really loads.
@@ -24,43 +39,26 @@ test("the page names the host, the Pan African Chamber of Commerce", async ({ pa
   expect(await logos.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 });
 
-test("a ticket button opens the registration form with the chosen pass, and Escape closes it", async ({ page }) => {
-  await page.goto("http://localhost:3002/");
-  await expect(page.getByRole("dialog")).toBeHidden();
+for (const path of ["/exhibit", "/exhibit/apply", "/sponsor", "/sponsor/enquire", "/participate", "/participate/register", "/smes"]) {
+  test(`${path} loads without signing in and has a heading`, async ({ page }) => {
+    const response = await page.goto(`${SITE}${path}`);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // Every page has the same header with the commercial navigation.
+    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Participate" })).toBeVisible();
+  });
+}
 
-  await page.getByRole("button", { name: "Get Investor Pass" }).click();
-  const dialog = page.getByRole("dialog", { name: "Register to attend" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Pass")).toHaveValue("investor");
-
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-
-  // The generic button opens the same form with no pass chosen.
-  await page.getByRole("button", { name: /Register as a participant/ }).click();
-  await expect(dialog.getByLabel("Pass")).toHaveValue("");
+test("a badge or a business that doesn't exist is a 404, not an error", async ({ page }) => {
+  expect((await page.goto(`${SITE}/badge/AAAAAAAAAAAAAAAAAAAAAAAA`))?.status()).toBe(404);
+  expect((await page.goto(`${SITE}/smes/no-such-business`))?.status()).toBe(404);
 });
 
-test("a visitor can register to attend, and the registration is confirmed with a reference", async ({ page }) => {
-  await page.goto("http://localhost:3002/");
-  await page.getByRole("button", { name: "Get Diaspora Pass" }).click();
-  const dialog = page.getByRole("dialog", { name: "Register to attend" });
-
-  // The browser's own validation stops an empty form before anything is sent.
-  await dialog.getByRole("button", { name: "Register", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "You're registered" })).toBeHidden();
-
-  const email = `e2e-summit-${Date.now()}@example.test`;
-  await dialog.getByLabel("Full name").fill("Amina Bekele");
-  await dialog.getByLabel("Email").fill(email);
-  await dialog.getByLabel("Organisation").fill("ZEBU Coffee");
-  await dialog.getByLabel("Job title").fill("Export manager");
-  await dialog.getByLabel("Country you are based in").selectOption("ET");
-  await dialog.getByLabel(/I agree that/).check();
-  await dialog.getByRole("button", { name: "Register", exact: true }).click();
-
-  await expect(dialog.getByRole("heading", { name: "You're registered" })).toBeVisible();
-  await expect(dialog).toContainText("Diaspora Pass");
-  await expect(dialog).toContainText(email);
-  await expect(dialog).toContainText(/Reference DTS-\d{5}/);
+test("the pages fit a phone: nothing scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const path of ["/", "/exhibit", "/sponsor", "/participate", "/participate/register", "/smes"]) {
+    await page.goto(`${SITE}${path}`);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, path).toBeLessThanOrEqual(0);
+  }
 });

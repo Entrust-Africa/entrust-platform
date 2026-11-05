@@ -1,5 +1,5 @@
-// The landing page's copy, as set in the design. Dates, prices and pass contents are Entrust's to confirm:
-// change them here and nowhere else.
+// The site's copy. Dates, prices and what each package includes come from the API's catalogue (the organisers edit them in the
+// admin screens), so the only prices on the pages are the ones it sends. Change the words here and nowhere else.
 
 export const SUPPORT_EMAIL = "support@entrust-africa.com";
 
@@ -9,49 +9,43 @@ export const HOST = {
   url: "https://panafricanchamber.com",
 } as const;
 
-/** The line above the headline. The design gives exact days, too small to read in the screenshot we were sent. */
-export const EVENT_LINE = "Addis Ababa · Ethiopia · January";
+/**
+ * The line above the headline. January 2027 is the planning period and the exact days are not announced: do not publish any
+ * other date.
+ */
+export const EVENT_LINE = "Addis Ababa · Ethiopia · January 2027 · Dates to be announced";
 
-export const HIGHLIGHTS = [
-  {
-    title: "Buyer-seller matchmaking",
-    text: "Vetted buyers meet verified sellers in scheduled 1:1 deal meetings.",
-  },
-  {
-    title: "Market briefings",
-    text: "On-the-ground intelligence across Africa, the Americas, Europe and Asia.",
-  },
-  {
-    title: "Trade finance & logistics",
-    text: "Lenders, export agencies and logistics partners ready to move your goods.",
-  },
+export const HEADLINE = "Connecting Africa and its global diaspora through trade, investment and business partnerships";
+
+export const INTRO =
+  "The Africa Diaspora Trade & Investment Summit brings together African businesses, diaspora investors, international buyers, business leaders and institutions to build meaningful commercial relationships, unlock investment opportunities and strengthen economic cooperation.";
+
+/** Why it matters: the gap the summit closes (concept note, section 1). */
+export const WHY = [
+  "Africa and its diaspora hold significant commercial, professional and investment resources. Too often they never reach the African SMEs that need international buyers, capital, distribution networks and technology.",
+  "ADTIS is a structured platform where assessed, investment-ready African businesses meet buyers, investors, distributors, financial institutions and technical experts, over three days in Addis Ababa.",
 ] as const;
 
-export const PASSES = [
-  {
-    id: "diaspora",
-    name: "Diaspora Pass",
-    price: "$450",
-    audience: "For founders, professionals and returning talent.",
-    features: ["All 3 days of sessions", "Market briefings & clinics", "Networking events"],
-    featured: false,
-  },
-  {
-    id: "investor",
-    name: "Investor Pass",
-    price: "$950",
-    audience: "For funds, buyers and deal-makers.",
-    features: ["Everything in Diaspora Pass", "Curated 1:1 matchmaking", "Deal room & investors' dinner"],
-    featured: true,
-  },
-  {
-    id: "delegation",
-    name: "Delegation Pass",
-    price: "$2,400",
-    audience: "For companies and government teams.",
-    features: ["Everything in Investor Pass", "Private briefing room", "5 seats & branded table"],
-    featured: false,
-  },
+export const OBJECTIVES = [
+  { title: "Facilitate trade", text: "Connect African SMEs with international buyers, importers, distributors and regional trade partners." },
+  { title: "Mobilise diaspora investment", text: "Create ways for diaspora investors, investment groups and institutions to find viable African businesses." },
+  { title: "Build SME investment readiness", text: "Assess businesses on commercial potential, operations, finances and readiness to work with international partners." },
+  { title: "Advance Brain Gain", text: "Bring diaspora professionals' knowledge, technology and management experience to African enterprises." },
 ] as const;
 
-export type PassId = (typeof PASSES)[number]["id"];
+/** Who should take part (concept note, section 5). */
+export const WHO = [
+  "African SME owners, entrepreneurs and business leaders",
+  "Diaspora entrepreneurs and business associations",
+  "Diaspora investors and investment networks",
+  "Family offices and private investment groups",
+  "International buyers, importers and distributors",
+  "Banks and financial institutions",
+  "Venture capital and private equity firms",
+  "Development finance institutions",
+  "Trade promotion organisations and chambers of commerce",
+  "Government representatives and policymakers",
+  "Technology companies and digital trade service providers",
+  "Professional experts, consultants and diaspora specialists",
+  "Development partners and international organisations",
+] as const;
