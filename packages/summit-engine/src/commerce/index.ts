@@ -17,3 +17,5 @@ export {
 export type { BookingStatus, PaymentSubject } from "./booking";
 export { ENQUIRY_OPEN, ENQUIRY_STATUSES, ENQUIRY_STATUS_LABELS, ENQUIRY_TRANSITIONS } from "./enquiry";
 export type { EnquiryStatus } from "./enquiry";
+export { DELEGATE_STATUSES, SELECTED_SME_ELIGIBILITY, badgeProblems, badgeState, parseBadgeCode } from "./delegate";
+export type { BadgeState, DelegateStatus } from "./delegate";
