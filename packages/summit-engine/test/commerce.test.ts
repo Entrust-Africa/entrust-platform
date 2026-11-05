@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BENEFIT_AREAS,
+  BOOKING_HOLDS_BOOTH,
+  BOOKING_TRANSITIONS,
+  BUSINESS_SECTORS,
+  PAYMENT_STATUSES,
+  PAYMENT_TRANSITIONS,
+  confirmationBlockers,
   EXHIBITION_COMPARISON,
   STANDARD_EDITION,
   STANDARD_PRODUCTS,
@@ -151,5 +157,34 @@ describe("product checks", () => {
 
   it("finds two products with the same address", () => {
     expect(catalogueProblems([good, good])).toEqual([`${good.slug}: two products have this address.`]);
+  });
+});
+
+describe("booking and payment rules", () => {
+  it("lets a booking be confirmed only when approved, paid (verified) and given a booth", () => {
+    expect(confirmationBlockers({ status: "approved", boothNumber: "A12" }, "confirmed")).toEqual([]);
+    expect(confirmationBlockers({ status: "submitted", boothNumber: "A12" }, "confirmed")).toHaveLength(1);
+    expect(confirmationBlockers({ status: "approved", boothNumber: "A12" }, "awaiting_verification")).toEqual(["The payment has not been verified."]);
+    expect(confirmationBlockers({ status: "approved", boothNumber: null }, "confirmed")).toEqual(["No booth number has been assigned."]);
+    expect(confirmationBlockers({ status: "approved", boothNumber: null }, null)).toHaveLength(2);
+  });
+
+  it("holds a booth only for approved and confirmed bookings", () => {
+    expect(BOOKING_HOLDS_BOOTH).toEqual(["approved", "confirmed"]);
+  });
+
+  it("never goes from submitted straight to confirmed, and a rejected or cancelled booking stays so", () => {
+    expect(BOOKING_TRANSITIONS.submitted).not.toContain("confirmed");
+    expect(BOOKING_TRANSITIONS.rejected).toEqual([]);
+    expect(BOOKING_TRANSITIONS.cancelled).toEqual([]);
+  });
+
+  it("sends a payment to refunded only from confirmed", () => {
+    for (const status of PAYMENT_STATUSES) expect(PAYMENT_TRANSITIONS[status].includes("refunded")).toBe(status === "confirmed");
+  });
+
+  it("lists the eleven target sectors and Other", () => {
+    expect(BUSINESS_SECTORS).toHaveLength(12);
+    expect(BUSINESS_SECTORS.at(-1)).toBe("Other");
   });
 });
