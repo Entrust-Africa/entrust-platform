@@ -54,3 +54,5 @@ export function latestPublishedTemplate(): ApplicationTemplate | undefined {
   return published.length ? newest(published) : undefined;
 }
 export * from "./passes";
+
+export * from "./commerce";
