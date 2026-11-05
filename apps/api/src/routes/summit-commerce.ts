@@ -10,6 +10,12 @@ import {
   BookingParam,
   BookingQuery,
   Catalogue,
+  EnquiryDetail,
+  EnquiryList,
+  EnquiryParam,
+  EnquiryPatch,
+  EnquiryQuery,
+  EnquiryStatusBody,
   EvidenceUrl,
   ExhibitorApplicationBody,
   ExhibitorApplicationReceipt,
@@ -17,6 +23,8 @@ import {
   PaymentParam,
   PaymentPatch,
   ReasonBody,
+  SponsorEnquiryBody,
+  SponsorEnquiryReceipt,
   EditionBody,
   EditionDetail,
   EditionList,
@@ -27,6 +35,7 @@ import {
   ProductPatch,
 } from "../schemas/summit-commerce";
 import { allocateBooth, applyForBooth, approveBooking, cancelBooking, confirmBooking, getBooking, listBookings, rejectBooking } from "../services/summit-commerce-bookings";
+import { changeEnquiryStatus, getEnquiry, listEnquiries, submitEnquiry, updateEnquiry } from "../services/summit-commerce-enquiries";
 import { evidenceUrl, updatePayment } from "../services/summit-commerce-payments";
 import { createEdition, createProduct, getEdition, listEditions, publicCatalogue, updateEdition, updateProduct } from "../services/summit-commerce";
 import { clearRouter, contextFor, json, listErrors, problem, writeErrors } from "./clear/shared";
@@ -72,8 +81,25 @@ const exhibitorApplicationRoute = createRoute({
   },
 });
 
+const sponsorEnquiryRoute = createRoute({
+  method: "post",
+  path: "/sponsor-enquiries",
+  tags,
+  summary: "Ask about sponsoring",
+  description:
+    "For the public sponsorship form: an organisation says which sponsorship level or additional opportunity it is interested in. It needs no sign-in. It records the enquiry and emails a receipt; nothing is reserved or due. A second enquiry from the same address for the same option replaces the first while it is new. An option whose places are all confirmed takes no enquiries.",
+  request: { body: { required: true, content: json(SponsorEnquiryBody) } },
+  responses: {
+    201: { description: "The enquiry was recorded", content: json(SponsorEnquiryReceipt) },
+    400: problem("The form isn't complete or valid"),
+    404: problem("Enquiries aren't open, or there is no such option"),
+    422: problem("The option is no longer available"),
+  },
+});
+
 export const summitCommercePublic = publicRouter
   .openapi(catalogueRoute, async (c) => c.json(await publicCatalogue({ db: getDb() }), 200))
+  .openapi(sponsorEnquiryRoute, async (c) => c.json(await submitEnquiry({ db: getDb(), now: new Date() }, c.req.valid("json")), 201))
   .openapi(exhibitorApplicationRoute, async (c) => c.json(await applyForBooth({ db: getDb(), now: new Date() }, c.req.valid("json")), 201));
 
 // ---- Administrators ----
@@ -244,6 +270,47 @@ const evidenceRoute = createRoute({
   responses: { 200: { description: "The link", content: json(EvidenceUrl) }, ...admin },
 });
 
+const listEnquiriesRoute = createRoute({
+  method: "get",
+  path: "/sponsor-enquiries",
+  tags,
+  summary: "List the sponsorship enquiries",
+  description: "Newest first, for the current edition unless another is named, with how many are in each status and the value of the pipeline. Entrust administrators and facilitators.",
+  request: { query: EnquiryQuery },
+  responses: { 200: { description: "The enquiries", content: json(EnquiryList) }, ...listErrors, 403: admin[403] },
+});
+
+const getEnquiryRoute = createRoute({
+  method: "get",
+  path: "/sponsor-enquiries/{id}",
+  tags,
+  summary: "One sponsorship enquiry",
+  description: "What the organisation wrote, its status history, the organisers' notes and the payment. Entrust administrators and facilitators.",
+  request: { params: EnquiryParam },
+  responses: { 200: { description: "The enquiry", content: json(EnquiryDetail) }, ...admin },
+});
+
+const updateEnquiryRoute = createRoute({
+  method: "patch",
+  path: "/sponsor-enquiries/{id}",
+  tags,
+  summary: "Record the value and notes of an enquiry",
+  description: "The value starts as the listed price and can be changed while the deal is negotiated. Entrust administrators and facilitators.",
+  request: { params: EnquiryParam, body: { required: true, content: json(EnquiryPatch) } },
+  responses: { 200: { description: "The enquiry", content: json(EnquiryDetail) }, ...admin, 409: writeErrors[409], 422: writeErrors[422] },
+});
+
+const enquiryStatusRoute = createRoute({
+  method: "post",
+  path: "/sponsor-enquiries/{id}/status",
+  tags,
+  summary: "Move an enquiry along the pipeline",
+  description:
+    "New enquiry, contacted, negotiation, proposal sent, confirmed or declined. Confirming opens a payment for the enquiry's value, emails the sponsor the payment instructions, and counts against the option's capacity (refused when its places are taken). Declining cancels a payment that was never paid.",
+  request: { params: EnquiryParam, body: { required: true, content: json(EnquiryStatusBody) } },
+  responses: { 200: { description: "The enquiry", content: json(EnquiryDetail) }, ...admin, 409: writeErrors[409], 422: writeErrors[422] },
+});
+
 export const summitCommerce = router
   .openapi(listEditionsRoute, async (c) => c.json(await listEditions(await contextFor(c.get("user"))), 200))
   .openapi(createEditionRoute, async (c) => c.json(await createEdition(await contextFor(c.get("user")), c.req.valid("json")), 201))
@@ -275,4 +342,12 @@ export const summitCommerce = router
   .openapi(paymentRoute, async (c) =>
     c.json(await updatePayment(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
   )
-  .openapi(evidenceRoute, async (c) => c.json(await evidenceUrl(await contextFor(c.get("user")), c.req.valid("param").id), 200));
+  .openapi(evidenceRoute, async (c) => c.json(await evidenceUrl(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(listEnquiriesRoute, async (c) => c.json(await listEnquiries(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(getEnquiryRoute, async (c) => c.json(await getEnquiry(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(updateEnquiryRoute, async (c) =>
+    c.json(await updateEnquiry(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  )
+  .openapi(enquiryStatusRoute, async (c) =>
+    c.json(await changeEnquiryStatus(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200),
+  );

@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import {
   BENEFIT_AREA_IDS,
   BOOKING_STATUSES,
+  ENQUIRY_STATUSES,
   MAX_FEATURES,
   MAX_PRICE_CENTS,
   PAYMENT_STATUSES,
@@ -352,3 +353,101 @@ export const PaymentPatch = z
 export const EvidenceUrl = z
   .object({ downloadUrl: z.string(), expiresInSeconds: z.number().int(), fileName: z.string(), contentType: z.string() })
   .openapi("SummitPaymentEvidenceUrl");
+
+
+// ---- Sponsorship and opportunity enquiries ----
+
+const EnquiryStatusEnum = z.enum(ENQUIRY_STATUSES);
+
+export const SponsorEnquiryBody = z
+  .object({
+    productSlug: z.string().trim().min(1).max(60).openapi({ example: "gold-partner", description: "A sponsorship level or additional opportunity, by its address in the catalogue." }),
+    organisationName: z.string().trim().min(1).max(160),
+    country: CountryCode,
+    contactName: z.string().trim().min(2).max(120),
+    position: z.string().trim().min(1).max(120),
+    email: Email,
+    phone: z.string().trim().min(5).max(40),
+    sector: z.string().trim().min(1).max(120),
+    objectives: z.string().trim().min(5).max(2000).openapi({ description: "What the organisation wants from sponsoring." }),
+    requirements: optionalText(2000),
+    consent: z.literal(true).openapi({ description: "The organisation agreed to be contacted about the enquiry. Must be true." }),
+    nickname: z.string().optional().openapi({ description: "A trap for bots: people leave it empty. Anything in it is discarded without a trace." }),
+  })
+  .openapi("SummitSponsorEnquiryBody");
+
+export const SponsorEnquiryReceipt = z
+  .object({
+    number: z.string().openapi({ example: "SPN-0004" }),
+    productName: z.string(),
+    price: z.string().openapi({ example: "$6,250" }),
+  })
+  .openapi("SummitSponsorEnquiryReceipt");
+
+export const EnquiryItem = z
+  .object({
+    id: z.uuid(),
+    number: z.string(),
+    status: EnquiryStatusEnum,
+    productId: z.uuid(),
+    productName: z.string(),
+    productKind: Kind,
+    organisationName: z.string(),
+    country: z.string(),
+    contactName: z.string(),
+    email: z.string(),
+    sector: z.string(),
+    valueCents: z.number().int(),
+    paymentStatus: PaymentStatusEnum.nullable().openapi({ description: "Null until the sponsorship is confirmed and a payment is opened." }),
+    createdAt: Timestamp,
+    statusChangedAt: Timestamp,
+  })
+  .openapi("SummitEnquiryItem");
+
+export const EnquiryDetail = EnquiryItem.extend({
+  position: z.string(),
+  phone: z.string(),
+  objectives: z.string(),
+  requirements: z.string().nullable(),
+  notes: z.string().nullable(),
+  payment: Payment.nullable(),
+  history: z.array(z.object({ at: Timestamp, by: z.string().nullable(), from: EnquiryStatusEnum.nullable(), to: EnquiryStatusEnum, note: z.string().nullable() })),
+}).openapi("SummitEnquiryDetail");
+
+export const EnquiryQuery = z.object({
+  editionId: z.uuid().optional().openapi({ description: "Default: the current edition." }),
+  status: EnquiryStatusEnum.optional(),
+  productId: z.uuid().optional(),
+  kind: z.enum(["sponsorship_level", "opportunity"]).optional(),
+  q: z.string().trim().max(100).optional().openapi({ description: "Part of the organisation, contact, email or reference." }),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const EnquiryList = z
+  .object({
+    items: z.array(EnquiryItem),
+    total: z.number().int(),
+    byStatus: z.record(z.string(), z.number().int()).openapi({ description: "How many enquiries of the edition are in each status, across all of them." }),
+    pipeline: z.object({
+      openCount: z.number().int(),
+      openValueCents: z.number().int().openapi({ description: "What the enquiries still being worked would bring in if all were confirmed." }),
+      confirmedCount: z.number().int(),
+      confirmedValueCents: z.number().int(),
+    }),
+  })
+  .openapi("SummitEnquiryList");
+
+export const EnquiryParam = z.object({ id: z.uuid() });
+
+export const EnquiryPatch = z
+  .object({
+    valueCents: z.number().int().min(0).max(MAX_PRICE_CENTS).openapi({ description: "What the sponsorship is worth, if negotiated. Not changeable once confirmed: change the payment's amount owed instead." }),
+    notes: z.string().trim().min(1).max(4000).nullable().openapi({ description: "For the organisers only." }),
+  })
+  .partial()
+  .openapi("SummitEnquiryPatch");
+
+export const EnquiryStatusBody = z
+  .object({ status: EnquiryStatusEnum, note: z.string().trim().min(1).max(1000).optional() })
+  .openapi("SummitEnquiryStatusBody");

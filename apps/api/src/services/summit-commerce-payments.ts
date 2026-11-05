@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { PAYMENT_TRANSITIONS, type PaymentStatus, type PaymentSubject } from "@entrust/summit-engine";
 import type { z } from "@hono/zod-openapi";
@@ -16,18 +16,35 @@ import { recordSummitChange } from "./summit-status";
 type PaymentRow = typeof schema.commercePayment.$inferSelect;
 export type PaymentView = z.infer<typeof Payment>;
 
-/** Opens the payment for a booking, sponsorship or delegate registration, as pending. A second call changes nothing. */
+/**
+ * Opens the payment for a booking, sponsorship or delegate registration, as pending. A payment that was cancelled (the
+ * sponsor declined and then came back) is reopened at the new amount; any other existing payment is left as it is.
+ */
 export async function openPayment(
   db: Executor,
   payment: { editionId: string; subjectType: PaymentSubject; subjectId: string; amountDueCents: number },
 ): Promise<PaymentRow> {
   await db.insert(schema.commercePayment).values(payment).onConflictDoNothing();
-  const [row] = await db
-    .select()
-    .from(schema.commercePayment)
-    .where(and(eq(schema.commercePayment.subjectType, payment.subjectType), eq(schema.commercePayment.subjectId, payment.subjectId)));
+  const where = and(eq(schema.commercePayment.subjectType, payment.subjectType), eq(schema.commercePayment.subjectId, payment.subjectId));
+  const [row] = await db.select().from(schema.commercePayment).where(where);
   if (!row) throw new Error("The payment was not saved.");
-  return row;
+  if (row.status !== "cancelled") return row;
+  const [reopened] = await db.update(schema.commercePayment).set({ status: "pending", amountDueCents: payment.amountDueCents }).where(where).returning();
+  return reopened ?? row;
+}
+
+/** A payment that was never paid is cancelled with what it was for. One already confirmed stays, for a person to refund. */
+export async function cancelOpenPayment(db: Executor, subjectType: PaymentSubject, subjectId: string): Promise<void> {
+  await db
+    .update(schema.commercePayment)
+    .set({ status: "cancelled" })
+    .where(
+      and(
+        eq(schema.commercePayment.subjectType, subjectType),
+        eq(schema.commercePayment.subjectId, subjectId),
+        inArray(schema.commercePayment.status, ["pending", "awaiting_verification"]),
+      ),
+    );
 }
 
 export async function paymentOf(db: Executor, subjectType: PaymentSubject, subjectId: string): Promise<PaymentRow | undefined> {

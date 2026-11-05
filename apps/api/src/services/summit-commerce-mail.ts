@@ -55,3 +55,5 @@ export function paymentParagraphs(methods: readonly PaymentMethod[], reference: 
 }
 
 export const amountText = (cents: number, currency = "USD"): string => (currency === "USD" ? formatUsd(cents) : `${formatUsd(cents)} ${currency}`);
+
+export const firstName = (name: string): string => name.trim().split(/\s+/)[0] ?? name;
