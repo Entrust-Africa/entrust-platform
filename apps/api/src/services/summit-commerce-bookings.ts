@@ -26,8 +26,8 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { currentEdition } from "./summit-commerce";
 import { heldBooths } from "./summit-commerce-inventory";
-import { amountText, paymentParagraphs, sendNotice, siteUrl } from "./summit-commerce-mail";
-import { openPayment, paymentOf, paymentView } from "./summit-commerce-payments";
+import { amountText, firstName, paymentParagraphs, sendNotice, siteUrl } from "./summit-commerce-mail";
+import { cancelOpenPayment, openPayment, paymentOf, paymentView } from "./summit-commerce-payments";
 import { recordSummitChange } from "./summit-status";
 
 // Exhibitor bookings (section 6): an exhibitor applies on the public form; an administrator approves (which holds a booth
@@ -40,8 +40,6 @@ type Receipt = z.infer<typeof ExhibitorApplicationReceipt>;
 
 /** A repeat submission gets no second receipt inside this window, so the form can't be used to flood an inbox. */
 const RECEIPT_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-const firstName = (name: string): string => name.trim().split(/\s+/)[0] ?? name;
 
 function requireHandler(ctx: Ctx, doing: string): void {
   requireStaff(ctx.principal, ["admin", "facilitator"], doing);
@@ -377,7 +375,7 @@ export async function rejectBooking(ctx: Ctx, id: string, body: z.infer<typeof R
       .where(eq(schema.exhibitorBooking.id, id))
       .returning();
     if (!updated) throw new Error("The booking was not saved.");
-    await closeOpenPayment(tx, "exhibitor_booking", id);
+    await cancelOpenPayment(tx, "exhibitor_booking", id);
     await recordSummitChange(tx, ctx.principal.userId, {
       action: "summit.commerce.booking.rejected",
       entityType: "exhibitor_booking",
@@ -404,20 +402,6 @@ export async function rejectBooking(ctx: Ctx, id: string, body: z.infer<typeof R
   return detail(ctx.db, row);
 }
 
-/** A payment that was never paid is cancelled with its booking. One that was confirmed stays, for a person to refund. */
-async function closeOpenPayment(db: Executor, subjectType: "exhibitor_booking", subjectId: string): Promise<void> {
-  await db
-    .update(schema.commercePayment)
-    .set({ status: "cancelled" })
-    .where(
-      and(
-        eq(schema.commercePayment.subjectType, subjectType),
-        eq(schema.commercePayment.subjectId, subjectId),
-        inArray(schema.commercePayment.status, ["pending", "awaiting_verification"]),
-      ),
-    );
-}
-
 export async function cancelBooking(ctx: Ctx, id: string, body: z.infer<typeof ReasonBody>): Promise<Detail> {
   requireHandler(ctx, "cancel an exhibitor booking");
   const { row, wasHolding } = await ctx.db.transaction(async (tx) => {
@@ -429,7 +413,7 @@ export async function cancelBooking(ctx: Ctx, id: string, body: z.infer<typeof R
       .where(eq(schema.exhibitorBooking.id, id))
       .returning();
     if (!updated) throw new Error("The booking was not saved.");
-    await closeOpenPayment(tx, "exhibitor_booking", id);
+    await cancelOpenPayment(tx, "exhibitor_booking", id);
     await recordSummitChange(tx, ctx.principal.userId, {
       action: "summit.commerce.booking.cancelled",
       entityType: "exhibitor_booking",
