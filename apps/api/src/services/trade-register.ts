@@ -4,7 +4,7 @@ import { deriveRegister, readRegister, summariseRegister, type RegisterInput } f
 import type { RegisterImportedView, RegisterListView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { readWorkbookSheets } from "./register-workbook";
+import { readUploadedWorkbook } from "./register-workbook";
 
 // Entrust's register of pilot SMEs, from the diagnostic workbook. Staff only: a sponsor sees none of it. The workbook is
 // where staff keep the data, so loading it again brings the register up to date: a business is matched on its SME ID,
@@ -34,26 +34,14 @@ export async function listRegister(ctx: Ctx): Promise<RegisterListView> {
   };
 }
 
-const bytesOf = (base64: string): Uint8Array => {
-  try {
-    return Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
-  } catch {
-    throw new ServiceError("invalid", "The file couldn't be read.");
-  }
-};
-
 /** Loads the diagnostic workbook into the register: new businesses are added, changed ones updated, the rest left as they are. */
 export async function importRegister(ctx: Ctx, input: { fileName?: string | undefined; contentBase64: string }): Promise<RegisterImportedView> {
   requireStaff(ctx.principal, ["admin", "facilitator"], "load the SME register");
-  const bytes = bytesOf(input.contentBase64);
-  // Every .xlsx file is a zip, which starts with "PK".
-  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-    throw new ServiceError("invalid", "That isn't an Excel workbook (.xlsx).");
-  }
+  const sheets = readUploadedWorkbook(input.contentBase64);
 
   let read: ReturnType<typeof readRegister>;
   try {
-    read = readRegister(readWorkbookSheets(bytes));
+    read = readRegister(sheets);
   } catch (error) {
     if (error instanceof ServiceError) throw error;
     throw new ServiceError("invalid", error instanceof Error ? error.message : "The workbook couldn't be read.");

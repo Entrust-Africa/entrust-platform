@@ -372,6 +372,8 @@ describe("API documentation", () => {
         "/v1/summit/periods/{id}/final-list",
         "/v1/summit/periods/{id}/final-list/notifications",
         "/v1/summit/periods/{id}/selection-target",
+        "/v1/trade/applications",
+        "/v1/trade/applications/import",
         "/v1/trade/assessments",
         "/v1/trade/assessments/template",
         "/v1/trade/assessments/{id}",

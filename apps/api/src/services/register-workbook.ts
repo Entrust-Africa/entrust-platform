@@ -105,3 +105,16 @@ export function readWorkbookSheets(bytes: Uint8Array): Record<string, SheetGrid>
   }
   return sheets;
 }
+
+/** The sheets of an uploaded workbook, sent as base64. Throws a `ServiceError` fit to show when it isn't one. */
+export function readUploadedWorkbook(contentBase64: string): Record<string, SheetGrid> {
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(contentBase64), (ch) => ch.charCodeAt(0));
+  } catch {
+    throw new ServiceError("invalid", "The file couldn't be read.");
+  }
+  // Every .xlsx file is a zip, which starts with "PK".
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new ServiceError("invalid", "That isn't an Excel workbook (.xlsx).");
+  return readWorkbookSheets(bytes);
+}

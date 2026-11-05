@@ -126,9 +126,11 @@ export async function cleanup() {
   }
   // The register of pilot SMEs belongs to no organisation, so the tests' own businesses go by their code, and the audit rows of the people who loaded them with the people.
   await db.delete(schema.smeRegister).where(like(schema.smeRegister.code, `${PREFIX.toUpperCase()}%`));
+  // Application responses are labelled with the programme they were loaded for.
+  await db.delete(schema.programApplication).where(like(schema.programApplication.program, `${PREFIX}%`));
   const people = await db.select({ id: schema.user.id }).from(schema.user).where(like(schema.user.email, `${PREFIX}%`));
   if (people.length) {
-    await db.delete(schema.auditLog).where(and(eq(schema.auditLog.entityType, "sme_register"), inArray(schema.auditLog.actorUserId, people.map((p) => p.id))));
+    await db.delete(schema.auditLog).where(and(inArray(schema.auditLog.entityType, ["sme_register", "program_application"]), inArray(schema.auditLog.actorUserId, people.map((p) => p.id))));
   }
   await db.delete(schema.user).where(like(schema.user.email, `${PREFIX}%`));
   await db.delete(schema.caseReferenceCounter).where(eq(schema.caseReferenceCounter.country, COUNTRY));

@@ -461,3 +461,56 @@ export const RegisterImported = z
   .openapi("TradeRegisterImported");
 export type RegisterListView = z.infer<typeof RegisterList>;
 export type RegisterImportedView = z.infer<typeof RegisterImported>;
+
+// ---- Applications to a programme ----
+
+export const ApplicationItem = z
+  .object({
+    id: z.uuid(),
+    program: z.string(),
+    submittedAt: z.iso.datetime(),
+    email: z.string(),
+    businessName: z.string(),
+    contactName: z.string().nullable(),
+    phone: z.string().nullable(),
+    location: z.string().nullable(),
+    country: z.literal("ET").openapi({ description: "Always ET: a response from anywhere else is kept but never listed." }),
+    answers: z.record(z.string(), z.string()).openapi({ description: "The answer to each question that has one, as typed, by key." }),
+    timesApplied: z.number().int().openapi({ description: "How many responses came from this business (by email or name); 1 when only one." }),
+  })
+  .openapi("TradeApplicationItem");
+
+export const ApplicationList = z
+  .object({
+    items: z.array(ApplicationItem),
+    summary: z.object({
+      shown: z.number().int(),
+      notShown: z.number().int().openapi({ description: "Responses kept but not listed, because they are from outside Ethiopia or don't say where from. Only the number is given." }),
+      exportedBefore: z.number().int(),
+      interestedInZemen: z.number().int(),
+      repeatApplications: z.number().int().openapi({ description: "Listed responses from a business that applied more than once." }),
+    }),
+  })
+  .openapi("TradeApplicationList");
+
+export const ImportApplicationsBody = z
+  .object({
+    program: z.string().trim().min(1).max(200).openapi({ description: "The programme the form is for. Loading the same programme again updates its responses." }),
+    fileName: z.string().trim().max(200).optional(),
+    contentBase64: z.string().min(1).max(14_000_000).openapi({ description: "The .xlsx file's bytes, base64 encoded. At most about 10 MB." }),
+  })
+  .openapi("ImportTradeApplicationsBody");
+
+export const ApplicationsImported = z
+  .object({
+    total: z.number().int().openapi({ description: "Responses read from the sheet." }),
+    created: z.number().int(),
+    updated: z.number().int(),
+    unchanged: z.number().int(),
+    shown: z.number().int().openapi({ description: "How many are from Ethiopia, so can be listed." }),
+    notShown: z.number().int().openapi({ description: "How many are kept but won't be listed: from outside Ethiopia, or not saying where from." }),
+    warnings: z.array(z.string()).openapi({ description: "Things to check in the sheet. They name businesses in Ethiopia only." }),
+  })
+  .openapi("TradeApplicationsImported");
+export type ApplicationListView = z.infer<typeof ApplicationList>;
+export type ApplicationsImportedView = z.infer<typeof ApplicationsImported>;
