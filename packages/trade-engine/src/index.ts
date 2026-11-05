@@ -22,3 +22,30 @@ export {
   isSponsorDataKind,
 } from "./consent";
 export type { DataKindInfo, SponsorDataKind } from "./consent";
+export {
+  CAPITAL_GAP_PARTS,
+  FINANCE_PRIORITY_THRESHOLDS,
+  MASTER_SHEET,
+  READINESS_LEVEL_THRESHOLDS,
+  READINESS_SCORES,
+  SERVICE_SHEET,
+  bankNames,
+  deriveRegister,
+  exportReadinessScore,
+  financePriority,
+  readRegister,
+  readinessLevel,
+  summariseRegister,
+  totalCapitalGap,
+} from "./register";
+export type {
+  Cell,
+  FinancePriority,
+  ReadRegisterResult,
+  ReadinessLevel,
+  ReadinessScoreKey,
+  RegisterInput,
+  RegisterRecord,
+  RegisterSummary,
+  SheetGrid,
+} from "./register";
