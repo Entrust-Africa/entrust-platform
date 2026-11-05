@@ -65,6 +65,25 @@ describe("Worker Runtime End-to-End Handlers", () => {
     expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["applicant@example.test"] });
   });
 
+  it("sends the Summit registration email through the worker", async () => {
+    const jobId = await enqueue(JOB_NAMES.SEND_EMAIL, {
+      to: ["visitor@example.test"],
+      subject: "We have your registration for the Diaspora Trade Summit",
+      template: "summit-registration",
+      props: { fullName: "Amina Bekele", passName: "Investor Pass", number: "DTS-00042" },
+    });
+
+    let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    const startTime = Date.now();
+    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+      await new Promise((r) => setTimeout(r, 200));
+      status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
+    }
+
+    expect(status?.state).toBe("completed");
+    expect(status?.output).toMatchObject({ success: true, logged: true, recipients: ["visitor@example.test"] });
+  });
+
   it("sends the Summit result email through the worker", async () => {
     const jobId = await enqueue(JOB_NAMES.SEND_EMAIL, {
       to: ["applicant@example.test"],

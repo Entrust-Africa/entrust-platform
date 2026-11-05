@@ -6,6 +6,7 @@ import {
   InvitationEmail,
   PasswordResetEmail,
   SummitClarificationEmail,
+  SummitRegistrationEmail,
   SummitResultEmail,
   VerificationEmail,
 } from "@entrust/notify/templates";
@@ -64,6 +65,9 @@ export async function handleSendEmail(jobData: SendEmailJobData) {
           {...(data.props.url ? { url: data.props.url } : {})}
         />
       );
+      break;
+    case "summit-registration":
+      reactElement = <SummitRegistrationEmail fullName={data.props.fullName} passName={data.props.passName} number={data.props.number} />;
       break;
     case "test":
     default:

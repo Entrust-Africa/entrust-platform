@@ -117,6 +117,18 @@ describe("the Summit result email", () => {
   });
 });
 
+describe("the Summit registration email", () => {
+  it("confirms the pass and the reference, and says nothing is charged", async () => {
+    const { render } = await import("@react-email/components");
+    const { SummitRegistrationEmail } = await import("../src/templates");
+    const text = await render(SummitRegistrationEmail({ fullName: "Amina Bekele", passName: "Investor Pass", number: "DTS-00042" }), { plainText: true });
+    expect(text).toContain("Amina Bekele");
+    expect(text).toContain("Investor Pass");
+    expect(text).toContain("DTS-00042");
+    expect(text).toContain("Nothing is charged yet");
+  });
+});
+
 describe("platform-aware auth email templates", () => {
   it("renders platform name in invitation email", async () => {
     const { render } = await import("@react-email/components");
