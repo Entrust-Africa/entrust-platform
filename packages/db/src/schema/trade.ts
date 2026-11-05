@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   ASSESSMENT_STATUSES,
+  SPONSOR_DATA_KINDS,
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   ENROLLMENT_STATUSES,
@@ -521,4 +522,34 @@ export const assessmentConsent = trade.table(
     acceptedAt: timestamp("accepted_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [uniqueIndex("trade_assessment_consent_question_uidx").on(t.assessmentId, t.questionId)],
+);
+
+// What an SME's owner lets a sponsor see by name (#70). One live row (not withdrawn) per sponsor, SME and kind; a
+// withdrawal sets `withdrawn_at` and the sponsor loses access on the next request. Rows are never deleted, and
+// they keep the words that were agreed to.
+export const sponsorConsent = trade.table(
+  "sponsor_consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sponsorOrganizationId: text("sponsor_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    smeOrganizationId: text("sme_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: SPONSOR_DATA_KINDS }).notNull(),
+    grantedByUserId: text("granted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).defaultNow().notNull(),
+    wordingVersion: text("wording_version").notNull(),
+    wording: text("wording").notNull(),
+    withdrawnByUserId: text("withdrawn_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("trade_sponsor_consent_live_uidx")
+      .on(t.sponsorOrganizationId, t.smeOrganizationId, t.kind)
+      .where(sql`${t.withdrawnAt} is null`),
+    index("trade_sponsor_consent_sme_idx").on(t.smeOrganizationId),
+    index("trade_sponsor_consent_sponsor_idx").on(t.sponsorOrganizationId),
+  ],
 );

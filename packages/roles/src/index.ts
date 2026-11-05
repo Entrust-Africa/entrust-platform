@@ -13,6 +13,13 @@ export type SmeRole = (typeof SME_ROLES)[number];
 export const ENTRUST_ROLES = ["admin", "facilitator", "reviewer"] as const;
 export type EntrustRole = (typeof ENTRUST_ROLES)[number];
 
+/**
+ * Roles in a sponsor organisation, such as the bank that sponsors a TRADE cohort (#70). An administrator manages their
+ * own colleagues; a viewer only reads. Neither is a staff role, so they open nothing in CLEAR.
+ */
+export const SPONSOR_ROLES = ["sponsor_admin", "sponsor_viewer"] as const;
+export type SponsorRole = (typeof SPONSOR_ROLES)[number];
+
 export type Role = SmeRole | EntrustRole;
 
 /** Who makes a change: a person with one of these roles, or CLEAR itself (timers, automated checks). */
