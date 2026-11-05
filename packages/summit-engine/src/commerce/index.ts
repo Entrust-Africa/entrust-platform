@@ -19,3 +19,13 @@ export { ENQUIRY_OPEN, ENQUIRY_STATUSES, ENQUIRY_STATUS_LABELS, ENQUIRY_TRANSITI
 export type { EnquiryStatus } from "./enquiry";
 export { DELEGATE_STATUSES, SELECTED_SME_ELIGIBILITY, badgeProblems, badgeState, parseBadgeCode } from "./delegate";
 export type { BadgeState, DelegateStatus } from "./delegate";
+export {
+  COMMERCE_REPORTS,
+  COMMERCE_REPORT_IDS,
+  REVENUE_STREAMS,
+  REVENUE_STREAM_LABELS,
+  boothFigures,
+  boothTotals,
+  revenueOf,
+} from "./dashboard";
+export type { BoothFigures, CommerceReportId, PaymentFigures, Revenue, RevenueStream } from "./dashboard";
