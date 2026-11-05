@@ -155,6 +155,29 @@ jobs:
           if [ -n "${SUMMIT_APP_URL}" ]; then vars+=(--var "SUMMIT_APP_URL:${SUMMIT_APP_URL}"); fi
           pnpm --filter @entrust/summit run deploy "${vars[@]}"
 
+  # CLEAR, TRADE and the Summit page run on Railway, which builds from the `prod` branch. Moving `prod` forward only here means
+  # an app deploys after CI has passed and after the API and its migrations are live, never before.
+  promote-prod:
+    name: Promote to prod (Railway builds from it)
+    needs: deploy-api
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+      - name: Fast-forward prod to this commit
+        run: |
+          git fetch origin prod
+          if git merge-base --is-ancestor HEAD origin/prod; then
+            echo "prod already has this commit."
+          else
+            git push origin HEAD:refs/heads/prod
+          fi
+
   deploy-website:
     name: Deploy Website (OpenNext)
     needs: migrate-db
