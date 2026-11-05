@@ -1,3 +1,4 @@
+import { isNotApplicable } from "@entrust/forms";
 import type { Condition, FormDefinition, FormQuestion, FormSection } from "@entrust/forms";
 import type { Question, TradeRules } from "@entrust/trade-rules";
 import type { Answer as EngineAnswer } from "./responses";
@@ -51,15 +52,9 @@ export function placementAsForm(rules: TradeRules): FormDefinition {
   };
 }
 
-/** What a screen sends or receives for a capability question marked "does not apply to us". */
-export interface NotApplicable {
-  notApplicable: true;
-  /** A short reason. Staff approve it later. */
-  reason: string;
-}
-
-export const isNotApplicable = (answer: unknown): answer is NotApplicable =>
-  typeof answer === "object" && answer !== null && !Array.isArray(answer) && (answer as { notApplicable?: unknown }).notApplicable === true;
+// "Does not apply to us" is a form answer of its own ({ notApplicable: true, reason }); the form package defines it.
+export { isNotApplicable } from "@entrust/forms";
+export type { NotApplicable } from "@entrust/forms";
 
 /**
  * The engine's own form of an answer from the shape a form screen sends. A capability score arrives as
