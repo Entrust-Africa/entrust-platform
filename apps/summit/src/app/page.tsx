@@ -1,7 +1,7 @@
 import { ArrowUpRight, Check, Handshake, Ticket } from "lucide-react";
 import { OpenRegistration, RegistrationDialog } from "@/components/registration";
 import { EVENT_LINE, HIGHLIGHTS, HOST, PASSES, SUPPORT_EMAIL } from "@/lib/content";
-import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
+import { applicationsLine, applyUrl, countryNames, getPeriod, signInUrl } from "@/lib/period";
 
 // The application window changes when Entrust edits the period, so every visit asks the API.
 export const dynamic = "force-dynamic";
@@ -272,7 +272,7 @@ export default async function SummitLandingPage() {
             <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-white">
               Contact
             </a>
-            <a href={apply} className="hover:text-white">
+            <a href={signInUrl()} className="hover:text-white">
               Applicant sign in
             </a>
           </nav>

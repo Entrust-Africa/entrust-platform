@@ -37,9 +37,14 @@ export function platformUrl(): string {
   return (process.env.SUMMIT_APP_URL?.trim() || fallback).replace(/\/+$/, "");
 }
 
-/** The SME application. A visitor who isn't signed in is sent to sign in first and comes back to it. */
+/** The SME application. A visitor with no account sees its first step straight away, with no sign-in screen. */
 export function applyUrl(): string {
   return `${platformUrl()}/summit/apply`;
+}
+
+/** The sign-in page for someone who already applied; signing in brings them back to their application. */
+export function signInUrl(): string {
+  return `${platformUrl()}/sign-in?next=${encodeURIComponent("/summit/apply")}`;
 }
 
 /** One line on where the application window stands, or null before a period is set. */
