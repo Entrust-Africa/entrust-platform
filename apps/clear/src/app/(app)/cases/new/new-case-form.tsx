@@ -14,11 +14,15 @@ export interface FactChoice {
 export function NewCaseForm({
   organizations,
   defaultOrganization,
+  chooseExporter = false,
   destinations,
   facts,
 }: {
   organizations: { id: string; name: string }[];
-  defaultOrganization: string;
+  /** The organisation chosen to start with. Not needed when `chooseExporter` makes the person pick. */
+  defaultOrganization?: string;
+  /** Entrust staff open cases for any exporter, so they always pick one, from a blank choice, rather than getting a default. */
+  chooseExporter?: boolean;
   destinations: { group: string; countries: { code: string; name: string }[] }[];
   facts: Record<"product" | "transportMode" | "coldChain" | "paymentTerms" | "incoterm", FactChoice>;
 }) {
@@ -27,7 +31,16 @@ export function NewCaseForm({
     <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-6">
       <Card className="flex flex-col gap-5 p-4 sm:p-6">
         <h2 className="font-display text-base font-bold">What is exported, and where</h2>
-        {organizations.length > 1 ? (
+        {chooseExporter ? (
+          <SelectField
+            label="Exporter"
+            name="organizationId"
+            required
+            placeholder="Choose the exporter"
+            hint="The SME organisation the case is opened for."
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+          />
+        ) : organizations.length > 1 ? (
           <SelectField
             label="Exporter"
             name="organizationId"

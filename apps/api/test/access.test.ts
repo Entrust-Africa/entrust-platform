@@ -56,6 +56,7 @@ describe("signed out", () => {
       ["POST", `/cases/${id}/amendments`, {}],
       ["PUT", `/cases/${id}/documents/final_packing_list/fields`, {}],
       ["GET", "/document-fields"],
+      ["GET", "/exporters"],
       ["GET", "/minimum-prices"],
       ["GET", `/minimum-prices/${id}`],
       ["POST", "/minimum-prices", {}],
@@ -146,6 +147,42 @@ describe("opening a case", () => {
     expect(within.body.cadCap).toMatchObject({ withinCap: true, excessUsd: 0 });
     const negative = await call(w.ownerA, "POST", "/cases", { organizationId: w.orgA, facts: FACTS, cadAmountUsd: -1 });
     expect(negative.status).toBe(400);
+  });
+});
+
+describe("choosing an exporter to open a case for", () => {
+  it("lists the SME organisations with CLEAR access for admins and facilitators, by name", async () => {
+    // Staff see each SME once, with its SME ID; the Entrust organisation and an SME without CLEAR access are not exporters.
+    const tradeOnly = await createOrganization("org-trade-only", [], { platform: "trade" });
+    for (const user of [w.admin, w.facilitator]) {
+      const res = await call(user, "GET", "/exporters");
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      const ids = res.body.items.map((o: Json) => o.id);
+      expect(ids).toEqual(expect.arrayContaining([w.orgA, w.orgB, w.orgC]));
+      expect(ids).not.toContain(w.entrust);
+      expect(ids).not.toContain(tradeOnly);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(res.body.items.find((o: Json) => o.id === w.orgA)).toEqual({ id: w.orgA, name: "org-a", smeId: expect.stringMatching(/^TEST-/) });
+      const names: string[] = res.body.items.map((o: Json) => o.name);
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    }
+  });
+
+  it("is for admins and facilitators only", async () => {
+    for (const user of [w.reviewer, w.ownerA, w.memberA, w.outsider, w.strayAdmin, w.strayOwner]) {
+      const res = await call(user, "GET", "/exporters");
+      expect(res).toMatchObject({ status: 403, body: { code: "forbidden" } });
+    }
+  });
+
+  it("lists nobody while ENTRUST_ORG_ID is unset, since then nobody is staff", async () => {
+    const id = process.env.ENTRUST_ORG_ID;
+    delete process.env.ENTRUST_ORG_ID;
+    try {
+      expect((await call(w.admin, "GET", "/exporters")).status).toBe(403);
+    } finally {
+      process.env.ENTRUST_ORG_ID = id;
+    }
   });
 });
 
@@ -282,6 +319,7 @@ describe("API documentation", () => {
         "/v1/clear/cases/{id}/rule-pack",
         "/v1/clear/cases/{id}/steps/{stepId}/transition",
         "/v1/clear/document-fields",
+        "/v1/clear/exporters",
         "/v1/clear/minimum-prices",
         "/v1/clear/minimum-prices/csv",
         "/v1/clear/minimum-prices/{id}",

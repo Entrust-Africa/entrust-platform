@@ -28,3 +28,14 @@ export async function listOrganizations(): Promise<{ id: string; name: string }[
   const organizations = (await res.json()) as { id: string; name: string }[];
   return organizations.map(({ id, name }) => ({ id, name }));
 }
+
+/**
+ * The exporters Entrust staff can open a case for: every SME organisation with access to CLEAR. Staff belong to the Entrust
+ * organisation alone, so `listOrganizations` has nothing to offer them. Empty for anyone the API doesn't let open cases for others.
+ */
+export async function listExporters(): Promise<{ id: string; name: string }[]> {
+  const res = await (await serverApi()).v1.clear.exporters.$get();
+  if (res.status !== 200) return [];
+  const { items } = await res.json();
+  return items.map((o) => ({ id: o.id, name: o.smeId ? `${o.name} (${o.smeId})` : o.name }));
+}
