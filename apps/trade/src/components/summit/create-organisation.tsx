@@ -8,10 +8,10 @@ import { countryName } from "@/lib/summit";
 import { textInput } from "@/components/form-runner/styles";
 
 /**
- * Which platform the new organisation is given with its first access. The API only offers "clear" or "trade" here, so
- * the Summit can't ask for its own. Once POST /v1/organizations accepts "summit", change this one value.
+ * Which platform the new organisation is given with its first access: the Summit alone, so TRADE's learner screens
+ * stay out of an applicant's way. Entrust can add TRADE later, for a selected SME.
  */
-const FIRST_PLATFORM = "trade";
+const FIRST_PLATFORM = "summit";
 
 const slugOf = (name: string) =>
   name
