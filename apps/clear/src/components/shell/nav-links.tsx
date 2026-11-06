@@ -79,6 +79,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
         const isActive = item.match(pathname);
         const Icon = item.icon;
         if (item.external) {
+          // The bar has no room for another item at the 768px tablet width, so the link joins it from 1024px; the phone drawer always has it.
           return (
             <a
               key={item.href}
@@ -86,7 +87,7 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
               target="_blank"
               rel="noopener noreferrer"
               onClick={onNavigate}
-              className="relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-500"
+              className="relative hidden items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-500 lg:inline-flex"
             >
               <Icon className="size-3.5 shrink-0 text-ink-3" aria-hidden="true" />
               <span>{item.label}</span>
