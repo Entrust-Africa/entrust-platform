@@ -298,7 +298,7 @@ describe("TRADE database schema (#55)", () => {
           points: 6,
           maxPoints: 12,
           coverage: "0.8000",
-          score: 50,
+          score: "50.00",
           evidenceStatus: "documented",
         }),
       ).rejects.toThrow();

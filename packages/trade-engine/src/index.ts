@@ -9,7 +9,7 @@ export type { DiagnosticPathwayOptions } from "./diagnostic";
 export * from "./calculators";
 export { evaluatePlacement } from "./placement";
 export type { PlacementInput, PlacementOutcome } from "./placement";
-export { PATHWAY_NAMES, buildPlacementReport } from "./report";
+export { MODULE_STATUS_LABELS, PATHWAY_NAMES, REVIEW_NOTES, buildPlacementReport } from "./report";
 export type { PlacementReport, ReportBaseline, ReportDomain, ReportInput, ReportModule, ReportObjectives, ReportReason } from "./report";
 export { PLACEMENT_FORM_ID, isNotApplicable, placementAnswerFromForm, placementAnswerToForm, placementAsForm } from "./placement-form";
 export type { NotApplicable } from "./placement-form";

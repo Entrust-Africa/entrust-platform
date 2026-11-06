@@ -26,6 +26,10 @@ import type { AssessmentView } from "../schemas/trade";
 import { hasTradeAccess, type Ctx, type Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { rescoreLivePlacement, requireAvenue, scorePlacement } from "./trade-placement";
+import { accessTo, recordTradeChange, unwrapAnswer, wrapAnswer, type Access } from "./trade-shared";
+
+export { recordTradeChange } from "./trade-shared";
 
 // The two forms an enrolled SME fills in on TRADE: the onboarding diagnostic (#78) and the placement
 // assessment (#57). They share one implementation: a form definition, answers that save as the person
@@ -45,18 +49,6 @@ const SIGNATURE = { name: "D1", position: "D2", date: "D3" } as const;
 const REASON_MAX = 300;
 
 // ---- Access ----
-
-interface Access {
-  staff: boolean;
-  /** Staff reviewers read; administrators and facilitators can fill a form in for an SME. */
-  write: boolean;
-}
-
-async function accessTo(db: Executor, principal: Principal, organizationId: string): Promise<Access | null> {
-  if (principal.staffRole) return { staff: true, write: principal.staffRole !== "reviewer" };
-  if (principal.smeRoles.has(organizationId) && (await hasTradeAccess(db, organizationId))) return { staff: false, write: true };
-  return null;
-}
 
 function requireWrite(access: Access, doing: string): void {
   if (!access.write) throw new ServiceError("forbidden", `You can't ${doing}.`);
@@ -240,13 +232,6 @@ async function findAssessment(tx: Executor, principal: Principal, id: string, op
   const [locked] = await tx.select().from(schema.tradeAssessment).where(eq(schema.tradeAssessment.id, id)).for("update");
   return { ...found, row: locked ?? found.row, access };
 }
-
-/**
- * An answer is stored as { v: answer }. A bare scalar in a jsonb column comes back wrong through Drizzle (the text
- * "0" or "2020" is read as a number), so nothing is stored bare.
- */
-const wrapAnswer = (answer: unknown): { v: unknown } | null => (answer === null || answer === undefined ? null : { v: answer });
-const unwrapAnswer = (stored: unknown): unknown => (stored && typeof stored === "object" && !Array.isArray(stored) && "v" in stored ? (stored as { v: unknown }).v : null);
 
 async function rowsOf(tx: Executor, assessmentId: string): Promise<ResponseRow[]> {
   const rows = await tx.select().from(schema.assessmentResponse).where(eq(schema.assessmentResponse.assessmentId, assessmentId));
@@ -579,27 +564,25 @@ export async function submitAssessment(ctx: Ctx, id: string): Promise<Assessment
       throw new ServiceError("precondition_failed", `The assessment isn't complete: ${problemsText([...check.errors, ...check.incomplete])}`);
     }
 
-    let status: AssessmentRow["status"] = "submitted";
-    if (row.kind === "placement") {
-      const visible = new Set(placementVisible(findTradeRules(row.templateVersion)!, Object.fromEntries(rows.filter(hasAnswer).map((r) => [r.questionId, (r.unscored ?? r.answer) as EngineAnswer]))).map((q) => q.id));
-      const waiting = rows.some((r) => r.unscored === "not_applicable" && visible.has(r.questionId) && r.approvedAt === null);
-      if (check.conflicts.length || waiting) status = "review_required";
-    } else {
-      await assignDiagnosticPathway(tx, ctx, found, rows);
-    }
+    // The avenue comes first: the diagnostic decides it, and the placement assessment's plan is built on it.
+    if (row.kind === "diagnostic") await assignDiagnosticPathway(tx, ctx, found, rows);
+    else await requireAvenue(tx, enrollment.id);
 
-    const [saved] = await tx
+    const [submitted] = await tx
       .update(schema.tradeAssessment)
-      .set({ status, assessedAt: ctx.now, ...(found.access.staff ? { assessedByUserId: ctx.principal.userId } : {}) })
+      .set({ status: "submitted", assessedAt: ctx.now, ...(found.access.staff ? { assessedByUserId: ctx.principal.userId } : {}) })
       .where(eq(schema.tradeAssessment.id, id))
       .returning();
+    let saved = submitted ?? row;
+    // The placement assessment is scored on submit: it becomes scored, or review_required when staff have something to look at.
+    if (row.kind === "placement") saved = { ...saved, status: await scorePlacement(tx, ctx, row, enrollment.organizationId, "submitted") };
     await recordTradeChange(tx, ctx.principal.userId, {
       action: "trade.assessment.submitted",
       organizationId: enrollment.organizationId,
       entityId: id,
-      after: { kind: row.kind, status, templateVersion: row.templateVersion, byStaff: found.access.staff },
+      after: { kind: row.kind, status: saved.status, templateVersion: row.templateVersion, byStaff: found.access.staff },
     });
-    return buildView(tx, { ...found, row: saved ?? row }, ctx.now);
+    return buildView(tx, { ...found, row: saved }, ctx.now);
   });
 }
 
@@ -657,6 +640,8 @@ async function assignDiagnosticPathway(tx: Executor, ctx: Ctx, found: Found, row
     before: old ? { pathway: old.pathway, status: old.status } : null,
     after: { pathway: assigned.pathway, provisional: assigned.provisional, liveOrder: assigned.liveOrder, reasonCodes: assigned.reasonCodes },
   });
+  // A retaken diagnostic can move the avenue under a placement assessment that is already scored.
+  await rescoreLivePlacement(tx, ctx, enrollment.id, enrollment.organizationId, "avenue");
 }
 
 // ---- Staff ----
@@ -685,18 +670,9 @@ export async function approveNotApplicable(ctx: Ctx, id: string, questionId: str
       after: { question: questionId, reason: response.unscoredReason },
     });
 
+    // An approval takes the question out of the denominator, so the placement assessment is scored again and may be ready.
     let current = row;
-    if (row.status === "review_required") {
-      const kit = kitFor(row.kind as FormKind, row.templateVersion);
-      const rows = await rowsOf(tx, id);
-      const rules = findTradeRules(row.templateVersion)!;
-      const visible = new Set(placementVisible(rules, Object.fromEntries(rows.filter(hasAnswer).map((r) => [r.questionId, (r.unscored ?? r.answer) as EngineAnswer]))).map((q) => q.id));
-      const waiting = rows.some((r) => r.unscored === "not_applicable" && visible.has(r.questionId) && r.approvedAt === null);
-      if (!waiting && kit.check(rows, todayOf(ctx.now)).conflicts.length === 0) {
-        const [updated] = await tx.update(schema.tradeAssessment).set({ status: "submitted" }).where(eq(schema.tradeAssessment.id, id)).returning();
-        current = updated ?? row;
-      }
-    }
+    if (row.kind === "placement") current = { ...row, status: await scorePlacement(tx, ctx, row, found.enrollment.organizationId, "approval") };
     return buildView(tx, { ...found, row: current }, ctx.now);
   });
 }
@@ -750,33 +726,9 @@ export async function setEnrollmentPathway(ctx: Ctx, enrollmentId: string, input
       after: { pathway: input.pathway, status: "confirmed" },
       reason,
     });
+    // Confirming or changing the avenue is what a plan on a provisional avenue waits for, so the plan is made again on it.
+    await rescoreLivePlacement(tx, ctx, enrollmentId, enrollment.organizationId, "avenue");
     return { enrollmentId, pathway: await pathwayView(tx, enrollmentId) };
   });
 }
 
-// ---- Audit ----
-
-interface TradeChange {
-  action: string;
-  organizationId: string | null;
-  entityId: string;
-  entityType?: string;
-  before?: unknown;
-  after?: unknown;
-  reason?: string | null;
-}
-
-/** Records a change in the shared audit log. Run it in the transaction that makes the change. */
-export async function recordTradeChange(db: Executor, userId: string | null, change: TradeChange): Promise<void> {
-  await db.insert(schema.auditLog).values({
-    actorUserId: userId,
-    organizationId: change.organizationId,
-    platform: "trade",
-    action: change.action,
-    entityType: change.entityType ?? (change.action.startsWith("trade.pathway") ? "enrollment" : "assessment"),
-    entityId: change.entityId,
-    before: change.before ?? null,
-    after: change.after ?? null,
-    reason: change.reason ?? null,
-  });
-}

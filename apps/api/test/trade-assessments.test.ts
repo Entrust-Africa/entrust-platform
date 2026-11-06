@@ -1,7 +1,7 @@
 import { and, eq, like } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { visibleQuestions, type FormDefinition } from "@entrust/forms";
-import { monthsBefore, placementAsForm } from "@entrust/trade-engine";
+import { evaluatePlacement, monthsBefore, placementAsForm, type Answers } from "@entrust/trade-engine";
 import { latestDiagnosticTemplate, latestTradeRules } from "@entrust/trade-rules";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, type TestUser } from "./support";
@@ -466,8 +466,23 @@ const rules = latestTradeRules();
 
 const placementAnswers = (overrides: Record<string, Wire> = {}) => fillIn(placement, overrides);
 
-async function placementDraft(): Promise<Json> {
-  return startFor(w.owner, "placement", await freshEnrollment());
+/** Gives an enrolment the avenue its diagnostic would have given, so the placement assessment can be submitted. */
+async function giveAvenue(enrollmentId: string, avenue: { pathway?: "A" | "B"; provisional?: boolean; liveOrder?: boolean } = {}): Promise<void> {
+  const pathway = avenue.pathway ?? "A";
+  await db.insert(schema.pathwayAssignment).values({
+    enrollmentId,
+    pathway,
+    status: avenue.provisional ? "provisional" : "confirmed",
+    liveOrder: avenue.liveOrder ?? false,
+    rulesVersion: rules.version,
+    reasonCodes: pathway === "B" ? ["PATHWAY_RECENT_SHIPMENT", ...(avenue.provisional ? ["PATHWAY_SHIPMENT_UNVERIFIED"] : [])] : ["PATHWAY_NO_RECENT_SHIPMENT"],
+  });
+}
+
+async function placementDraft(avenue: Parameters<typeof giveAvenue>[1] = {}): Promise<Json> {
+  const enrollmentId = await freshEnrollment();
+  await giveAvenue(enrollmentId, avenue);
+  return startFor(w.owner, "placement", enrollmentId);
 }
 
 describe("the placement assessment", () => {
@@ -512,7 +527,7 @@ describe("the placement assessment", () => {
     await put(w.owner, `/assessments/${draft.id}/responses`, { answers: placementAnswers({ A1: "never", A2: "none", A5: ["not_available"] }) });
     const early = await post(w.owner, `/assessments/${draft.id}/submit`);
     expect(early.status).toBe(200);
-    expect(early.body.status).toBe("submitted");
+    expect(early.body.status).toBe("scored");
     expect((await put(w.owner, `/assessments/${draft.id}/responses`, { answers: { A1: "regular_exports" } })).status).toBe(409);
   });
 
@@ -550,9 +565,19 @@ describe("the placement assessment", () => {
 
     const approved = await post(w.admin, path);
     expect(approved.status).toBe(200);
-    expect(approved.body).toMatchObject({ status: "submitted", notApplicableApproved: { B1: true } });
+    expect(approved.body).toMatchObject({ status: "scored", notApplicableApproved: { B1: true } });
     const [row] = await db.select().from(schema.assessmentResponse).where(and(eq(schema.assessmentResponse.assessmentId, draft.id), eq(schema.assessmentResponse.questionId, "B1")));
     expect(row).toMatchObject({ approvedByUserId: w.admin.id, unscoredReason: "We sell only at home." });
+  });
+
+  it("can't be submitted before the diagnostic has given an avenue", async () => {
+    const enrollmentId = await freshEnrollment();
+    const draft = await startFor(w.owner, "placement", enrollmentId);
+    await put(w.owner, `/assessments/${draft.id}/responses`, { answers: placementAnswers({ A1: "never", A2: "none", A5: ["not_available"] }) });
+    const res = await post(w.owner, `/assessments/${draft.id}/submit`);
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("diagnostic");
+    expect((await get(w.owner, `/assessments/${draft.id}`)).body.status).toBe("draft");
   });
 
   it("keeps the placement assessment and the diagnostic apart for one enrolment", async () => {
@@ -561,5 +586,214 @@ describe("the placement assessment", () => {
     const p = await startFor(w.owner, "placement", enrollmentId);
     expect(d.id).not.toBe(p.id);
     expect(p.templateVersion).toBe(rules.version);
+  });
+});
+
+// ---- Results, learning plan and report (#58) ----
+
+const QUIET = { A1: "never", A2: "none", A5: ["not_available"] } as const;
+
+async function submittedPlacement(overrides: Record<string, Wire> = QUIET, avenue: Parameters<typeof giveAvenue>[1] = {}): Promise<{ id: string; enrollmentId: string; body: Json }> {
+  const draft = await placementDraft(avenue);
+  const saved = await put(w.owner, `/assessments/${draft.id}/responses`, { answers: placementAnswers(overrides) });
+  expect(saved.status).toBe(200);
+  const submitted = await post(w.owner, `/assessments/${draft.id}/submit`);
+  expect(submitted.status).toBe(200);
+  return { id: draft.id, enrollmentId: draft.enrollmentId, body: submitted.body };
+}
+
+/** The answers the engine saw, read from what was stored. */
+async function storedAnswers(assessmentId: string): Promise<{ answers: Answers; approved: string[] }> {
+  const rows = await db.select().from(schema.assessmentResponse).where(eq(schema.assessmentResponse.assessmentId, assessmentId));
+  const answers: Record<string, string | number | string[]> = {};
+  const approved: string[] = [];
+  for (const r of rows) {
+    const stored = (r.answer as { v?: string | number | string[] } | null)?.v;
+    const value = r.unscored ?? stored;
+    if (value === undefined || value === null) continue;
+    answers[r.questionId] = value;
+    if (r.unscored === "not_applicable" && r.approvedAt) approved.push(r.questionId);
+  }
+  return { answers, approved };
+}
+
+describe("a scored placement assessment", () => {
+  it("stores the scores, the plan and its module assignments with the rules version", async () => {
+    const { id, enrollmentId, body } = await submittedPlacement();
+    expect(body.status).toBe("scored");
+
+    const scores = await db.select().from(schema.capabilityScore).where(eq(schema.capabilityScore.assessmentId, id));
+    expect(scores.filter((s) => s.kind === "domain")).toHaveLength(rules.domains.length);
+    expect(scores.filter((s) => s.kind === "group")).toHaveLength(rules.triggerGroups.length);
+
+    const [plan] = await db.select().from(schema.learningPlan).where(eq(schema.learningPlan.assessmentId, id));
+    expect(plan).toMatchObject({ enrollmentId, rulesVersion: rules.version, pathway: "A", status: "generated", requiresHumanReview: false });
+    const [avenue] = await db.select().from(schema.pathwayAssignment).where(eq(schema.pathwayAssignment.enrollmentId, enrollmentId));
+    expect(plan?.pathwayAssignmentId).toBe(avenue?.id);
+    const assigned = await db.select().from(schema.moduleAssignment).where(eq(schema.moduleAssignment.planId, plan!.id));
+    expect(assigned.length).toBeGreaterThan(2);
+
+    const audit = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, id), eq(schema.auditLog.action, "trade.placement.scored")));
+    expect(audit).toHaveLength(1);
+  });
+
+  it("can be reproduced from the stored answers, the avenue and the rules version", async () => {
+    const { id, enrollmentId } = await submittedPlacement({ ...QUIET, B1: "3", B2: "2", C1: "1", D1: "0" });
+    const { answers, approved } = await storedAnswers(id);
+    const [avenue] = await db.select().from(schema.pathwayAssignment).where(eq(schema.pathwayAssignment.enrollmentId, enrollmentId));
+    const again = evaluatePlacement(rules, {
+      answers,
+      approvedNotApplicable: approved,
+      pathway: { rulesVersion: rules.version, pathway: avenue!.pathway, provisional: avenue!.status === "provisional", liveOrder: avenue!.liveOrder, reasonCodes: avenue!.reasonCodes as never },
+    });
+
+    const [plan] = await db.select().from(schema.learningPlan).where(eq(schema.learningPlan.assessmentId, id));
+    const stored = await db.select().from(schema.moduleAssignment).where(eq(schema.moduleAssignment.planId, plan!.id));
+    expect(stored.map((m) => ({ module: m.moduleId, status: m.status, sequence: m.sequence, reasonCodes: m.reasonCodes })).sort((a, b) => a.sequence - b.sequence)).toEqual(
+      again.plan.modules.map((m) => ({ module: m.module, status: m.status, sequence: m.sequence, reasonCodes: [...m.reasonCodes] })),
+    );
+    const scores = await db.select().from(schema.capabilityScore).where(eq(schema.capabilityScore.assessmentId, id));
+    for (const r of [...again.scores.domains.map((d) => ["domain", d] as const), ...again.scores.groups.map((g) => ["group", g] as const)]) {
+      const row = scores.find((s) => s.kind === r[0] && s.domain === r[1].id);
+      expect(row).toMatchObject({ points: r[1].points, maxPoints: r[1].maxPoints, band: r[1].band });
+      expect(row?.score === null ? null : Number(row?.score)).toBe(r[1].score);
+    }
+  });
+
+  it("gives every module in the plan a reason code and the rules version (pilot criterion 6)", async () => {
+    const { id } = await submittedPlacement();
+    const results = await get(w.owner, `/assessments/${id}/results`);
+    expect(results.status).toBe(200);
+    expect(results.body.rulesVersion).toBe(rules.version);
+    const plan = await get(w.owner, `/learning-plans/${results.body.learningPlanId}`);
+    expect(plan.status).toBe(200);
+    expect(plan.body.rulesVersion).toBe(rules.version);
+    expect(plan.body.modules.length).toBeGreaterThan(2);
+    for (const m of plan.body.modules) {
+      expect(m.reasons.length).toBeGreaterThan(0);
+      for (const reason of m.reasons) expect(reason.text.length).toBeGreaterThan(5);
+    }
+    expect(plan.body.modules.map((m: Json) => m.sequence)).toEqual(plan.body.modules.map((_: Json, i: number) => i + 1));
+
+    const report = await get(w.owner, `/assessments/${id}/report`);
+    expect(report.body.report.rulesVersion).toBe(rules.version);
+    for (const m of report.body.report.plan.modules) expect(m.reasons.length).toBeGreaterThan(0);
+  });
+
+  it("puts M04, M06 and M08 first for a live order (pilot criterion 5)", async () => {
+    const { id } = await submittedPlacement({ A1: "never", A2: "order_confirmed", A5: ["purchase_order_or_contract"] }, { liveOrder: true });
+    const report = await get(w.owner, `/assessments/${id}/report`);
+    expect(report.status).toBe(200);
+    expect(report.body.report.plan.modules.slice(0, 4).map((m: Json) => m.module)).toEqual(["M01", "M04", "M06", "M08"]);
+    expect(report.body.report.plan.modules.slice(1, 4).every((m: Json) => m.status === "priority_required")).toBe(true);
+    expect(report.body.report.pathway.liveOrder).toBe(true);
+  });
+
+  it("reports what the placement spec asks for", async () => {
+    const { id } = await submittedPlacement({ ...QUIET, A4: "both_validated", A4a: "Dried chilli", A4b: "Germany", A4c: "Importer" });
+    const res = await get(w.owner, `/assessments/${id}/report`);
+    expect(res.status).toBe(200);
+    const { report } = res.body;
+    expect(report).toMatchObject({
+      rulesVersion: rules.version,
+      status: "current",
+      baseline: { attempt: 1 },
+      pathway: { id: "A", name: "Export Entry and Readiness", provisional: false },
+      plan: { requiresStaffReview: false },
+    });
+    const [owner] = await db
+      .select({ organizationId: schema.enrollment.organizationId })
+      .from(schema.tradeAssessment)
+      .innerJoin(schema.enrollment, eq(schema.enrollment.id, schema.tradeAssessment.enrollmentId))
+      .where(eq(schema.tradeAssessment.id, id));
+    const [profile] = await db.select().from(schema.smeProfile).where(eq(schema.smeProfile.organizationId, owner!.organizationId));
+    expect(report.baseline.smeId).toBe(profile?.smeId);
+    expect(report.domains.map((d: Json) => d.id)).toEqual(rules.domains.map((d) => d.id));
+    for (const d of report.domains) expect(d).toMatchObject({ coverage: expect.any(Number), evidence: "self_reported", evidenceLabel: "Self-reported" });
+    expect(report.pathway.reasons[0].text.length).toBeGreaterThan(5);
+    expect(report.objectives.target).toMatchObject({ product: "Dried chilli", market: "Germany", buyerType: "Importer" });
+  });
+
+  it("reads the same every time", async () => {
+    const { id } = await submittedPlacement({ ...QUIET, B1: "2" });
+    const first = await get(w.owner, `/assessments/${id}/report`);
+    const second = await get(w.admin, `/assessments/${id}/report`);
+    expect(second.body).toEqual(first.body);
+  });
+
+  it("shows the owner's and Entrust staff's reports, and nobody else's", async () => {
+    const { id } = await submittedPlacement();
+    for (const path of [`/assessments/${id}/results`, `/assessments/${id}/report`]) {
+      expect((await get(null, path)).status).toBe(401);
+      expect((await get(w.rival, path)).status).toBe(404);
+      expect((await get(w.noTrade, path)).status).toBe(404);
+      expect((await get(w.owner, path)).status).toBe(200);
+      for (const staff of [w.admin, w.facilitator, w.reviewer]) expect((await get(staff, path)).status).toBe(200);
+    }
+    const planId = (await get(w.owner, `/assessments/${id}/results`)).body.learningPlanId;
+    expect((await get(w.rival, `/learning-plans/${planId}`)).status).toBe(404);
+    expect((await get(w.reviewer, `/learning-plans/${planId}`)).status).toBe(200);
+  });
+
+  it("has nothing to show until the assessment is submitted", async () => {
+    const draft = await placementDraft();
+    expect((await get(w.owner, `/assessments/${draft.id}/results`)).status).toBe(422);
+    expect((await get(w.owner, `/assessments/${draft.id}/report`)).status).toBe(422);
+    const diag = await startFor(w.owner, "diagnostic", await freshEnrollment());
+    expect((await get(w.owner, `/assessments/${diag.id}/report`)).status).toBe(404);
+    expect((await get(w.owner, "/learning-plans/00000000-0000-4000-8000-000000000000")).status).toBe(404);
+  });
+
+  it("keeps an old report readable after a retake, marked superseded", async () => {
+    const first = await submittedPlacement({ ...QUIET, B1: "0" });
+    const retake = await post(w.owner, "/assessments", { kind: "placement", enrollmentId: first.enrollmentId, retake: true });
+    expect(retake.status).toBe(201);
+    await put(w.owner, `/assessments/${retake.body.id}/responses`, { answers: placementAnswers({ ...QUIET, B1: "3" }) });
+    expect((await post(w.owner, `/assessments/${retake.body.id}/submit`)).status).toBe(200);
+
+    const old = await get(w.owner, `/assessments/${first.id}/report`);
+    expect(old.status).toBe(200);
+    expect(old.body.report).toMatchObject({ status: "superseded", baseline: { attempt: 1 } });
+    const now = await get(w.owner, `/assessments/${retake.body.id}/report`);
+    expect(now.body.report).toMatchObject({ status: "current", baseline: { attempt: 2 } });
+    expect(now.body.learningPlanId).not.toBe(old.body.learningPlanId);
+
+    const plans = await db.select().from(schema.learningPlan).where(eq(schema.learningPlan.enrollmentId, first.enrollmentId));
+    expect(plans.filter((p) => p.status !== "superseded")).toHaveLength(1);
+    expect(plans.find((p) => p.id === old.body.learningPlanId)?.status).toBe("superseded");
+  });
+
+  it("scores again once staff approve a \"does not apply\", with the question out of the denominator", async () => {
+    const { id } = await submittedPlacement({ ...QUIET, B1: { notApplicable: true, reason: "We sell only at home." } });
+    const before = (await get(w.owner, `/assessments/${id}/results`)).body;
+    expect(before.status).toBe("review_required");
+    const buyerBefore = before.domains.find((d: Json) => d.id === "buyer_development");
+    expect(buyerBefore.coverage).toBe(80);
+
+    const approved = await post(w.admin, `/assessments/${id}/responses/B1/approve`);
+    expect(approved.body.status).toBe("scored");
+    const after = (await get(w.owner, `/assessments/${id}/results`)).body;
+    expect(after.status).toBe("scored");
+    expect(after.domains.find((d: Json) => d.id === "buyer_development").coverage).toBe(100);
+    expect(after.learningPlanId).not.toBe(before.learningPlanId);
+
+    const scores = await db.select().from(schema.capabilityScore).where(eq(schema.capabilityScore.assessmentId, id));
+    expect(scores).toHaveLength(rules.domains.length + rules.triggerGroups.length);
+  });
+
+  it("waits on a provisional avenue, and is ready once staff confirm it", async () => {
+    const { id, enrollmentId, body } = await submittedPlacement(QUIET, { pathway: "B", provisional: true });
+    expect(body.status).toBe("review_required");
+    const plan = (await get(w.owner, `/assessments/${id}/report`)).body;
+    expect(plan.report.plan.requiresStaffReview).toBe(true);
+    expect(plan.report.plan.reviewNotes.join(" ")).toContain("shipment record");
+    expect(plan.report.pathway.provisional).toBe(true);
+
+    expect((await post(w.admin, `/enrollments/${enrollmentId}/pathway`, { pathway: "B", reason: "The shipment record was accepted." })).status).toBe(200);
+    expect((await get(w.owner, `/assessments/${id}`)).body.status).toBe("scored");
+    const confirmed = (await get(w.owner, `/assessments/${id}/report`)).body;
+    expect(confirmed.report.plan.requiresStaffReview).toBe(false);
+    expect(confirmed.report.pathway.provisional).toBe(false);
+    expect(confirmed.learningPlanId).not.toBe(plan.learningPlanId);
   });
 });
