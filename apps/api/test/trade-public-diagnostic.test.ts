@@ -222,14 +222,22 @@ describe("staff reading the submissions", () => {
     expect(res.body.items[0]).toMatchObject({ email: submittedEmail, status: "submitted", pathway: "A" });
     expect(res.body.counts.submitted).toBeGreaterThanOrEqual(1);
     expect(res.body.counts.draft).toBeGreaterThanOrEqual(1);
+    expect(res.body.counts.pathwayA).toBeGreaterThanOrEqual(1);
+    expect(res.body.counts.perDay).toHaveLength(14);
+    const today = res.body.counts.perDay.at(-1);
+    expect(today.date).toBe(new Date().toISOString().slice(0, 10));
+    expect(today.started).toBeGreaterThanOrEqual(1);
+    expect(today.submitted).toBeGreaterThanOrEqual(1);
   });
 
   it("shows one submission's answers", async () => {
     const list = await get(w.reviewer, `/public-diagnostics?q=${encodeURIComponent(submittedEmail)}`);
     const one = await get(w.reviewer, `/public-diagnostics/${list.body.items[0].id}`);
     expect(one.status).toBe(200);
-    expect(one.body.answers.Q135).toBe("no");
-    expect(one.body.form.questions.length).toBe(diagnostic.questions.length);
+    expect(one.body.pathway).toMatchObject({ pathway: "A" });
+    const answered = one.body.sections.flatMap((section: { items: { id: string; answer: string }[] }) => section.items);
+    expect(answered.find((item: { id: string }) => item.id === "Q135").answer).toBe("No");
+    expect(one.body.sections[0].title).toBeTruthy();
     expect((await get(w.reviewer, "/public-diagnostics/not-an-id")).status).toBe(404);
   });
 

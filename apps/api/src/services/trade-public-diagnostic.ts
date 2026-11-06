@@ -341,7 +341,20 @@ export interface ListInput {
 }
 
 /** The forms people have started or submitted, newest first. Entrust staff only. */
-export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise<{ items: PublicDiagnosticSummary[]; counts: { submitted: number; draft: number } }> {
+export interface PublicDiagnosticCounts {
+  submitted: number;
+  draft: number;
+  pathwayA: number;
+  pathwayB: number;
+  /** Pathway B forms waiting for staff to see a shipment record. */
+  provisional: number;
+  /** A confirmed live order, which moves M04, M06 and M08 forward. */
+  liveOrder: number;
+  /** Forms started and submitted on each of the last 14 days, oldest first. */
+  perDay: { date: string; started: number; submitted: number }[];
+}
+
+export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise<{ items: PublicDiagnosticSummary[]; counts: PublicDiagnosticCounts }> {
   requireStaff(ctx.principal);
   const search = input.q?.trim();
   const where = and(
@@ -359,8 +372,31 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
     .select({
       submitted: sql<number>`count(*) filter (where ${schema.publicDiagnostic.status} = 'submitted')::int`,
       draft: sql<number>`count(*) filter (where ${schema.publicDiagnostic.status} = 'draft')::int`,
+      pathwayA: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'A')::int`,
+      pathwayB: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'B')::int`,
+      provisional: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'B' and ${schema.publicDiagnostic.pathwayProvisional})::int`,
+      liveOrder: sql<number>`count(*) filter (where ${schema.publicDiagnostic.liveOrder})::int`,
     })
     .from(schema.publicDiagnostic);
+
+  const since = new Date(ctx.now.getTime() - 13 * 24 * HOUR_MS);
+  since.setUTCHours(0, 0, 0, 0);
+  const started = await ctx.db
+    .select({ day: sql<string>`to_char(${schema.publicDiagnostic.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
+    .from(schema.publicDiagnostic)
+    .where(gt(schema.publicDiagnostic.createdAt, since))
+    .groupBy(sql`1`);
+  const submitted = await ctx.db
+    .select({ day: sql<string>`to_char(${schema.publicDiagnostic.submittedAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
+    .from(schema.publicDiagnostic)
+    .where(gt(schema.publicDiagnostic.submittedAt, since))
+    .groupBy(sql`1`);
+  const startedBy = new Map(started.map((r) => [r.day, r.n]));
+  const submittedBy = new Map(submitted.map((r) => [r.day, r.n]));
+  const perDay = Array.from({ length: 14 }, (_, i) => {
+    const date = new Date(since.getTime() + i * 24 * HOUR_MS).toISOString().slice(0, 10);
+    return { date, started: startedBy.get(date) ?? 0, submitted: submittedBy.get(date) ?? 0 };
+  });
 
   const emails = [...new Set(rows.map((r) => r.email))];
   const sameEmail = new Map<string, number>();
@@ -395,7 +431,15 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
       sameEmail: sameEmail.get(r.email) ?? 1,
       organization: organizations.get(r.email) ?? null,
     })),
-    counts: { submitted: totals?.submitted ?? 0, draft: totals?.draft ?? 0 },
+    counts: {
+      submitted: totals?.submitted ?? 0,
+      draft: totals?.draft ?? 0,
+      pathwayA: totals?.pathwayA ?? 0,
+      pathwayB: totals?.pathwayB ?? 0,
+      provisional: totals?.provisional ?? 0,
+      liveOrder: totals?.liveOrder ?? 0,
+      perDay,
+    },
   };
 }
 
@@ -406,14 +450,25 @@ export async function getPublicDiagnosticForStaff(ctx: Ctx, id: string) {
   const [row] = await ctx.db.select().from(schema.publicDiagnostic).where(eq(schema.publicDiagnostic.id, id));
   if (!row) throw new ServiceError("not_found", "Diagnostic not found.");
   const template = templateOf(row);
+  const answers = (row.answers ?? {}) as Record<string, unknown>;
+  const sections = template.sections
+    .map((section) => ({
+      id: section.id,
+      title: section.title,
+      items: template.questions
+        .filter((q) => q.section === section.id && answers[q.id] !== undefined && answers[q.id] !== null)
+        .map((q) => ({ id: q.id, text: q.text.replace(/\{country\}/g, VARIABLES.country), answer: answerText(q, answers[q.id]) })),
+    }))
+    .filter((section) => section.items.length > 0);
+  const { answers: _answers, ...view } = viewOf(row, ctx.now);
   return {
-    ...viewOf(row, ctx.now),
+    ...view,
     id: row.id,
     startedAt: row.createdAt.toISOString(),
     signedName: row.signedName,
     signedPosition: row.signedPosition,
     signedDate: row.signedDate,
-    form: template as FormDefinition,
+    sections,
   };
 }
 
