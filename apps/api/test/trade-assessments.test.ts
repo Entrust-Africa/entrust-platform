@@ -350,7 +350,7 @@ describe("submitting the diagnostic", () => {
     const done = await submittedDiagnostic({ Q135: "no" });
     const rows = await db.select().from(schema.auditLog).where(eq(schema.auditLog.organizationId, done.organizationId));
     const actions = rows.filter((r) => r.platform === "trade").map((r) => r.action).sort();
-    expect(actions).toEqual(["trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
+    expect(actions).toEqual(["sme_profile.updated", "trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
   });
 });
 
@@ -795,5 +795,137 @@ describe("a scored placement assessment", () => {
     expect(confirmed.report.plan.requiresStaffReview).toBe(false);
     expect(confirmed.report.pathway.provisional).toBe(false);
     expect(confirmed.learningPlanId).not.toBe(plan.learningPlanId);
+  });
+});
+
+// ---- Section 1 is the registry entry (#78) ----
+
+const profileOf = async (organizationId: string) => {
+  const [profile] = await db.select().from(schema.smeProfile).where(eq(schema.smeProfile.organizationId, organizationId));
+  return profile!;
+};
+
+const profileAudit = (organizationId: string) =>
+  db.select().from(schema.auditLog).where(and(eq(schema.auditLog.organizationId, organizationId), eq(schema.auditLog.action, "sme_profile.updated")));
+
+const uniqueRegistration = () => `REG-${Math.random().toString(36).slice(2, 10)}`;
+
+describe("section 1 of the diagnostic and the SME registry", () => {
+  it("opens with what the registry holds", async () => {
+    const enrollmentId = await freshEnrollment();
+    const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
+    await db
+      .update(schema.smeProfile)
+      .set({ tin: "TIN-0042", yearEstablished: 2015, ownershipType: "private_limited_company", womanOwned: true, premises: "own_premises", permanentEmployees: 0, website: "https://registry.example" })
+      .where(eq(schema.smeProfile.organizationId, enrollment!.organizationId));
+    const profile = await profileOf(enrollment!.organizationId);
+
+    const draft = await startFor(w.owner, "diagnostic", enrollmentId);
+    expect(draft.answers).toMatchObject({
+      Q1: profile.legalName,
+      Q4: "TIN-0042",
+      Q5: 2015,
+      Q6: "private_limited_company",
+      Q11: "https://registry.example",
+      Q15: 0,
+      Q17: "yes",
+      Q18: "own_premises",
+    });
+    expect(draft.answers.Q16).toBeUndefined();
+  });
+
+  it("leaves a value the form wouldn't take for the person to fill in", async () => {
+    const enrollmentId = await freshEnrollment();
+    const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
+    await db.update(schema.smeProfile).set({ yearEstablished: 1850, tin: "TIN-OK" }).where(eq(schema.smeProfile.organizationId, enrollment!.organizationId));
+    const draft = await startFor(w.owner, "diagnostic", enrollmentId);
+    expect(draft.answers.Q5).toBeUndefined();
+    expect(draft.answers.Q4).toBe("TIN-OK");
+  });
+
+  it("writes section 1 to the profile on submit, and audits the values before and after", async () => {
+    const registration = uniqueRegistration();
+    const submitted = await submittedDiagnostic({
+      Q1: "Awash Spice Exporters PLC",
+      Q3: registration,
+      Q4: "TIN-777",
+      Q5: 2012,
+      Q6: "plc",
+      Q8: "info@awash.example",
+      Q9: "+251911000000",
+      Q14: "agro_processing",
+      Q15: 12,
+      Q16: 4,
+      Q17: "yes",
+      Q18: "rented_premises",
+    });
+    const profile = await profileOf(submitted.organizationId);
+    expect(profile).toMatchObject({
+      legalName: "Awash Spice Exporters PLC",
+      registrationNumber: registration,
+      tin: "TIN-777",
+      yearEstablished: 2012,
+      ownershipType: "plc",
+      businessEmail: "info@awash.example",
+      businessPhone: "+251911000000",
+      mainActivity: "agro_processing",
+      permanentEmployees: 12,
+      temporaryEmployees: 4,
+      womanOwned: true,
+      premises: "rented_premises",
+    });
+
+    const [entry] = await profileAudit(submitted.organizationId);
+    expect(entry).toMatchObject({ entityType: "sme_profile", entityId: profile.id, platform: "trade" });
+    expect(entry?.before).toMatchObject({ tin: null, yearEstablished: null, permanentEmployees: null });
+    expect(entry?.after).toMatchObject({ legalName: "Awash Spice Exporters PLC", tin: "TIN-777", yearEstablished: 2012, permanentEmployees: 12, womanOwned: true });
+    expect((entry?.before as Record<string, unknown>).legalName).not.toBe("Awash Spice Exporters PLC");
+  });
+
+  it("changes only what the person edited, and writes nothing when nothing changed", async () => {
+    const overrides = { Q1: "Stable Name Ltd", Q3: uniqueRegistration(), Q4: "TIN-1", Q5: 2000 };
+    const first = await submittedDiagnostic(overrides);
+    expect(await profileAudit(first.organizationId)).toHaveLength(1);
+
+    const retake = await post(w.owner, "/assessments", { kind: "diagnostic", enrollmentId: first.enrollmentId, retake: true });
+    expect(retake.status).toBe(201);
+    expect(retake.body.answers).toMatchObject({ Q1: "Stable Name Ltd", Q4: "TIN-1", Q5: 2000 });
+    const same = await put(w.owner, `/assessments/${retake.body.id}/responses`, { answers: fillIn(diagnostic, overrides) });
+    expect(same.status).toBe(200);
+    expect((await post(w.owner, `/assessments/${retake.body.id}/submit`)).status).toBe(200);
+    expect(await profileAudit(first.organizationId)).toHaveLength(1);
+
+    const again = await post(w.owner, "/assessments", { kind: "diagnostic", enrollmentId: first.enrollmentId, retake: true });
+    await put(w.owner, `/assessments/${again.body.id}/responses`, { answers: fillIn(diagnostic, { ...overrides, Q4: "TIN-2" }) });
+    expect((await post(w.owner, `/assessments/${again.body.id}/submit`)).status).toBe(200);
+    const entries = await profileAudit(first.organizationId);
+    expect(entries).toHaveLength(2);
+    const latest = entries.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0]!;
+    expect(latest.before).toEqual({ tin: "TIN-1" });
+    expect(latest.after).toEqual({ tin: "TIN-2" });
+  });
+
+  it("clears an optional field the person emptied", async () => {
+    const overrides = { Q3: uniqueRegistration(), Q11: "https://old.example" };
+    const first = await submittedDiagnostic(overrides);
+    expect((await profileOf(first.organizationId)).website).toBe("https://old.example");
+
+    const retake = await post(w.owner, "/assessments", { kind: "diagnostic", enrollmentId: first.enrollmentId, retake: true });
+    await put(w.owner, `/assessments/${retake.body.id}/responses`, { answers: { ...fillIn(diagnostic, overrides), Q11: null } });
+    expect((await post(w.owner, `/assessments/${retake.body.id}/submit`)).status).toBe(200);
+    expect((await profileOf(first.organizationId)).website).toBeNull();
+  });
+
+  it("doesn't take a registration number another business already holds", async () => {
+    const registration = uniqueRegistration();
+    const first = await submittedDiagnostic({ Q3: registration });
+    expect((await profileOf(first.organizationId)).registrationNumber).toBe(registration);
+
+    const second = await submittedDiagnostic({ Q3: registration, Q4: "TIN-DUP" });
+    const profile = await profileOf(second.organizationId);
+    expect(profile.registrationNumber).not.toBe(registration);
+    expect(profile.tin).toBe("TIN-DUP");
+    const [entry] = await profileAudit(second.organizationId);
+    expect((entry?.after as { notWritten?: Record<string, string> }).notWritten?.registrationNumber).toContain("already holds");
   });
 });
