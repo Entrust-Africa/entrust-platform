@@ -15,7 +15,7 @@ import { switchablePlatforms } from "./platforms";
  */
 export function Sidebar({ user }: { user: UserProfile }) {
   return (
-    <aside aria-label="Sidebar" className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface md:flex">
+    <aside aria-label="Sidebar" className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface md:flex print:hidden">
       <Patchwork />
       <div className="flex h-16 shrink-0 items-center px-5">
         <Brand />

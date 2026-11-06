@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { ASSESSMENT_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
+import { ASSESSMENT_STATUSES, EVIDENCE_CONFIDENCE, LEARNING_PLAN_STATUSES, MODULE_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
 import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { CaseIdParam, Facts, Role } from "./clear";
@@ -262,6 +262,135 @@ export const SetPathwayBody = z
     reason: z.string().min(1).max(500).openapi({ example: "The shipment record was accepted." }),
   })
   .openapi("SetTradePathwayBody");
+
+// ---- Placement results, learning plan and report (#58) ----
+
+const ReasonView = z.object({ code: z.string(), text: z.string().openapi({ description: "The sentence the SME reads next to the module." }) });
+const ContentStatus = z.enum(["ready", "draft", "in_production"]);
+
+const ScoreView = z.object({
+  id: z.string().openapi({ example: "financial_records" }),
+  title: z.string(),
+  /** 0 to 100, or null while too few questions have a valid answer. Missing is never zero. */
+  score: z.number().nullable(),
+  band: z.string().nullable().openapi({ example: "developing" }),
+  bandLabel: z.string().nullable(),
+  /** The share of questions with a valid answer, as a whole percent. */
+  coverage: z.number(),
+  points: z.number(),
+  maxPoints: z.number(),
+  evidence: z.enum(EVIDENCE_CONFIDENCE),
+});
+
+export const PlacementResults = z
+  .object({
+    assessmentId: z.uuid(),
+    /** scored, or review_required while staff have something to look at. */
+    status: z.enum(ASSESSMENT_STATUSES),
+    rulesVersion: z.string().openapi({ example: "0.2.0" }),
+    learningPlanId: z.uuid().nullable(),
+    domains: z.array(ScoreView),
+    /** The trigger groups the plan is built from, each with the module it points to. */
+    groups: z.array(ScoreView.extend({ module: z.enum(MODULE_IDS) })),
+  })
+  .openapi("TradePlacementResults");
+export type PlacementResults = z.infer<typeof PlacementResults>;
+
+export const LearningPlanView = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    assessmentId: z.uuid().nullable(),
+    rulesVersion: z.string(),
+    pathway: z.enum(PATHWAYS),
+    pathwayName: z.string(),
+    /** generated or review_required when the engine made it; later states are staff's. */
+    status: z.enum(LEARNING_PLAN_STATUSES),
+    requiresStaffReview: z.boolean(),
+    /** Why staff will look at it, in plain words. */
+    reviewNotes: z.array(z.string()),
+    createdAt: z.iso.datetime(),
+    supersededAt: z.iso.datetime().nullable(),
+    modules: z.array(
+      z.object({
+        sequence: z.number(),
+        module: z.enum(MODULE_IDS),
+        title: z.string(),
+        status: z.enum(MODULE_STATUSES),
+        statusLabel: z.string(),
+        source: z.enum(["engine", "staff_override"]),
+        reasons: z.array(ReasonView),
+      }),
+    ),
+  })
+  .openapi("TradeLearningPlan");
+export type LearningPlanView = z.infer<typeof LearningPlanView>;
+
+const OptionLabel = z.object({ value: z.string(), label: z.string() });
+
+export const PlacementReportView = z
+  .object({
+    assessmentId: z.uuid(),
+    learningPlanId: z.uuid(),
+    report: z.object({
+      rulesVersion: z.string(),
+      /** superseded once a retake replaces it. It stays readable. */
+      status: z.enum(["current", "superseded"]),
+      baseline: z.object({
+        organisation: z.string(),
+        smeId: z.string().openapi({ example: "ET-SME-000001" }),
+        assessedOn: z.string().openapi({ example: "2026-11-20" }),
+        attempt: z.number(),
+      }),
+      pathway: z.object({
+        id: z.enum(PATHWAYS),
+        name: z.string(),
+        provisional: z.boolean(),
+        liveOrder: z.boolean(),
+        reasons: z.array(ReasonView),
+      }),
+      domains: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          score: z.number().nullable(),
+          band: z.string().nullable(),
+          bandLabel: z.string().nullable(),
+          guidance: z.string().nullable(),
+          coverage: z.number(),
+          answered: z.number(),
+          total: z.number(),
+          evidence: z.enum(EVIDENCE_CONFIDENCE),
+          evidenceLabel: z.string(),
+        }),
+      ),
+      plan: z.object({
+        modules: z.array(
+          z.object({
+            sequence: z.number(),
+            module: z.enum(MODULE_IDS),
+            title: z.string(),
+            deliverable: z.string(),
+            status: z.enum(MODULE_STATUSES),
+            statusLabel: z.string(),
+            reasons: z.array(ReasonView),
+            contentStatus: ContentStatus,
+          }),
+        ),
+        requiresStaffReview: z.boolean(),
+        reviewNotes: z.array(z.string()),
+      }),
+      objectives: z.object({
+        opportunity: OptionLabel.nullable(),
+        target: z.object({ status: OptionLabel.nullable(), product: z.string().nullable(), market: z.string().nullable(), buyerType: z.string().nullable() }),
+      }),
+    }),
+  })
+  .openapi("TradePlacementReport");
+export type PlacementReportView = z.infer<typeof PlacementReportView>;
+
+export const LearningPlanParam = z.object({ id: z.uuid() });
 
 // ---- Sponsors and consent (#70) ----
 

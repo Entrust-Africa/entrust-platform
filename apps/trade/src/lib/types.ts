@@ -205,3 +205,42 @@ export interface TradeFacilitatorRoster {
   session: TradeSessionDetail;
   smes: FacilitatorRosterSme[];
 }
+
+/** The placement report as `GET /v1/trade/assessments/{id}/report` sends it (#58). */
+export interface PlacementReportData {
+  rulesVersion: string;
+  status: "current" | "superseded";
+  baseline: { organisation: string; smeId: string; assessedOn: string; attempt: number };
+  pathway: { id: "A" | "B"; name: string; provisional: boolean; liveOrder: boolean; reasons: { code: string; text: string }[] };
+  domains: {
+    id: string;
+    title: string;
+    score: number | null;
+    band: string | null;
+    bandLabel: string | null;
+    guidance: string | null;
+    coverage: number;
+    answered: number;
+    total: number;
+    evidence: string;
+    evidenceLabel: string;
+  }[];
+  plan: {
+    modules: {
+      sequence: number;
+      module: string;
+      title: string;
+      deliverable: string;
+      status: string;
+      statusLabel: string;
+      reasons: { code: string; text: string }[];
+      contentStatus: "ready" | "draft" | "in_production";
+    }[];
+    requiresStaffReview: boolean;
+    reviewNotes: string[];
+  };
+  objectives: {
+    opportunity: { value: string; label: string } | null;
+    target: { status: { value: string; label: string } | null; product: string | null; market: string | null; buyerType: string | null };
+  };
+}

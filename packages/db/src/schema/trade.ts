@@ -236,7 +236,12 @@ export const assessmentResponse = trade.table(
 );
 export const tradeAssessmentResponse = assessmentResponse;
 
-// A capability score for one domain or trigger group from an assessment.
+export const SCORE_KINDS = ["domain", "group"] as const;
+export type ScoreKind = (typeof SCORE_KINDS)[number];
+
+// A capability score for one domain or trigger group from an assessment. `domain` holds the domain's or the group's ID,
+// and `kind` says which. The score is 0 to 100 with two decimals; null while too few questions have a valid answer.
+// Rescoring after staff approve a "does not apply" answer replaces the assessment's rows.
 export const capabilityScore = trade.table(
   "capability_score",
   {
@@ -244,17 +249,18 @@ export const capabilityScore = trade.table(
     assessmentId: uuid("assessment_id")
       .notNull()
       .references(() => tradeAssessment.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: SCORE_KINDS }).notNull().default("domain"),
     domain: text("domain").notNull(),
     points: integer("points").notNull(),
     maxPoints: integer("max_points").notNull(),
     coverage: numeric("coverage", { precision: 5, scale: 4 }).notNull(),
-    score: integer("score"),
+    score: numeric("score", { precision: 5, scale: 2 }),
     band: text("band"),
     evidenceStatus: text("evidence_status", { enum: EVIDENCE_CONFIDENCE }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex("trade_capability_score_assessment_domain_uidx").on(t.assessmentId, t.domain),
+    uniqueIndex("trade_capability_score_assessment_domain_uidx").on(t.assessmentId, t.kind, t.domain),
   ],
 );
 
@@ -272,6 +278,8 @@ export const learningPlan = trade.table(
     }),
     rulesVersion: text("rules_version").notNull(),
     pathway: text("pathway", { enum: PATHWAYS }).notNull(),
+    // The avenue the plan was built from. A later confirmation or change of the avenue is another row, so this one stays true.
+    pathwayAssignmentId: uuid("pathway_assignment_id").references(() => pathwayAssignment.id, { onDelete: "set null" }),
     status: text("status", { enum: LEARNING_PLAN_STATUSES }).notNull().default("generated"),
     requiresHumanReview: boolean("requires_human_review").notNull().default(false),
     reviewReasons: text("review_reasons")

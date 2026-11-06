@@ -9,6 +9,10 @@ import {
   AssessmentView,
   EnrollmentParam,
   EnrollmentPathway,
+  LearningPlanParam,
+  LearningPlanView,
+  PlacementReportView,
+  PlacementResults,
   SaveResponsesBody,
   SetPathwayBody,
   StartAssessmentBody,
@@ -24,6 +28,7 @@ import {
   startAssessment,
   submitAssessment,
 } from "../../services/trade-assessments";
+import { getLearningPlan, getPlacementReport, getPlacementResults } from "../../services/trade-placement";
 import { clearRouter, contextFor, json, listErrors, problem, writeErrors } from "../clear/shared";
 
 // The onboarding diagnostic (#78) and the placement assessment (#57): one set of routes for both, chosen by `kind`.
@@ -133,6 +138,38 @@ const setPathwayRoute = createRoute({
   },
 });
 
+const resultsRoute = createRoute({
+  method: "get",
+  path: "/assessments/{id}/results",
+  tags,
+  summary: "A placement assessment's scores",
+  description:
+    "The stored score of each of the six domains and each of the eight trigger groups, with its band, coverage and evidence status, the rules version they were made with, and the learning plan they led to. A score is null while too few questions have a valid answer; it is never zero. 422 before the assessment is submitted.",
+  request: { params: AssessmentParam },
+  responses: { 200: { description: "The scores", content: json(PlacementResults) }, ...listErrors },
+});
+
+const reportRoute = createRoute({
+  method: "get",
+  path: "/assessments/{id}/report",
+  tags,
+  summary: "A placement assessment's report",
+  description:
+    "The placement report: baseline, the pathway and why, each domain's score, band, coverage and evidence status, the ordered learning plan with the reason for each module in plain words, and the commercial objectives from A2 and A4. Entrust staff can read any SME's. The report of an assessment a retake replaced stays readable, marked superseded.",
+  request: { params: AssessmentParam },
+  responses: { 200: { description: "The report", content: json(PlacementReportView) }, ...listErrors },
+});
+
+const planRoute = createRoute({
+  method: "get",
+  path: "/learning-plans/{id}",
+  tags,
+  summary: "View a learning plan",
+  description: "The modules assigned to an SME in order, each with its status and the reasons it is there, the rules version, and whether staff will review it first.",
+  request: { params: LearningPlanParam },
+  responses: { 200: { description: "The learning plan", content: json(LearningPlanView) }, ...listErrors },
+});
+
 export const tradeAssessments = assessments
   .openapi(templateRoute, async (c) => {
     await contextFor(c.get("user"));
@@ -144,6 +181,9 @@ export const tradeAssessments = assessments
   .openapi(getRoute, async (c) => c.json(await getAssessment(await contextFor(c.get("user")), c.req.valid("param").id), 200))
   .openapi(saveRoute, async (c) => c.json(await saveResponses(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")), 200))
   .openapi(submitRoute, async (c) => c.json(await submitAssessment(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(resultsRoute, async (c) => c.json(await getPlacementResults(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(reportRoute, async (c) => c.json(await getPlacementReport(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(planRoute, async (c) => c.json(await getLearningPlan(await contextFor(c.get("user")), c.req.valid("param").id), 200))
   .openapi(approveRoute, async (c) => {
     const { id, questionId } = c.req.valid("param");
     return c.json(await approveNotApplicable(await contextFor(c.get("user")), id, questionId), 200);
