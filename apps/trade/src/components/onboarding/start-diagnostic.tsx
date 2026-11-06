@@ -44,7 +44,7 @@ export function StartDiagnostic() {
   return (
     <div className="space-y-6">
       {remembered && (
-        <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-ink">
+        <div className="rounded-lg border border-brand-100 bg-brand-50 p-4 text-sm text-ink">
           <p className="font-semibold">You already started this form on this device.</p>
           <Link href={`/onboarding/${remembered}`} className="mt-1 inline-block font-semibold text-brand-700 underline underline-offset-4">
             Carry on where you left off →
