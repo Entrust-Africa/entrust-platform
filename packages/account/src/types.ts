@@ -14,6 +14,8 @@ export interface UserProfile {
   email: string;
   activeOrganizationId?: string | null;
   staffRole?: "admin" | "facilitator" | "reviewer" | null;
+  /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
+  summitCommittee?: boolean;
   platforms?: string[];
   organizations?: UserOrganization[];
 }
