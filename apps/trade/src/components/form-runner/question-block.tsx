@@ -23,10 +23,12 @@ export interface QuestionBlockProps {
   /** For a question with `evidenceBased`: documents are available, and how to change that. Both or neither. */
   documentsAvailable?: boolean;
   onDocumentsChange?: (available: boolean) => void;
+  /** Extra classes for the block, such as the columns it spans. */
+  className?: string;
 }
 
 /** One question: its words, its control, "I don't know" where the form allows it, and what is wrong with the answer. */
-export function QuestionBlock({ question, answer, onChange, disabled, notKnownAllowed, error, variables, today, documentsAvailable, onDocumentsChange }: QuestionBlockProps) {
+export function QuestionBlock({ question, answer, onChange, disabled, notKnownAllowed, error, variables, today, documentsAvailable, onDocumentsChange, className }: QuestionBlockProps) {
   const domId = `field-${question.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
   const unknown = isNotKnown(answer);
   const doesNotApply = isNotApplicable(answer);
@@ -44,7 +46,7 @@ export function QuestionBlock({ question, answer, onChange, disabled, notKnownAl
   );
 
   return (
-    <div id={`q-${question.id}`} className="scroll-mt-24 space-y-2.5">
+    <div id={`q-${question.id}`} className={cn("scroll-mt-24 space-y-2.5", className)}>
       {choice ? (
         <p id={`${domId}-label`} className="text-base font-semibold leading-snug text-ink">
           {heading}

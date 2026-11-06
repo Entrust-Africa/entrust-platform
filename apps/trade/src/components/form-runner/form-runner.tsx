@@ -267,7 +267,7 @@ export function FormRunner(props: FormRunnerProps) {
                 ))}
               </div>
 
-              <div className="space-y-8">
+              <div className={cn(props.wide ? "grid gap-y-8 xl:grid-cols-2 xl:gap-x-12" : "space-y-8")}>
                 {questions.map((question, i) => {
                   const invalid = invalidByQuestion.get(question.id);
                   const missing = missingByQuestion.get(question.id);
@@ -277,11 +277,12 @@ export function FormRunner(props: FormRunnerProps) {
                   return (
                     <Fragment key={question.id}>
                       {question.group && question.group !== questions[i - 1]?.group && (
-                        <h3 className="border-t border-line pt-6 font-display text-lg font-bold text-ink">{question.group}</h3>
+                        <h3 className={cn("border-t border-line pt-6 font-display text-lg font-bold text-ink", props.wide && "xl:col-span-2")}>{question.group}</h3>
                       )}
                       <QuestionBlock
                         question={question}
                         answer={answer}
+                        {...(props.wide && (question.type === "long_text" || question.type === "list") ? { className: "xl:col-span-2" } : {})}
                         onChange={(value) => change(question, value)}
                         disabled={readOnly}
                         notKnownAllowed={notKnownAllowed(question) && !readOnly}

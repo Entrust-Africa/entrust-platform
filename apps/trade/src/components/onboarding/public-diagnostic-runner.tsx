@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { FormDefinition } from "@entrust/forms";
 import { FormRunner, type AnswerPatch } from "@/components/form-runner";
-import { KINDS } from "@/components/assessment/kinds";
+import { KINDS, diagnosticAllowsNotKnown } from "@/components/assessment/kinds";
 import { tradeFetch } from "@/lib/trade-client";
 
 const REMEMBERED = "entrust-onboarding-token";
@@ -49,6 +49,8 @@ export function PublicDiagnosticRunner({
       onSave={save}
       onSubmit={submit}
       variables={variables}
+      allowNotKnown={diagnosticAllowsNotKnown}
+      wide
       submit={{
         ...KINDS.diagnostic.submit,
         confirmBody: "You won't be able to change your answers after this. You will see which learning path you start on, and we will email you to say we have it.",

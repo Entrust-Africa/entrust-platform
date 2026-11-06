@@ -46,3 +46,9 @@ export const KINDS: Record<AssessmentKind, KindInfo> = {
 };
 
 export const isKind = (value: string): value is AssessmentKind => value === "diagnostic" || value === "placement";
+
+/**
+ * The diagnostic offers no "I don't know" box: where a person doesn't know, they say so in their own words. The three
+ * kinds of answer that can't take words, a number, an amount and a date, keep it, so nobody is stuck on one.
+ */
+export const diagnosticAllowsNotKnown = (question: { type: string }): boolean => question.type === "number" || question.type === "money" || question.type === "date";

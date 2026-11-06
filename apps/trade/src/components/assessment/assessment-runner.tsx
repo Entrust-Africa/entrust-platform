@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { FormDefinition } from "@entrust/forms";
 import { FormRunner, type AnswerPatch } from "@/components/form-runner";
 import { tradeFetch } from "@/lib/trade-client";
-import { KINDS, type AssessmentKind } from "./kinds";
+import { KINDS, diagnosticAllowsNotKnown, type AssessmentKind } from "./kinds";
 
 /** Fills in a draft diagnostic or placement assessment: saves through the API as the person goes, and submits. */
 export function AssessmentRunner({
@@ -53,7 +53,7 @@ export function AssessmentRunner({
       onDocumentsChange={setDocuments}
       submit={KINDS[kind].submit}
       // A placement question can be "I don't know" or "does not apply"; only the capability questions have that choice.
-      {...(kind === "placement" ? { allowNotKnown: (q) => q.allowNotApplicable === true } : {})}
+      {...(kind === "placement" ? { allowNotKnown: (q) => q.allowNotApplicable === true } : { allowNotKnown: diagnosticAllowsNotKnown, wide: true })}
     />
   );
 }

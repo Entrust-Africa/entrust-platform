@@ -46,11 +46,11 @@ export default async function PublicDiagnosticPage({ params }: { params: Promise
     return <p className="mx-auto max-w-xl py-8 text-sm text-ink-2">The form couldn't be loaded. Refresh the page to try again.</p>;
   }
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div>
-        <h1 className="font-display text-xl font-bold text-ink">Onboarding diagnostic</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">Onboarding diagnostic</h1>
         <p className="mt-1 text-sm text-ink-2">
-          {view.businessName ? `${view.businessName}. ` : ""}Your answers save as you go. We emailed the link to {view.email}, so you can carry on later.
+          {view.businessName ? `${view.businessName}. ` : ""}Your answers save as you go. We emailed the link to {view.email}, so you can carry on later. Where you don't know an answer, write that you don't know.
         </p>
       </div>
       <PublicDiagnosticRunner token={token} definition={template.data.form} answers={view.answers} variables={view.variables} />

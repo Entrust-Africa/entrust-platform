@@ -58,7 +58,7 @@ export async function AssessmentDetailPage({ kind, id }: { kind: AssessmentKind;
     const template = await tradeGet<{ form: FormDefinition }>(`/assessments/template?kind=${kind}&version=${encodeURIComponent(view.templateVersion)}`);
     if (!template.data) notFound();
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className={kind === "diagnostic" ? "mx-auto max-w-5xl space-y-4" : "mx-auto max-w-2xl space-y-4"}>
         <h1 className="font-display text-xl font-bold text-ink">{KINDS[kind].title}</h1>
         <AssessmentRunner assessmentId={view.id} kind={kind} definition={template.data.form} answers={view.answers} variables={view.variables} documents={view.documents} />
       </div>

@@ -47,6 +47,11 @@ export interface FormRunnerProps {
   reviewTop?: ReactNode;
   submit?: SubmitCopy;
   today?: string;
+  /**
+   * Use a wide screen: from 1280px the questions of a section sit in two columns, with long text and lists across both.
+   * A phone and a tablet are unchanged. Give the runner a container wide enough to show it.
+   */
+  wide?: boolean;
 }
 
 export interface SubmitCopy {
