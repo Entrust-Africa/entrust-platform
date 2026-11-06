@@ -7,6 +7,8 @@ import {
   Briefcase,
   CheckSquare,
   ClipboardList,
+  ExternalLink,
+  FlaskConical,
   FolderGit2,
   GraduationCap,
   LayoutDashboard,
@@ -21,6 +23,7 @@ import {
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { summitAccess } from "@/lib/summit";
+import { SIMULATOR_URL } from "@/lib/simulator";
 
 interface NavLinksProps {
   onNavigate?: () => void;
@@ -33,6 +36,8 @@ interface NavItem {
   label: string;
   icon: typeof BookOpen;
   match: (path: string) => boolean;
+  /** Another app: opens in a new tab and is never the current page. */
+  external?: boolean;
 }
 
 /** Links that belong together, under a heading when they have one. */
@@ -54,6 +59,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     icon: Mic2,
     match: (path) => path.startsWith("/summit"),
   };
+  const simulator: NavItem = { href: SIMULATOR_URL, label: "Export simulator", icon: FlaskConical, match: () => false, external: true };
   const account: NavItem = { href: "/account", label: "Account", icon: User, match: (path) => path.startsWith("/account") };
 
   if (isStaff) {
@@ -66,6 +72,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/register", label: "SME register", icon: ClipboardList, match: (path) => path.startsWith("/register") },
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
           { href: "/reports", label: "Reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
+          simulator,
         ],
       },
     ];
@@ -105,6 +112,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
+    simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },
   ];
   if (access?.hasSummit) items.push(summitItem);
@@ -123,6 +131,23 @@ export function NavLinks({ onNavigate, className, user }: NavLinksProps) {
           {group.items.map((item) => {
             const isActive = item.match(pathname);
             const Icon = item.icon;
+            if (item.external) {
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onNavigate}
+                  className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-2 transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-500"
+                >
+                  <Icon className="size-5 shrink-0 text-ink-3" aria-hidden="true" />
+                  <span>{item.label}</span>
+                  <ExternalLink className="ml-auto size-4 shrink-0 text-ink-3" aria-hidden="true" />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              );
+            }
             return (
               <Link
                 key={item.href}
