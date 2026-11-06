@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   BookOpen,
   Briefcase,
   CheckSquare,
@@ -20,6 +21,7 @@ import {
   User,
   Users,
   FileText,
+  Gavel,
 } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
@@ -45,6 +47,15 @@ interface NavItem {
 interface NavGroup {
   heading?: string;
   items: NavItem[];
+}
+
+/** The selection committee's screens. */
+function committeeLinks(): NavItem[] {
+  return [
+    { href: "/summit/committee", label: "Committee", icon: Gavel, match: (path) => path.startsWith("/summit/committee") },
+    { href: "/summit/dashboard", label: "Dashboard", icon: BarChart3, match: (path) => path.startsWith("/summit/dashboard") },
+    { href: "/summit/reports", label: "Summit reports", icon: FileText, match: (path) => path.startsWith("/summit/reports") },
+  ];
 }
 
 /** The links this visitor gets, in groups: one list for the sidebar and the phone drawer. */
@@ -80,10 +91,16 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     ];
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
     // sponsors, delegates, the directory).
-    const summit: NavItem[] = [];
+    const summit: NavItem[] = [
+      { href: "/summit/review", label: "Applications", icon: ClipboardList, match: (path) => path.startsWith("/summit/review") },
+    ];
+    // The committee's screens are for its members and the administrators and facilitators who run the selection.
+    if (user?.staffRole === "admin" || user?.staffRole === "facilitator") summit.push(...committeeLinks());
+    // An officer's reports hold the applications assigned to them.
+    else summit.push(committeeLinks()[2]!);
     // Only an administrator sets application periods.
     if (user?.staffRole === "admin") {
-      summit.push({ href: "/summit/admin/periods", label: "Application periods", icon: FileText, match: (path) => path.startsWith("/summit") && !path.startsWith("/summit/commerce") });
+      summit.push({ href: "/summit/admin/periods", label: "Application periods", icon: FileText, match: (path) => path.startsWith("/summit/admin") });
     }
     // The ADTIS exhibition, sponsorship and delegate screens are for administrators and facilitators.
     if (user?.staffRole === "admin" || user?.staffRole === "facilitator") {
@@ -93,6 +110,9 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     groups.push({ items: [account] });
     return groups;
   }
+
+  // A member of the selection committee is not staff: they get the committee's screens and nothing else of the Summit.
+  if (user?.summitCommittee) return [{ heading: "Summit", items: committeeLinks() }, { items: [account] }];
 
   if (isSponsor) {
     return [
