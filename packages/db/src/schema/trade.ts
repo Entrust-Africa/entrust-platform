@@ -20,6 +20,7 @@ import {
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   EVIDENCE_TARGET_TYPES,
+  MODULE_EXEMPTION_STATUSES,
   ENROLLMENT_STATUSES,
   EXPORT_OUTCOME_STATUSES,
   FINANCING_OUTCOME_STATUSES,
@@ -291,6 +292,9 @@ export const learningPlan = trade.table(
     acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
     supersededById: uuid("superseded_by_id"),
     supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNotes: text("review_notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -397,6 +401,37 @@ export const moduleProgress = trade.table(
   },
   (t) => [
     uniqueIndex("trade_module_progress_enrollment_module_uidx").on(t.enrollmentId, t.moduleId),
+  ],
+);
+
+// An exemption granted or requested for a module, backed by an evidence record.
+export const moduleExemption = trade.table(
+  "module_exemption",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    evidenceRecordId: uuid("evidence_record_id")
+      .notNull()
+      .references(() => evidenceRecord.id, { onDelete: "cascade" }),
+    status: text("status", { enum: MODULE_EXEMPTION_STATUSES }).notNull().default("pending"),
+    reason: text("reason").notNull(),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewComment: text("review_comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_module_exemption_enrollment_idx").on(t.enrollmentId),
+    index("trade_module_exemption_enr_module_idx").on(t.enrollmentId, t.moduleId),
+    index("trade_module_exemption_evidence_idx").on(t.evidenceRecordId),
   ],
 );
 
@@ -519,6 +554,7 @@ export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
   assessments: many(tradeAssessment),
   learningPlans: many(learningPlan),
   moduleProgress: many(moduleProgress),
+  moduleExemptions: many(moduleExemption),
   evidenceRecords: many(evidenceRecord),
   commercialOpportunities: many(commercialOpportunity),
   outcomes: many(outcome),
@@ -551,6 +587,7 @@ export const learningPlanRelations = relations(learningPlan, ({ one, many }) => 
     fields: [learningPlan.assessmentId],
     references: [tradeAssessment.id],
   }),
+  reviewedByUser: one(user, { fields: [learningPlan.reviewedByUserId], references: [user.id] }),
   moduleAssignments: many(moduleAssignment),
 }));
 
@@ -563,6 +600,13 @@ export const moduleAssignmentRelations = relations(moduleAssignment, ({ one }) =
 
 export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
   enrollment: one(enrollment, { fields: [moduleProgress.enrollmentId], references: [enrollment.id] }),
+}));
+
+export const moduleExemptionRelations = relations(moduleExemption, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [moduleExemption.enrollmentId], references: [enrollment.id] }),
+  evidenceRecord: one(evidenceRecord, { fields: [moduleExemption.evidenceRecordId], references: [evidenceRecord.id] }),
+  requestedByUser: one(user, { fields: [moduleExemption.requestedByUserId], references: [user.id] }),
+  reviewedByUser: one(user, { fields: [moduleExemption.reviewedByUserId], references: [user.id] }),
 }));
 
 export const evidenceRecordRelations = relations(evidenceRecord, ({ one }) => ({

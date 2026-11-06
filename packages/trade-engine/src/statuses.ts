@@ -13,6 +13,9 @@ export type LearningPlanStatus = (typeof LEARNING_PLAN_STATUSES)[number];
 export const MODULE_PROGRESS_STATUSES = ["not_started", "in_progress", "submitted", "needs_revision", "passed", "exempted"] as const;
 export type ModuleProgressStatus = (typeof MODULE_PROGRESS_STATUSES)[number];
 
+export const MODULE_EXEMPTION_STATUSES = ["pending", "approved", "rejected"] as const;
+export type ModuleExemptionStatus = (typeof MODULE_EXEMPTION_STATUSES)[number];
+
 export const EVIDENCE_REVIEW_STATUSES = ["not_submitted", "submitted", "under_review", "accepted", "rejected", "resubmission_required"] as const;
 export type EvidenceReviewStatus = (typeof EVIDENCE_REVIEW_STATUSES)[number];
 
@@ -27,6 +30,9 @@ export const EVIDENCE_LABEL_TIERS = [
   "formal_bank_decision",
 ] as const;
 export type EvidenceLabelTier = (typeof EVIDENCE_LABEL_TIERS)[number];
+
+export const MODULE_ASSIGNMENT_SOURCES = ["engine", "staff_override"] as const;
+export type ModuleAssignmentSource = (typeof MODULE_ASSIGNMENT_SOURCES)[number];
 
 export const OPPORTUNITY_STATUSES = ["identified", "qualified", "inquiry", "quotation", "negotiation", "order_confirmed", "lost", "completed"] as const;
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
