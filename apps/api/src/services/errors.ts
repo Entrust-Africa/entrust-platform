@@ -14,7 +14,8 @@ export type ServiceErrorCode =
   | "forbidden"
   | "not_found"
   | "invalid_transition"
-  | "precondition_failed";
+  | "precondition_failed"
+  | "conflict";
 
 const STATUS = {
   invalid: 422,
@@ -23,6 +24,7 @@ const STATUS = {
   not_found: 404,
   invalid_transition: 409,
   precondition_failed: 422,
+  conflict: 409,
 } as const satisfies Record<ServiceErrorCode, number>;
 
 export class ServiceError extends Error {

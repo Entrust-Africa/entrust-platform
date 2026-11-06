@@ -7,26 +7,40 @@ import { createBusiness } from "@/lib/summit-business";
 import { countryName } from "@/lib/summit";
 import { textInput } from "@/components/form-runner/styles";
 
-/** A new visitor's business: its name and country, so it has an organisation to apply as. */
-export function CreateOrganisation({ countries }: { countries: string[] }) {
+/**
+ * A new visitor's business: its name and country, so it has an organisation to apply as (`platform` summit) or to be
+ * enrolled with (`platform` trade). A business whose name is close to one we already have is asked to confirm.
+ */
+export function CreateOrganisation({ countries, platform = "summit" }: { countries: string[]; platform?: "summit" | "trade" }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [similar, setSimilar] = useState<{ message: string; input: { name: string; legalName: string; country: string } }>();
 
-  async function create(form: FormData) {
+  async function save(input: { name: string; legalName: string; country: string }, confirmDuplicateName: boolean) {
     setPending(true);
     setError(undefined);
-    const result = await createBusiness({
-      name: String(form.get("name") ?? ""),
-      legalName: String(form.get("legalName") ?? ""),
-      country: String(form.get("country") ?? ""),
-    });
+    const result = await createBusiness({ ...input, platform, confirmDuplicateName });
     if (!result.ok) {
-      setError(result.error);
+      if (result.duplicate) setSimilar({ message: result.error, input });
+      else setError(result.error);
       setPending(false);
       return;
     }
+    setSimilar(undefined);
     router.refresh();
+  }
+
+  async function create(form: FormData) {
+    setSimilar(undefined);
+    await save(
+      {
+        name: String(form.get("name") ?? ""),
+        legalName: String(form.get("legalName") ?? ""),
+        country: String(form.get("country") ?? ""),
+      },
+      false,
+    );
   }
 
   return (
@@ -65,6 +79,15 @@ export function CreateOrganisation({ countries }: { countries: string[] }) {
         <p className="rounded-md bg-danger-50 px-3 py-2 text-sm font-medium text-danger" role="alert">
           {error}
         </p>
+      )}
+      {similar && (
+        <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+          <p>{similar.message}</p>
+          <p>If your business is already on Entrust, ask its owner to invite you. If it is a different business, you can go on.</p>
+          <Button type="button" variant="secondary" loading={pending} onClick={() => void save(similar.input, true)}>
+            Mine is a different business
+          </Button>
+        </div>
       )}
       <Button type="submit" size="lg" className="w-full sm:w-auto" loading={pending}>
         Save my business

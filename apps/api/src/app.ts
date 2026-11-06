@@ -10,6 +10,7 @@ import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
 import { ServiceError } from "./services/errors";
 import { organizations } from "./routes/organizations";
+import { smes } from "./routes/smes";
 import { jobs } from "./routes/jobs";
 import { files } from "./routes/files";
 import { auditRouter } from "./routes/audit";
@@ -18,6 +19,7 @@ import { tradeAssessments } from "./routes/trade/assessments";
 import { tradeCatalogue } from "./routes/trade/catalogue";
 import { tradeModules } from "./routes/trade/modules";
 import { tradePractice } from "./routes/trade/practice";
+import { tradePrograms } from "./routes/trade/programs";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSponsors } from "./routes/trade/sponsors";
 import { summit, summitPublic } from "./routes/summit";
@@ -64,6 +66,7 @@ export const app = base
   .route("/v1", health)
   .route("/v1", me)
   .route("/v1", organizations)
+  .route("/v1", smes)
   .route("/v1", jobs)
   .route("/v1", files)
   .route("/v1", auditRouter)
@@ -74,6 +77,7 @@ export const app = base
   .route("/v1/trade", tradeAssessments)
   .route("/v1/trade", tradeSponsors)
   .route("/v1/trade", tradePractice)
+  .route("/v1/trade", tradePrograms)
   .route("/v1/trade", tradeRegister)
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)
