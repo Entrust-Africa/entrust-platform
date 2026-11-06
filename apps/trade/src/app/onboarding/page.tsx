@@ -12,7 +12,7 @@ export default function OnboardingPage() {
           Tell us about your business so Entrust can place you on the right learning path before the TRADE training starts on 19 November 2026.
         </p>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-relaxed text-ink-2">
-          <li>You don't need an account. Just your email address.</li>
+          <li>You don't need an account. Just your business name, email address and phone number.</li>
           <li>Questions that don't apply to you stay hidden, so most businesses answer far fewer than the full list.</li>
           <li>Your answers save as you go. You can stop at any time and carry on from the link we email you.</li>
           <li>It works on a phone. Have your business registration and tax details nearby.</li>

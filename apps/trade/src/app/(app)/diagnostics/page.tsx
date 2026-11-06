@@ -99,8 +99,8 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                 type="search"
                 name="q"
                 defaultValue={q}
-                aria-label="Search by business or email"
-                placeholder="Search business or email"
+                aria-label="Search by business, email or phone"
+                placeholder="Search business, email or phone"
                 className="h-10 w-60 rounded-md border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <button type="submit" className="h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-semibold text-ink hover:bg-surface-2">
@@ -136,6 +136,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                         <td className="px-4 py-3">
                           <div className="font-semibold text-ink">{d.businessName ?? "No name yet"}</div>
                           <div className="text-xs text-ink-3">{d.email}</div>
+                          {d.phone && <div className="text-xs text-ink-3">{d.phone}</div>}
                           {d.sameEmail > 1 && <div className="mt-0.5 text-xs text-amber-700">{d.sameEmail} forms from this email</div>}
                         </td>
                         <td className="px-4 py-3">

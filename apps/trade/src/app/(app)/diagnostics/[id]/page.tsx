@@ -34,6 +34,14 @@ export default async function DiagnosticDetailPage({ params }: { params: Promise
               <a href={`mailto:${d.email}`} className="underline underline-offset-4">
                 {d.email}
               </a>
+              {d.phone && (
+                <>
+                  {" · "}
+                  <a href={`tel:${d.phone.replace(/[^+0-9]/g, "")}`} className="underline underline-offset-4">
+                    {d.phone}
+                  </a>
+                </>
+              )}
             </p>
           </div>
           <StatusBadge tone={d.status === "submitted" ? "ok" : "warn"}>{d.status === "submitted" ? "Submitted" : "In progress"}</StatusBadge>

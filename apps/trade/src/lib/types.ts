@@ -101,6 +101,7 @@ export interface StaffAssessmentRow {
 export interface PublicDiagnosticSummary {
   id: string;
   email: string;
+  phone: string | null;
   businessName: string | null;
   status: "draft" | "submitted";
   pathway: "A" | "B" | null;
@@ -126,6 +127,7 @@ export interface PublicDiagnosticDetail {
   id: string;
   status: "draft" | "submitted";
   email: string;
+  phone: string | null;
   businessName: string | null;
   startedAt: string;
   submittedAt: string | null;

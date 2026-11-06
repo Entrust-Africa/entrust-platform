@@ -10,9 +10,9 @@ import { textInput } from "@/components/form-runner/styles";
 const REMEMBERED = "entrust-onboarding-token";
 
 /**
- * The first step of the public diagnostic: an email address (so the private link can be sent and Entrust can match
- * the answers to the business later) and, if they like, the business name. No password and no account. The browser
- * remembers the draft, so coming back to this page offers to carry on.
+ * The first step of the public diagnostic: the business's name, an email address (so the private link can be sent and
+ * Entrust can match the answers to the business later) and a phone number. All three are needed. No password and no
+ * account. The browser remembers the draft, so coming back to this page offers to carry on.
  */
 export function StartDiagnostic() {
   const router = useRouter();
@@ -28,12 +28,14 @@ export function StartDiagnostic() {
     setPending(true);
     setError(undefined);
     const result = await tradeFetch<{ token: string }>("POST", "/public/diagnostic", {
+      businessName: String(form.get("businessName") ?? ""),
       email: String(form.get("email") ?? ""),
-      businessName: String(form.get("businessName") ?? "") || undefined,
+      phone: String(form.get("phone") ?? ""),
       website: String(form.get("website") ?? "") || undefined,
     });
     if (!result.data) {
-      setError(result.status === 400 ? "Check your email address and try again." : (result.error ?? "Something went wrong. Try again."));
+      // The API words a refusal as "phone: Enter a phone number…": show the sentence without the field name.
+      setError(result.status === 400 ? (result.error ?? "Check your details and try again.").replace(/^[a-zA-Z]+: /, "") : (result.error ?? "Something went wrong. Try again."));
       setPending(false);
       return;
     }
@@ -53,19 +55,40 @@ export function StartDiagnostic() {
       )}
       <form action={start} className="space-y-5">
         <div className="space-y-1.5">
+          <label htmlFor="start-business" className="block text-base font-semibold text-ink">
+            Business name
+          </label>
+          <input id="start-business" name="businessName" required maxLength={200} autoComplete="organization" className={textInput(false)} />
+        </div>
+        <div className="space-y-1.5">
           <label htmlFor="start-email" className="block text-base font-semibold text-ink">
             Your email address
           </label>
           <input id="start-email" name="email" type="email" required maxLength={200} autoComplete="email" inputMode="email" aria-describedby="start-email-hint" className={textInput(false)} />
           <p id="start-email-hint" className="text-sm text-ink-3">
-            We send you a private link to your form, so you can stop and carry on later. We use it to match your answers to your business.
+            We send you a private link to your form, so you can stop and carry on later.
           </p>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="start-business" className="block text-base font-semibold text-ink">
-            Business name <span className="font-normal text-ink-3">(optional)</span>
+          <label htmlFor="start-phone" className="block text-base font-semibold text-ink">
+            Phone number
           </label>
-          <input id="start-business" name="businessName" maxLength={200} autoComplete="organization" className={textInput(false)} />
+          <input
+            id="start-phone"
+            name="phone"
+            type="tel"
+            required
+            minLength={7}
+            maxLength={30}
+            autoComplete="tel"
+            inputMode="tel"
+            placeholder="+251 91 123 4567"
+            aria-describedby="start-phone-hint"
+            className={textInput(false)}
+          />
+          <p id="start-phone-hint" className="text-sm text-ink-3">
+            So Entrust can reach you about the training. Include the country code if you can.
+          </p>
         </div>
         {/* A trap for bots: people never see or fill this in. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
