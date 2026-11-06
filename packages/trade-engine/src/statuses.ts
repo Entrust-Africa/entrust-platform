@@ -16,6 +16,18 @@ export type ModuleProgressStatus = (typeof MODULE_PROGRESS_STATUSES)[number];
 export const EVIDENCE_REVIEW_STATUSES = ["not_submitted", "submitted", "under_review", "accepted", "rejected", "resubmission_required"] as const;
 export type EvidenceReviewStatus = (typeof EVIDENCE_REVIEW_STATUSES)[number];
 
+export const EVIDENCE_TARGET_TYPES = ["assessment_question", "module_submission", "exemption_request", "outcome"] as const;
+export type EvidenceTargetType = (typeof EVIDENCE_TARGET_TYPES)[number];
+
+export const EVIDENCE_LABEL_TIERS = [
+  "ai_suggestion",
+  "self_reported",
+  "expert_reviewed",
+  "validated_regulatory_requirement",
+  "formal_bank_decision",
+] as const;
+export type EvidenceLabelTier = (typeof EVIDENCE_LABEL_TIERS)[number];
+
 export const OPPORTUNITY_STATUSES = ["identified", "qualified", "inquiry", "quotation", "negotiation", "order_confirmed", "lost", "completed"] as const;
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 

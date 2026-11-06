@@ -97,6 +97,7 @@ export async function cleanup() {
     // Audit rows would otherwise outlive the organisation with their link set to null.
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
     await db.delete(schema.platformAccess).where(inArray(schema.platformAccess.organizationId, ids));
+    await db.delete(schema.evidenceRecord).where(inArray(schema.evidenceRecord.organizationId, ids));
     await db.delete(schema.file).where(inArray(schema.file.organizationId, ids));
     await db.delete(schema.exportCase).where(inArray(schema.exportCase.organizationId, ids));
     await db.delete(schema.salesContract).where(inArray(schema.salesContract.organizationId, ids));

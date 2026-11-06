@@ -17,6 +17,7 @@ import { auditRouter } from "./routes/audit";
 import { tradeApplications } from "./routes/trade/applications";
 import { tradeAssessments } from "./routes/trade/assessments";
 import { tradeCatalogue } from "./routes/trade/catalogue";
+import { tradeEvidence } from "./routes/trade/evidence";
 import { tradeModules } from "./routes/trade/modules";
 import { tradeWorksheets } from "./routes/trade/worksheets";
 import { tradePractice } from "./routes/trade/practice";
@@ -81,6 +82,7 @@ export const app = base
   .route("/v1/trade", tradeModules)
   .route("/v1/trade", tradeAssessments)
   .route("/v1/trade", tradeWorksheets)
+  .route("/v1/trade", tradeEvidence)
   .route("/v1/trade", tradeSponsors)
   .route("/v1/trade", tradePractice)
   .route("/v1/trade", tradePrograms)
