@@ -4,8 +4,10 @@ export {
   type DeliveryMode,
   ENROLLMENT_STATUSES,
   type EnrollmentStatus,
+  ATTENDANCE_STATUSES,
+  type AttendanceStatus,
 } from "@entrust/db";
-import type { DeliveryMode, EnrollmentStatus } from "@entrust/db";
+import type { DeliveryMode, EnrollmentStatus, AttendanceStatus } from "@entrust/db";
 
 export interface TradeProgram {
   id: string;
@@ -29,6 +31,7 @@ export interface TradeCohort {
   endDate: string | null;
   createdAt: string;
   enrolledCount: number;
+  attendanceRequired?: boolean;
 }
 
 export interface TradeCohortEnrolment {
@@ -46,6 +49,7 @@ export interface TradeCohortEnrolment {
 
 export interface TradeCohortDetail extends Omit<TradeCohort, "enrolledCount"> {
   enrolments: TradeCohortEnrolment[];
+  sessions?: TradeSessionSummary[];
 }
 
 export interface TradeEnrollmentSummary {
@@ -138,4 +142,66 @@ export interface PublicDiagnosticDetail {
   progress: { total: number; answered: number; percent: number };
   pathway: { pathway: string; name: string; status: "provisional" | "confirmed"; liveOrder: boolean; reasons: string[] } | null;
   sections: { id: string; title: string; items: { id: string; text: string; answer: string }[] }[];
+}
+
+export interface SessionMaterial {
+  title: string;
+  url: string;
+}
+
+export interface TradeSessionSummary {
+  id: string;
+  cohortId: string;
+  cohortName: string;
+  title: string;
+  description: string | null;
+  moduleCodes: string[];
+  facilitatorUserId: string | null;
+  facilitatorName: string | null;
+  startTime: string;
+  endTime: string;
+  venue: string | null;
+  recordingUrl: string | null;
+  learnerMaterials: SessionMaterial[];
+  facilitatorMaterials: SessionMaterial[];
+  createdAt: string;
+}
+
+export interface TradeSessionDetail extends TradeSessionSummary {
+  programId: string;
+  programName: string;
+}
+
+export interface FacilitatorRosterMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  attendance: {
+    id: string;
+    status: AttendanceStatus;
+    notes: string | null;
+    recordedAt: string;
+  } | null;
+}
+
+export interface FacilitatorRosterModule {
+  moduleCode: string;
+  status: string;
+  completedAt: string | null;
+}
+
+export interface FacilitatorRosterSme {
+  organizationId: string;
+  organizationName: string;
+  legalName: string | null;
+  smeId: string | null;
+  enrollmentStatus: EnrollmentStatus;
+  members: FacilitatorRosterMember[];
+  modules: FacilitatorRosterModule[];
+}
+
+export interface TradeFacilitatorRoster {
+  session: TradeSessionDetail;
+  smes: FacilitatorRosterSme[];
 }

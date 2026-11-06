@@ -22,6 +22,7 @@ import { tradePractice } from "./routes/trade/practice";
 import { tradePublicDiagnostic } from "./routes/trade/public-diagnostic";
 import { tradePrograms } from "./routes/trade/programs";
 import { tradeRegister } from "./routes/trade/register";
+import { tradeSessions } from "./routes/trade/sessions";
 import { tradeSponsors } from "./routes/trade/sponsors";
 import { summit, summitPublic } from "./routes/summit";
 import { summitCommerce, summitCommercePublic } from "./routes/summit-commerce";
@@ -82,6 +83,7 @@ export const app = base
   .route("/v1/trade", tradePractice)
   .route("/v1/trade", tradePrograms)
   .route("/v1/trade", tradeRegister)
+  .route("/v1/trade", tradeSessions)
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)
   .route("/v1/summit", summitPublic)

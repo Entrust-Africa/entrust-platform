@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getCohort, getMe, listDiagnostics, listWaitingSmes } from "@/lib/api";
+import { getCohort, getMe, listDiagnostics, listSessions, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { StatusUpdater } from "./status-updater";
+import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
 
 export const metadata = { title: "Cohort Details" };
 
@@ -79,7 +80,12 @@ export default async function CohortDetailPage(props: {
   }
 
   const { id } = await props.params;
-  const [cohort, waiting, diagnostics] = await Promise.all([getCohort(id), listWaitingSmes(), listDiagnostics()]);
+  const [cohort, waiting, diagnostics, sessions] = await Promise.all([
+    getCohort(id),
+    listWaitingSmes(),
+    listDiagnostics(),
+    listSessions(id),
+  ]);
   if (!cohort) {
     notFound();
   }
@@ -92,7 +98,7 @@ export default async function CohortDetailPage(props: {
   }).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <Link
           href="/cohorts"
@@ -112,11 +118,14 @@ export default async function CohortDetailPage(props: {
             </div>
             <h1 className="mt-1 font-display text-2xl font-bold text-ink">{cohort.name}</h1>
           </div>
-          <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+          <div className="flex items-center gap-2">
+            <ScheduleSessionDialog cohortId={cohort.id} />
+            <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-5">
         <Card className="p-4">
           <span className="text-xs text-ink-3 font-medium">Delivery Mode</span>
           <p className="mt-1 text-sm font-semibold text-ink">
@@ -142,8 +151,88 @@ export default async function CohortDetailPage(props: {
             {cohort.sponsorName ?? "None (Entrust Direct)"}
           </p>
         </Card>
+        <Card className="p-4">
+          <span className="text-xs text-ink-3 font-medium">Attendance Requirement</span>
+          <p className="mt-1 text-sm font-semibold text-ink">
+            {cohort.attendanceRequired !== false ? "Required for Completion" : "Optional"}
+          </p>
+        </Card>
       </div>
 
+      {/* Live Sessions & Workshops Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-lg font-bold text-ink">
+              Live Sessions & Workshops ({sessions.length})
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-2">
+              Interactive sessions scheduled for this cohort, with facilitator preparation and attendance sheets.
+            </p>
+          </div>
+          <ScheduleSessionDialog cohortId={cohort.id} />
+        </div>
+
+        {sessions.length === 0 ? (
+          <Card className="p-6 text-center text-sm text-ink-2 max-w-lg mx-auto">
+            No live workshops scheduled for this cohort yet. Click &quot;Schedule Session&quot; to plan a session.
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sessions.map((sess) => (
+              <Card key={sess.id} className="flex flex-col justify-between p-5 hover:border-brand-500 transition-colors">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-ink-3">
+                      {new Date(sess.startTime).toLocaleDateString()}
+                    </span>
+                    <span className="text-xs text-ink-3 font-mono">
+                      {new Date(sess.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-2 font-display text-base font-bold text-ink">{sess.title}</h3>
+                  {sess.description && (
+                    <p className="mt-1 text-xs text-ink-2 line-clamp-2">{sess.description}</p>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {sess.moduleCodes.map((code) => (
+                      <span
+                        key={code}
+                        className="rounded bg-canvas px-1.5 py-0.5 text-[11px] font-mono font-semibold text-brand-700"
+                      >
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 text-xs text-ink-2">
+                    {sess.venue ? (
+                      <span className="truncate block font-mono text-[11px] text-brand-600">
+                        📍 {sess.venue}
+                      </span>
+                    ) : (
+                      <span className="text-ink-3">Venue TBD</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-line">
+                  <Link
+                    href={`/cohorts/${cohort.id}/sessions/${sess.id}`}
+                    className="inline-flex w-full items-center justify-center rounded-md bg-canvas py-1.5 text-xs font-semibold text-ink hover:bg-line transition-colors"
+                  >
+                    Attendance & Facilitator Prep →
+                  </Link>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Enrolled SMEs Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-bold text-ink">

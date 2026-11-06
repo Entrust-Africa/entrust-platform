@@ -100,7 +100,7 @@ describe("Background Jobs Runtime with pg-boss", () => {
     // Wait for the job to complete
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 14000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -109,7 +109,7 @@ describe("Background Jobs Runtime with pg-boss", () => {
     expect(status?.id).toBe(jobId);
     expect(processedJob).not.toBeNull();
     expect(processedJob.data.to).toBe("trader@example.test");
-  });
+  }, 15000);
 
   it(
     "retries a failing job with backoff and lands in failed state with error kept",

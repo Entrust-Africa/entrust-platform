@@ -66,6 +66,7 @@ export const cohort = trade.table(
     country: text("country").notNull().default("ET"),
     language: text("language").notNull().default("en"),
     deliveryMode: text("delivery_mode", { enum: DELIVERY_MODES }).notNull().default("self_paced"),
+    attendanceRequired: boolean("attendance_required").notNull().default(true),
     startDate: date("start_date", { mode: "string" }),
     endDate: date("end_date", { mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -104,6 +105,69 @@ export const enrollment = trade.table(
   (t) => [
     uniqueIndex("trade_enrollment_cohort_org_uidx").on(t.cohortId, t.organizationId),
     index("trade_enrollment_org_idx").on(t.organizationId),
+  ],
+);
+
+export const ATTENDANCE_STATUSES = ["present", "late", "absent"] as const;
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
+// A live workshop or training session within a cohort.
+export const liveSession = trade.table(
+  "live_session",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cohortId: uuid("cohort_id")
+      .notNull()
+      .references(() => cohort.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    moduleCodes: jsonb("module_codes").$type<string[]>().notNull().default([]),
+    facilitatorUserId: text("facilitator_user_id").references(() => user.id, { onDelete: "set null" }),
+    startTime: timestamp("start_time", { withTimezone: true }).notNull(),
+    endTime: timestamp("end_time", { withTimezone: true }).notNull(),
+    venue: text("venue"),
+    recordingUrl: text("recording_url"),
+    learnerMaterials: jsonb("learner_materials").$type<{ title: string; url: string }[]>().notNull().default([]),
+    facilitatorMaterials: jsonb("facilitator_materials").$type<{ title: string; url: string }[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_session_cohort_idx").on(t.cohortId),
+    index("trade_session_start_idx").on(t.startTime),
+  ],
+);
+
+// Attendance record of a person for a live session.
+export const attendance = trade.table(
+  "attendance",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => liveSession.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ATTENDANCE_STATUSES }).notNull(),
+    notes: text("notes"),
+    recordedByUserId: text("recorded_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_attendance_session_user_uidx").on(t.sessionId, t.userId),
+    index("trade_attendance_org_idx").on(t.organizationId),
   ],
 );
 

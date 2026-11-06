@@ -37,9 +37,9 @@ export async function listExporters(ctx: Ctx): Promise<ExporterListView> {
 
   // An organisation with no kind recorded is an SME, as everywhere else; the Entrust team and sponsors are not exporters.
   const entrustOrganizationId = process.env.ENTRUST_ORG_ID;
-  return {
-    items: rows
-      .filter((r) => r.id !== entrustOrganizationId && (organizationKind(r.metadata) ?? "sme") === "sme")
-      .map((r) => ({ id: r.id, name: r.name, smeId: r.smeId })),
-  };
+  const items = rows
+    .filter((r) => r.id !== entrustOrganizationId && (organizationKind(r.metadata) ?? "sme") === "sme")
+    .map((r) => ({ id: r.id, name: r.name, smeId: r.smeId }));
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  return { items };
 }

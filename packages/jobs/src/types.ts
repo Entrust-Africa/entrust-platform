@@ -70,6 +70,15 @@ export const SummitNoticeEmailPropsSchema = z.object({
   action: z.object({ label: z.string().min(1), url: z.string().url() }).optional(),
 });
 
+export const TradeSessionReminderPropsSchema = z.object({
+  sessionTitle: z.string().min(1),
+  cohortName: z.string().min(1),
+  startTime: z.string().min(1),
+  venue: z.string().optional().nullable(),
+  meetingUrl: z.string().optional().nullable(),
+  recipientName: z.string().optional(),
+});
+
 const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("test"),
@@ -102,6 +111,10 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
   BaseEmailSchema.extend({
     template: z.literal("summit-notice"),
     props: SummitNoticeEmailPropsSchema,
+  }),
+  BaseEmailSchema.extend({
+    template: z.literal("trade-session-reminder"),
+    props: TradeSessionReminderPropsSchema,
   }),
 ]);
 
