@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { core, organization, user } from "./auth";
 
 // Platforms that run on the shared core. TRADE, Summit and MIZAN have no UI yet.
@@ -51,6 +51,20 @@ export const smeProfile = core.table(
     mergedIntoSmeId: text("merged_into_sme_id"),
     tin: text("tin"),
     country: text("country").notNull().default("ET"),
+    // Section 1 of the TRADE onboarding diagnostic (#78) keeps these in the registry. All are optional: a business
+    // that has not filled in the diagnostic has none of them.
+    yearEstablished: integer("year_established"),
+    ownershipType: text("ownership_type"),
+    businessEmail: text("business_email"),
+    businessPhone: text("business_phone"),
+    address: text("address"),
+    website: text("website"),
+    socialPages: text("social_pages"),
+    mainActivity: text("main_activity"),
+    permanentEmployees: integer("permanent_employees"),
+    temporaryEmployees: integer("temporary_employees"),
+    womanOwned: boolean("woman_owned"),
+    premises: text("premises"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()

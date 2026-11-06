@@ -27,6 +27,7 @@ import { hasTradeAccess, type Ctx, type Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { rescoreLivePlacement, requireAvenue, scorePlacement } from "./trade-placement";
+import { savePrefill, writeSectionOne } from "./trade-profile";
 import { accessTo, recordTradeChange, unwrapAnswer, wrapAnswer, type Access } from "./trade-shared";
 
 export { recordTradeChange } from "./trade-shared";
@@ -438,6 +439,8 @@ export async function startAssessment(ctx: Ctx, input: StartInput): Promise<Asse
       .returning();
     if (!row) throw new Error("The assessment was not created");
     if (existing) await tx.update(schema.tradeAssessment).set({ supersededById: row.id }).where(eq(schema.tradeAssessment.id, existing.id));
+    // Section 1 is the business's registry entry, so a new diagnostic opens with what the registry holds.
+    if (input.kind === "diagnostic") await savePrefill(tx, row.id, enrollment.organizationId, kit.version, todayOf(ctx.now));
 
     await recordTradeChange(tx, principal.userId, {
       action: existing ? "trade.assessment.retake" : "trade.assessment.started",
@@ -640,6 +643,8 @@ async function assignDiagnosticPathway(tx: Executor, ctx: Ctx, found: Found, row
     before: old ? { pathway: old.pathway, status: old.status } : null,
     after: { pathway: assigned.pathway, provisional: assigned.provisional, liveOrder: assigned.liveOrder, reasonCodes: assigned.reasonCodes },
   });
+  // Section 1 is kept in the SME registry: what the business said about itself is written to its profile, and audited.
+  await writeSectionOne(tx, ctx.principal.userId, enrollment.organizationId, row.id, answers);
   // A retaken diagnostic can move the avenue under a placement assessment that is already scored.
   await rescoreLivePlacement(tx, ctx, enrollment.id, enrollment.organizationId, "avenue");
 }

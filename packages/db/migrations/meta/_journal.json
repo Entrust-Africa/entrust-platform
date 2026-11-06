@@ -225,6 +225,13 @@
       "when": 1793993831626,
       "tag": "0031_placement_results",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793994517883,
+      "tag": "0032_sme_profile_section_one",
+      "breakpoints": true
     }
   ]
 }
