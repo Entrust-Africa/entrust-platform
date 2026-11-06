@@ -96,3 +96,44 @@ export interface StaffAssessmentRow {
   pathway: "A" | "B" | null;
   pathwayStatus: "provisional" | "confirmed" | null;
 }
+
+/** One onboarding diagnostic filled in through the public link, as the staff list shows it. */
+export interface PublicDiagnosticSummary {
+  id: string;
+  email: string;
+  businessName: string | null;
+  status: "draft" | "submitted";
+  pathway: "A" | "B" | null;
+  pathwayProvisional: boolean | null;
+  liveOrder: boolean | null;
+  submittedAt: string | null;
+  startedAt: string;
+  sameEmail: number;
+  organization: { id: string; name: string } | null;
+}
+
+export interface PublicDiagnosticCounts {
+  submitted: number;
+  draft: number;
+  pathwayA: number;
+  pathwayB: number;
+  provisional: number;
+  liveOrder: number;
+  perDay: { date: string; started: number; submitted: number }[];
+}
+
+export interface PublicDiagnosticDetail {
+  id: string;
+  status: "draft" | "submitted";
+  email: string;
+  businessName: string | null;
+  startedAt: string;
+  submittedAt: string | null;
+  templateVersion: string;
+  signedName: string | null;
+  signedPosition: string | null;
+  signedDate: string | null;
+  progress: { total: number; answered: number; percent: number };
+  pathway: { pathway: string; name: string; status: "provisional" | "confirmed"; liveOrder: boolean; reasons: string[] } | null;
+  sections: { id: string; title: string; items: { id: string; text: string; answer: string }[] }[];
+}

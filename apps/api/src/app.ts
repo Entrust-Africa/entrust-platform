@@ -19,6 +19,7 @@ import { tradeAssessments } from "./routes/trade/assessments";
 import { tradeCatalogue } from "./routes/trade/catalogue";
 import { tradeModules } from "./routes/trade/modules";
 import { tradePractice } from "./routes/trade/practice";
+import { tradePublicDiagnostic } from "./routes/trade/public-diagnostic";
 import { tradePrograms } from "./routes/trade/programs";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSponsors } from "./routes/trade/sponsors";
@@ -73,6 +74,8 @@ export const app = base
   .route("/v1/clear", clearCases)
   .route("/v1/clear", clearMinimumPrices)
   .route("/v1/clear", clearRulePacks)
+  // The public diagnostic goes first: the signed-in TRADE routers below guard every path under /v1/trade.
+  .route("/v1/trade", tradePublicDiagnostic)
   .route("/v1/trade", tradeModules)
   .route("/v1/trade", tradeAssessments)
   .route("/v1/trade", tradeSponsors)
