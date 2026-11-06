@@ -63,3 +63,36 @@ export interface TradeEnrollmentSummary {
   completedAt: string | null;
   withdrawnAt: string | null;
 }
+
+/** A business that has signed up to TRADE and is in no cohort yet. */
+export interface WaitingSme {
+  organizationId: string;
+  organizationName: string;
+  smeId: string | null;
+  legalName: string | null;
+  country: string | null;
+  ownerEmail: string | null;
+  createdAt: string;
+}
+
+/** A business found in the SME registry, for staff picking whom to enrol. */
+export interface RegistrySme {
+  organizationId: string;
+  organizationName: string;
+  smeId: string;
+  legalName: string;
+  tradingName: string | null;
+  country: string;
+  isMerged: boolean;
+}
+
+/** One row of the staff list of onboarding forms: who filled in what, and the avenue it gave. */
+export interface StaffAssessmentRow {
+  id: string;
+  kind: "diagnostic" | "placement";
+  status: string;
+  enrollmentId: string;
+  submittedAt: string | null;
+  pathway: "A" | "B" | null;
+  pathwayStatus: "provisional" | "confirmed" | null;
+}

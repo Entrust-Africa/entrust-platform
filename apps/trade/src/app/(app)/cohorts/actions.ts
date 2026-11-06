@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { serverApi } from "@/lib/api";
-import type { DeliveryMode, EnrollmentStatus } from "@/lib/types";
+import type { DeliveryMode, EnrollmentStatus, RegistrySme } from "@/lib/types";
 
 export type ActionState = { error: string | null; success?: boolean };
 
@@ -121,4 +122,38 @@ export async function updateStatusAction(_: ActionState, form: FormData): Promis
     revalidatePath(`/cohorts/${cohortId}`);
   }
   return { error: null, success: true };
+}
+
+/** Looks businesses up in the SME registry by name, SME ID, TIN or registration number (Entrust staff only). */
+export async function searchSmesAction(query: string): Promise<{ smes: RegistrySme[]; error: string | null }> {
+  const q = query.trim();
+  if (q.length < 2) return { smes: [], error: null };
+  const cookie = (await headers()).get("cookie") ?? "";
+  const response = await fetch(`${process.env.API_URL ?? "http://localhost:4000"}/v1/smes/search?q=${encodeURIComponent(q)}&limit=15`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  if (!response.ok) return { smes: [], error: "The search didn't work. Try again." };
+  const data = (await response.json()) as { smes: RegistrySme[] };
+  return { smes: data.smes.filter((s) => !s.isMerged), error: null };
+}
+
+export type EnrolManyResult = { enrolled: number; failed: { organizationId: string; error: string }[] };
+
+/** Enrols several businesses in one go. One that fails (already in the cohort, say) doesn't stop the rest. */
+export async function enrolManyAction(cohortId: string, organizationIds: string[]): Promise<EnrolManyResult> {
+  const api = await serverApi();
+  const result: EnrolManyResult = { enrolled: 0, failed: [] };
+  for (const organizationId of organizationIds) {
+    const res = await api.v1.trade.enrollments.$post({ json: { cohortId, organizationId } });
+    if (res.ok) {
+      result.enrolled += 1;
+    } else {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      result.failed.push({ organizationId, error: data?.error ?? `Failed (${res.status}).` });
+    }
+  }
+  revalidatePath(`/cohorts/${cohortId}`);
+  revalidatePath("/cohorts");
+  return result;
 }

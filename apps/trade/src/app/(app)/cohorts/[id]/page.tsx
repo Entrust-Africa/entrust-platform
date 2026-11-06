@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getCohort, getMe } from "@/lib/api";
-import type { EnrollmentStatus } from "@/lib/types";
+import { getCohort, getMe, listDiagnostics, listWaitingSmes } from "@/lib/api";
+import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { StatusUpdater } from "./status-updater";
 
@@ -48,6 +48,25 @@ function formatDeliveryMode(mode: string): string {
   }
 }
 
+/** What a business's onboarding diagnostic looks like to staff: not started, in progress, or submitted with its avenue. */
+function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
+  if (!row) return <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge tone="ok">Submitted</StatusBadge>
+      {row.pathway && (
+        <StatusBadge tone={row.pathway === "B" ? "product" : "info"}>
+          {`Pathway ${row.pathway}${row.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+        </StatusBadge>
+      )}
+      <Link href={`/diagnostic/${row.id}`} className="font-semibold text-brand-600 hover:underline">
+        View
+      </Link>
+    </div>
+  );
+}
+
 export default async function CohortDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
@@ -60,10 +79,17 @@ export default async function CohortDetailPage(props: {
   }
 
   const { id } = await props.params;
-  const cohort = await getCohort(id);
+  const [cohort, waiting, diagnostics] = await Promise.all([getCohort(id), listWaitingSmes(), listDiagnostics()]);
   if (!cohort) {
     notFound();
   }
+  const diagnosticOf = new Map<string, StaffAssessmentRow>();
+  for (const row of diagnostics) if (!diagnosticOf.has(row.enrollmentId)) diagnosticOf.set(row.enrollmentId, row);
+  const enrolledOrganizationIds = cohort.enrolments.map((e) => e.organizationId);
+  const submitted = cohort.enrolments.filter((e) => {
+    const d = diagnosticOf.get(e.enrollmentId);
+    return d && d.status !== "draft";
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -86,7 +112,7 @@ export default async function CohortDetailPage(props: {
             </div>
             <h1 className="mt-1 font-display text-2xl font-bold text-ink">{cohort.name}</h1>
           </div>
-          <EnrollSmeDialog cohortId={cohort.id} />
+          <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
         </div>
       </div>
 
@@ -123,6 +149,11 @@ export default async function CohortDetailPage(props: {
           <h2 className="font-display text-lg font-bold text-ink">
             Enrolled SMEs ({cohort.enrolments.length})
           </h2>
+          {cohort.enrolments.length > 0 && (
+            <p className="text-xs text-ink-2">
+              {submitted} of {cohort.enrolments.length} have submitted the onboarding diagnostic
+            </p>
+          )}
         </div>
 
         {cohort.enrolments.length === 0 ? (
@@ -132,7 +163,7 @@ export default async function CohortDetailPage(props: {
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
             </p>
             <div className="mt-4">
-              <EnrollSmeDialog cohortId={cohort.id} />
+              <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
             </div>
           </Card>
         ) : (
@@ -145,6 +176,7 @@ export default async function CohortDetailPage(props: {
                     <th className="px-4 py-3">Legal Name</th>
                     <th className="px-4 py-3">Enrolled On</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Onboarding diagnostic</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -168,6 +200,9 @@ export default async function CohortDetailPage(props: {
                         <StatusBadge tone={getStatusTone(enr.status)}>
                           {enr.status.charAt(0).toUpperCase() + enr.status.slice(1)}
                         </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <StatusUpdater

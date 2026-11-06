@@ -8,7 +8,10 @@ import type {
   TradeCohort,
   TradeCohortDetail,
   TradeEnrollmentSummary,
+  WaitingSme,
+  StaffAssessmentRow,
 } from "./types";
+import { tradeGet } from "./trade-api";
 
 /** Server-side API client that forwards the visitor's cookies. */
 export async function serverApi() {
@@ -78,4 +81,16 @@ export async function listEnrollments(filter?: {
   if (res.status !== 200) return [];
   const data = (await res.json()) as { enrollments: TradeEnrollmentSummary[] };
   return data.enrollments;
+}
+
+/** Businesses that signed up to TRADE and are in no cohort yet (Entrust staff only). */
+export async function listWaitingSmes(): Promise<WaitingSme[]> {
+  const result = await tradeGet<{ smes: WaitingSme[] }>("/enrollments/waiting");
+  return result.data?.smes ?? [];
+}
+
+/** Every onboarding diagnostic with its status and avenue, newest first (Entrust staff only). */
+export async function listDiagnostics(): Promise<StaffAssessmentRow[]> {
+  const result = await tradeGet<{ items: StaffAssessmentRow[] }>("/assessments?kind=diagnostic");
+  return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
 }
