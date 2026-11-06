@@ -4,6 +4,7 @@ import { formatDateTime, statusCopy } from "@/lib/summit";
 import { load, requireUser } from "@/lib/summit-server";
 import { ClarificationPanel } from "@/components/summit/clarification-panel";
 import { ActionCard, DetailsCard, DocumentsCard, EligibilityCard, SentNotice } from "@/components/summit/hub-sections";
+import { SharingCard } from "@/components/summit/sharing-card";
 import { WithdrawButton } from "@/components/summit/withdraw-button";
 
 export const metadata = { title: "Your Summit application" };
@@ -23,6 +24,8 @@ export default async function ApplicationPage({
   const path = `/summit/applications/${id}`;
   await requireUser(path);
   const application = await load(path, (api) => ok(api.v1.summit.applications[":id"].$get({ param: { id } })));
+  // A selected business decides whether its profile may be shared with buyers and investors.
+  const sharing = application.view === "applicant" && application.status === "selected" ? await load(path, (api) => ok(api.v1.summit.applications[":id"].sharing.$get({ param: { id } }))) : null;
 
   const copy = statusCopy(application.status, application.result);
   const justSent = submitted === "1" && application.status !== "draft";
@@ -60,6 +63,8 @@ export default async function ApplicationPage({
           <ClarificationPanel applicationId={application.id} clarification={request} />
         </div>
       ))}
+
+      {sharing && <SharingCard applicationId={application.id} sharing={sharing} />}
 
       <EligibilityCard application={application} />
 

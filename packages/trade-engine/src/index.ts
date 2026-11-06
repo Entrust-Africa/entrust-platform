@@ -18,10 +18,12 @@ export {
   DATA_KINDS,
   SPONSOR_DATA_KINDS,
   SPONSOR_DISCLAIMER,
+  SUMMIT_DATA_KINDS,
+  SUMMIT_PROFILE_WORDING,
   consentWording,
   isSponsorDataKind,
 } from "./consent";
-export type { DataKindInfo, SponsorDataKind } from "./consent";
+export type { ConsentKind, DataKindInfo, SponsorDataKind, SummitDataKind } from "./consent";
 export {
   CAPITAL_GAP_PARTS,
   FINANCE_PRIORITY_THRESHOLDS,

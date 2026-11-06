@@ -40,6 +40,9 @@ import {
   PeriodList,
   PeriodParam,
   PeriodPatch,
+  ProfileQuery,
+  SharingBody,
+  SharingView,
   RecommendationBody,
   RecordScoresBody,
   RegistrationBody,
@@ -79,6 +82,7 @@ import { getDashboard, setSelectionTarget } from "../services/summit-dashboard";
 import { approveFinalList, getFinalList, resendResults } from "../services/summit-final-list";
 import { assignOfficer, listOfficers, recordException, reviewAssessment } from "../services/summit-review";
 import { makeProfile } from "../services/summit-profile";
+import { getSharing, setSharing } from "../services/summit-sharing";
 import { listRegistrations, register } from "../services/summit-registrations";
 import { exportReport, listReports, viewReport } from "../services/summit-reports";
 import { clearRouter, contextFor, json, listErrors, problem, readErrors, writeErrors } from "./clear/shared";
@@ -603,15 +607,37 @@ const profileRoute = createRoute({
   tags,
   summary: "The one-page profile of a selected SME",
   description:
-    "A PDF with what the business told us about itself and what it is looking for, to prepare the business meetings: identity, industry, products, trade, the commercial ask, the markets and partners it wants, the investment it seeks, and who to contact. It holds no score, rationale, verification finding or internal note. It is for Entrust's own use; a copy for a buyer or an investor needs the business's authorisation, which isn't built yet, so there is no such copy. Only for an SME the committee has selected. Entrust administrators and facilitators, the assessment officer it is assigned to, and the selection committee. Every profile is written to the audit log.",
-  request: { params: ApplicationParam },
+    "A PDF with what the business told us about itself and what it is looking for, to prepare the business meetings: identity, industry, products, trade, the commercial ask, the markets and partners it wants, the investment it seeks, and who to contact. It holds no score, rationale, verification finding or internal note. The internal copy is for Entrust's own use: Entrust administrators and facilitators, the assessment officer it is assigned to, and the selection committee. `copy=external` makes a copy for a buyer, an investor or a partner, only for an administrator or facilitator and only while the business's owner has agreed to share it (see the sharing endpoints); once they take the agreement back, the next request is refused. Only for an SME the committee has selected. Every profile is written to the audit log, with the agreement an external copy rested on.",
+  request: { params: ApplicationParam, query: ProfileQuery },
   responses: {
     200: { description: "The profile", content: { "application/pdf": { schema: z.string().openapi({ format: "binary" }) } } },
     ...listErrors,
-    403: problem("Not Entrust staff or the selection committee"),
+    403: problem("Not Entrust staff or the selection committee, or an external copy without the business's agreement"),
     404: notFound,
     409: problem("The application isn't selected"),
   },
+});
+
+const getSharingRoute = createRoute({
+  method: "get",
+  path: "/applications/{id}/sharing",
+  tags,
+  summary: "Whether the business shares its profile outside Entrust",
+  description:
+    "Whether the owner of the business has agreed that Entrust may share its one-page Summit profile with the buyers, investors and partners it introduces, with the words they agreed to. The applicant and the Entrust staff who can open the application.",
+  request: { params: ApplicationParam },
+  responses: { 200: { description: "The agreement", content: json(SharingView) }, ...listErrors, 404: notFound },
+});
+
+const setSharingRoute = createRoute({
+  method: "put",
+  path: "/applications/{id}/sharing",
+  tags,
+  summary: "Agree to share the profile, or take the agreement back",
+  description:
+    "Only the owner of the business that applied, once the committee has selected it. The words agreed to are kept with the agreement and every change is written to the audit log. Taking the agreement back stops external copies from the next request.",
+  request: { params: ApplicationParam, body: { required: true, content: json(SharingBody) } },
+  responses: { 200: { description: "The agreement", content: json(SharingView) }, ...writeErrors, 404: notFound },
 });
 
 export const summit = router
@@ -702,8 +728,10 @@ export const summit = router
     c.json(await approveFinalList(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json")?.note), 201),
   )
   .openapi(resendRoute, async (c) => c.json(await resendResults(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(getSharingRoute, async (c) => c.json(await getSharing(await contextFor(c.get("user")), c.req.valid("param").id), 200))
+  .openapi(setSharingRoute, async (c) => c.json(await setSharing(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("json").share), 200))
   .openapi(profileRoute, async (c) => {
-    const file = await makeProfile(await contextFor(c.get("user")), c.req.valid("param").id);
+    const file = await makeProfile(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("query").copy);
     return new Response(new Uint8Array(file.body), {
       status: 200,
       headers: {

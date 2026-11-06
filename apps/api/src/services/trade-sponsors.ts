@@ -4,6 +4,7 @@ import {
   CONSENT_WORDING_VERSION,
   DATA_KINDS,
   SPONSOR_DATA_KINDS,
+  isSponsorDataKind,
   SPONSOR_DISCLAIMER,
   consentWording,
   type SponsorDataKind,
@@ -241,10 +242,19 @@ export async function listSponsorCohorts(ctx: Ctx) {
 /** One live consent row per kind, for a sponsor and the SMEs in a cohort. */
 async function liveConsents(db: Executor, sponsorId: string, smeOrganizationIds: readonly string[]) {
   if (smeOrganizationIds.length === 0) return [];
-  return db
+  const rows = await db
     .select()
     .from(schema.sponsorConsent)
-    .where(and(eq(schema.sponsorConsent.sponsorOrganizationId, sponsorId), inArray(schema.sponsorConsent.smeOrganizationId, [...smeOrganizationIds]), isNull(schema.sponsorConsent.withdrawnAt)));
+    .where(
+      and(
+        eq(schema.sponsorConsent.sponsorOrganizationId, sponsorId),
+        inArray(schema.sponsorConsent.smeOrganizationId, [...smeOrganizationIds]),
+        isNull(schema.sponsorConsent.withdrawnAt),
+        // A Summit applicant's agreement is with Entrust, never with a cohort's sponsor.
+        inArray(schema.sponsorConsent.kind, [...SPONSOR_DATA_KINDS]),
+      ),
+    );
+  return rows.filter((c): c is typeof c & { kind: SponsorDataKind } => isSponsorDataKind(c.kind));
 }
 
 /** A sponsored cohort: the same figures, and the SMEs whose owners agreed to share something, with what. */

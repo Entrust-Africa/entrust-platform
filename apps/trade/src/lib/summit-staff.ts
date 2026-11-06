@@ -108,3 +108,5 @@ export const labelOf = (list: readonly { id: string; label: string }[], id: stri
 
 /** A score out of 100 with no more than one decimal. */
 export const scoreText = (score: number | null | undefined): string => (score === null || score === undefined ? "—" : String(Math.round(score * 10) / 10));
+
+export type Sharing = Body<Awaited<ReturnType<Summit["applications"][":id"]["sharing"]["$get"]>>>;

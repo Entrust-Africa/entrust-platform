@@ -8,6 +8,7 @@ import { Claims } from "@/components/summit/staff/claims";
 import { Conversation } from "@/components/summit/staff/conversation";
 import { NextSteps } from "@/components/summit/staff/decisions";
 import { DocumentLink } from "@/components/summit/staff/document-link";
+import { ProfileCard } from "@/components/summit/staff/profile-card";
 import { Scorecard } from "@/components/summit/staff/scorecard";
 
 export const metadata = { title: "Assess a Summit application" };
@@ -25,10 +26,11 @@ export default async function ReviewApplicationPage({ params }: { params: Promis
   const path = `/summit/review/${id}`;
   const me = await requireUser(path);
   const access = staffAccess(me);
-  const { application, workspace } = await load(path, async (api) => {
+  const { application, workspace, sharing } = await load(path, async (api) => {
     const application = await ok(api.v1.summit.applications[":id"].$get({ param: { id } }));
     const workspace = await ok(api.v1.summit.applications[":id"].assessment.$get({ param: { id } }));
-    return { application, workspace };
+    const sharing = application.status === "selected" ? await ok(api.v1.summit.applications[":id"].sharing.$get({ param: { id } })) : null;
+    return { application, workspace, sharing };
   });
 
   const status = statusOf(application.status);
@@ -111,6 +113,8 @@ export default async function ReviewApplicationPage({ params }: { params: Promis
           )}
         </Card>
       </div>
+
+      {sharing && <ProfileCard applicationId={application.id} sharing={sharing} canMakeExternal={access.allApplications} />}
 
       <Scorecard applicationId={application.id} workspace={workspace} canEdit={canScore} />
       <Claims applicationId={application.id} workspace={workspace} documents={application.documents} canEdit={canEdit} />
