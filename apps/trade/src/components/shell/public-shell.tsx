@@ -2,7 +2,17 @@ import Link from "next/link";
 import { Patchwork } from "@entrust/ui";
 
 /** The frame for pages a visitor can open without signing in: the same header look as the app, with a way in. */
-export function PublicShell({ children }: { children: React.ReactNode }) {
+export function PublicShell({
+  children,
+  homeHref = "/summit",
+  homeLabel = "TRADE, Summit",
+  signInHref = "/sign-in?next=%2Fsummit%2Fapply",
+}: {
+  children: React.ReactNode;
+  homeHref?: string;
+  homeLabel?: string;
+  signInHref?: string;
+}) {
   return (
     <div className="flex min-h-dvh flex-col bg-canvas text-ink">
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-xs">
@@ -15,8 +25,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         <Patchwork />
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
-            href="/summit"
-            aria-label="TRADE, Summit"
+            href={homeHref}
+            aria-label={homeLabel}
             className="flex items-center gap-2.5 rounded-md transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-brand-500"
           >
             <span className="flex size-9 items-center justify-center rounded-md bg-brand-600 font-display text-sm font-black text-white shadow-xs">
@@ -25,7 +35,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
             <span className="font-display text-base font-extrabold tracking-tight text-ink">TRADE</span>
           </Link>
           <Link
-            href="/sign-in?next=%2Fsummit%2Fapply"
+            href={signInHref}
             className="inline-flex h-11 items-center rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2"
           >
             Sign in

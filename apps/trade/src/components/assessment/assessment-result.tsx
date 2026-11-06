@@ -13,7 +13,7 @@ export interface ResultView {
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 /** What a person sees once their form is submitted. For the diagnostic: the learning path they start on, and why. */
-export function AssessmentResult({ view }: { view: ResultView }) {
+export function AssessmentResult({ view, hideBackLink = false }: { view: ResultView; hideBackLink?: boolean }) {
   const info = KINDS[view.kind];
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -73,9 +73,11 @@ export function AssessmentResult({ view }: { view: ResultView }) {
           This diagnostic does not guarantee any financing, insurance cover, export approval or contract.
         </p>
       )}
-      <Link href="/" className="inline-block text-sm font-semibold text-brand-600 hover:underline">
-        ← Back to My plan
-      </Link>
+      {!hideBackLink && (
+        <Link href="/" className="inline-block text-sm font-semibold text-brand-600 hover:underline">
+          ← Back to My plan
+        </Link>
+      )}
     </div>
   );
 }
