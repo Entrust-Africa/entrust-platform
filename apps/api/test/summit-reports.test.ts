@@ -649,6 +649,91 @@ describe("the profile of a selected SME", () => {
   });
 });
 
+describe("sharing the profile outside Entrust", () => {
+  const sharing = (user: TestUser | null, id: string) => call(user, "GET", `/applications/${id}/sharing`);
+  const share = (user: TestUser | null, id: string, value: boolean) => call(user, "PUT", `/applications/${id}/sharing`, { share: value });
+  const external = (user: TestUser | null, id: string) => callFileV1(user, `${S}/applications/${id}/profile?copy=external`);
+  const audit = (id: string, action: string) => db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, id), eq(schema.auditLog.action, action)));
+  const owner = () => w.owners[0]!;
+
+  it("makes no external copy until the owner agrees, though the internal copy is made", async () => {
+    const before = await sharing(owner(), w.a);
+    expect(before.body).toMatchObject({ shared: false, canChange: true, grantedAt: null, wordingVersion: "1.0.0" });
+    expect(before.body.wording).toContain("Entrust can share");
+    const refused = await external(w.admin, w.a);
+    expect(refused.status).toBe(403);
+    expect((await refused.json()).error).toContain("hasn't agreed");
+    expect((await callFileV1(w.admin, `${S}/applications/${w.a}/profile`)).status).toBe(200);
+  });
+
+  it("lets only the owner of a selected business decide", async () => {
+    expect((await share(null, w.a, true)).status).toBe(401);
+    expect((await share(w.outsider, w.a, true)).status).toBe(404);
+    for (const staff of [w.admin, w.facilitator, w.committee, w.reviewer]) expect((await share(staff, w.a, true)).status, staff.id).toBe(403);
+    // A business the committee hasn't selected has no profile to share.
+    expect((await share(w.owners[1]!, w.b, true)).status).toBe(409);
+    expect((await sharing(w.admin, w.a)).body).toMatchObject({ shared: false, canChange: false });
+    expect((await sharing(w.outsider, w.a)).status).toBe(404);
+  });
+
+  it("keeps the agreement with the words agreed to, and audits it", async () => {
+    const res = await share(owner(), w.a, true);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toMatchObject({ shared: true, canChange: true });
+    expect(res.body.grantedAt).toEqual(expect.any(String));
+
+    const [consent] = await db
+      .select()
+      .from(schema.sponsorConsent)
+      .where(and(eq(schema.sponsorConsent.smeOrganizationId, w.orgs[0]!), eq(schema.sponsorConsent.kind, "summit_profile")));
+    expect(consent).toMatchObject({ sponsorOrganizationId: w.entrust, wordingVersion: "1.0.0", grantedByUserId: owner().id, withdrawnAt: null });
+    expect(consent?.wording).toBe(res.body.wording);
+    expect((await audit(w.a, "summit.sharing.granted")).at(-1)).toMatchObject({ platform: "summit", actorUserId: owner().id, organizationId: w.orgs[0] });
+
+    // Agreeing again changes nothing.
+    expect((await share(owner(), w.a, true)).status).toBe(200);
+    const rows = await db.select().from(schema.sponsorConsent).where(and(eq(schema.sponsorConsent.smeOrganizationId, w.orgs[0]!), eq(schema.sponsorConsent.kind, "summit_profile")));
+    expect(rows).toHaveLength(1);
+    expect((await sharing(w.admin, w.a)).body).toMatchObject({ shared: true, canChange: false });
+  });
+
+  it("makes an external copy for an administrator or a facilitator, marked as shared with consent", async () => {
+    const res = await external(w.admin, w.a);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="summit-profile-sel-001-org-a-external.pdf"');
+    const text = await pdfText(new Uint8Array(await res.arrayBuffer()));
+    expect(text).toContain("EXTERNAL, SHARED WITH THE BUSINESS'S CONSENT");
+    for (const secret of ["Strong buyers and a clear plan.", "Recommend", "Marked 90", "ocument-supported"]) expect(text, secret).not.toContain(secret);
+    expect((await external(w.facilitator, w.a)).status).toBe(200);
+
+    // The committee and the officer read the internal copy; only the people who introduce the business make an external one.
+    for (const user of [w.committee, w.reviewer]) expect((await external(user, w.a)).status, user.id).toBe(403);
+    expect((await external(w.owners[0]!, w.a)).status).toBe(403);
+    expect((await external(w.outsider, w.a)).status).toBe(404);
+
+    const copies = (await audit(w.a, "summit.profile.generated")).filter((e) => (e.after as { classification?: string }).classification === "external");
+    expect(copies.length).toBeGreaterThanOrEqual(2);
+    expect(copies[0]?.after).toMatchObject({ classification: "external", consentId: expect.any(String), consentGrantedAt: expect.any(String) });
+  });
+
+  it("stops at once when the owner takes the agreement back", async () => {
+    const res = await share(owner(), w.a, false);
+    expect(res.body).toMatchObject({ shared: false, grantedAt: null });
+    const refused = await external(w.admin, w.a);
+    expect(refused.status).toBe(403);
+    expect((await refused.json()).error).toContain("taken its agreement back");
+    expect((await audit(w.a, "summit.sharing.withdrawn")).at(-1)).toMatchObject({ actorUserId: owner().id });
+    const [consent] = await db.select().from(schema.sponsorConsent).where(and(eq(schema.sponsorConsent.smeOrganizationId, w.orgs[0]!), eq(schema.sponsorConsent.kind, "summit_profile")));
+    expect(consent?.withdrawnAt).not.toBeNull();
+    // The internal copy is still Entrust's own.
+    expect((await callFileV1(w.admin, `${S}/applications/${w.a}/profile`)).status).toBe(200);
+    // And the owner can agree again later.
+    expect((await share(owner(), w.a, true)).body.shared).toBe(true);
+    expect((await external(w.admin, w.a)).status).toBe(200);
+    expect((await share(owner(), w.a, false)).body.shared).toBe(false);
+  });
+});
+
 describe("after the final list is approved", () => {
   it("shows the approval and the published results in the reports", async () => {
     expect((await decide(w.c, "not_selected", "Not ready this round.")).status).toBe(201);

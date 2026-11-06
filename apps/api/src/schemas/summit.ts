@@ -775,6 +775,31 @@ export type FinalListViewType = z.infer<typeof FinalListView>;
 export type CommitteeItemView = z.infer<typeof CommitteeItem>;
 export type CompareViewType = z.infer<typeof CompareView>;
 
+// ---- Sharing the profile outside Entrust (#80) ----
+
+export const SharingView = z
+  .object({
+    /** The business's owner has agreed that Entrust may share its Summit profile with the buyers, investors and partners it introduces. */
+    shared: z.boolean(),
+    grantedAt: Timestamp.nullable(),
+    /** The caller can change it: the owner of the business, once it is selected. */
+    canChange: z.boolean(),
+    /** The sentence the owner agrees to. */
+    wording: z.string(),
+    wordingVersion: z.string(),
+  })
+  .openapi("SummitSharing");
+export type SharingView = z.infer<typeof SharingView>;
+
+export const SharingBody = z.object({ share: z.boolean() }).openapi("SummitSharingBody");
+
+export const ProfileQuery = z.object({
+  copy: z
+    .enum(["internal", "external"])
+    .default("internal")
+    .openapi({ description: "internal: Entrust's own. external: for a buyer, investor or partner, only while the business's owner has agreed to share it." }),
+});
+
 export type PeriodView = z.infer<typeof Period>;
 export type FormView = z.infer<typeof Form>;
 export type ApplicationDetailView = z.infer<typeof ApplicationDetail>;

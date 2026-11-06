@@ -15,6 +15,17 @@ export const SPONSOR_DATA_KINDS = [
 ] as const;
 export type SponsorDataKind = (typeof SPONSOR_DATA_KINDS)[number];
 
+/**
+ * What a Summit applicant can let Entrust share outside Entrust (#80). It uses the same agreements as the sponsors' (one live
+ * row per business and kind, the wording kept with it, withdrawn at any time), but the one who shares is Entrust, so the agreement
+ * is made with the Entrust organisation and cohort sponsors never see it.
+ */
+export const SUMMIT_DATA_KINDS = ["summit_profile"] as const;
+export type SummitDataKind = (typeof SUMMIT_DATA_KINDS)[number];
+
+/** Every kind an agreement can be for. */
+export type ConsentKind = SponsorDataKind | SummitDataKind;
+
 export const CONSENT_WORDING_VERSION = "1.0.0";
 
 export interface DataKindInfo {
@@ -74,3 +85,7 @@ export const SPONSOR_DISCLAIMER =
   "TRADE scores measure training progress. They are not a credit assessment, and they are not a lending decision.";
 
 export const isSponsorDataKind = (value: string): value is SponsorDataKind => (SPONSOR_DATA_KINDS as readonly string[]).includes(value);
+
+/** The sentence a Summit applicant's owner agrees to. Stored with the agreement. */
+export const SUMMIT_PROFILE_WORDING =
+  "I agree that Entrust can share the one-page Summit profile of my business with the buyers, investors and partners it introduces me to at the Summit. The profile holds what I told Entrust about my business and what it is looking for. It holds no score, finding or note of Entrust's. I understand I can take this back at any time, and Entrust will stop sharing it from the next request.";

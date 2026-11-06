@@ -352,6 +352,7 @@ describe("API documentation", () => {
         "/v1/summit/applications/{id}/eligibility-exceptions",
         "/v1/summit/applications/{id}/officer",
         "/v1/summit/applications/{id}/profile",
+        "/v1/summit/applications/{id}/sharing",
         "/v1/summit/applications/{id}/recommendation",
         "/v1/summit/applications/{id}/review",
         "/v1/summit/applications/{id}/stage",

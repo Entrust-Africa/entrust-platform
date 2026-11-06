@@ -16,6 +16,7 @@ import {
 import {
   ASSESSMENT_STATUSES,
   SPONSOR_DATA_KINDS,
+  SUMMIT_DATA_KINDS,
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   ENROLLMENT_STATUSES,
@@ -611,7 +612,7 @@ export const sponsorConsent = trade.table(
     smeOrganizationId: text("sme_organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: SPONSOR_DATA_KINDS }).notNull(),
+    kind: text("kind", { enum: [...SPONSOR_DATA_KINDS, ...SUMMIT_DATA_KINDS] }).notNull(),
     grantedByUserId: text("granted_by_user_id").references(() => user.id, { onDelete: "set null" }),
     grantedAt: timestamp("granted_at", { withTimezone: true }).defaultNow().notNull(),
     wordingVersion: text("wording_version").notNull(),
