@@ -244,3 +244,21 @@ export interface PlacementReportData {
     target: { status: { value: string; label: string } | null; product: string | null; market: string | null; buyerType: string | null };
   };
 }
+
+export type {
+  LearningPlanRecord,
+  LearningPlanView,
+  ModuleAssignmentView,
+  ModuleExemptionView,
+  ModuleProgressView,
+} from "@entrust/api/client";
+
+export interface ModuleItemSummary {
+  id: string;
+  title: string;
+  deliverable: string;
+  objectives: string[];
+  contentStatus: "ready" | "draft" | "in_production";
+  latestVersion: string | null;
+  versions: string[];
+}

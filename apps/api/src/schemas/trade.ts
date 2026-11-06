@@ -10,6 +10,7 @@ import {
   LEARNING_PLAN_STATUSES,
   MODULE_ASSIGNMENT_SOURCES,
   MODULE_EXEMPTION_STATUSES,
+  MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
   SPONSOR_DATA_KINDS,
 } from "@entrust/trade-engine";
@@ -1095,3 +1096,48 @@ export type ModuleExemptionView = z.infer<typeof ModuleExemptionSchema>;
 export type CreateExemptionInput = z.infer<typeof CreateExemptionBody>;
 export type ReviewExemptionInput = z.infer<typeof ReviewExemptionBody>;
 export type ExemptionListQueryInput = z.infer<typeof ExemptionListQuery>;
+
+// ---- Module Progress & Learner Tracking ----
+export const ModuleProgressSchema = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string(),
+    status: z.enum(MODULE_PROGRESS_STATUSES),
+    lessonProgress: z.record(z.string(), z.unknown()),
+    startedAt: z.string().nullable(),
+    completedAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeModuleProgress");
+
+export const ModuleProgressList = z
+  .object({
+    items: z.array(ModuleProgressSchema),
+  })
+  .openapi("TradeModuleProgressList");
+
+export const ModuleProgressQuery = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS).optional(),
+  })
+  .openapi("TradeModuleProgressQuery");
+
+export const RecordModuleProgressBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    lessonId: z.string().trim().optional(),
+    completed: z.boolean().optional(),
+    status: z.enum(MODULE_PROGRESS_STATUSES).optional(),
+    contentVersion: z.string().trim().optional(),
+  })
+  .openapi("RecordTradeModuleProgressBody");
+
+export type ModuleProgressView = z.infer<typeof ModuleProgressSchema>;
+export type ModuleProgressQueryInput = z.infer<typeof ModuleProgressQuery>;
+export type RecordModuleProgressInput = z.infer<typeof RecordModuleProgressBody>;
+

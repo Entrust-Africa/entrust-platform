@@ -432,6 +432,7 @@ describe("API documentation", () => {
         "/v1/trade/exemptions/{id}/review",
         "/v1/trade/consents",
         "/v1/trade/consents/{id}/withdraw",
+        "/v1/trade/module-progress",
         "/v1/trade/modules",
         "/v1/trade/modules/{id}",
         "/v1/trade/worksheet-versions/{id}",

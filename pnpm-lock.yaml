@@ -403,6 +403,9 @@ importers:
       '@entrust/roles':
         specifier: workspace:*
         version: link:../../packages/roles
+      '@entrust/trade-content':
+        specifier: workspace:*
+        version: link:../../packages/trade-content
       '@entrust/trade-engine':
         specifier: workspace:*
         version: link:../../packages/trade-engine
