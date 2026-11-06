@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   schema,
   DELIVERY_MODES,
@@ -6,6 +6,7 @@ import {
   ENROLLMENT_STATUSES,
   type EnrollmentStatus,
 } from "@entrust/db";
+import { organizationKind } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 
@@ -194,6 +195,7 @@ export async function enrolSme(
     .select({
       id: schema.organization.id,
       name: schema.organization.name,
+      metadata: schema.organization.metadata,
       smeId: schema.smeProfile.smeId,
       legalName: schema.smeProfile.legalName,
     })
@@ -201,6 +203,8 @@ export async function enrolSme(
     .leftJoin(schema.smeProfile, eq(schema.smeProfile.organizationId, schema.organization.id))
     .where(eq(schema.organization.id, input.organizationId));
   if (!org) throw new ServiceError("not_found", "Organisation not found.");
+  const kind = organizationKind(org.metadata);
+  if (kind && kind !== "sme") throw new ServiceError("invalid", "Only an SME can be enrolled in a cohort.");
 
   // 3. Check for existing enrolment in this cohort
   const [existing] = await db
@@ -264,6 +268,53 @@ export async function enrolSme(
   });
 
   return enr!;
+}
+
+export interface WaitingSme {
+  organizationId: string;
+  organizationName: string;
+  smeId: string | null;
+  legalName: string | null;
+  country: string | null;
+  ownerEmail: string | null;
+  createdAt: Date;
+}
+
+/**
+ * The businesses that have signed up to TRADE and are in no cohort yet, newest first: the ones Entrust still has to
+ * enrol. A business that was enrolled and withdrawn is not here, because it has an enrolment row.
+ */
+export async function listWaitingSmes(db: Executor, limit = 200): Promise<WaitingSme[]> {
+  const rows = await db
+    .select({
+      organizationId: schema.organization.id,
+      organizationName: schema.organization.name,
+      metadata: schema.organization.metadata,
+      smeId: schema.smeProfile.smeId,
+      legalName: schema.smeProfile.legalName,
+      country: schema.smeProfile.country,
+      ownerEmail: sql<string | null>`(
+        select ${schema.user.email} from ${schema.member}
+        inner join ${schema.user} on ${schema.user.id} = ${schema.member.userId}
+        where ${schema.member.organizationId} = ${schema.organization.id} and ${schema.member.role} = 'owner'
+        order by ${schema.member.createdAt} limit 1
+      )`,
+      createdAt: schema.organization.createdAt,
+    })
+    .from(schema.organization)
+    .innerJoin(
+      schema.platformAccess,
+      and(eq(schema.platformAccess.organizationId, schema.organization.id), eq(schema.platformAccess.platform, "trade")),
+    )
+    .leftJoin(schema.smeProfile, eq(schema.smeProfile.organizationId, schema.organization.id))
+    .leftJoin(schema.enrollment, eq(schema.enrollment.organizationId, schema.organization.id))
+    .where(isNull(schema.enrollment.id))
+    .orderBy(desc(schema.organization.createdAt))
+    .limit(Math.min(Math.max(limit, 1), 500));
+
+  return rows
+    .filter((r) => (organizationKind(r.metadata) ?? "sme") === "sme")
+    .map(({ metadata: _metadata, ...rest }) => rest);
 }
 
 export async function listEnrollments(

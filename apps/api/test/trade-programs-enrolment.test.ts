@@ -328,3 +328,70 @@ describe("Owner invitations by Entrust staff", () => {
     expect(nonStaffRes.body.error).toContain("Only Entrust staff can invite organisation owners");
   });
 });
+
+describe("Businesses waiting to be enrolled", () => {
+  let cohortId: string;
+  let waitingOrgId: string;
+  let sponsorOrgId: string;
+
+  beforeAll(async () => {
+    const prog = await callV1(w.admin, "POST", "/trade/programs", { name: `Waiting Program ${randomUUID().slice(0, 6)}` });
+    const cohort = await callV1(w.admin, "POST", "/trade/cohorts", { programId: prog.body.id, name: `Waiting Cohort ${randomUUID().slice(0, 6)}` });
+    cohortId = cohort.body.id;
+
+    const created = await callV1(w.otherSmeOwner, "POST", "/organizations", {
+      name: `Waiting Traders ${randomUUID().slice(0, 6)}`,
+      slug: `waiting-${randomUUID().slice(0, 8)}`,
+      legalName: `Waiting Traders ${randomUUID().slice(0, 6)} Share Company`,
+      country: "ET",
+      platform: "trade",
+    });
+    expect(created.status).toBe(201);
+    waitingOrgId = created.body.id;
+
+    const sponsor = await callV1(w.admin, "POST", "/organizations", {
+      name: `Waiting Sponsor ${randomUUID().slice(0, 6)}`,
+      slug: `waiting-sponsor-${randomUUID().slice(0, 8)}`,
+      legalName: `Waiting Sponsor ${randomUUID().slice(0, 6)} Bank`,
+      country: "ET",
+      platform: "trade",
+      kind: "sponsor",
+    });
+    expect(sponsor.status).toBe(201);
+    sponsorOrgId = sponsor.body.id;
+  });
+
+  it("lists a business that signed up to TRADE and is in no cohort, with its owner's email", async () => {
+    const res = await callV1(w.facilitator, "GET", "/trade/enrollments/waiting");
+    expect(res.status).toBe(200);
+    const row = res.body.smes.find((s: { organizationId: string }) => s.organizationId === waitingOrgId);
+    expect(row).toBeDefined();
+    const [owner] = await db.select({ email: schema.user.email }).from(schema.user).where(eq(schema.user.id, w.otherSmeOwner.id));
+    expect(row.ownerEmail).toBe(owner!.email);
+    expect(row.smeId).toMatch(/^ET-SME-/);
+  });
+
+  it("leaves out sponsors", async () => {
+    const res = await callV1(w.admin, "GET", "/trade/enrollments/waiting");
+    expect(res.body.smes.some((s: { organizationId: string }) => s.organizationId === sponsorOrgId)).toBe(false);
+  });
+
+  it("is for staff only", async () => {
+    const res = await callV1(w.otherSmeOwner, "GET", "/trade/enrollments/waiting");
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses to enrol a sponsor", async () => {
+    const res = await callV1(w.admin, "POST", "/trade/enrollments", { cohortId, organizationId: sponsorOrgId });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("Only an SME can be enrolled");
+  });
+
+  it("drops a business from the list once it is enrolled", async () => {
+    const enrol = await callV1(w.admin, "POST", "/trade/enrollments", { cohortId, organizationId: waitingOrgId });
+    expect(enrol.status).toBe(201);
+    expect(enrol.body.status).toBe("registered");
+    const res = await callV1(w.admin, "GET", "/trade/enrollments/waiting");
+    expect(res.body.smes.some((s: { organizationId: string }) => s.organizationId === waitingOrgId)).toBe(false);
+  });
+});
