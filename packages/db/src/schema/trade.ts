@@ -331,6 +331,49 @@ export const moduleAssignment = trade.table(
   ],
 );
 
+export const WORKSHEET_VERSION_STATUSES = ["draft", "submitted"] as const;
+export type WorksheetVersionStatus = (typeof WORKSHEET_VERSION_STATUSES)[number];
+
+// What an SME enters in a worksheet (#64, #65). Values save as they type and are labelled self-reported. Submitting turns a draft into
+// a numbered version that never changes; editing starts the next draft from it. `values` holds the structured figures, so MIZAN can
+// read them later. `result` is what the worksheet worked out at submit, kept so a submitted version reads the same forever.
+export const worksheetVersion = trade.table(
+  "worksheet_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    worksheetId: text("worksheet_id").notNull(),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    // 1 for the first, counted per enrolment and worksheet. A draft has the number its submit will keep.
+    version: integer("version").notNull(),
+    status: text("status", { enum: WORKSHEET_VERSION_STATUSES }).notNull().default("draft"),
+    values: jsonb("values").$type<Record<string, unknown>>().notNull().default({}),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    confidence: text("confidence", { enum: EVIDENCE_CONFIDENCE }).notNull().default("self_reported"),
+    // The submitted version a draft was started from, or the other worksheet's version that prefilled it.
+    basedOnVersionId: uuid("based_on_version_id"),
+    prefilledFromVersionId: uuid("prefilled_from_version_id"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_worksheet_version_uidx").on(t.enrollmentId, t.worksheetId, t.version),
+    // One draft at a time for a worksheet.
+    uniqueIndex("trade_worksheet_version_draft_uidx")
+      .on(t.enrollmentId, t.worksheetId)
+      .where(sql`${t.status} = 'draft'`),
+    index("trade_worksheet_version_enrollment_idx").on(t.enrollmentId),
+  ],
+);
+
 // Progress made by an enrolled SME on a specific module.
 export const moduleProgress = trade.table(
   "module_progress",

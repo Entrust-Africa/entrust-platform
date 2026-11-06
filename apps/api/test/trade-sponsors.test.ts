@@ -319,6 +319,37 @@ describe("what an SME shares", () => {
   });
 });
 
+describe("worksheets a sponsor can see", () => {
+  it("shows the submitted worksheets an agreement covers, figures only and never the assessor's flags", async () => {
+    const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.organizationId, w.org));
+    const submitted = (worksheetId: string, moduleId: "M03" | "M04", computed: Record<string, number>) => ({
+      enrollmentId: enrollment!.id,
+      worksheetId,
+      moduleId,
+      version: 1,
+      status: "submitted" as const,
+      values: { currency: "USD" },
+      result: { computed, etb: { gross_profit: 5650 }, flags: [{ code: "open_account_unverified_buyer", severity: "critical_candidate", message: "x", fields: [] }], problems: [] },
+      submittedAt: new Date(),
+    });
+    await db.insert(schema.worksheetVersion).values([submitted("m03-income-statement", "M03", { gross_profit: 100 }), submitted("m04-transaction-brief", "M04", { gap: 410_000 })]);
+
+    // Only what the owner agreed to: the financial worksheets first, then the M04 brief.
+    await post(w.owner, "/consents", { sponsorOrganizationId: w.bank, kinds: ["financial_worksheets"] });
+    const first = await get(w.bankViewer, `/sponsor/cohorts/${w.cohortA}/smes/${w.org}`);
+    expect(first.body.data.financial_worksheets).toEqual({
+      available: true,
+      worksheets: [{ worksheetId: "m03-income-statement", title: "Simplified income statement", version: 1, submittedAt: expect.any(String), currency: "USD", computed: { gross_profit: 100 }, etb: { gross_profit: 5650 } }],
+    });
+    expect(first.body.data.m04_brief).toBeUndefined();
+
+    await post(w.owner, "/consents", { sponsorOrganizationId: w.bank, kinds: ["m04_brief"] });
+    const second = await get(w.bankViewer, `/sponsor/cohorts/${w.cohortA}/smes/${w.org}`);
+    expect(second.body.data.m04_brief.worksheets).toEqual([expect.objectContaining({ worksheetId: "m04-transaction-brief", computed: { gap: 410_000 } })]);
+    expect(JSON.stringify(second.body.data)).not.toContain("open_account_unverified_buyer");
+  });
+});
+
 describe("a sponsor viewer", () => {
   it("can't change anything", async () => {
     expect((await post(w.bankViewer, "/sponsors", { name: "X", slug: `${PREFIX}x` })).status).toBe(403);

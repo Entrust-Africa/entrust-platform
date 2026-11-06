@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { ASSESSMENT_STATUSES, EVIDENCE_CONFIDENCE, LEARNING_PLAN_STATUSES, MODULE_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
+import { ASSESSMENT_STATUSES, EVIDENCE_CONFIDENCE, FIELD_KINDS, LEARNING_PLAN_STATUSES, MODULE_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
 import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { CaseIdParam, Facts, Role } from "./clear";
@@ -391,6 +391,135 @@ export const PlacementReportView = z
 export type PlacementReportView = z.infer<typeof PlacementReportView>;
 
 export const LearningPlanParam = z.object({ id: z.uuid() });
+
+// ---- Worksheets (#64, #65) ----
+
+const WorksheetFieldView = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.enum(FIELD_KINDS),
+  required: z.boolean(),
+  help: z.string().nullable(),
+  options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
+  /** Shown only while another field holds one of these values. */
+  showWhen: z.object({ field: z.string(), in: z.array(z.string()) }).nullable(),
+});
+
+const ResultKind = z.enum(["money", "number", "percent", "days", "text"]);
+
+export const WorksheetDefinitionView = z
+  .object({
+    id: z.string().openapi({ example: "m03-income-statement" }),
+    module: z.enum(MODULE_IDS),
+    title: z.string(),
+    description: z.string(),
+    /** Has amounts: opens with a currency and, when it isn't ETB, the rate and its date. */
+    money: z.boolean(),
+    /** The worksheet that prefills this one when a new draft starts. */
+    prefillFrom: z.string().nullable(),
+    printable: z.boolean(),
+    fields: z.array(WorksheetFieldView),
+    tables: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        columns: z.array(WorksheetFieldView),
+        computedColumns: z.array(z.object({ id: z.string(), label: z.string(), kind: ResultKind })),
+        minRows: z.number().int().nullable(),
+        maxRows: z.number().int().nullable(),
+      }),
+    ),
+    computed: z.array(z.object({ id: z.string(), label: z.string(), kind: ResultKind, etb: z.boolean() })),
+    sections: z.array(z.object({ id: z.string(), title: z.string(), description: z.string().nullable(), items: z.array(z.string()) })),
+  })
+  .openapi("TradeWorksheetDefinition");
+export type WorksheetDefinitionView = z.infer<typeof WorksheetDefinitionView>;
+
+export const WorksheetDefinitionList = z.object({ items: z.array(WorksheetDefinitionView) }).openapi("TradeWorksheetDefinitionList");
+
+const ResultValue = z.union([z.number(), z.string(), z.null()]);
+
+const WorksheetResultView = z.object({
+  computed: z.record(z.string(), ResultValue),
+  /** Per table, one object per row with its computed columns. */
+  rows: z.record(z.string(), z.array(z.record(z.string(), ResultValue))),
+  /** The ETB equivalents of the money results, when the worksheet isn't in ETB and the rate is entered. */
+  etb: z.record(z.string(), z.number().nullable()),
+  /** Warnings for the learner, and critical-failure candidates the assessor confirms. Code never decides a failure. */
+  flags: z.array(z.object({ code: z.string(), severity: z.enum(["warning", "critical_candidate"]), message: z.string(), fields: z.array(z.string()) })),
+  /** Figures that can't be used, against the field. */
+  problems: z.array(z.object({ field: z.string(), message: z.string() })),
+});
+
+export const WorksheetVersionView = z
+  .object({
+    id: z.uuid(),
+    worksheetId: z.string(),
+    module: z.enum(MODULE_IDS),
+    title: z.string(),
+    /** 1 for the first. A draft has the number its submit will keep. */
+    version: z.number().int(),
+    status: z.enum(["draft", "submitted"]),
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    /** The caller can change the values: a member of the SME's organisation, on a draft. */
+    canEdit: z.boolean(),
+    /** Always self-reported until staff review the figures. */
+    confidence: z.enum(EVIDENCE_CONFIDENCE),
+    confidenceLabel: z.string(),
+    /** The values entered: a scalar for each field, a list of rows for each table. */
+    values: z.record(z.string(), z.unknown()),
+    /** Worked out live for a draft. For a submitted version, what it worked out at submit. */
+    result: WorksheetResultView,
+    basedOn: z.object({ id: z.uuid(), version: z.number().int() }).nullable().openapi({ description: "The submitted version this draft was started from." }),
+    prefilledFrom: z.object({ id: z.uuid(), worksheetId: z.string(), title: z.string(), version: z.number().int() }).nullable(),
+    /** The financial worksheets say so: nothing is sent to MIZAN yet, but the figures are kept as structured data it can read. */
+    mizan: z.object({ connected: z.boolean(), message: z.string() }).nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    submittedAt: z.iso.datetime().nullable(),
+  })
+  .openapi("TradeWorksheetVersion");
+export type WorksheetVersionView = z.infer<typeof WorksheetVersionView>;
+
+export const WorksheetVersionList = z
+  .object({
+    worksheetId: z.string(),
+    items: z.array(z.object({ id: z.uuid(), version: z.number().int(), status: z.enum(["draft", "submitted"]), updatedAt: z.iso.datetime(), submittedAt: z.iso.datetime().nullable() })),
+  })
+  .openapi("TradeWorksheetVersionList");
+
+export const WorksheetSummaryList = z
+  .object({
+    enrollmentId: z.uuid(),
+    items: z.array(
+      z.object({
+        id: z.string(),
+        module: z.enum(MODULE_IDS),
+        title: z.string(),
+        description: z.string(),
+        /** The newest submitted version. */
+        latest: z.object({ id: z.uuid(), version: z.number().int(), submittedAt: z.iso.datetime() }).nullable(),
+        draft: z.object({ id: z.uuid(), version: z.number().int(), updatedAt: z.iso.datetime() }).nullable(),
+      }),
+    ),
+  })
+  .openapi("TradeWorksheetSummaryList");
+
+export const WorksheetParam = z.object({ id: z.string().min(1).max(80) });
+export const WorksheetVersionParam = z.object({ id: z.uuid() });
+export const WorksheetQuery = z.object({
+  enrollmentId: z.uuid().optional().openapi({ description: "The enrolment. Default: the organisation's only live enrolment." }),
+  organizationId: z.string().optional().openapi({ description: "The SME organisation. Default: the caller's only one." }),
+});
+
+export const SaveWorksheetBody = z
+  .object({
+    values: z.record(z.string(), z.unknown().nullable()).openapi({
+      description: "A value sets a field, null clears it, and fields not named stay. A table's value is its whole list of rows. Amounts are numbers in the worksheet's currency, dates are YYYY-MM-DD, a checkbox is true or false.",
+    }),
+  })
+  .openapi("SaveTradeWorksheetBody");
 
 // ---- Sponsors and consent (#70) ----
 

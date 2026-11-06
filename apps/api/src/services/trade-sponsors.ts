@@ -14,6 +14,7 @@ import { organizationKind, type Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { pathwayView, recordTradeChange } from "./trade-assessments";
+import { sharedWorksheets } from "./trade-worksheets";
 
 // Sponsors and consent (#70). A sponsor organisation, such as the bank behind a cohort, has two roles: an
 // administrator who manages colleagues, and a viewer. A sponsor sees only the cohorts it sponsors, and only
@@ -319,6 +320,9 @@ export async function getSponsorSme(ctx: Ctx, cohortId: string, organizationId: 
         .where(eq(schema.moduleProgress.enrollmentId, enrollment.id))
         .orderBy(asc(schema.moduleProgress.moduleId));
       data[kind] = { available: true, modules: rows };
+    } else if (kind === "financial_worksheets" || kind === "m04_brief") {
+      // The newest submitted worksheets the agreement covers: figures only, never the assessor's flags.
+      data[kind] = { available: true, worksheets: await sharedWorksheets(ctx.db, enrollment.id, kind) };
     } else {
       // These kinds are shared the day TRADE records them. The consent exists already, so the screens and the checks need no change.
       data[kind] = { available: false };
