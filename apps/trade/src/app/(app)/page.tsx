@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
+import { CreateOrganisation } from "@/components/summit/create-organisation";
+import { AFRICAN_COUNTRIES } from "@/lib/summit-business";
 import type { EnrollmentStatus } from "@/lib/types";
 
 export const metadata = { title: "My plan" };
@@ -36,6 +38,21 @@ export default async function TradeHomePage() {
 
   // An organisation that has the Summit and not TRADE has nothing here: send it to the Summit instead of an empty plan.
   if (!hasTradeAccess && activeOrg?.platforms.includes("summit")) redirect("/summit/apply");
+
+  // Someone who has signed up and has no business yet: they add it here, then Entrust enrols it in a cohort.
+  if (!isStaff && (me.organizations?.length ?? 0) === 0) {
+    return (
+      <div className="mx-auto max-w-xl py-8">
+        <h1 className="font-display text-2xl font-bold text-ink">Add your business</h1>
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">
+          Tell us which business you are signing up for. Entrust then enrols it in the TRADE training, and you can fill in the onboarding diagnostic.
+        </p>
+        <Card className="mt-6 p-6">
+          <CreateOrganisation countries={[...AFRICAN_COUNTRIES]} platform="trade" />
+        </Card>
+      </div>
+    );
+  }
 
   if (!hasTradeAccess) {
     return (
@@ -147,18 +164,28 @@ export default async function TradeHomePage() {
             Tailored capability roadmap for {activeOrg?.name ?? "your organisation"}.
           </p>
         </div>
-        {currentEnrollment ? (
-          <StatusBadge tone={getStatusTone(currentEnrollment.status)}>
-            {`${currentEnrollment.cohortName} (${currentEnrollment.status})`}
-          </StatusBadge>
-        ) : pathway ? (
-          <StatusBadge tone="info">
-            {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
-          </StatusBadge>
-        ) : (
-          <StatusBadge tone="info">Pathway A: Export Readiness</StatusBadge>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {currentEnrollment && (
+            <StatusBadge tone={getStatusTone(currentEnrollment.status)}>
+              {`${currentEnrollment.cohortName} (${currentEnrollment.status})`}
+            </StatusBadge>
+          )}
+          {pathway && (
+            <StatusBadge tone="info">
+              {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+            </StatusBadge>
+          )}
+        </div>
       </div>
+
+      {!currentEnrollment && (
+        <Card className="border-l-4 border-l-amber-500 bg-surface p-4">
+          <div className="font-display text-base font-bold text-ink">Waiting for Entrust to enrol your business</div>
+          <p className="mt-1 text-sm text-ink-2">
+            {activeOrg?.name ?? "Your business"} is registered on TRADE. Once Entrust enrols it in a training cohort, the onboarding diagnostic below opens. This usually takes a short while, and you don't need to do anything else.
+          </p>
+        </Card>
+      )}
 
       {currentEnrollment && (
         <Card className="flex flex-wrap items-center justify-between gap-4 bg-surface p-4 border-l-4 border-l-brand-600">

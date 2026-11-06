@@ -24,10 +24,20 @@ const slugOf = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 
-export type CreateBusinessResult = { ok: true; id: string } | { ok: false; error: string };
+/** `duplicate` is set when the API found a business with a similar name and wants the visitor to confirm theirs is another. */
+export type CreateBusinessResult = { ok: true; id: string } | { ok: false; error: string; duplicate?: boolean };
 
-/** Creates the signed-in visitor's business as an organisation. `legalName` is the business name when left empty. */
-export async function createBusiness(input: { name: string; legalName?: string; country: string }): Promise<CreateBusinessResult> {
+/**
+ * Creates the signed-in visitor's business as an organisation. `legalName` is the business name when left empty.
+ * `platform` is the one the business gets first: the Summit for an applicant, TRADE for a training participant.
+ */
+export async function createBusiness(input: {
+  name: string;
+  legalName?: string;
+  country: string;
+  platform?: "summit" | "trade";
+  confirmDuplicateName?: boolean;
+}): Promise<CreateBusinessResult> {
   const name = input.name.trim();
   const slug = `${slugOf(name) || "business"}-${Math.random().toString(36).slice(2, 7)}`;
   try {
@@ -35,11 +45,22 @@ export async function createBusiness(input: { name: string; legalName?: string; 
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, legalName: input.legalName?.trim() || name, slug, country: input.country, platform: FIRST_PLATFORM }),
+      body: JSON.stringify({
+        name,
+        legalName: input.legalName?.trim() || name,
+        slug,
+        country: input.country,
+        platform: input.platform ?? FIRST_PLATFORM,
+        ...(input.confirmDuplicateName ? { confirmDuplicateName: true } : {}),
+      }),
     });
-    const data = (await response.json().catch(() => null)) as { id?: unknown; error?: unknown } | null;
+    const data = (await response.json().catch(() => null)) as { id?: unknown; error?: unknown; code?: unknown } | null;
     if (response.ok && typeof data?.id === "string") return { ok: true, id: data.id };
-    return { ok: false, error: typeof data?.error === "string" ? data.error : "We couldn't save your business. Please try again." };
+    return {
+      ok: false,
+      error: typeof data?.error === "string" ? data.error : "We couldn't save your business. Please try again.",
+      ...(data?.code === "duplicate_legal_name_warning" ? { duplicate: true } : {}),
+    };
   } catch {
     return { ok: false, error: "We couldn't reach the server. Check your internet connection and try again." };
   }
