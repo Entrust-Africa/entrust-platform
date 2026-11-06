@@ -6,6 +6,7 @@ import {
   BarChart3,
   BookOpen,
   Briefcase,
+  Calculator,
   CheckSquare,
   ClipboardList,
   ExternalLink,
@@ -132,6 +133,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
   const items: NavItem[] = [
     { href: "/", label: "My plan", icon: LayoutDashboard, match: (path) => path === "/" || path.startsWith("/plan") },
     { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
+    { href: "/worksheets", label: "Worksheets", icon: Calculator, match: (path) => path.startsWith("/worksheets") },
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
     simulator,
