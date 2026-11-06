@@ -7,6 +7,8 @@ import { TransitionError } from "@entrust/gate-engine";
  * - not_found: there is no such thing, or the caller can't see it (404)
  * - invalid_transition: the status can't go there from where it is (409)
  * - precondition_failed: allowed, but not yet (422)
+ * - conflict: it clashes with what is already there (409)
+ * - rate_limited: too many requests from this address or about this email (429)
  */
 export type ServiceErrorCode =
   | "invalid"
@@ -15,7 +17,8 @@ export type ServiceErrorCode =
   | "not_found"
   | "invalid_transition"
   | "precondition_failed"
-  | "conflict";
+  | "conflict"
+  | "rate_limited";
 
 const STATUS = {
   invalid: 422,
@@ -25,6 +28,7 @@ const STATUS = {
   invalid_transition: 409,
   precondition_failed: 422,
   conflict: 409,
+  rate_limited: 429,
 } as const satisfies Record<ServiceErrorCode, number>;
 
 export class ServiceError extends Error {

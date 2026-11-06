@@ -645,3 +645,47 @@ export const programApplication = trade.table(
     index("trade_program_application_country_idx").on(t.country),
   ],
 );
+
+export const PUBLIC_DIAGNOSTIC_STATUSES = ["draft", "submitted"] as const;
+export type PublicDiagnosticStatus = (typeof PUBLIC_DIAGNOSTIC_STATUSES)[number];
+
+// The onboarding diagnostic filled in without an account: anyone with the public link starts a draft, keeps it by
+// its private link (only a hash of the token is stored), and submits it. It belongs to no enrolment, so the
+// avenue is kept on the row. Staff read the submissions and match each to a business when they enrol it.
+export const publicDiagnostic = trade.table(
+  "public_diagnostic",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull().unique(),
+    email: text("email").notNull(),
+    businessName: text("business_name"),
+    templateVersion: text("template_version").notNull(),
+    status: text("status", { enum: PUBLIC_DIAGNOSTIC_STATUSES }).notNull().default("draft"),
+    // One object, question ID to the answer as the screen sends it. Kept whole, not row by row, so a bare
+    // string or number never goes through a jsonb scalar.
+    answers: jsonb("answers").$type<Record<string, unknown>>().notNull().default({}),
+    pathway: text("pathway", { enum: PATHWAYS }),
+    pathwayProvisional: boolean("pathway_provisional"),
+    liveOrder: boolean("live_order"),
+    rulesVersion: text("rules_version"),
+    reasonCodes: jsonb("reason_codes").$type<string[]>(),
+    // The declaration's signature (section 10) and the wording version they agreed to.
+    signedName: text("signed_name"),
+    signedPosition: text("signed_position"),
+    signedDate: text("signed_date"),
+    // A hash of the visitor's address, only to limit how many forms one address starts in an hour.
+    ipHash: text("ip_hash"),
+    linkEmailedAt: timestamp("link_emailed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_public_diagnostic_email_idx").on(t.email),
+    index("trade_public_diagnostic_status_idx").on(t.status, t.submittedAt),
+    index("trade_public_diagnostic_created_idx").on(t.createdAt),
+  ],
+);
