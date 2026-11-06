@@ -98,6 +98,12 @@ export async function listDiagnostics(): Promise<StaffAssessmentRow[]> {
   return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
 }
 
+/** Every placement assessment with its status, newest first (Entrust staff only). */
+export async function listPlacements(): Promise<StaffAssessmentRow[]> {
+  const result = await tradeGet<{ items: StaffAssessmentRow[] }>("/assessments?kind=placement");
+  return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
+}
+
 /** List sessions for a cohort. */
 export async function listSessions(cohortId: string): Promise<TradeSessionSummary[]> {
   const res = await (await serverApi()).v1.trade.cohorts[":cohortId"].sessions.$get({

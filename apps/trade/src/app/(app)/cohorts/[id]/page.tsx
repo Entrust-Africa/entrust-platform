@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getCohort, getMe, listDiagnostics, listSessions, listWaitingSmes } from "@/lib/api";
+import { getCohort, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { StatusUpdater } from "./status-updater";
@@ -68,6 +68,20 @@ function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
   );
 }
 
+/** What a business's placement assessment looks like to staff: not started, in progress, or scored with a link to its report. */
+function PlacementCell({ row }: { row: StaffAssessmentRow | undefined }) {
+  if (!row) return <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge tone={row.status === "review_required" ? "warn" : "ok"}>{row.status === "review_required" ? "Needs review" : "Scored"}</StatusBadge>
+      <Link href={`/assessment/${row.id}/report`} className="font-semibold text-brand-600 hover:underline">
+        Report
+      </Link>
+    </div>
+  );
+}
+
 export default async function CohortDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
@@ -80,10 +94,11 @@ export default async function CohortDetailPage(props: {
   }
 
   const { id } = await props.params;
-  const [cohort, waiting, diagnostics, sessions] = await Promise.all([
+  const [cohort, waiting, diagnostics, placements, sessions] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
     listDiagnostics(),
+    listPlacements(),
     listSessions(id),
   ]);
   if (!cohort) {
@@ -91,6 +106,8 @@ export default async function CohortDetailPage(props: {
   }
   const diagnosticOf = new Map<string, StaffAssessmentRow>();
   for (const row of diagnostics) if (!diagnosticOf.has(row.enrollmentId)) diagnosticOf.set(row.enrollmentId, row);
+  const placementOf = new Map<string, StaffAssessmentRow>();
+  for (const row of placements) if (!placementOf.has(row.enrollmentId)) placementOf.set(row.enrollmentId, row);
   const enrolledOrganizationIds = cohort.enrolments.map((e) => e.organizationId);
   const submitted = cohort.enrolments.filter((e) => {
     const d = diagnosticOf.get(e.enrollmentId);
@@ -266,6 +283,7 @@ export default async function CohortDetailPage(props: {
                     <th className="px-4 py-3">Enrolled On</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Onboarding diagnostic</th>
+                    <th className="px-4 py-3">Placement assessment</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -292,6 +310,9 @@ export default async function CohortDetailPage(props: {
                       </td>
                       <td className="px-4 py-3">
                         <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlacementCell row={placementOf.get(enr.enrollmentId)} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <StatusUpdater

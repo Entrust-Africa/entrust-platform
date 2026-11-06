@@ -3,6 +3,8 @@ import { Card } from "@entrust/ui";
 import { KINDS, type AssessmentKind } from "./kinds";
 
 export interface ResultView {
+  /** Set on the placement assessment, whose report has its own page. */
+  id?: string;
   kind: AssessmentKind;
   status: string;
   submittedAt: string | null;
@@ -58,13 +60,18 @@ export function AssessmentResult({ view, hideBackLink = false }: { view: ResultV
           <Card className="p-5 text-sm text-ink-2">Your answers are in. Your learning path will appear here soon.</Card>
         )
       ) : (
-        <Card className="space-y-2 p-5 text-sm leading-relaxed text-ink-2 sm:p-6">
+        <Card className="space-y-3 p-5 text-sm leading-relaxed text-ink-2 sm:p-6">
           <p className="font-semibold text-ink">Your answers are in.</p>
           <p>
             {view.status === "review_required"
-              ? "Entrust will take a quick look at a few of your answers before your learning plan is ready."
-              : "Your learning plan will appear in My plan once Entrust has reviewed your answers."}
+              ? "Entrust will take a quick look at a few of your answers before your learning plan is final. You can already read your report."
+              : "Your scores and learning plan are ready."}
           </p>
+          {view.id && view.status !== "draft" && (
+            <Link href={`/assessment/${view.id}/report`} className="inline-block font-semibold text-brand-600 hover:underline">
+              Read your placement report →
+            </Link>
+          )}
         </Card>
       )}
 
