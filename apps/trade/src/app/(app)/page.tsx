@@ -30,6 +30,8 @@ function getStatusTone(status: EnrollmentStatus): "ok" | "info" | "warn" | "dang
 export default async function TradeHomePage() {
   const me = await getMe();
   if (!me) redirect("/sign-in");
+  // A member of the Summit's selection committee has no learning plan: their work is the committee's screens.
+  if (me.summitCommittee && !me.staffRole) redirect("/summit/committee");
 
   const activeOrg =
     me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
