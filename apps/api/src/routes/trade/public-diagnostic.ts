@@ -28,9 +28,17 @@ const invalid = (result: { success: boolean; error?: { issues: readonly { path: 
   return undefined;
 };
 
+// An email address, a phone number and the business's name are all needed to start: Entrust writes back, and calls, to the
+// business that filled the form in.
 const startBody = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
-  businessName: z.string().trim().max(200).optional(),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(200),
+  phone: z
+    .string()
+    .trim()
+    .min(7, "Enter a phone number, with the country code if you can")
+    .max(30)
+    .regex(/^\+?\(?[0-9][0-9\s().-]{5,}$/, "Enter a phone number using digits only, for example +251 91 123 4567"),
+  businessName: z.string().trim().min(1, "Enter the name of your business").max(200),
   // A trap for bots: a person never sees this field, so a form that fills it in is answered as if it worked and stored nowhere.
   website: z.string().max(500).optional(),
 });
@@ -55,7 +63,7 @@ export const tradePublicDiagnostic = new Hono<AppEnv>()
     const body = c.req.valid("json");
     if (body.website) return c.json({ token: crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 12) }, 201);
     const addressHash = await hashAddress(addressOf((name) => c.req.header(name)));
-    const started = await startPublicDiagnostic({ db: getDb(), now: now() }, { email: body.email, businessName: body.businessName, addressHash });
+    const started = await startPublicDiagnostic({ db: getDb(), now: now() }, { email: body.email, businessName: body.businessName, phone: body.phone, addressHash });
     return c.json(started, 201);
   })
   .get("/public/diagnostic/:token/template", async (c) => c.json(await templateForToken({ db: getDb(), now: now() }, c.req.param("token"))))

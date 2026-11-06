@@ -1,0 +1,1 @@
+ALTER TABLE "trade"."public_diagnostic" ADD COLUMN "phone" text;

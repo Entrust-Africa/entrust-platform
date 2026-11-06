@@ -84,8 +84,10 @@ function fillIn(form: FormDefinition, overrides: Record<string, Wire> = {}): Rec
 const diagnostic = latestDiagnosticTemplate() as FormDefinition;
 const yearAgo = () => new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
 
+const PHONE = "+251 91 123 4567";
+
 async function start(name: string, extra: Record<string, unknown> = {}) {
-  const res = await post(null, "/public/diagnostic", { email: email(name), businessName: `Business ${name}`, ...extra });
+  const res = await post(null, "/public/diagnostic", { email: email(name), phone: PHONE, businessName: `Business ${name}`, ...extra });
   expect(res.status).toBe(201);
   return res.body.token as string;
 }
@@ -105,18 +107,52 @@ describe("the public diagnostic", () => {
     const view = await get(null, `/public/diagnostic/${token}`);
     expect(view.status).toBe(200);
     expect(view.body).toMatchObject({ status: "draft", businessName: "Business start", submittedAt: null, pathway: null });
-    expect(view.body.progress.answered).toBe(0);
+    // The name, email and phone number given to start are already answers in section 1.
+    expect(view.body.progress.answered).toBe(3);
+  });
+
+  it("needs an email, a phone number and the business's name to start", async () => {
+    const ok = { email: email("required"), phone: PHONE, businessName: "Required Traders" };
+    expect((await post(null, "/public/diagnostic", { ...ok, email: undefined })).status).toBe(400);
+    const noPhone = await post(null, "/public/diagnostic", { ...ok, phone: undefined });
+    expect(noPhone.status).toBe(400);
+    expect(noPhone.body.error).toContain("phone");
+    const noName = await post(null, "/public/diagnostic", { ...ok, businessName: undefined });
+    expect(noName.status).toBe(400);
+    expect(noName.body.error).toContain("business");
+    expect((await post(null, "/public/diagnostic", { ...ok, businessName: "   " })).status).toBe(400);
+    expect((await post(null, "/public/diagnostic", { ...ok, phone: "call me" })).status).toBe(400);
+    expect((await post(null, "/public/diagnostic", { ...ok, phone: "12" })).status).toBe(400);
+    expect((await post(null, "/public/diagnostic", ok)).status).toBe(201);
+    for (const phone of ["0911234567", "+251-91-123-4567", "(251) 911 234 567"]) {
+      expect((await post(null, "/public/diagnostic", { ...ok, email: email("phone-format"), phone })).status).toBe(201);
+    }
+  });
+
+  it("starts section 1 with the name, email and phone number given", async () => {
+    const given = email("prefill");
+    const res = await post(null, "/public/diagnostic", { email: given, phone: PHONE, businessName: "Prefilled Traders PLC" });
+    const view = await get(null, `/public/diagnostic/${res.body.token}`);
+    expect(view.body).toMatchObject({ businessName: "Prefilled Traders PLC", phone: PHONE, email: given });
+    const byWording = (pattern: RegExp) => diagnostic.questions.find((q) => pattern.test(q.text))!.id;
+    expect(view.body.answers[byWording(/registered business name/i)]).toBe("Prefilled Traders PLC");
+    expect(view.body.answers[byWording(/business email address/i)]).toBe(given);
+    expect(view.body.answers[byWording(/business telephone number/i)]).toBe(PHONE);
+    // They are only a start: the person can change them.
+    const q1 = byWording(/registered business name/i);
+    const changed = await put(null, `/public/diagnostic/${res.body.token}/responses`, { answers: { [q1]: "Prefilled Traders Share Company" } });
+    expect(changed.body.answers[q1]).toBe("Prefilled Traders Share Company");
   });
 
   it("refuses a bad email and a token that isn't one", async () => {
-    expect((await post(null, "/public/diagnostic", { email: "not-an-email" })).status).toBe(400);
+    expect((await post(null, "/public/diagnostic", { email: "not-an-email", phone: PHONE, businessName: "Bad Email Ltd" })).status).toBe(400);
     expect((await get(null, "/public/diagnostic/short")).status).toBe(404);
     expect((await get(null, `/public/diagnostic/${"a".repeat(43)}`)).status).toBe(404);
   });
 
   it("stores nothing for a form whose trap field is filled in", async () => {
     const trapped = email("bot");
-    const res = await post(null, "/public/diagnostic", { email: trapped, website: "http://spam.example" });
+    const res = await post(null, "/public/diagnostic", { email: trapped, phone: PHONE, businessName: "Bot Co", website: "http://spam.example" });
     expect(res.status).toBe(201);
     expect((await get(null, `/public/diagnostic/${res.body.token}`)).status).toBe(404);
     const rows = await db.select().from(schema.publicDiagnostic).where(like(schema.publicDiagnostic.email, trapped));
@@ -125,8 +161,9 @@ describe("the public diagnostic", () => {
 
   it("limits how many drafts one email starts in an hour", async () => {
     const same = email("flood");
-    for (let i = 0; i < 5; i++) expect((await post(null, "/public/diagnostic", { email: same })).status).toBe(201);
-    const sixth = await post(null, "/public/diagnostic", { email: same });
+    const details = { email: same, phone: PHONE, businessName: "Flood Co" };
+    for (let i = 0; i < 5; i++) expect((await post(null, "/public/diagnostic", details)).status).toBe(201);
+    const sixth = await post(null, "/public/diagnostic", details);
     expect(sixth.status).toBe(429);
     expect(sixth.body.code).toBe("rate_limited");
   });
@@ -192,7 +229,7 @@ describe("the public diagnostic", () => {
     const one = await start("private-one");
     const two = await start("private-two");
     await put(null, `/public/diagnostic/${one}/responses`, { answers: { Q135: "yes" } });
-    expect((await get(null, `/public/diagnostic/${two}`)).body.answers).toEqual({});
+    expect((await get(null, `/public/diagnostic/${two}`)).body.answers.Q135).toBeUndefined();
   });
 });
 
@@ -202,7 +239,7 @@ describe("staff reading the submissions", () => {
 
   beforeAll(async () => {
     submittedEmail = email("staff-view");
-    const res = await post(null, "/public/diagnostic", { email: submittedEmail, businessName: "=cmd|' /C calc'!A0" });
+    const res = await post(null, "/public/diagnostic", { email: submittedEmail, phone: PHONE, businessName: "=cmd|' /C calc'!A0" });
     submittedToken = res.body.token;
     await put(null, `/public/diagnostic/${submittedToken}/responses`, { answers: fillIn(diagnostic, { Q135: "no" }) });
     expect((await post(null, `/public/diagnostic/${submittedToken}/submit`)).status).toBe(200);
@@ -219,7 +256,7 @@ describe("staff reading the submissions", () => {
     const res = await get(w.reviewer, `/public-diagnostics?status=submitted&q=${encodeURIComponent(submittedEmail)}`);
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0]).toMatchObject({ email: submittedEmail, status: "submitted", pathway: "A" });
+    expect(res.body.items[0]).toMatchObject({ email: submittedEmail, phone: PHONE, status: "submitted", pathway: "A" });
     expect(res.body.counts.submitted).toBeGreaterThanOrEqual(1);
     expect(res.body.counts.draft).toBeGreaterThanOrEqual(1);
     expect(res.body.counts.pathwayA).toBeGreaterThanOrEqual(1);
@@ -248,9 +285,11 @@ describe("staff reading the submissions", () => {
     expect(res.headers.get("content-disposition")).toContain("onboarding-diagnostics-");
     const text = await res.text();
     const header = text.split("\r\n")[0]!;
+    expect(header).toContain("Phone");
     expect(header).toContain("Pathway");
     expect(header).toContain("Q135");
     expect(text).toContain(submittedEmail);
+    expect(text).toContain(PHONE);
     // A name that starts like a formula is written as text.
     expect(text).toContain("'=cmd");
     expect(text).not.toMatch(/,=cmd/);

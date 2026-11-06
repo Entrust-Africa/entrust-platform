@@ -659,6 +659,8 @@ export const publicDiagnostic = trade.table(
     tokenHash: text("token_hash").notNull().unique(),
     email: text("email").notNull(),
     businessName: text("business_name"),
+    // Asked with the email and the business name before the form opens. Null only on rows from before it was asked.
+    phone: text("phone"),
     templateVersion: text("template_version").notNull(),
     status: text("status", { enum: PUBLIC_DIAGNOSTIC_STATUSES }).notNull().default("draft"),
     // One object, question ID to the answer as the screen sends it. Kept whole, not row by row, so a bare

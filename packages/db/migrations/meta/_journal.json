@@ -204,6 +204,13 @@
       "when": 1793963498697,
       "tag": "0028_trade_public_diagnostic",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793966553000,
+      "tag": "0029_public_diagnostic_phone",
+      "breakpoints": true
     }
   ]
 }

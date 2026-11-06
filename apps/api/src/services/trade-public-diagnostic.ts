@@ -79,9 +79,27 @@ export function publicTemplate() {
 
 export interface StartInput {
   email: string;
-  businessName?: string | undefined;
+  businessName: string;
+  phone: string;
   /** A hash of the visitor's address, if known. */
   addressHash?: string | null | undefined;
+}
+
+/**
+ * The first answers of section 1, from the three details given to start: the business's name, its email and its phone
+ * number. They are only a start: the person can change them, and the form still checks them like any answer. A question
+ * is found by its wording, so a later version of the form that renumbers them still works.
+ */
+function startingAnswers(template: { questions: readonly FormQuestion[] }, input: { email: string; businessName: string; phone: string }): Record<string, unknown> {
+  const find = (pattern: RegExp) => template.questions.find((q) => q.type === "short_text" && pattern.test(q.text));
+  const answers: Record<string, unknown> = {};
+  const set = (question: FormQuestion | undefined, value: string) => {
+    if (question && value) answers[question.id] = value;
+  };
+  set(find(/registered business name/i), input.businessName);
+  set(find(/business email address/i), input.email);
+  set(find(/business telephone number/i), input.phone);
+  return answers;
 }
 
 function linkOf(token: string): string {
@@ -120,8 +138,10 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
     .values({
       tokenHash: await hashToken(token),
       email,
-      businessName: input.businessName?.trim() || null,
+      businessName: input.businessName.trim(),
+      phone: input.phone.trim(),
       templateVersion: template.version,
+      answers: startingAnswers(template, { email, businessName: input.businessName.trim(), phone: input.phone.trim() }),
       ipHash: input.addressHash ?? null,
     })
     .returning({ id: schema.publicDiagnostic.id });
@@ -135,7 +155,7 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
       template: "summit-notice",
       props: {
         heading: "Your onboarding diagnostic",
-        greeting: input.businessName?.trim() ? `Hello ${input.businessName.trim()},` : "Hello,",
+        greeting: `Hello ${input.businessName.trim()},`,
         paragraphs: [
           "Thank you for starting the Entrust TRADE onboarding diagnostic. This is your private link. Your answers save as you go, so you can stop and carry on from this link whenever you like, on any device.",
           "Please don't forward it: anyone with the link can read and change your answers.",
@@ -156,6 +176,7 @@ export interface PublicDiagnosticView {
   status: Row["status"];
   templateVersion: string;
   email: string;
+  phone: string | null;
   businessName: string | null;
   submittedAt: string | null;
   variables: Record<string, string>;
@@ -189,6 +210,7 @@ function viewOf(row: Row, now: Date): PublicDiagnosticView {
     status: row.status,
     templateVersion: row.templateVersion,
     email: row.email,
+    phone: row.phone,
     businessName: row.businessName,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     variables: { ...VARIABLES },
@@ -321,6 +343,7 @@ export async function submitPublicDiagnostic(ctx: Writer, token: string): Promis
 export interface PublicDiagnosticSummary {
   id: string;
   email: string;
+  phone: string | null;
   businessName: string | null;
   status: Row["status"];
   pathway: Row["pathway"];
@@ -359,7 +382,9 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
   const search = input.q?.trim();
   const where = and(
     input.status ? eq(schema.publicDiagnostic.status, input.status) : undefined,
-    search ? or(ilike(schema.publicDiagnostic.email, `%${search}%`), ilike(schema.publicDiagnostic.businessName, `%${search}%`)) : undefined,
+    search
+      ? or(ilike(schema.publicDiagnostic.email, `%${search}%`), ilike(schema.publicDiagnostic.businessName, `%${search}%`), ilike(schema.publicDiagnostic.phone, `%${search}%`))
+      : undefined,
   );
   const rows = await ctx.db
     .select()
@@ -421,6 +446,7 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
     items: rows.map((r) => ({
       id: r.id,
       email: r.email,
+      phone: r.phone,
       businessName: r.businessName,
       status: r.status,
       pathway: r.pathway,
@@ -520,6 +546,7 @@ export async function exportPublicDiagnosticsCsv(ctx: Ctx): Promise<string> {
     "Reference",
     "Submitted",
     "Email",
+    "Phone",
     "Business",
     "Pathway",
     "Provisional",
@@ -539,6 +566,7 @@ export async function exportPublicDiagnosticsCsv(ctx: Ctx): Promise<string> {
         r.id,
         r.submittedAt?.toISOString() ?? "",
         r.email,
+        r.phone ?? "",
         r.businessName ?? "",
         r.pathway ?? "",
         r.pathwayProvisional ? "Yes" : "No",
