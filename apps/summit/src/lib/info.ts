@@ -150,3 +150,43 @@ export const PARTNERS: readonly Partner[] = [];
 
 /** Announcements and summit updates, newest first. */
 export const NEWS: readonly NewsItem[] = [];
+
+// Sponsorship and strategic partnership, as the host (the Pan African Chamber of Commerce) distinguishes them in its
+// "Sponsorship & Strategic Partnership Tiers" and the summit's fundraising plan. Only the public rules are here; the
+// plan's targets, prospect owners and tracker are internal and must not be published. No prices: the sponsorship levels
+// and their prices come from the catalogue.
+
+export const PARTNERSHIP_KINDS = [
+  {
+    name: "Sponsor",
+    gives: "Funding",
+    receives: "Visibility, activation, access and association with the summit.",
+    how: "Choose a sponsorship level or a specific opportunity.",
+  },
+  {
+    name: "Strategic partner",
+    gives: "Capability, resources, expertise, infrastructure, relationships or market access that helps deliver the summit.",
+    receives: "Collaboration, alignment, co-created outcomes and appropriate access to the host's initiatives.",
+    how: "Qualified by the organisers on what you can contribute. It is not bought as a higher sponsorship level.",
+  },
+] as const;
+
+/** The kinds of organisation the organisers would like to work with as strategic partners. */
+export const STRATEGIC_PARTNER_PROFILES: readonly string[] = [
+  "Trade-finance institutions and banks",
+  "Government trade and investment agencies",
+  "Legal, tax, compliance and market-entry advisers",
+  "Logistics and supply-chain providers",
+  "Airlines, hotels, venues and ground-transport partners",
+  "Business-matching and buyer-access platforms",
+  "Market-intelligence and country-briefing providers",
+  "Investment institutions, family offices and qualified investor networks",
+];
+
+/** What a sponsorship or partnership does not give. Said plainly so no one is promised more than the agreement says. */
+export const PARTNERSHIP_LIMITS: readonly string[] = [
+  "No guaranteed contracts, sales, funding, government access, investor access, speaking slots or other commercial outcomes.",
+  "No exclusivity unless it is documented and approved in a written agreement.",
+  "No governance rights, ownership, board authority or unrestricted access to the host's relationships.",
+  "Custom benefits, ticket allocations and in-kind contributions, with an agreed value, are set out in writing.",
+];
