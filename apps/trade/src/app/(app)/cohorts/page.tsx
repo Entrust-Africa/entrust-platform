@@ -11,7 +11,7 @@ export const metadata = { title: "Cohorts" };
 
 const PATH = "/cohorts";
 
-/** What there is to say about a cohort's businesses, from what each entry carries: readiness for the leather cohort, exporting and financing for the agro cohort. */
+/** What there is to say about a cohort's businesses, from what each entry carries: readiness for the leather cohort, exporting and financing for the cohorts that applied through a form. */
 function figures(cohort: CatalogueCohort): { label: string; value: string }[] {
   const out = [{ label: "Businesses", value: String(cohort.count) }];
   const scores = cohort.smes.map((s) => s.readinessScore).filter((n): n is number => n !== null);
