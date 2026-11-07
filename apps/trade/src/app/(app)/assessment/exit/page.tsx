@@ -13,7 +13,10 @@ export default async function ExitAssessmentPage() {
   const me = await getMe();
   if (!me) redirect("/sign-in");
 
-  const enrollments = await listEnrollments();
+  const activeOrg =
+    me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
+
+  const enrollments = activeOrg ? await listEnrollments({ organizationId: activeOrg.id }) : [];
   const currentEnrollment = enrollments[0];
 
   if (!currentEnrollment) {
