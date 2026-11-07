@@ -1,4 +1,4 @@
-import { isYes, tidyPhone } from "./applications";
+import { hasExported, isYes, tidyPhone } from "./applications";
 import type { ReadinessLevel, RegisterRecord } from "./register";
 import { letters } from "./register";
 
@@ -123,7 +123,7 @@ export function catalogueFromApplications(applications: readonly ApplicationRow[
     reference: null,
     readinessLevel: null,
     readinessScore: null,
-    exportedBefore: yesNo(a.answers.exportedBefore),
+    exportedBefore: hasExported(a.answers),
     wantsZemenFinancing: yesNo(a.answers.zemenInterest),
     alsoInCohorts: [],
   }));

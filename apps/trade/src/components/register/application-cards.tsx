@@ -7,7 +7,8 @@ import { applicationPhoneHref, formatDay } from "./format";
 // One card a response, so long free-text answers read well on a phone. The facts staff look at first are up top; the rest of the
 // answers are under "All answers". Only responses from Ethiopia ever get here: the API doesn't send the others.
 
-const FACTS: ApplicationQuestionKey[] = ["category", "mainProducts", "employees", "yearEstablished", "revenue", "exportedBefore", "exportMarkets", "bank", "zemenInterest", "supportNeeded"];
+// Only the facts a response answers are shown, since the forms don't all ask the same questions.
+const FACTS: ApplicationQuestionKey[] = ["category", "mainProducts", "employees", "yearEstablished", "ownership", "revenue", "turnover", "exportStage", "exportedBefore", "exportMarkets", "bank", "zemenInterest", "supportNeeded"];
 const LABEL = Object.fromEntries(APPLICATION_QUESTIONS.map((q) => [q.key, q.label])) as Record<ApplicationQuestionKey, string>;
 const REST = APPLICATION_QUESTIONS.map((q) => q.key).filter((k) => !FACTS.includes(k));
 
@@ -24,6 +25,7 @@ export function ApplicationCards({ items }: { items: ApplicationItem[] }) {
   return (
     <ul className="grid gap-4 lg:grid-cols-2">
       {items.map((a) => {
+        const facts = FACTS.filter((k) => a.answers[k]);
         const rest = REST.filter((k) => a.answers[k]);
         return (
           <li key={a.id}>
@@ -59,7 +61,7 @@ export function ApplicationCards({ items }: { items: ApplicationItem[] }) {
                     {a.email}
                   </a>
                 </Fact>
-                {FACTS.map((key) => (
+                {facts.map((key) => (
                   <Fact key={key} label={LABEL[key]}>
                     {key === "zemenInterest" && a.answers[key] ? (
                       <StatusBadge tone={isYes(a.answers[key]) ? "ok" : "idle"}>{isYes(a.answers[key]) ? "Yes" : "No"}</StatusBadge>
