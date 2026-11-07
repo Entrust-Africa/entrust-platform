@@ -3,19 +3,29 @@ import type { FormDefinition } from "@entrust/forms";
 import { Card } from "@entrust/ui";
 import { AssessmentResult, type ResultView } from "@/components/assessment/assessment-result";
 import { PublicDiagnosticRunner } from "@/components/onboarding/public-diagnostic-runner";
+import { afriConnectSignInShown } from "@entrust/auth/africonnect";
+import { ConfirmEmail } from "@/components/onboarding/confirm-email";
 import { tradeGet } from "@/lib/trade-api";
 
 interface View extends ResultView {
   status: "draft" | "submitted";
   email: string;
+  emailVerified: boolean;
   businessName: string | null;
   answers: Record<string, unknown>;
   variables: Record<string, string>;
 }
 
 /** A draft's own page, reached by its private link: the form while it is a draft, the result once it is submitted. */
-export default async function PublicDiagnosticPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicDiagnosticPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ proof?: string }>;
+}) {
   const { token } = await params;
+  const { proof } = await searchParams;
   const result = await tradeGet<Omit<View, "kind" | "filledInByStaff">>(`/public/diagnostic/${encodeURIComponent(token)}`);
   if (!result.data) {
     return (
@@ -31,6 +41,11 @@ export default async function PublicDiagnosticPage({ params }: { params: Promise
     );
   }
   const view = result.data;
+
+  // The link in the email carries a proof that the visitor reads that address's mail; a button spends it.
+  if (typeof proof === "string" && proof && !view.emailVerified) {
+    return <ConfirmEmail token={token} proof={proof} email={view.email} afriConnect={afriConnectSignInShown()} />;
+  }
 
   if (view.status === "submitted") {
     return (
