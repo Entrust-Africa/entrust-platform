@@ -20,7 +20,7 @@ export default async function SignInPage({
       {comeBackTo && <RememberNext next={comeBackTo} />}
       <SignInView
         appName="TRADE"
-        logoSrc=""
+        logoSrc="/logo.png"
         logoAlt="TRADE logo"
         tagline={comeBackTo ? "Apply to the Africa Diaspora Trade and Investment Summit." : "Building export capability for African SMEs."}
         description={
