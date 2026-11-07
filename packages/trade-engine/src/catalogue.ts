@@ -3,7 +3,8 @@ import type { ReadinessLevel, RegisterRecord } from "./register";
 import { letters } from "./register";
 
 // The catalogue of pilot SMEs, one list a cohort. Cohort 1 is the leather businesses, from the diagnostic workbook; cohort 2 is
-// the agro-processing businesses that applied to the training programme. Both are put in one shape so a screen can list them alike.
+// the agro-processing businesses that applied to the training programme; cohort 3 is the Export Growth Companies cohort, which
+// applied through a form of its own. All are put in one shape so a screen can list them alike.
 
 /** A cohort is active while it is running or about to, and previous once it has finished. */
 export type CohortStatus = "active" | "previous";
@@ -15,15 +16,30 @@ export interface PilotCohort {
   status: CohortStatus;
 }
 
-// Fixed in code, like the split itself: both pilot cohorts are over, so none is active. A new cohort will be the first active one.
-// When cohorts and enrolments are managed in the database (#56), the status should come from a cohort's dates instead.
+// Fixed in code, like the split itself: the first two pilot cohorts are over, and the Export Growth Companies cohort is the one being
+// run (its training starts in November 2026). When cohorts and enrolments are managed in the database (#56), the status should come
+// from a cohort's dates instead.
 export const PILOT_COHORTS: readonly PilotCohort[] = [
   { number: 1, name: "Leather", description: "The leather businesses in the export readiness diagnostic.", status: "previous" },
   { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme.", status: "previous" },
+  {
+    number: 3,
+    name: "Export growth companies",
+    description: "The businesses in Ethiopia that applied to the Export Growth Companies cohort, in agro-processing, garments, gemstones, leather, coffee and other sectors.",
+    status: "active",
+  },
 ];
 
-/** An application belongs to cohort 2 when the programme it was loaded for has "agro" in its name. */
-export const AGRO_PROGRAMME = /agro/i;
+/**
+ * Which cohort a programme's applications belong to, found by words in the programme's name: that name is what staff type when they load
+ * a form's responses, and it is kept on every application. The first match wins; a programme that matches none is in no cohort.
+ */
+export const APPLICATION_COHORTS: readonly { number: number; programme: RegExp }[] = [
+  { number: 3, programme: /export[\s_-]*growth/i },
+  { number: 2, programme: /agro/i },
+];
+
+export const cohortOfProgramme = (program: string): number | null => APPLICATION_COHORTS.find((c) => c.programme.test(program))?.number ?? null;
 
 export interface CatalogueSme {
   /** Stable across loads, so a list can key on it. */
@@ -85,6 +101,8 @@ export function catalogueFromRegister(record: RegisterRecord, id: string): Catal
 
 export interface ApplicationRow {
   id: string;
+  /** The programme the responses were loaded for, which says what cohort the business is in. */
+  program: string;
   submittedAt: string;
   email: string;
   businessName: string;
@@ -96,9 +114,14 @@ export interface ApplicationRow {
 
 /**
  * One entry a business, not a response: a business that applied twice (found by its email address or its name) is listed once, from
- * its latest response.
+ * its latest response. This is done a cohort at a time, so a business that applied to two programmes has an entry in each cohort.
+ * An application whose programme is in no cohort is left out.
  */
 export function catalogueFromApplications(applications: readonly ApplicationRow[]): CatalogueSme[] {
+  return APPLICATION_COHORTS.flatMap(({ number }) => latestPerBusiness(applications.filter((a) => cohortOfProgramme(a.program) === number)).map((a) => applicationEntry(a, number)));
+}
+
+function latestPerBusiness(applications: readonly ApplicationRow[]): ApplicationRow[] {
   const latest = new Map<string, ApplicationRow>();
   const groupOf = new Map<string, string>(); // an email or a name -> the group it first appeared in
   for (const application of applications) {
@@ -108,26 +131,28 @@ export function catalogueFromApplications(applications: readonly ApplicationRow[
     const current = latest.get(group);
     if (!current || application.submittedAt > current.submittedAt) latest.set(group, application);
   }
-  return [...latest.values()].map((a) => ({
-    key: `application:${a.id}`,
-    id: a.id,
-    cohort: 2,
-    name: a.businessName,
-    contactName: a.contactName,
-    phone: a.phone,
-    email: a.email,
-    location: a.location,
-    product: oneLine(a.answers.mainProducts) ?? oneLine(a.answers.produces) ?? oneLine(a.answers.category),
-    employees: oneLine(a.answers.employees, 60),
-    bank: oneLine(a.answers.bank, 60),
-    reference: null,
-    readinessLevel: null,
-    readinessScore: null,
-    exportedBefore: hasExported(a.answers),
-    wantsZemenFinancing: yesNo(a.answers.zemenInterest),
-    alsoInCohorts: [],
-  }));
+  return [...latest.values()];
 }
+
+const applicationEntry = (a: ApplicationRow, cohort: number): CatalogueSme => ({
+  key: `application:${a.id}`,
+  id: a.id,
+  cohort,
+  name: a.businessName,
+  contactName: a.contactName,
+  phone: a.phone,
+  email: a.email,
+  location: a.location,
+  product: oneLine(a.answers.mainProducts) ?? oneLine(a.answers.produces) ?? oneLine(a.answers.category),
+  employees: oneLine(a.answers.employees, 60),
+  bank: oneLine(a.answers.bank, 60),
+  reference: null,
+  readinessLevel: null,
+  readinessScore: null,
+  exportedBefore: hasExported(a.answers),
+  wantsZemenFinancing: yesNo(a.answers.zemenInterest),
+  alsoInCohorts: [],
+});
 
 /** How a business is recognised across the register and the applications: the last nine digits of its phone number, or its email address. */
 export const identityKeys = ({ phone, email }: { phone: string | null; email: string | null }): string[] => {

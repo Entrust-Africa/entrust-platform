@@ -8,6 +8,7 @@ import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, typ
 const w = {} as { admin: TestUser; facilitator: TestUser; reviewer: TestUser; owner: TestUser; entrust: string };
 const CODE = PREFIX.toUpperCase();
 const AGRO = `${PREFIX}agro-catalogue`;
+const GROWTH = `${PREFIX}export-growth-catalogue`;
 const OTHER = `${PREFIX}coffee-catalogue`;
 
 const get = (user: TestUser | null) => callV1(user, "GET", "/trade/catalogue");
@@ -28,7 +29,7 @@ const application = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-const FOREIGN = ["Lagos Ventures", "Chidi Okafor", "07063479837", "Mystery Ltd", "Kim Unknown", "lagos@firm", "mystery@firm", "Coffee Programme Co"];
+const FOREIGN = ["Lagos Ventures", "Chidi Okafor", "07063479837", "Mystery Ltd", "Kim Unknown", "lagos@firm", "mystery@firm", "Coffee Programme Co", "Growth Lagos Ltd", "growth-lagos@firm"];
 
 beforeAll(async () => {
   await cleanup();
@@ -51,7 +52,11 @@ beforeAll(async () => {
     // Kept, never shown.
     application({ email: `${PREFIX}lagos@firm.test`, businessName: "Lagos Ventures Ltd", contactName: "Chidi Okafor", phone: "07063479837", location: "Lagos", country: "NG" }),
     application({ email: `${PREFIX}mystery@firm.test`, businessName: "Mystery Ltd", contactName: "Kim Unknown", phone: "12345", location: "Online", country: null }),
-    // Another programme, which isn't cohort 2.
+    // The Export Growth Companies cohort: Acme applied to it too (cohort 3), under another spelling and a second email, with the same phone.
+    application({ program: GROWTH, email: `${PREFIX}acme@firm.test`, businessName: "Acme Foods PLC", submittedAt: new Date("2026-07-16T12:00:00Z"), location: "Bole, Addis Ababa", answers: { mainProducts: "Dried mango", employees: "11-25", exportStage: "Currently exporting", ownership: "Women-owned" } }),
+    application({ program: GROWTH, email: `${PREFIX}growth-spice@firm.test`, businessName: "Spice Garden PLC", phone: "+251911222333", location: "Arada sub city, Addis Ababa", answers: { mainProducts: "Turmeric", exportStage: "Preparing to export" } }),
+    application({ program: GROWTH, email: `${PREFIX}growth-lagos@firm.test`, businessName: "Growth Lagos Ltd", phone: "07063479837", location: "Lagos", country: "NG" }),
+    // Another programme, which isn't in any cohort.
     application({ program: OTHER, email: `${PREFIX}other@firm.test`, businessName: "Coffee Programme Co", location: "Addis Ababa" }),
   ]);
 });
@@ -84,15 +89,15 @@ describe("who can see the catalogue", () => {
 });
 
 describe("the cohorts", () => {
-  it("has cohort 1, leather, and cohort 2, agro-processing, even when either is empty", async () => {
+  it("has cohort 1, leather, cohort 2, agro-processing, and cohort 3, export growth companies, even when any is empty", async () => {
     const { body } = await get(w.admin);
-    expect(body.cohorts.map((c: Json) => [c.number, c.name])).toEqual([[1, "Leather"], [2, "Agro-processing"]]);
+    expect(body.cohorts.map((c: Json) => [c.number, c.name])).toEqual([[1, "Leather"], [2, "Agro-processing"], [3, "Export growth companies"]]);
     expect(body.cohorts.every((c: Json) => c.count === c.smes.length)).toBe(true);
   });
 
-  it("says both cohorts are previous", async () => {
+  it("says the first two cohorts are previous and the third is active", async () => {
     const { body } = await get(w.admin);
-    expect(body.cohorts.map((c: Json) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"]]);
+    expect(body.cohorts.map((c: Json) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"], [3, "active"]]);
   });
 
   it("gives each business the id of its stored record, so its page can be opened", async () => {
@@ -100,7 +105,7 @@ describe("the cohorts", () => {
     for (const sme of mine(cohort(body, 1).smes)) {
       expect((await callV1(w.admin, "GET", `/trade/register/${sme.id}`)).body.code).toBe(sme.reference);
     }
-    for (const sme of mine(cohort(body, 2).smes)) {
+    for (const sme of [...mine(cohort(body, 2).smes), ...mine(cohort(body, 3).smes)]) {
       expect((await callV1(w.admin, "GET", `/trade/applications/${sme.id}`)).body.businessName).toBe(sme.name);
     }
   });
@@ -119,10 +124,20 @@ describe("the cohorts", () => {
     expect(smes[1]).toMatchObject({ exportedBefore: true, wantsZemenFinancing: false });
   });
 
-  it("marks a business that is in both cohorts, found by its phone number", async () => {
+  it("lists the Export Growth Companies applicants from Ethiopia, in cohort 3, read from where they are with exporting", async () => {
+    const smes = mine(cohort((await get(w.admin)).body, 3).smes);
+    expect(smes.map((s: Json) => [s.name, s.location])).toEqual([["Acme Foods PLC", "Bole, Addis Ababa"], ["Spice Garden PLC", "Arada sub city, Addis Ababa"]]);
+    expect(smes[0]).toMatchObject({ cohort: 3, reference: null, product: "Dried mango", employees: "11-25", bank: null, exportedBefore: true, wantsZemenFinancing: null });
+    expect(smes[1]).toMatchObject({ exportedBefore: false });
+    // Not in the agro cohort, and the agro cohort's businesses are not in this one.
+    expect(mine(cohort((await get(w.admin)).body, 2).smes).map((s: Json) => s.name)).not.toContain("Spice Garden PLC");
+  });
+
+  it("marks a business that is in more than one cohort, found by its phone number", async () => {
     const { body } = await get(w.admin);
-    expect(mine(cohort(body, 1).smes).find((s: Json) => s.name === "Zeta Leather")).toMatchObject({ alsoInCohorts: [2] });
-    expect(mine(cohort(body, 2).smes).find((s: Json) => s.name === "Acme Foods PLC")).toMatchObject({ alsoInCohorts: [1] });
+    expect(mine(cohort(body, 1).smes).find((s: Json) => s.name === "Zeta Leather")).toMatchObject({ alsoInCohorts: [2, 3] });
+    expect(mine(cohort(body, 2).smes).find((s: Json) => s.name === "Acme Foods PLC")).toMatchObject({ alsoInCohorts: [1, 3] });
+    expect(mine(cohort(body, 3).smes).find((s: Json) => s.name === "Acme Foods PLC")).toMatchObject({ alsoInCohorts: [1, 2] });
     expect(mine(cohort(body, 1).smes).find((s: Json) => s.name === "Alpha Leather")).toMatchObject({ alsoInCohorts: [] });
   });
 

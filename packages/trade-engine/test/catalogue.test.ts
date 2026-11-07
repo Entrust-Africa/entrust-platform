@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PILOT_COHORTS, buildCatalogue, catalogueFromApplications, catalogueFromRegister, deriveRegister, markSharedBusinesses, sameBusiness, type ApplicationRow, type RegisterInput } from "../src";
+import { APPLICATION_COHORTS, PILOT_COHORTS, buildCatalogue, catalogueFromApplications, cohortOfProgramme, catalogueFromRegister, deriveRegister, markSharedBusinesses, sameBusiness, type ApplicationRow, type RegisterInput } from "../src";
 
 const register = (over: Partial<RegisterInput> = {}) =>
   deriveRegister({
@@ -38,8 +38,12 @@ const register = (over: Partial<RegisterInput> = {}) =>
     ...over,
   });
 
+const AGRO = "Agro-Processing SME Training Program (TRADE Program)";
+const GROWTH = "TRADE Export Growth Companies Cohort";
+
 const application = (over: Partial<ApplicationRow> = {}): ApplicationRow => ({
   id: "a1",
+  program: AGRO,
   submittedAt: "2026-03-27T12:00:00.000Z",
   email: "owner@firm.test",
   businessName: "Acme Foods PLC",
@@ -151,23 +155,72 @@ describe("the same business in two cohorts", () => {
 });
 
 describe("the catalogue", () => {
-  it("has the two cohorts, with their businesses by name", () => {
+  it("has the three cohorts, with their businesses by name", () => {
     const catalogue = buildCatalogue([
       catalogueFromRegister(register({ code: "TRADE-TST-LEA-003", companyName: "zeta Leather", phone: null }), "row"),
       catalogueFromRegister(register({ companyName: "Alpha Leather", phone: null }), "row"),
       ...catalogueFromApplications([application({ businessName: "Mango Co", email: "m@firm.test", phone: null })]),
     ]);
-    expect(catalogue.map((c) => [c.number, c.name, c.count])).toEqual([[1, "Leather", 2], [2, "Agro-processing", 1]]);
+    expect(catalogue.map((c) => [c.number, c.name, c.count])).toEqual([[1, "Leather", 2], [2, "Agro-processing", 1], [3, "Export growth companies", 0]]);
     expect(catalogue[0]!.smes.map((s) => s.name)).toEqual(["Alpha Leather", "zeta Leather"]);
   });
 
-  it("keeps both cohorts when one is empty", () => {
-    expect(buildCatalogue([]).map((c) => [c.number, c.count])).toEqual([[1, 0], [2, 0]]);
+  it("keeps every cohort when it is empty", () => {
+    expect(buildCatalogue([]).map((c) => [c.number, c.count])).toEqual([[1, 0], [2, 0], [3, 0]]);
   });
 
-  it("says both pilot cohorts are previous, with none active", () => {
-    expect(buildCatalogue([]).map((c) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"]]);
-    expect(PILOT_COHORTS.map((c) => c.status)).toEqual(["previous", "previous"]);
+  it("says the first two pilot cohorts are previous and the Export Growth Companies cohort is active", () => {
+    expect(buildCatalogue([]).map((c) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"], [3, "active"]]);
+    expect(PILOT_COHORTS.map((c) => c.status)).toEqual(["previous", "previous", "active"]);
+  });
+
+  it("has a cohort for every programme pattern", () => {
+    expect(APPLICATION_COHORTS.every((c) => PILOT_COHORTS.some((p) => p.number === c.number))).toBe(true);
+  });
+});
+
+describe("which cohort a programme's applications are in", () => {
+  it("is found by words in the programme's name, however the file was named", () => {
+    expect(cohortOfProgramme("TRADE Export Growth Companies Cohort")).toBe(3);
+    expect(cohortOfProgramme("trade export  growth companies cohort (responses)")).toBe(3);
+    expect(cohortOfProgramme("Export-Growth Companies")).toBe(3);
+    expect(cohortOfProgramme("Agro-Processing SME Training Program (TRADE Program) Powered by Entrust in partnership with Zemen Bank")).toBe(2);
+  });
+
+  it("puts a programme in none when its name says no cohort, and the most specific name first", () => {
+    expect(cohortOfProgramme("Coffee Programme")).toBeNull();
+    expect(cohortOfProgramme("")).toBeNull();
+    expect(cohortOfProgramme("Agro Export Growth Companies")).toBe(3);
+  });
+});
+
+describe("an Export Growth Companies application as a catalogue entry", () => {
+  it("is in cohort 3, with the exporting stage read as whether it has exported", () => {
+    const [sme] = catalogueFromApplications([
+      application({ program: GROWTH, answers: { mainProducts: "Turmeric, ginger", employees: "11-25", exportStage: "Exported previously", category: "Agro-Processing" } }),
+    ]);
+    expect(sme).toMatchObject({ cohort: 3, name: "Acme Foods PLC", product: "Turmeric, ginger", employees: "11-25", bank: null, exportedBefore: true, wantsZemenFinancing: null });
+  });
+
+  it("keeps the cohorts apart: a business that applied to both programmes has an entry in each, and is marked", () => {
+    const smes = catalogueFromApplications([
+      application({ id: "agro", submittedAt: "2026-03-27T12:00:00.000Z" }),
+      application({ id: "growth", program: GROWTH, submittedAt: "2026-07-16T12:00:00.000Z" }),
+    ]);
+    expect(smes.map((s) => [s.cohort, s.key]).sort()).toEqual([[2, "application:agro"], [3, "application:growth"]]);
+    expect(markSharedBusinesses(smes).map((s) => [s.cohort, s.alsoInCohorts]).sort()).toEqual([[2, [3]], [3, [2]]]);
+  });
+
+  it("lists a business once within the cohort when it applied twice, from its latest response", () => {
+    const smes = catalogueFromApplications([
+      application({ id: "first", program: GROWTH, submittedAt: "2026-07-15T12:00:00.000Z", location: "Addis Ababa" }),
+      application({ id: "second", program: GROWTH, submittedAt: "2026-07-16T12:00:00.000Z", location: "Bole, Addis Ababa" }),
+    ]);
+    expect(smes.map((s) => [s.key, s.location])).toEqual([["application:second", "Bole, Addis Ababa"]]);
+  });
+
+  it("leaves out applications to a programme that is in no cohort", () => {
+    expect(catalogueFromApplications([application({ program: "Coffee Programme" })])).toEqual([]);
   });
 });
 
