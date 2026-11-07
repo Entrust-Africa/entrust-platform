@@ -8,6 +8,8 @@ import {
   EVIDENCE_TARGET_TYPES,
   FIELD_KINDS,
   LEARNING_PLAN_STATUSES,
+  MODULE_ASSIGNMENT_SOURCES,
+  MODULE_EXEMPTION_STATUSES,
   MODULE_STATUSES,
   SPONSOR_DATA_KINDS,
 } from "@entrust/trade-engine";
@@ -939,3 +941,157 @@ export type CreateEvidenceInput = z.infer<typeof CreateEvidenceBody>;
 export type ReviewEvidenceInput = z.infer<typeof ReviewEvidenceBody>;
 export type RequestEvidenceInput = z.infer<typeof RequestEvidenceBody>;
 export type EvidenceListQueryInput = z.infer<typeof EvidenceListQuery>;
+
+// ---- Plan Review, Overrides & Exemptions (#60) ----
+
+export const ModuleAssignmentSchema = z
+  .object({
+    id: z.uuid(),
+    planId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    status: z.enum(MODULE_STATUSES),
+    sequence: z.number().int(),
+    reasonCodes: z.array(z.string()),
+    source: z.enum(MODULE_ASSIGNMENT_SOURCES),
+    createdAt: z.iso.datetime(),
+  })
+  .openapi("TradeModuleAssignment");
+
+export const LearningPlanSchema = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    organizationId: z.string().optional(),
+    organizationName: z.string().optional(),
+    assessmentId: z.uuid().nullable(),
+    rulesVersion: z.string(),
+    pathway: z.enum(PATHWAYS),
+    status: z.enum(LEARNING_PLAN_STATUSES),
+    requiresHumanReview: z.boolean(),
+    reviewReasons: z.array(z.string()),
+    reviewedByUserId: z.string().nullable(),
+    reviewedByUserName: z.string().nullable().optional(),
+    reviewedAt: z.iso.datetime().nullable(),
+    reviewNotes: z.string().nullable(),
+    acknowledgedAt: z.iso.datetime().nullable(),
+    supersededById: z.uuid().nullable(),
+    supersededAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    modules: z.array(ModuleAssignmentSchema),
+  })
+  .openapi("TradeLearningPlanRecord");
+
+export const LearningPlanList = z
+  .object({
+    items: z.array(LearningPlanSchema),
+  })
+  .openapi("TradeLearningPlanList");
+
+export const LearningPlanListQuery = z
+  .object({
+    enrollmentId: z.uuid().optional(),
+    cohortId: z.uuid().optional(),
+    organizationId: z.string().optional(),
+    status: z.enum(LEARNING_PLAN_STATUSES).optional(),
+    requiresHumanReview: z.coerce.boolean().optional(),
+  })
+  .openapi("LearningPlanListQuery");
+
+export const PlanParam = z
+  .object({
+    id: z.uuid(),
+  })
+  .openapi("PlanParam");
+
+export const ApprovePlanBody = z
+  .object({
+    notes: z.string().trim().optional(),
+  })
+  .openapi("ApprovePlanBody");
+
+export const OverridePlanItemInput = z
+  .object({
+    moduleId: z.enum(MODULE_IDS),
+    status: z.enum(MODULE_STATUSES).default("required"),
+    sequence: z.number().int().optional(),
+  })
+  .openapi("OverridePlanItemInput");
+
+export const OverridePlanBody = z
+  .object({
+    reason: z.string().trim().min(1, "Override reason is mandatory and required."),
+    additions: z.array(OverridePlanItemInput).optional(),
+    removals: z.array(z.enum(MODULE_IDS)).optional(),
+    status: z.enum(["approved", "active"]).default("approved"),
+  })
+  .openapi("OverridePlanBody");
+
+export const ModuleExemptionSchema = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    organizationId: z.string().optional(),
+    organizationName: z.string().optional(),
+    moduleId: z.enum(MODULE_IDS),
+    evidenceRecordId: z.uuid(),
+    evidenceTitle: z.string().optional(),
+    status: z.enum(MODULE_EXEMPTION_STATUSES),
+    reason: z.string(),
+    requestedByUserId: z.string().nullable(),
+    requestedByUserName: z.string().nullable().optional(),
+    reviewedByUserId: z.string().nullable(),
+    reviewedByUserName: z.string().nullable().optional(),
+    reviewedAt: z.iso.datetime().nullable(),
+    reviewComment: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .openapi("TradeModuleExemption");
+
+export const ModuleExemptionList = z
+  .object({
+    items: z.array(ModuleExemptionSchema),
+  })
+  .openapi("TradeModuleExemptionList");
+
+export const CreateExemptionBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    evidenceRecordId: z.uuid(),
+    reason: z.string().trim().min(1, "Reason for exemption is required"),
+  })
+  .openapi("CreateExemptionBody");
+
+export const ReviewExemptionBody = z
+  .object({
+    status: z.enum(["approved", "rejected"]),
+    comment: z.string().trim().optional(),
+  })
+  .openapi("ReviewExemptionBody");
+
+export const ExemptionListQuery = z
+  .object({
+    enrollmentId: z.uuid().optional(),
+    organizationId: z.string().optional(),
+    moduleId: z.enum(MODULE_IDS).optional(),
+    status: z.enum(MODULE_EXEMPTION_STATUSES).optional(),
+  })
+  .openapi("ExemptionListQuery");
+
+export const ExemptionParam = z
+  .object({
+    id: z.uuid(),
+  })
+  .openapi("ExemptionParam");
+
+export type LearningPlanRecord = z.infer<typeof LearningPlanSchema>;
+export type ModuleAssignmentView = z.infer<typeof ModuleAssignmentSchema>;
+export type ApprovePlanInput = z.infer<typeof ApprovePlanBody>;
+export type OverridePlanInput = z.infer<typeof OverridePlanBody>;
+export type LearningPlanListQueryInput = z.infer<typeof LearningPlanListQuery>;
+export type ModuleExemptionView = z.infer<typeof ModuleExemptionSchema>;
+export type CreateExemptionInput = z.infer<typeof CreateExemptionBody>;
+export type ReviewExemptionInput = z.infer<typeof ReviewExemptionBody>;
+export type ExemptionListQueryInput = z.infer<typeof ExemptionListQuery>;
