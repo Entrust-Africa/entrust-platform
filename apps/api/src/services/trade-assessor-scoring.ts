@@ -6,6 +6,7 @@ import { type ModuleId } from "@entrust/trade-rules";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   CreateModuleSubmissionInput,
   ModuleSubmissionListQueryInput,
@@ -543,6 +544,10 @@ export async function scoreModuleSubmission(
         )
       );
 
+    if (evaluation.passed) {
+      await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
+    }
+
     // Send email notification to SME via worker (#16 with @entrust/notify #17)
     try {
       const [ownerUser] = await db
@@ -710,6 +715,10 @@ export async function overrideRubricScore(
         eq(schema.moduleProgress.moduleId, sub.moduleId)
       )
     );
+
+  if (evaluation.passed) {
+    await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
+  }
 
   // Audit log with before and after details (M01 AT-15, M03 AT-15, M04 AT-11)
   await db.insert(schema.auditLog).values({

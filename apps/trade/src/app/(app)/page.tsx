@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BookOpen, CheckCircle2, Circle, Clock, PlayCircle } from "lucide-react";
+import { ArrowRight, BookOpen, CheckCircle2, Circle, Clock, PlayCircle, Award, TrendingUp } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments, listSessions } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
@@ -277,6 +277,40 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
           <p className="mt-1 text-sm text-ink-2">
             {activeOrg?.name ?? "Your business"} is registered on TRADE. Once Entrust enrols it in a training cohort, your onboarding diagnostic opens.
           </p>
+        </Card>
+      )}
+
+      {/* Program Completed Banner (#71) */}
+      {currentEnrollment?.status === "completed" && (
+        <Card className="p-6 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-brand-50/30 border-2 border-emerald-300 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎉</span>
+                <h2 className="font-display text-lg font-bold text-ink">Congratulations! Program Completed</h2>
+                <StatusBadge tone="product">COMPLETED</StatusBadge>
+              </div>
+              <p className="text-xs text-ink-2 max-w-xl leading-relaxed">
+                You have passed all modules assigned in your learning plan. Your official Certificate of Completion is ready and verified.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/assessment/exit"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-semibold text-ink hover:bg-canvas transition-colors"
+              >
+                <TrendingUp className="size-3.5" />
+                Exit Assessment
+              </Link>
+              <Link
+                href="/certificate"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors"
+              >
+                <Award className="size-4" />
+                View Certificate
+              </Link>
+            </div>
+          </div>
         </Card>
       )}
 

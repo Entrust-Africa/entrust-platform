@@ -112,7 +112,7 @@ export const PracticeEventList = z
 
 // ---- Assessments: the onboarding diagnostic and the placement assessment (#57, #78) ----
 
-const FormKind = z.enum(["placement", "diagnostic"]).openapi({ description: "The onboarding diagnostic or the placement assessment." });
+const FormKind = z.enum(["placement", "diagnostic", "exit"]).openapi({ description: "The onboarding diagnostic, placement assessment, or exit assessment." });
 
 export const AssessmentForm = z
   .object({
@@ -1358,4 +1358,99 @@ export type ScoreSubmissionInput = z.infer<typeof ScoreSubmissionBody>;
 export type OverrideScoreInput = z.infer<typeof OverrideScoreBody>;
 export type RubricAssessmentView = z.infer<typeof RubricAssessmentView>;
 export type SubmissionScoresList = z.infer<typeof SubmissionScoresList>;
+
+// ---- Certificates & Program Completion (#71) ----
+
+export const CertificateCodeParam = z.object({
+  code: z.string().min(1).openapi({ example: "TRADE-2026-F98A-32B1" }),
+});
+
+export const CertificateParam = z.object({
+  id: z.uuid(),
+});
+
+export const CertificateView = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    code: z.string().openapi({ example: "TRADE-2026-F98A-32B1" }),
+    recipientName: z.string(),
+    recipientOrganizationName: z.string(),
+    programName: z.string(),
+    cohortName: z.string(),
+    pathway: z.string(),
+    issuedAt: z.iso.datetime(),
+    isValid: z.boolean(),
+    isRevoked: z.boolean(),
+    revokedAt: z.iso.datetime().nullable(),
+    revocationReason: z.string().nullable(),
+    verificationUrl: z.string(),
+  })
+  .openapi("TradeCertificate");
+
+export const PublicCertificateView = z
+  .object({
+    code: z.string().openapi({ example: "TRADE-2026-F98A-32B1" }),
+    recipientName: z.string(),
+    recipientOrganizationName: z.string(),
+    programName: z.string(),
+    cohortName: z.string(),
+    pathway: z.string(),
+    issuedAt: z.iso.datetime(),
+    isValid: z.boolean(),
+    isRevoked: z.boolean(),
+    revokedAt: z.iso.datetime().nullable(),
+    revocationReason: z.string().nullable(),
+  })
+  .openapi("PublicTradeCertificate");
+
+export const RevokeCertificateBody = z
+  .object({
+    reason: z.string().trim().min(3, "Revocation reason is required"),
+  })
+  .openapi("RevokeTradeCertificateBody");
+
+export const AdminOverrideModuleBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    reason: z.string().trim().min(3, "Reason for manual completion override is required"),
+  })
+  .openapi("AdminOverrideModuleBody");
+
+export const DomainComparisonView = z
+  .object({
+    domainId: z.string(),
+    domainTitle: z.string(),
+    placementScore: z.number().nullable(),
+    placementBand: z.string().nullable(),
+    placementBandLabel: z.string().nullable(),
+    exitScore: z.number().nullable(),
+    exitBand: z.string().nullable(),
+    exitBandLabel: z.string().nullable(),
+    deltaScore: z.number().nullable(),
+  })
+  .openapi("TradeDomainComparison");
+
+export const ExitAssessmentReportView = z
+  .object({
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    organizationName: z.string(),
+    cohortName: z.string(),
+    placementAssessmentId: z.uuid().nullable(),
+    exitAssessmentId: z.uuid().nullable(),
+    placementScores: z.array(ScoreView),
+    exitScores: z.array(ScoreView),
+    comparisons: z.array(DomainComparisonView),
+  })
+  .openapi("TradeExitAssessmentReport");
+
+export type CertificateView = z.infer<typeof CertificateView>;
+export type PublicCertificateView = z.infer<typeof PublicCertificateView>;
+export type RevokeCertificateInput = z.infer<typeof RevokeCertificateBody>;
+export type AdminOverrideModuleInput = z.infer<typeof AdminOverrideModuleBody>;
+export type DomainComparisonView = z.infer<typeof DomainComparisonView>;
+export type ExitAssessmentReportView = z.infer<typeof ExitAssessmentReportView>;
+
 

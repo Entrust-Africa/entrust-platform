@@ -395,6 +395,9 @@ export const moduleProgress = trade.table(
     theoryCompletedAt: timestamp("theory_completed_at", { withTimezone: true }),
     knowledgeCheckScore: numeric("knowledge_check_score", { precision: 5, scale: 2 }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    adminOverrideByUserId: text("admin_override_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    adminOverrideReason: text("admin_override_reason"),
+    adminOverrideAt: timestamp("admin_override_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -507,6 +510,37 @@ export const rubricAssessment = trade.table(
   (t) => [
     index("trade_rubric_assessment_submission_idx").on(t.submissionId),
     index("trade_rubric_assessment_assessor_idx").on(t.assessorUserId),
+  ],
+);
+
+// A certificate issued to an SME upon completion of the TRADE program (#71).
+export const certificate = trade.table(
+  "certificate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    code: text("code").notNull().unique(),
+    recipientName: text("recipient_name").notNull(),
+    recipientOrganizationName: text("recipient_organization_name").notNull(),
+    programName: text("program_name").notNull(),
+    cohortName: text("cohort_name").notNull(),
+    pathway: text("pathway").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: text("revoked_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    revocationReason: text("revocation_reason"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_certificate_enrollment_idx").on(t.enrollmentId),
+    uniqueIndex("trade_certificate_code_uidx").on(t.code),
   ],
 );
 
@@ -660,6 +694,8 @@ export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
   assessments: many(tradeAssessment),
   learningPlans: many(learningPlan),
   moduleProgress: many(moduleProgress),
+  submissions: many(moduleSubmission),
+  certificates: many(certificate),
   moduleExemptions: many(moduleExemption),
   evidenceRecords: many(evidenceRecord),
   commercialOpportunities: many(commercialOpportunity),
@@ -706,6 +742,7 @@ export const moduleAssignmentRelations = relations(moduleAssignment, ({ one }) =
 
 export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
   enrollment: one(enrollment, { fields: [moduleProgress.enrollmentId], references: [enrollment.id] }),
+  adminOverrideByUser: one(user, { fields: [moduleProgress.adminOverrideByUserId], references: [user.id] }),
 }));
 
 export const knowledgeCheckAttemptRelations = relations(knowledgeCheckAttempt, ({ one }) => ({
@@ -724,6 +761,11 @@ export const rubricAssessmentRelations = relations(rubricAssessment, ({ one }) =
   submission: one(moduleSubmission, { fields: [rubricAssessment.submissionId], references: [moduleSubmission.id] }),
   assessorUser: one(user, { fields: [rubricAssessment.assessorUserId], references: [user.id] }),
   overriddenByUser: one(user, { fields: [rubricAssessment.overriddenByUserId], references: [user.id] }),
+}));
+
+export const certificateRelations = relations(certificate, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [certificate.enrollmentId], references: [enrollment.id] }),
+  revokedByUser: one(user, { fields: [certificate.revokedByUserId], references: [user.id] }),
 }));
 
 export const moduleExemptionRelations = relations(moduleExemption, ({ one }) => ({

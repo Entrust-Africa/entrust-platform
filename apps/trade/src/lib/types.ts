@@ -262,6 +262,12 @@ export type {
   RubricAssessmentView,
   ScoreSubmissionInput,
   SubmissionScoresList,
+  AdminOverrideModuleInput,
+  CertificateView,
+  DomainComparisonView,
+  ExitAssessmentReportView,
+  PublicCertificateView,
+  RevokeCertificateInput,
 } from "@entrust/api/client";
 
 export interface ModuleItemSummary {

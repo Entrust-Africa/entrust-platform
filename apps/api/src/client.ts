@@ -51,4 +51,10 @@ export type {
   RubricAssessmentView,
   ScoreSubmissionInput,
   SubmissionScoresList,
+  AdminOverrideModuleInput,
+  CertificateView,
+  DomainComparisonView,
+  ExitAssessmentReportView,
+  PublicCertificateView,
+  RevokeCertificateInput,
 } from "./schemas/trade";

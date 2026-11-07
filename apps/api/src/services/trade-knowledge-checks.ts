@@ -5,6 +5,7 @@ import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   CohortKnowledgeCheckStats,
   KnowledgeCheckAttemptInput,
@@ -140,6 +141,10 @@ export async function submitKnowledgeCheckAttempt(
       knowledgeCheckScore: String(bestScore),
       lessonProgress: {},
     });
+  }
+
+  if (evaluation.passed) {
+    await evaluateAndSyncModuleCompletion(db, ctx, input.enrollmentId, moduleId);
   }
 
   // Audit log
