@@ -268,6 +268,19 @@ export type {
   ExitAssessmentReportView,
   PublicCertificateView,
   RevokeCertificateInput,
+  ActivityView,
+  CreateOpportunityActivityInput,
+  CreateOpportunityInput,
+  ExportJourneyStageView,
+  OpportunityScorecardInput,
+  OpportunityView,
+  UpdateOpportunityStageInput,
+  CreateExportOutcomeInput,
+  CreateFinancingOutcomeInput,
+  OutcomeEventView,
+  OutcomeView,
+  UpdateExportStatusInput,
+  UpdateFinancingStatusInput,
 } from "@entrust/api/client";
 
 export interface ModuleItemSummary {

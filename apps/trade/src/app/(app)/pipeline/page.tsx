@@ -1,23 +1,62 @@
-import { Card } from "@entrust/ui";
+import { redirect } from "next/navigation";
+import { getMe } from "@/lib/api";
+import { tradeGet } from "@/lib/trade-api";
+import { PipelineDashboard } from "@/components/pipeline/pipeline-dashboard";
+import type { ExportJourneyStageView, OpportunityView } from "@/lib/types";
 
-export const metadata = { title: "Pipeline" };
+export const metadata = { title: "Commercial Pipeline" };
 
-export default function PipelinePage() {
+interface PipelinePageProps {
+  searchParams?: Promise<{ organizationId?: string }>;
+}
+
+export default async function PipelinePage({ searchParams }: PipelinePageProps) {
+  const me = await getMe();
+  if (!me) redirect("/sign-in");
+
+  const { organizationId: queryOrgId } = (await searchParams) ?? {};
+  const activeOrg =
+    (queryOrgId ? me.organizations?.find((o) => o.id === queryOrgId) : null) ??
+    me.organizations?.find((o) => o.id === me.activeOrganizationId) ??
+    me.organizations?.[0];
+
+  if (!activeOrg) {
+    redirect("/");
+  }
+
+  const [oppsRes, journeyRes] = await Promise.all([
+    tradeGet<{ items: OpportunityView[] }>(`/pipeline?organizationId=${encodeURIComponent(activeOrg.id)}`),
+    tradeGet<ExportJourneyStageView>(`/pipeline/journey?organizationId=${encodeURIComponent(activeOrg.id)}`),
+  ]);
+
+  const opportunities = oppsRes.data?.items ?? [];
+  const journey: ExportJourneyStageView = journeyRes.data ?? {
+    stageNumber: 2,
+    title: "Target Market Selected",
+    description: "Target market identified and compliance requirements mapped.",
+    furthestOpportunityId: null,
+    activeOpportunitiesCount: opportunities.length,
+    m05DeliverableStatus: {
+      isEligible: false,
+      verifiedCount: 0,
+      missingCount: 5,
+    },
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-ink">Commercial Pipeline</h1>
         <p className="mt-1 text-sm text-ink-2">
-          Track buyer inquiries, quotations, orders, and trade finance applications.
+          Track buyer inquiries, evaluate lead qualification scorecards, and progress across your export journey.
         </p>
       </div>
 
-      <Card className="p-8 text-center max-w-xl mx-auto mt-6">
-        <h2 className="font-display text-lg font-bold text-ink">No commercial deals recorded</h2>
-        <p className="mt-2 text-sm text-ink-2">
-          Opportunities identified during your trade program will be tracked here from inquiry to settlement.
-        </p>
-      </Card>
+      <PipelineDashboard
+        initialOpportunities={opportunities}
+        initialJourney={journey}
+        organizationId={activeOrg.id}
+      />
     </div>
   );
 }

@@ -28,6 +28,11 @@ import {
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
   OPPORTUNITY_STATUSES,
+  OUTCOME_EVIDENCE_TIERS,
+  COMMERCIAL_ACTIVITY_TYPES,
+  PIPELINE_STAGES,
+  QUALIFICATION_BANDS,
+  VERIFICATION_LADDER_STATUSES,
 } from "@entrust/trade-engine";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
@@ -609,7 +614,7 @@ export const evidenceRecord = trade.table(
   ],
 );
 
-// A commercial opportunity tracked for an enrolled SME.
+// A commercial opportunity tracked for an enrolled SME (#68).
 export const commercialOpportunity = trade.table(
   "commercial_opportunity",
   {
@@ -619,7 +624,20 @@ export const commercialOpportunity = trade.table(
       .references(() => organization.id, { onDelete: "cascade" }),
     enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     title: text("title").notNull(),
+    companyName: text("company_name").notNull().default(""),
     buyerName: text("buyer_name"),
+    country: text("country").notNull().default(""),
+    website: text("website"),
+    sourceLinks: jsonb("source_links").$type<string[]>().default([]),
+    decisionMakerRole: text("decision_maker_role"),
+    notes: text("notes"),
+    verificationStatus: text("verification_status", { enum: VERIFICATION_LADDER_STATUSES })
+      .notNull()
+      .default("unverified"),
+    scorecard: jsonb("scorecard").$type<Record<string, number>>(),
+    scorecardTotal: integer("scorecard_total"),
+    scorecardBand: text("scorecard_band", { enum: QUALIFICATION_BANDS }),
+    stage: text("stage", { enum: PIPELINE_STAGES }).notNull().default("lead_discovered"),
     estimatedValue: numeric("estimated_value", { precision: 14, scale: 2 }),
     currency: text("currency").default("USD"),
     status: text("status", { enum: OPPORTUNITY_STATUSES }).notNull().default("identified"),
@@ -632,13 +650,39 @@ export const commercialOpportunity = trade.table(
   (t) => [
     index("trade_opportunity_org_idx").on(t.organizationId),
     index("trade_opportunity_enrollment_idx").on(t.enrollmentId),
+    index("trade_opportunity_stage_idx").on(t.stage),
+  ],
+);
+
+// Commercial activities and touchpoints recorded against an opportunity (#68).
+export const commercialActivity = trade.table(
+  "commercial_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => commercialOpportunity.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    type: text("type", { enum: COMMERCIAL_ACTIVITY_TYPES }).notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    followUpDate: timestamp("follow_up_date", { withTimezone: true }),
+    evidenceUrl: text("evidence_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_activity_opportunity_idx").on(t.opportunityId),
+    index("trade_activity_org_idx").on(t.organizationId),
   ],
 );
 
 export const OUTCOME_KINDS = ["financing", "export"] as const;
 export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
 
-// A financing or export outcome for an enrolled SME.
+// A financing or export outcome for an enrolled SME (#69).
 export const outcome = trade.table(
   "outcome",
   {
@@ -649,6 +693,30 @@ export const outcome = trade.table(
     enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     kind: text("kind", { enum: OUTCOME_KINDS }).notNull(),
     status: text("status").notNull(),
+    // Financing outcome fields
+    lenderName: text("lender_name"),
+    financingType: text("financing_type"),
+    amountRequested: numeric("amount_requested", { precision: 14, scale: 2 }),
+    amountApproved: numeric("amount_approved", { precision: 14, scale: 2 }),
+    amountDisbursed: numeric("amount_disbursed", { precision: 14, scale: 2 }),
+    currency: text("currency").default("USD"),
+    approvalDate: timestamp("approval_date", { withTimezone: true }),
+    disbursementDate: timestamp("disbursement_date", { withTimezone: true }),
+    // Export outcome fields
+    opportunityId: uuid("opportunity_id").references(() => commercialOpportunity.id, { onDelete: "set null" }),
+    buyerName: text("buyer_name"),
+    destinationCountry: text("destination_country"),
+    productDescription: text("product_description"),
+    valuePlanned: numeric("value_planned", { precision: 14, scale: 2 }),
+    valueShipped: numeric("value_shipped", { precision: 14, scale: 2 }),
+    valuePaid: numeric("value_paid", { precision: 14, scale: 2 }),
+    shipmentDate: timestamp("shipment_date", { withTimezone: true }),
+    deliveryDate: timestamp("delivery_date", { withTimezone: true }),
+    paymentDate: timestamp("payment_date", { withTimezone: true }),
+    // Shared metadata
+    notes: text("notes"),
+    evidenceTier: text("evidence_tier", { enum: OUTCOME_EVIDENCE_TIERS }).notNull().default("self_reported"),
+    evidenceUrl: text("evidence_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -658,6 +726,7 @@ export const outcome = trade.table(
   (t) => [
     index("trade_outcome_org_idx").on(t.organizationId),
     index("trade_outcome_enrollment_idx").on(t.enrollmentId),
+    index("trade_outcome_opp_idx").on(t.opportunityId),
     check(
       "trade_outcome_financing_status_check",
       sql`${t.kind} <> 'financing' or ${t.status} in ('not_started', 'application_prepared', 'submitted', 'approved', 'declined', 'disbursed', 'cancelled')`,
@@ -669,6 +738,31 @@ export const outcome = trade.table(
   ],
 );
 export const tradeOutcome = outcome;
+
+// Audit history for financing and export outcome status changes (#69).
+export const outcomeEvent = trade.table(
+  "outcome_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    outcomeId: uuid("outcome_id")
+      .notNull()
+      .references(() => outcome.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    previousStatus: text("previous_status"),
+    newStatus: text("new_status").notNull(),
+    evidenceTier: text("evidence_tier", { enum: OUTCOME_EVIDENCE_TIERS }).notNull().default("self_reported"),
+    evidenceUrl: text("evidence_url"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_outcome_event_outcome_idx").on(t.outcomeId),
+    index("trade_outcome_event_org_idx").on(t.organizationId),
+  ],
+);
 
 // ---- Table Relations ----
 
@@ -786,7 +880,7 @@ export const evidenceRecordRelations = relations(evidenceRecord, ({ one }) => ({
   requestedByUser: one(user, { fields: [evidenceRecord.requestedByUserId], references: [user.id] }),
 }));
 
-export const commercialOpportunityRelations = relations(commercialOpportunity, ({ one }) => ({
+export const commercialOpportunityRelations = relations(commercialOpportunity, ({ one, many }) => ({
   organization: one(organization, {
     fields: [commercialOpportunity.organizationId],
     references: [organization.id],
@@ -795,14 +889,47 @@ export const commercialOpportunityRelations = relations(commercialOpportunity, (
     fields: [commercialOpportunity.enrollmentId],
     references: [enrollment.id],
   }),
+  activities: many(commercialActivity),
 }));
 
-export const tradeOutcomeRelations = relations(outcome, ({ one }) => ({
+export const commercialActivityRelations = relations(commercialActivity, ({ one }) => ({
+  opportunity: one(commercialOpportunity, {
+    fields: [commercialActivity.opportunityId],
+    references: [commercialOpportunity.id],
+  }),
+  organization: one(organization, {
+    fields: [commercialActivity.organizationId],
+    references: [organization.id],
+  }),
+  actorUser: one(user, {
+    fields: [commercialActivity.actorUserId],
+    references: [user.id],
+  }),
+}));
+
+export const tradeOutcomeRelations = relations(outcome, ({ one, many }) => ({
   organization: one(organization, {
     fields: [outcome.organizationId],
     references: [organization.id],
   }),
   enrollment: one(enrollment, { fields: [outcome.enrollmentId], references: [enrollment.id] }),
+  opportunity: one(commercialOpportunity, { fields: [outcome.opportunityId], references: [commercialOpportunity.id] }),
+  events: many(outcomeEvent),
+}));
+
+export const outcomeEventRelations = relations(outcomeEvent, ({ one }) => ({
+  outcome: one(outcome, {
+    fields: [outcomeEvent.outcomeId],
+    references: [outcome.id],
+  }),
+  organization: one(organization, {
+    fields: [outcomeEvent.organizationId],
+    references: [organization.id],
+  }),
+  actorUser: one(user, {
+    fields: [outcomeEvent.actorUserId],
+    references: [user.id],
+  }),
 }));
 
 

@@ -86,6 +86,7 @@ describe("the worksheet definitions", () => {
       "m03-working-capital-brief",
       "m03-information-pack",
       "m04-transaction-brief",
+      "m07-order-fulfilment-plan",
     ]);
     const m04 = res.body.items.find((d: Json) => d.id === "m04-transaction-brief");
     expect(m04).toMatchObject({ module: "M04", money: true, prefillFrom: "m03-working-capital-brief", printable: true });
@@ -101,7 +102,7 @@ describe("an enrolment's worksheets", () => {
     const res = await get(w.owner, `/worksheets${q()}`);
     expect(res.status).toBe(200);
     expect(res.body.enrollmentId).toBe(w.enrollment);
-    expect(res.body.items).toHaveLength(6);
+    expect(res.body.items).toHaveLength(7);
     expect(res.body.items.every((i: Json) => i.latest === null && i.draft === null)).toBe(true);
     // The only enrolment, found from the caller's organisation.
     expect((await get(w.owner, "/worksheets")).body.enrollmentId).toBe(w.enrollment);

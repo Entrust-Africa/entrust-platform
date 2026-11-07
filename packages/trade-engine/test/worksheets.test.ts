@@ -12,6 +12,7 @@ describe("the worksheet definitions", () => {
       "m03-working-capital-brief",
       "m03-information-pack",
       "m04-transaction-brief",
+      "m07-order-fulfilment-plan",
     ]);
     for (const w of WORKSHEET_DEFINITIONS) {
       const ids = [...w.fields.map((f) => f.id), ...w.tables.map((t) => t.id), ...w.computed.map((c) => c.id)];
@@ -241,5 +242,37 @@ describe("prefilling one worksheet from another", () => {
   it("offers nothing to a worksheet that doesn't build on it, or from another worksheet", () => {
     expect(prefillFrom("m03-income-statement", wc)).toEqual({});
     expect(prefillFrom("m04-transaction-brief", { ...wc, id: "m03-income-statement" })).toEqual({});
+  });
+
+  it("starts the M07 fulfilment plan from the M04 transaction brief", () => {
+    const m04 = {
+      id: "m04-transaction-brief",
+      values: {
+        currency: "USD",
+        exchange_rate: 56.5,
+        rate_date: "2026-11-01",
+        buyer_name: "Hamburg Coffee Imports GmbH",
+        product: "Washed Sidama Specialty Green Coffee",
+        contract_value: 85_000,
+        incoterm: "fob",
+        delivery_date: "2026-12-24",
+        payment_method: "letter_of_credit",
+        repayment_date: "2026-11-20",
+      },
+      computed: {},
+    };
+    expect(prefillFrom("m07-order-fulfilment-plan", m04)).toEqual({
+      currency: "USD",
+      exchange_rate: 56.5,
+      rate_date: "2026-11-01",
+      customer_name: "Hamburg Coffee Imports GmbH",
+      product: "Washed Sidama Specialty Green Coffee",
+      contract_value: 85_000,
+      incoterm: "fob",
+      contract_deadline: "2026-12-24",
+      handover_date: "2026-12-24",
+      financing_source: "letter_of_credit",
+      m04_cash_milestone_date: "2026-11-20",
+    });
   });
 });

@@ -22,12 +22,12 @@ export function WorksheetSummary({ definition, version, canStartNext }: { defini
           </p>
           <h1 className="mt-1 font-display text-2xl font-bold text-ink">{definition.title}</h1>
           <p className="mt-1 text-sm text-ink-3">
-            Self-reported by the business
+            {definition.id === "m07-order-fulfilment-plan" ? "Factory floor operational plan & production execution summary" : "Self-reported by the business"}
             {rate ? ` · ${rate}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
-          <PrintButton label={definition.printable ? "Print the summary for the bank" : "Print or save as PDF"} />
+          <PrintButton label={definition.id === "m07-order-fulfilment-plan" ? "Print factory floor summary" : definition.printable ? "Print the summary for the bank" : "Print or save as PDF"} />
           {canStartNext && <StartDraftButton worksheetId={definition.id} label="Start a new version to change it" variant="secondary" />}
         </div>
       </header>
@@ -113,6 +113,28 @@ export function WorksheetSummary({ definition, version, canStartNext }: { defini
           </dl>
         </Card>
       ))}
+
+      {definition.id === "m07-order-fulfilment-plan" && (
+        <div className="hidden border-t-2 border-line pt-4 print:block">
+          <div className="grid grid-cols-3 gap-6 text-xs text-ink-2">
+            <div className="space-y-4">
+              <p className="font-semibold text-ink">Production Line Supervisor</p>
+              <div className="border-b border-line pb-1">Signature: _______________________</div>
+              <div className="border-b border-line pb-1">Date: __________________________</div>
+            </div>
+            <div className="space-y-4">
+              <p className="font-semibold text-ink">Quality Control Inspector</p>
+              <div className="border-b border-line pb-1">Signature: _______________________</div>
+              <div className="border-b border-line pb-1">Date: __________________________</div>
+            </div>
+            <div className="space-y-4">
+              <p className="font-semibold text-ink">Operations Manager</p>
+              <div className="border-b border-line pb-1">Signature: _______________________</div>
+              <div className="border-b border-line pb-1">Date: __________________________</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {version.mizan && <p className="text-xs text-ink-3">{version.mizan.message}</p>}
       <p className="text-xs leading-relaxed text-ink-3">

@@ -4,16 +4,24 @@ import { QUESTION_TYPES } from "@entrust/forms";
 import { MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
 import {
   ASSESSMENT_STATUSES,
+  COMMERCIAL_ACTIVITY_TYPES,
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   EVIDENCE_TARGET_TYPES,
+  EXPORT_OUTCOME_STATUSES,
   FIELD_KINDS,
+  FINANCING_OUTCOME_STATUSES,
+  FINANCING_TYPES,
   LEARNING_PLAN_STATUSES,
   MODULE_ASSIGNMENT_SOURCES,
   MODULE_EXEMPTION_STATUSES,
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
+  OUTCOME_EVIDENCE_TIERS,
+  PIPELINE_STAGES,
+  QUALIFICATION_BANDS,
   SPONSOR_DATA_KINDS,
+  VERIFICATION_LADDER_STATUSES,
 } from "@entrust/trade-engine";
 import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
@@ -1452,5 +1460,292 @@ export type RevokeCertificateInput = z.infer<typeof RevokeCertificateBody>;
 export type AdminOverrideModuleInput = z.infer<typeof AdminOverrideModuleBody>;
 export type DomainComparisonView = z.infer<typeof DomainComparisonView>;
 export type ExitAssessmentReportView = z.infer<typeof ExitAssessmentReportView>;
+
+// Commercial Opportunity & Pipeline schemas (#68)
+export const OpportunityParam = z
+  .object({
+    id: z.string().uuid().openapi({ description: "Opportunity ID" }),
+  })
+  .openapi("TradeOpportunityParam");
+
+export const PipelineQuery = z
+  .object({
+    organizationId: z.string().optional().openapi({ description: "Organisation ID" }),
+    enrollmentId: z.string().uuid().optional().openapi({ description: "Enrolment ID" }),
+  })
+  .openapi("TradePipelineQuery");
+
+export const CreateOpportunityBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    title: z.string().trim().min(1, "Title is required"),
+    companyName: z.string().trim().min(1, "Company name is required"),
+    buyerName: z.string().trim().optional(),
+    country: z.string().trim().min(1, "Country is required"),
+    website: z.string().trim().url().optional().or(z.literal("")),
+    sourceLinks: z.array(z.string().url()).optional().default([]),
+    decisionMakerRole: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES).optional().default("unverified"),
+    stage: z.enum(PIPELINE_STAGES).optional().default("lead_discovered"),
+    estimatedValue: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+  })
+  .openapi("CreateTradeOpportunityBody");
+
+export const UpdateOpportunityStageBody = z
+  .object({
+    stage: z.enum(PIPELINE_STAGES),
+  })
+  .openapi("UpdateTradeOpportunityStageBody");
+
+export const CreateOpportunityActivityBody = z
+  .object({
+    type: z.enum(COMMERCIAL_ACTIVITY_TYPES),
+    summary: z.string().trim().min(1, "Summary is required"),
+    occurredAt: z.string().datetime(),
+    followUpDate: z.string().datetime().optional().nullable(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeOpportunityActivityBody");
+
+export const OpportunityScorecardBody = z
+  .object({
+    productFit: z.number().int().min(0).max(5),
+    purchasingPowerOrVolume: z.number().int().min(0).max(5),
+    paymentTerms: z.number().int().min(0).max(5),
+    accessToDecisionMaker: z.number().int().min(0).max(5),
+    importExperience: z.number().int().min(0).max(5),
+    timeline: z.number().int().min(0).max(5),
+  })
+  .openapi("TradeOpportunityScorecardBody");
+
+export const ActivityView = z
+  .object({
+    id: z.string().uuid(),
+    opportunityId: z.string().uuid(),
+    organizationId: z.string(),
+    actorUserId: z.string().nullable(),
+    type: z.enum(COMMERCIAL_ACTIVITY_TYPES),
+    summary: z.string(),
+    occurredAt: z.string(),
+    followUpDate: z.string().nullable(),
+    evidenceUrl: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeActivityView");
+
+export const ActivityList = z
+  .object({
+    items: z.array(ActivityView),
+  })
+  .openapi("TradeActivityList");
+
+export const OpportunityView = z
+  .object({
+    id: z.string().uuid(),
+    organizationId: z.string(),
+    enrollmentId: z.string().uuid().nullable(),
+    title: z.string(),
+    companyName: z.string(),
+    buyerName: z.string().nullable(),
+    country: z.string(),
+    website: z.string().nullable(),
+    sourceLinks: z.array(z.string()),
+    decisionMakerRole: z.string().nullable(),
+    notes: z.string().nullable(),
+    verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES),
+    stage: z.enum(PIPELINE_STAGES),
+    scorecard: z.record(z.string(), z.number()).nullable(),
+    scorecardTotal: z.number().nullable(),
+    scorecardBand: z.enum(QUALIFICATION_BANDS).nullable(),
+    estimatedValue: z.number().nullable(),
+    currency: z.string().nullable(),
+    activityCount: z.number(),
+    latestActivity: ActivityView.nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeOpportunityView");
+
+export const OpportunityList = z
+  .object({
+    items: z.array(OpportunityView),
+  })
+  .openapi("TradeOpportunityList");
+
+export const ExportJourneyStageView = z
+  .object({
+    stageNumber: z.number().int().min(1).max(10),
+    title: z.string(),
+    description: z.string(),
+    furthestOpportunityId: z.string().uuid().nullable(),
+    activeOpportunitiesCount: z.number().int(),
+    m05DeliverableStatus: z.object({
+      isEligible: z.boolean(),
+      verifiedCount: z.number().int(),
+      missingCount: z.number().int(),
+    }),
+  })
+  .openapi("TradeExportJourneyStageView");
+
+export type CreateOpportunityInput = z.infer<typeof CreateOpportunityBody>;
+export type UpdateOpportunityStageInput = z.infer<typeof UpdateOpportunityStageBody>;
+export type CreateOpportunityActivityInput = z.infer<typeof CreateOpportunityActivityBody>;
+export type OpportunityScorecardInput = z.infer<typeof OpportunityScorecardBody>;
+export type OpportunityView = z.infer<typeof OpportunityView>;
+export type ActivityView = z.infer<typeof ActivityView>;
+export type ExportJourneyStageView = z.infer<typeof ExportJourneyStageView>;
+
+// Financing & Export Outcomes schemas (#69)
+export const OutcomeParam = z
+  .object({
+    id: z.string().uuid().openapi({ description: "Outcome ID" }),
+  })
+  .openapi("TradeOutcomeParam");
+
+export const OutcomeQuery = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    kind: z.enum(["financing", "export"]).optional(),
+  })
+  .openapi("TradeOutcomeQuery");
+
+export const CreateFinancingOutcomeBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    lenderName: z.string().trim().min(1, "Lender name is required"),
+    financingType: z.enum(FINANCING_TYPES),
+    amountRequested: z.number().positive("Amount requested must be positive"),
+    amountApproved: z.number().nonnegative().optional().nullable(),
+    amountDisbursed: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+    status: z.enum(FINANCING_OUTCOME_STATUSES).optional().default("application_prepared"),
+    approvalDate: z.string().datetime().optional().nullable(),
+    disbursementDate: z.string().datetime().optional().nullable(),
+    notes: z.string().trim().optional(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeFinancingOutcomeBody");
+
+export const UpdateFinancingStatusBody = z
+  .object({
+    status: z.enum(FINANCING_OUTCOME_STATUSES),
+    amountApproved: z.number().nonnegative().optional().nullable(),
+    amountDisbursed: z.number().nonnegative().optional().nullable(),
+    approvalDate: z.string().datetime().optional().nullable(),
+    disbursementDate: z.string().datetime().optional().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+    notes: z.string().trim().optional(),
+  })
+  .openapi("UpdateTradeFinancingStatusBody");
+
+export const CreateExportOutcomeBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    opportunityId: z.string().uuid().optional().nullable(),
+    buyerName: z.string().trim().min(1, "Buyer name is required"),
+    destinationCountry: z.string().trim().min(1, "Destination country is required"),
+    productDescription: z.string().trim().min(1, "Product description is required"),
+    valuePlanned: z.number().nonnegative().optional().nullable(),
+    valueShipped: z.number().nonnegative().optional().nullable(),
+    valuePaid: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+    status: z.enum(EXPORT_OUTCOME_STATUSES).optional().default("planned"),
+    shipmentDate: z.string().datetime().optional().nullable(),
+    deliveryDate: z.string().datetime().optional().nullable(),
+    paymentDate: z.string().datetime().optional().nullable(),
+    notes: z.string().trim().optional(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeExportOutcomeBody");
+
+export const UpdateExportStatusBody = z
+  .object({
+    status: z.enum(EXPORT_OUTCOME_STATUSES),
+    valueShipped: z.number().nonnegative().optional().nullable(),
+    valuePaid: z.number().nonnegative().optional().nullable(),
+    shipmentDate: z.string().datetime().optional().nullable(),
+    deliveryDate: z.string().datetime().optional().nullable(),
+    paymentDate: z.string().datetime().optional().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+    notes: z.string().trim().optional(),
+  })
+  .openapi("UpdateTradeExportStatusBody");
+
+export const OutcomeEventView = z
+  .object({
+    id: z.string().uuid(),
+    outcomeId: z.string().uuid(),
+    organizationId: z.string(),
+    actorUserId: z.string().nullable(),
+    previousStatus: z.string().nullable(),
+    newStatus: z.string(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS),
+    evidenceUrl: z.string().nullable(),
+    notes: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeOutcomeEventView");
+
+export const OutcomeView = z
+  .object({
+    id: z.string().uuid(),
+    organizationId: z.string(),
+    enrollmentId: z.string().uuid().nullable(),
+    kind: z.enum(["financing", "export"]),
+    status: z.string(),
+    // Financing
+    lenderName: z.string().nullable(),
+    financingType: z.string().nullable(),
+    amountRequested: z.number().nullable(),
+    amountApproved: z.number().nullable(),
+    amountDisbursed: z.number().nullable(),
+    currency: z.string().nullable(),
+    approvalDate: z.string().nullable(),
+    disbursementDate: z.string().nullable(),
+    // Export
+    opportunityId: z.string().uuid().nullable(),
+    buyerName: z.string().nullable(),
+    destinationCountry: z.string().nullable(),
+    productDescription: z.string().nullable(),
+    valuePlanned: z.number().nullable(),
+    valueShipped: z.number().nullable(),
+    valuePaid: z.number().nullable(),
+    shipmentDate: z.string().nullable(),
+    deliveryDate: z.string().nullable(),
+    paymentDate: z.string().nullable(),
+    // Shared
+    notes: z.string().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS),
+    evidenceUrl: z.string().nullable(),
+    events: z.array(OutcomeEventView).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeOutcomeView");
+
+export const OutcomeList = z
+  .object({
+    items: z.array(OutcomeView),
+  })
+  .openapi("TradeOutcomeList");
+
+export type CreateFinancingOutcomeInput = z.infer<typeof CreateFinancingOutcomeBody>;
+export type UpdateFinancingStatusInput = z.infer<typeof UpdateFinancingStatusBody>;
+export type CreateExportOutcomeInput = z.infer<typeof CreateExportOutcomeBody>;
+export type UpdateExportStatusInput = z.infer<typeof UpdateExportStatusBody>;
+export type OutcomeEventView = z.infer<typeof OutcomeEventView>;
+export type OutcomeView = z.infer<typeof OutcomeView>;
+
+
 
 
