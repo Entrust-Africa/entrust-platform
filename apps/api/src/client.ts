@@ -32,3 +32,12 @@ export type {
   AuditLogListType,
   AuditQueryType,
 } from "./schemas/audit";
+
+// The shapes the TRADE endpoints return.
+export type {
+  LearningPlanRecord,
+  LearningPlanView,
+  ModuleAssignmentView,
+  ModuleExemptionView,
+  ModuleProgressView,
+} from "./schemas/trade";
