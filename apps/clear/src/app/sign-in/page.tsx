@@ -1,4 +1,5 @@
 import { SignInView } from "@entrust/account";
+import { afriConnectSignInShown } from "@entrust/auth/africonnect";
 import { getMe } from "@/lib/api";
 
 export const metadata = { title: "Sign in" };
@@ -6,9 +7,9 @@ export const metadata = { title: "Sign in" };
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invitationId?: string }>;
+  searchParams: Promise<{ invitationId?: string; error?: string }>;
 }) {
-  const { invitationId } = await searchParams;
+  const { invitationId, error } = await searchParams;
   const me = await getMe();
 
   return (
@@ -21,6 +22,8 @@ export default async function SignInPage({
       homePath="/"
       currentUser={me}
       invitationId={invitationId}
+      afriConnect={afriConnectSignInShown() ? { product: "clear" } : null}
+      errorCode={error}
     />
   );
 }

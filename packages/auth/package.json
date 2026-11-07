@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./roles": "./src/roles.ts"
+    "./roles": "./src/roles.ts",
+    "./africonnect": "./src/africonnect.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -17,7 +18,8 @@
     "@entrust/notify": "workspace:*",
     "@entrust/roles": "workspace:*",
     "better-auth": "^1.7.12",
-    "drizzle-orm": "^0.45.4"
+    "drizzle-orm": "^0.45.4",
+    "jose": "^6.2.13"
   },
   "devDependencies": {
     "vitest": "^5.0.5"

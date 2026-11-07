@@ -1,9 +1,17 @@
+import { and, eq, inArray } from "drizzle-orm";
 import { betterAuth } from "better-auth";
+import { APIError as BetterAuthAPIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { genericOAuth, organization } from "better-auth/plugins";
 import { getDb, schema, type Database } from "@entrust/db";
 import { sendEmail } from "@entrust/notify";
 import { InvitationEmail, PasswordResetEmail, VerificationEmail } from "@entrust/notify/templates";
+import {
+  AFRICONNECT_PROVIDER_ID,
+  afriConnectOAuthConfig,
+  afriConnectSettings,
+  provisionAfriConnectAccount,
+} from "./africonnect";
 import {
   detectPlatformFromUrl,
   getClearAppUrl,
@@ -43,6 +51,25 @@ const db = new Proxy({} as Database, {
   },
 });
 
+// Signing in with an AfriConnect account, when this deployment is registered with AfriConnect (africonnect.ts).
+const afriConnect = afriConnectSettings();
+
+/**
+ * An Entrust user made for someone before they first signed in (by the provisioning below) has no name yet; the
+ * name they gave AfriConnect fills it. A name Entrust already has is never replaced.
+ */
+async function fillEmptyName(person: { sub: string; name: string }) {
+  if (!person.name.trim()) return;
+  const accounts = db
+    .select({ userId: schema.account.userId })
+    .from(schema.account)
+    .where(and(eq(schema.account.providerId, AFRICONNECT_PROVIDER_ID), eq(schema.account.accountId, person.sub)));
+  await db
+    .update(schema.user)
+    .set({ name: person.name.trim() })
+    .where(and(inArray(schema.user.id, accounts), eq(schema.user.name, "")));
+}
+
 // One auth instance for every Entrust platform, served by apps/api. Organisations
 // are SME companies and the Entrust team; platform access is granted per organisation.
 export const auth = betterAuth({
@@ -63,6 +90,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    // With AfriConnect on, new accounts are made there (or by the provisioning below), never with an Entrust
+    // password. Existing passwords keep working until they are retired.
+    disableSignUp: Boolean(afriConnect),
     sendResetPassword: async ({ user, url }) => {
       const platform = detectPlatformFromUrl(url);
       const platformName = platform === "trade" ? "TRADE" : "CLEAR";
@@ -87,6 +117,8 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    // Always present (with no providers when AfriConnect is off), so the session type keeps every plugin's fields.
+    genericOAuth({ config: afriConnect ? [afriConnectOAuthConfig(afriConnect, fillEmptyName)] : [] }),
     organization({
       schema: {
         invitation: {
@@ -117,6 +149,16 @@ export const auth = betterAuth({
       },
     }),
   ],
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Better Auth also lets a client hand over an ID token directly instead of the redirect sign-in. For
+      // AfriConnect that would skip PKCE, state and the nonce Entrust chose, so only the redirect is accepted.
+      const body = ctx.body as { provider?: unknown; idToken?: unknown } | undefined;
+      if ((ctx.path === "/sign-in/social" || ctx.path === "/link-social") && body?.provider === AFRICONNECT_PROVIDER_ID && body.idToken) {
+        throw new BetterAuthAPIError("BAD_REQUEST", { message: "Sign in with AfriConnect through its sign-in page." });
+      }
+    }),
+  },
   advanced: {
     // Every API request checks its session. With joins the session and its user come back in one
     // query rather than two, through the session-to-user relation in @entrust/db's schema.
@@ -126,6 +168,63 @@ export const auth = betterAuth({
 });
 
 export type Session = typeof auth.$Infer.Session;
+
+/** Whether people sign in with their AfriConnect account on this deployment. */
+export const afriConnectSignIn = Boolean(afriConnect);
+
+export type EnsureAccountResult =
+  | { status: "linked"; userId: string; created: boolean }
+  | { status: "conflict"; reason: string }
+  | { status: "unavailable"; reason: string }
+  | { status: "disabled" };
+
+/**
+ * Make sure a person whose email Entrust has just verified (a registration, not a sign-in) has an account on both
+ * AfriConnect and Entrust, tied together by AfriConnect's subject. No password is set anywhere: the person chooses
+ * one the first time they sign in. Safe to call again; a second call finds what the first made.
+ *
+ * Refuses (`conflict`) rather than guess when the accounts disagree: an Entrust account for the email whose address
+ * was never verified (whoever made it may hold its password), an AfriConnect subject already tied to another Entrust
+ * user, or an Entrust user already tied to another subject. Those are linked, or not, when the person signs in.
+ */
+export async function ensureAfriConnectAccount(person: { email: string; name?: string }): Promise<EnsureAccountResult> {
+  if (!afriConnect) return { status: "disabled" };
+  const email = person.email.trim().toLowerCase();
+  const name = person.name?.trim() || undefined;
+  const ctx = await auth.$context;
+  const found = await ctx.internalAdapter.findUserByEmail(email, { includeAccounts: true });
+  if (found && !found.user.emailVerified) {
+    return { status: "conflict", reason: "an Entrust account for this email was never verified" };
+  }
+  const linked = found?.accounts.find((account) => account.providerId === AFRICONNECT_PROVIDER_ID);
+  if (found && linked) return { status: "linked", userId: found.user.id, created: false };
+
+  const provisioned = await provisionAfriConnectAccount(afriConnect, { email, name });
+  if (provisioned.status === "conflict") {
+    return { status: "conflict", reason: "AfriConnect has an unverified account for this email" };
+  }
+  if (provisioned.status === "unavailable") return provisioned;
+
+  const owner = await ctx.internalAdapter.findAccountByKey({
+    providerId: AFRICONNECT_PROVIDER_ID,
+    accountId: provisioned.sub,
+  });
+  if (owner) {
+    return owner.userId === found?.user.id || !found
+      ? { status: "linked", userId: owner.userId, created: false }
+      : { status: "conflict", reason: "the AfriConnect account is tied to another Entrust user" };
+  }
+  const user = found?.user ?? (await ctx.internalAdapter.createUser(
+      { email, name: name ?? "", emailVerified: true },
+      { method: "africonnect-provisioning" },
+    ));
+  await ctx.internalAdapter.linkAccount({
+    userId: user.id,
+    providerId: AFRICONNECT_PROVIDER_ID,
+    accountId: provisioned.sub,
+  });
+  return { status: "linked", userId: user.id, created: !found };
+}
 export { APIError } from "better-auth";
 export {
   detectPlatformFromUrl,
@@ -135,3 +234,10 @@ export {
   type AuthPlatform,
 };
 export * from "./roles";
+export {
+  AFRICONNECT_PROVIDER_ID,
+  afriConnectSettings,
+  provisionAfriConnectAccount,
+  type AfriConnectSettings,
+  type ProvisionResult,
+} from "./africonnect";

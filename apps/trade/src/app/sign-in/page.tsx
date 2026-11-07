@@ -1,4 +1,5 @@
 import { SignInView } from "@entrust/account";
+import { afriConnectSignInShown } from "@entrust/auth/africonnect";
 import { getMe } from "@/lib/api";
 import { safeNext } from "@/lib/next-path";
 import { RememberNext } from "@/components/summit/clear-next";
@@ -8,9 +9,9 @@ export const metadata = { title: "Sign in" };
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invitationId?: string; next?: string }>;
+  searchParams: Promise<{ invitationId?: string; next?: string; error?: string }>;
 }) {
-  const { invitationId, next } = await searchParams;
+  const { invitationId, next, error } = await searchParams;
   const me = await getMe();
   // A visitor sent here from the Summit comes back to it, even after creating an account and verifying their email.
   const comeBackTo = safeNext(next);
@@ -31,6 +32,8 @@ export default async function SignInPage({
         homePath={comeBackTo ?? "/"}
         currentUser={me}
         invitationId={invitationId}
+        afriConnect={afriConnectSignInShown() ? { product: "trade" } : null}
+        errorCode={error}
       />
     </>
   );

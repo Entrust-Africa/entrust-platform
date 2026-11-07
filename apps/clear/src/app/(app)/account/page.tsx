@@ -1,4 +1,5 @@
 import { AccountView } from "@entrust/account";
+import { afriConnectSignInShown } from "@entrust/auth/africonnect";
 import { getMe } from "@/lib/api";
 import { redirect } from "next/navigation";
 
@@ -11,5 +12,5 @@ export default async function AccountPage() {
   if (!me) {
     redirect("/sign-in");
   }
-  return <AccountView user={me} platformName="CLEAR" organizationsHref="/organizations" />;
+  return <AccountView user={me} platformName="CLEAR" organizationsHref="/organizations" afriConnect={afriConnectSignInShown()} />;
 }

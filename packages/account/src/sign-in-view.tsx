@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Button, Field, Patchwork } from "@entrust/ui";
+import { afriConnectErrorMessage, continueWithAfriConnect, type AfriConnectProduct } from "./africonnect";
 import { authClient } from "./auth-client";
 import type { UserProfile } from "./types";
 
@@ -18,6 +19,13 @@ export interface SignInViewProps {
   currentUser?: UserProfile | null;
   invitationId?: string;
   brandFooter?: ReactNode;
+  /**
+   * Sign in with an AfriConnect account: only the email is asked here, and AfriConnect's page (in this platform's
+   * colours) takes the password or a code. Without it, the Entrust email-and-password form shows.
+   */
+  afriConnect?: { product: AfriConnectProduct } | null;
+  /** The `?error=` code a failed AfriConnect sign-in comes back with. */
+  errorCode?: string | null;
 }
 
 type Mode = "sign-in" | "sign-up";
@@ -32,18 +40,36 @@ export function SignInView({
   currentUser,
   invitationId,
   brandFooter,
+  afriConnect,
+  errorCode,
 }: SignInViewProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("sign-in");
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | undefined>(() => (afriConnect ? afriConnectErrorMessage(errorCode) : undefined));
   const [pending, setPending] = useState(false);
 
   // If already signed in, redirect
   if (currentUser) {
-    const destination = invitationId
-      ? `/accept-invitation?id=${encodeURIComponent(invitationId)}`
-      : homePath;
-    router.replace(destination);
+    router.replace(invitationId ? `/accept-invitation?id=${encodeURIComponent(invitationId)}` : homePath);
+  }
+
+  const destination = invitationId ? `/accept-invitation?id=${encodeURIComponent(invitationId)}` : homePath;
+
+  async function onContinue(form: FormData) {
+    if (!afriConnect) return;
+    setPending(true);
+    setError(undefined);
+    const failed = await continueWithAfriConnect({
+      email: String(form.get("email") ?? ""),
+      product: afriConnect.product,
+      callbackPath: destination,
+      // A failed sign-in comes back here, still holding the invitation.
+      errorPath: invitationId ? `/sign-in?invitationId=${encodeURIComponent(invitationId)}` : "/sign-in",
+    });
+    if (failed) {
+      setError(failed.error);
+      setPending(false);
+    }
   }
 
   async function onSubmit(form: FormData) {
@@ -82,13 +108,11 @@ export function SignInView({
       );
       return;
     }
-    const destination =
+    router.replace(
       mode === "sign-up"
         ? `/check-email?email=${encodeURIComponent(email)}${invitationId ? `&invitationId=${encodeURIComponent(invitationId)}` : ""}`
-        : invitationId
-          ? `/accept-invitation?id=${encodeURIComponent(invitationId)}`
-          : homePath;
-    router.replace(destination);
+        : destination,
+    );
     router.refresh();
   }
 
@@ -125,51 +149,72 @@ export function SignInView({
       </section>
       <section className="flex items-center justify-center px-6 py-12 sm:px-12">
         <div className="w-full max-w-sm">
-          <h2 className="font-display text-2xl font-bold">
-            {mode === "sign-in" ? `Sign in to ${appName}` : "Create your account"}
-          </h2>
-          <p className="mt-2 text-sm text-ink-2">
-            {mode === "sign-in"
-              ? "Use the email your Entrust facilitator registered."
-              : "You'll use this account across Entrust platforms."}
-          </p>
-          <form action={onSubmit} className="mt-8 flex flex-col gap-5">
-            {mode === "sign-up" && <Field label="Full name" name="name" autoComplete="name" required />}
-            <Field label="Email" name="email" type="email" autoComplete="email" required />
-            <Field
-              label="Password"
-              name="password"
-              type="password"
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              minLength={8}
-              hint={mode === "sign-up" ? "At least 8 characters." : undefined}
-              error={error}
-              required
-            />
-            <Button type="submit" size="lg" loading={pending}>
-              {mode === "sign-in" ? "Sign in" : "Create account"}
-            </Button>
-          </form>
-          <p className="mt-6 text-sm text-ink-2">
-            {mode === "sign-in" ? `New to ${appName}? ` : "Already have an account? "}
-            <button
-              type="button"
-              className="font-semibold text-brand-600 underline-offset-4 hover:underline"
-              onClick={() => {
-                setMode(mode === "sign-in" ? "sign-up" : "sign-in");
-                setError(undefined);
-              }}
-            >
-              {mode === "sign-in" ? "Create an account" : "Sign in"}
-            </button>
-          </p>
-          {mode === "sign-in" && (
-            <Link
-              className="mt-4 block text-sm font-semibold text-brand-600 underline-offset-4 hover:underline"
-              href="/forgot-password"
-            >
-              Forgot your password?
-            </Link>
+          {afriConnect ? (
+            <>
+              <h2 className="font-display text-2xl font-bold">Sign in to {appName}</h2>
+              <p className="mt-2 text-sm text-ink-2">
+                Enter your email to continue. New to {appName}? Enter it all the same, and you'll create your account on
+                the next page.
+              </p>
+              <form action={onContinue} className="mt-8 flex flex-col gap-5">
+                <Field label="Email" name="email" type="email" autoComplete="email" required error={error} />
+                <Button type="submit" size="lg" loading={pending}>
+                  Continue
+                </Button>
+              </form>
+              <p className="mt-6 text-xs leading-relaxed text-ink-3">
+                Your Entrust Africa account is run with AfriConnect: you use the same email and password on both.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-2xl font-bold">
+                {mode === "sign-in" ? `Sign in to ${appName}` : "Create your account"}
+              </h2>
+              <p className="mt-2 text-sm text-ink-2">
+                {mode === "sign-in"
+                  ? "Use the email your Entrust facilitator registered."
+                  : "You'll use this account across Entrust platforms."}
+              </p>
+              <form action={onSubmit} className="mt-8 flex flex-col gap-5">
+                {mode === "sign-up" && <Field label="Full name" name="name" autoComplete="name" required />}
+                <Field label="Email" name="email" type="email" autoComplete="email" required />
+                <Field
+                  label="Password"
+                  name="password"
+                  type="password"
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                  minLength={8}
+                  hint={mode === "sign-up" ? "At least 8 characters." : undefined}
+                  error={error}
+                  required
+                />
+                <Button type="submit" size="lg" loading={pending}>
+                  {mode === "sign-in" ? "Sign in" : "Create account"}
+                </Button>
+              </form>
+              <p className="mt-6 text-sm text-ink-2">
+                {mode === "sign-in" ? `New to ${appName}? ` : "Already have an account? "}
+                <button
+                  type="button"
+                  className="font-semibold text-brand-600 underline-offset-4 hover:underline"
+                  onClick={() => {
+                    setMode(mode === "sign-in" ? "sign-up" : "sign-in");
+                    setError(undefined);
+                  }}
+                >
+                  {mode === "sign-in" ? "Create an account" : "Sign in"}
+                </button>
+              </p>
+              {mode === "sign-in" && (
+                <Link
+                  className="mt-4 block text-sm font-semibold text-brand-600 underline-offset-4 hover:underline"
+                  href="/forgot-password"
+                >
+                  Forgot your password?
+                </Link>
+              )}
+            </>
           )}
         </div>
       </section>

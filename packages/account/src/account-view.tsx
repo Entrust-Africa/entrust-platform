@@ -12,12 +12,15 @@ export interface AccountViewProps {
   user: UserProfile;
   platformName?: string;
   organizationsHref?: string;
+  /** People sign in with their AfriConnect account, so the password is AfriConnect's to change. */
+  afriConnect?: boolean;
 }
 
 export function AccountView({
   user,
   platformName = "CLEAR",
   organizationsHref = "/organizations",
+  afriConnect = false,
 }: AccountViewProps) {
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -150,35 +153,47 @@ export function AccountView({
             </div>
             <div>
               <h2 className="font-display text-lg font-bold">Password & Security</h2>
-              <p className="text-xs text-ink-3">Request a password reset link for your account</p>
+              <p className="text-xs text-ink-3">
+                {afriConnect ? "Your account is run with AfriConnect" : "Request a password reset link for your account"}
+              </p>
             </div>
           </div>
 
-          <div className="mt-6">
-            <p className="text-sm text-ink-2">
-              To change your password, we can email you a secure reset link.
-            </p>
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-4"
-              loading={resetPending}
-              onClick={() => void handleResetPassword()}
-            >
-              Send password reset email
-            </Button>
-
-            {resetMessage && (
-              <p
-                className={`mt-3 text-xs font-medium ${resetSuccess ? "text-brand-600" : "text-danger"}`}
-                role={resetSuccess ? "status" : "alert"}
-              >
-                {resetMessage}
+          {afriConnect ? (
+            <div className="mt-6 space-y-2 text-sm text-ink-2">
+              <p>You sign in with your email and the password you chose on AfriConnect. It is the same on both.</p>
+              <p>
+                Forgotten it? On the sign-in page, enter your email and choose “Email me a code instead”. The code signs
+                you in without the password.
               </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-6">
+              <p className="text-sm text-ink-2">
+                To change your password, we can email you a secure reset link.
+              </p>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-4"
+                loading={resetPending}
+                onClick={() => void handleResetPassword()}
+              >
+                Send password reset email
+              </Button>
+
+              {resetMessage && (
+                <p
+                  className={`mt-3 text-xs font-medium ${resetSuccess ? "text-brand-600" : "text-danger"}`}
+                  role={resetSuccess ? "status" : "alert"}
+                >
+                  {resetMessage}
+                </p>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Session Card */}
