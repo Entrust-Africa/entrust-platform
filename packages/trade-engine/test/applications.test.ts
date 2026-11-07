@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationCountry, isApplicationResponses, isYes, readApplications, sameApplicant, tidyPhone, timesApplied, type Cell } from "../src";
+import { applicationCountry, hasExported, isApplicationResponses, isYes, readApplications, sameApplicant, tidyPhone, timesApplied, type Cell } from "../src";
 
 const country = (location: string | null, phone: string | null = null, email: string | null = null) => applicationCountry({ location, email, phone });
 
@@ -143,7 +143,7 @@ describe("reading the form's responses", () => {
   });
 
   it("refuses a sheet that isn't a form's responses, in words that say why", () => {
-    expect(() => readApplications({ Sheet1: [["a", "b"]] })).toThrow(/no sheet has "Timestamp" and "Business Name" headings/);
+    expect(() => readApplications({ Sheet1: [["a", "b"]] })).toThrow(/no sheet has "Timestamp" and "Business Name" \(or "Company Name"\) headings/);
     expect(() => readApplications({ "Form Responses 1": [HEADINGS] })).toThrow(/no responses/);
   });
 });
@@ -178,5 +178,138 @@ describe("telling a form's responses from other files", () => {
     expect(isApplicationResponses({ Responses: [HEADINGS] })).toBe(true);
     expect(isApplicationResponses({ "Master SME Database": [["SME ID", "Company Name"]] })).toBe(false);
     expect(isApplicationResponses({})).toBe(false);
+  });
+});
+
+// The Export Growth Companies cohort's form: "Company Name" for the business, an address and a region apart, "Mobile Number",
+// and questions worded their own way (some with the form's typos). The businesses here are invented.
+const GROWTH_HEADINGS: Cell[] = [
+  "Timestamp", "Email Address", "Company Name ", "Contact Person", "Position", "Mobile Number", "Email Address 2", "Company Address", "Region", "Website",
+  "Social Media", "Business Profile", "Year Established", "Business Registration Number", "TIN", "Number of Employees", "What products and services do you offer?",
+  "Wat are are your top 3 products?", "Current production capacity?", "Main customers?", "Which best describes your company?",
+  "Which countries do you currently export to?", "Which countries are you targeting?", "Average annual export sales ", "Approximate annual turnover",
+  "Do you have audited financial statements?", "Do you currently work with a bank?", "He you ever received business financing?",
+  "Business needs-select your top priorities", "Is your business", "Can the owner or CEO attend all training sessions?", "Documents upload", "Final Declaration",
+];
+
+const growth = (over: Record<number, Cell> = {}): Cell[] => {
+  const row: Cell[] = [
+    SERIAL, "owner@firm.test", "Acme Spices PLC", "Abebe Kebede", "Manager", "0911105926", "abebe@firm.test", "Arada sub city, Wo 1", "Addis Ababa", "www.acme.test",
+    "Facebook", "Agro-Processing, Honey & Spices", 2021, "AA/1/0001/2013", "0012345678", "11-25", "Spices and honey", "Turmeric, cardamom, honey", "100kg/day", "Local",
+    "Preparing to export", "None", "Europe", null, "Under ETB 5 million", "Yes", "Yes", "No", "Export Readiness, Market Access", "Women-owned", "Yes", "Business License",
+    "I confirm that the information provided is accurate",
+  ];
+  for (const [i, v] of Object.entries(over)) row[Number(i)] = v;
+  return row;
+};
+const growthSheets = (...rows: Cell[][]) => ({ "Form Responses 1": [GROWTH_HEADINGS, ...rows] });
+
+describe("reading the Export Growth Companies form", () => {
+  it("is known as a form's responses by its Company Name heading, and a diagnostic workbook still isn't one", () => {
+    expect(isApplicationResponses(growthSheets(growth()))).toBe(true);
+    expect(isApplicationResponses({ Responses: [["Timestamp", "Company Name"]] })).toBe(true);
+    expect(isApplicationResponses({ "Master SME Database": [["SME ID", "Company Name"]] })).toBe(false);
+  });
+
+  it("reads the business, the contact and where it is", () => {
+    const { applications, warnings } = readApplications(growthSheets(growth()));
+    expect(warnings).toEqual([]);
+    expect(applications).toHaveLength(1);
+    expect(applications[0]).toMatchObject({
+      submittedAt: "2026-03-27T12:00:00.000Z",
+      email: "owner@firm.test",
+      businessName: "Acme Spices PLC",
+      contactName: "Abebe Kebede",
+      phone: "+251911105926",
+      location: "Arada sub city, Wo 1, Addis Ababa",
+      country: "ET",
+    });
+  });
+
+  it("keeps every answer under the question it is, whichever way the form words it", () => {
+    const { answers } = readApplications(growthSheets(growth())).applications[0]!;
+    expect(answers).toEqual({
+      position: "Manager",
+      contactEmail: "abebe@firm.test",
+      website: "www.acme.test",
+      socialMedia: "Facebook",
+      registrationNumber: "AA/1/0001/2013",
+      tin: "0012345678",
+      produces: "Spices and honey",
+      category: "Agro-Processing, Honey & Spices",
+      mainProducts: "Turmeric, cardamom, honey",
+      capacity: "100kg/day",
+      customers: "Local",
+      employees: "11-25",
+      yearEstablished: "2021",
+      ownership: "Women-owned",
+      turnover: "Under ETB 5 million",
+      exportStage: "Preparing to export",
+      exportingTo: "None",
+      exportMarkets: "Europe",
+      supportNeeded: "Export Readiness, Market Access",
+      hasBankAccount: "Yes",
+      hadLoan: "No",
+      auditedStatements: "Yes",
+      availability: "Yes",
+      documentsUploaded: "Business License",
+      declaration: "I confirm that the information provided is accurate",
+    });
+  });
+
+  it("joins the address and region, leaving out a region the address already names and one that is only a number", () => {
+    const place = (address: Cell, region: Cell) => readApplications(growthSheets(growth({ 7: address, 8: region }))).applications[0]!.location;
+    expect(place("Addis Ababa, Ethiopia", "Addis Ababa")).toBe("Addis Ababa, Ethiopia");
+    expect(place("Bole, Addis Ababa", "addis ababa ")).toBe("Bole, Addis Ababa");
+    expect(place("Kirkos", 14)).toBe("Kirkos");
+    expect(place(null, "Amhara")).toBe("Amhara");
+    expect(place("Debre Birhan", "Amhara")).toBe("Debre Birhan, Amhara");
+  });
+
+  it("works out the country from the address and region together, then the phone number", () => {
+    const country = (address: Cell, region: Cell, phone: Cell) => readApplications(growthSheets(growth({ 7: address, 8: region, 5: phone }))).applications[0]!.country;
+    expect(country("Kirkos subcity", "Addis Ababa", "0911105926")).toBe("ET");
+    expect(country("Behind Bole building 2nd floor addisababa Ethiopia", "Woreda 03", "0911105926")).toBe("ET");
+    // Says nothing about where it is, so the phone number does, even typed as a bare number.
+    expect(country("Nefas Silk", "Addisabeba", 944173254)).toBe("ET");
+    expect(country("Lagos", "Lagos", "07063479837")).toBe("NG");
+  });
+
+  it("tidies Ethiopian phone numbers however the cell holds them, and warns about one that has a digit too many", () => {
+    const phone = (typed: Cell) => readApplications(growthSheets(growth({ 5: typed }))).applications[0]!.phone;
+    expect(["0911105926", "+251911105926", 251911105926, "+251-911105926 "].map(phone)).toEqual(Array(4).fill("+251911105926"));
+    const { warnings } = readApplications(growthSheets(growth({ 5: "+2519666933709" })));
+    expect(warnings).toEqual([expect.stringContaining('the phone number "+2519666933709" doesn\'t look like an Ethiopian one')]);
+  });
+
+  it("keeps the second email address only when it is a different one", () => {
+    expect(readApplications(growthSheets(growth({ 6: "owner@firm.test" }))).applications[0]!.answers.contactEmail).toBeUndefined();
+    expect(readApplications(growthSheets(growth({ 6: "OTHER@firm.test" }))).applications[0]!.answers.contactEmail).toBe("other@firm.test");
+    expect(readApplications(growthSheets(growth({ 6: "not an email" }))).applications[0]!.answers.contactEmail).toBeUndefined();
+  });
+
+  it("keeps a repeat submission as its own response, and counts the business as having applied twice", () => {
+    const { applications } = readApplications(growthSheets(growth(), growth({ 0: SERIAL + 1, 17: "Honey only" })));
+    expect(applications).toHaveLength(2);
+    expect(timesApplied(applications)).toEqual([2, 2]);
+  });
+});
+
+describe("whether a response has exported", () => {
+  it("reads the yes or no answer when the form asks it", () => {
+    expect(hasExported({ exportedBefore: "Yes" })).toBe(true);
+    expect(hasExported({ exportedBefore: "No" })).toBe(false);
+    expect(hasExported({ exportedBefore: "Maybe" })).toBeNull();
+  });
+
+  it("reads where the business is with exporting when the form asks that instead", () => {
+    expect(["Exported previously", "Currently exporting"].map((exportStage) => hasExported({ exportStage }))).toEqual([true, true]);
+    expect(["Preparing to export", "Not yet exporting"].map((exportStage) => hasExported({ exportStage }))).toEqual([false, false]);
+    expect(hasExported({ exportStage: "Something else" })).toBeNull();
+  });
+
+  it("says nothing when neither is answered, and prefers the direct answer", () => {
+    expect(hasExported({})).toBeNull();
+    expect(hasExported({ exportedBefore: "No", exportStage: "Currently exporting" })).toBe(false);
   });
 });
