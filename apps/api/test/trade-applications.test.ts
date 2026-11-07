@@ -203,7 +203,7 @@ describe("a file that isn't a form's responses", () => {
   };
 
   it("is refused with the reason", async () => {
-    await refused(workbook({ Sheet1: [["a", "b"]] }), /no sheet has "Timestamp" and "Business Name" headings/);
+    await refused(workbook({ Sheet1: [["a", "b"]] }), /no sheet has "Timestamp" and "Business Name" \(or "Company Name"\) headings/);
     await refused(workbook({ "Form Responses 1": [HEADINGS] }), /no responses/);
     await refused("not a workbook", /isn't an Excel workbook|couldn't be read/);
   });
@@ -225,5 +225,89 @@ describe("a file that isn't a form's responses", () => {
 
   it("changes nothing when it is refused", async () => {
     expect(await rowsInDatabase()).toHaveLength(10);
+  });
+});
+
+// The Export Growth Companies cohort's form words its questions its own way: "Company Name", an address and a region apart, "Mobile Number".
+// The businesses here are invented.
+describe("the Export Growth Companies form", () => {
+  const GROWTH = `${PREFIX}export-growth-cohort`;
+  const HEAD: Cell[] = [
+    "Timestamp", "Email Address", "Company Name ", "Contact Person", "Position", "Mobile Number", "Email Address 2", "Company Address", "Region", "Website",
+    "Social Media", "Business Profile", "Year Established", "Business Registration Number", "TIN", "Number of Employees", "What products and services do you offer?",
+    "Wat are are your top 3 products?", "Current production capacity?", "Main customers?", "Which best describes your company?",
+    "Which countries do you currently export to?", "Which countries are you targeting?", "Average annual export sales ", "Approximate annual turnover",
+    "Do you have audited financial statements?", "Do you currently work with a bank?", "He you ever received business financing?",
+    "Business needs-select your top priorities", "Is your business", "Can the owner or CEO attend all training sessions?", "Documents upload", "Final Declaration",
+  ];
+  const row = (over: Record<number, Cell> = {}): Cell[] => {
+    const r: Cell[] = [
+      SERIAL, email("growth-spice"), "Spice Garden PLC", "Selam Tesfaye", "Owner", "0911105926", email("growth-spice-2"), "Arada sub city, Wo 1", "Addis Ababa", null, null,
+      "Agro-Processing, Honey & Spices", 2021, "AA/1/0001/2013", "0012345678", "11-25", "Spices", "Turmeric, ginger", "100kg/day", "Local", "Exported previously", "Canada",
+      "Europe", null, "Under ETB 5 million", "Yes", "Yes", "No", "Export Readiness", "Women-owned", "Yes", "Business License", "I confirm that the information provided is accurate",
+    ];
+    for (const [i, v] of Object.entries(over)) r[Number(i)] = v;
+    return r;
+  };
+  const file = (...rows: Cell[][]) => workbook({ "Form Responses 1": [HEAD, ...rows] });
+  const loadGrowth = (bytes: Uint8Array) => load(w.admin, bytes, { program: GROWTH, fileName: "TRADE Export Growth Companies Cohort (Responses).xlsx" });
+  const mineGrowth = (items: Json[]) => items.filter((i) => i.program === GROWTH);
+
+  it("loads, and keeps address, region and every answer", async () => {
+    const res = await loadGrowth(
+      file(
+        row(),
+        row({ 0: SERIAL + 1, 1: email("growth-bag"), 2: "Bag Makers", 3: "Mekdes", 5: 944173254, 7: "Nefas Silk", 8: "Addisabeba", 12: "Oct 2015", 20: "Not yet exporting", 6: null }),
+        row({ 0: SERIAL + 2, 1: email("growth-lagos"), 2: "Lagos Growth Ltd", 5: "07063479837", 7: "Ikeja", 8: "Lagos" }),
+      ),
+    );
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body).toMatchObject({ total: 3, created: 3, shown: 2, notShown: 1, warnings: [] });
+
+    const items = mineGrowth((await get(w.reviewer)).body.items);
+    expect(items.map((i: Json) => i.businessName)).toEqual(["Bag Makers", "Spice Garden PLC"]);
+    expect(items.find((i: Json) => i.businessName === "Spice Garden PLC")).toMatchObject({
+      contactName: "Selam Tesfaye",
+      phone: "+251911105926",
+      location: "Arada sub city, Wo 1, Addis Ababa",
+      answers: {
+        position: "Owner",
+        contactEmail: email("growth-spice-2"),
+        registrationNumber: "AA/1/0001/2013",
+        tin: "0012345678",
+        category: "Agro-Processing, Honey & Spices",
+        mainProducts: "Turmeric, ginger",
+        capacity: "100kg/day",
+        exportStage: "Exported previously",
+        exportMarkets: "Europe",
+        supportNeeded: "Export Readiness",
+        hasBankAccount: "Yes",
+        hadLoan: "No",
+        availability: "Yes",
+        documentsUploaded: "Business License",
+      },
+    });
+    // The phone number alone placed this one in Ethiopia.
+    expect(items.find((i: Json) => i.businessName === "Bag Makers")).toMatchObject({ phone: "+251944173254", location: "Nefas Silk, Addisabeba", country: "ET" });
+    expect(JSON.stringify((await get(w.admin)).body)).not.toContain("Lagos Growth");
+  });
+
+  it("counts the businesses that have exported from where they are with exporting", async () => {
+    const { items, summary } = (await get(w.admin)).body;
+    expect(mineGrowth(items)).toHaveLength(2);
+    // Spice Garden has exported; Bag Makers hasn't. The count covers every programme loaded in this database.
+    expect(summary.exportedBefore).toBeGreaterThanOrEqual(1);
+    expect(items.filter((i: Json) => i.program === GROWTH && i.answers.exportStage === "Exported previously")).toHaveLength(1);
+  });
+
+  it("is sent back to the Applications tab by the register's loader, but a diagnostic workbook that also has a Company Name sheet is not", async () => {
+    const toRegister = await callV1(w.admin, "POST", "/trade/register/import", { contentBase64: Buffer.from(file(row())).toString("base64") });
+    expect(toRegister).toMatchObject({ status: 422, body: { code: "invalid" } });
+    expect(toRegister.body.error).toMatch(/form's responses, not the diagnostic workbook.*Applications tab/);
+
+    const diagnostic = workbook({ "Master SME Database": [["SME ID", "Company Name"]], Notes: [["Timestamp", "Company Name"], [SERIAL, "Anyone"]] });
+    const res = await callV1(w.admin, "POST", "/trade/register/import", { contentBase64: Buffer.from(diagnostic).toString("base64") });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toMatch(/no businesses in it/);
   });
 });
