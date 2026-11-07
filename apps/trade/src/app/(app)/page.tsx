@@ -8,6 +8,7 @@ import { CreateOrganisation } from "@/components/summit/create-organisation";
 import { AFRICAN_COUNTRIES } from "@/lib/summit-business";
 import type {
   EnrollmentStatus,
+  ExportJourneyStageView,
   LearningPlanRecord,
   ModuleItemSummary,
   ModuleProgressView,
@@ -161,7 +162,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
   }
 
   // Learner (or Staff inspecting learner) View
-  const [list, enrollments, modulesRes] = await Promise.all([
+  const [list, enrollments, modulesRes, journeyRes] = await Promise.all([
     activeOrg
       ? tradeGet<{ items: AssessmentSummary[] }>(`/assessments?organizationId=${encodeURIComponent(activeOrg.id)}`)
       : Promise.resolve(null),
@@ -169,6 +170,9 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
       ? listEnrollments({ organizationId: activeOrg.id })
       : Promise.resolve([]),
     tradeGet<{ items: ModuleItemSummary[] }>("/modules"),
+    activeOrg
+      ? tradeGet<ExportJourneyStageView>(`/pipeline/journey?organizationId=${encodeURIComponent(activeOrg.id)}`)
+      : Promise.resolve(null),
   ]);
 
   const live = (kind: "diagnostic" | "placement") =>
@@ -277,6 +281,38 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
           <p className="mt-1 text-sm text-ink-2">
             {activeOrg?.name ?? "Your business"} is registered on TRADE. Once Entrust enrols it in a training cohort, your onboarding diagnostic opens.
           </p>
+        </Card>
+      )}
+
+      {/* Export Journey Stage Banner (#68) */}
+      {journeyRes?.data && (
+        <Card className="p-4 bg-gradient-to-r from-brand-50 to-white border-brand-200 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-brand-700 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs">
+                  Export Journey Stage {journeyRes.data.stageNumber} of 10
+                </span>
+                <span className="font-display font-bold text-ink">{journeyRes.data.title}</span>
+              </div>
+              <p className="text-xs text-ink-2 max-w-xl">{journeyRes.data.description}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <div className="text-[11px] font-semibold text-ink-3">M05 Verified Leads</div>
+                <div className="text-xs font-bold text-ink">
+                  {journeyRes.data.m05DeliverableStatus.verifiedCount} / 5
+                  {journeyRes.data.m05DeliverableStatus.isEligible ? " ✓" : ""}
+                </div>
+              </div>
+              <Link
+                href="/pipeline"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 shadow-xs transition-colors"
+              >
+                Commercial Pipeline →
+              </Link>
+            </div>
+          </div>
         </Card>
       )}
 

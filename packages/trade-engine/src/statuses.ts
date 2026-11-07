@@ -37,6 +37,50 @@ export type ModuleAssignmentSource = (typeof MODULE_ASSIGNMENT_SOURCES)[number];
 export const OPPORTUNITY_STATUSES = ["identified", "qualified", "inquiry", "quotation", "negotiation", "order_confirmed", "lost", "completed"] as const;
 export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
 
+/** M05 Buyer verification ladder (#68) */
+export const VERIFICATION_LADDER_STATUSES = [
+  "unverified",
+  "identity_checked",
+  "commercially_relevant",
+  "qualified_opportunity",
+] as const;
+export type VerificationLadderStatus = (typeof VERIFICATION_LADDER_STATUSES)[number];
+
+/** M05 13 buyer pipeline stages + closed/disqualified (#68) */
+export const PIPELINE_STAGES = [
+  "lead_discovered",
+  "contact_established",
+  "initial_pitch_made",
+  "lead_verified",
+  "needs_assessed",
+  "commercial_fit_confirmed",
+  "rfq_received",
+  "quote_submitted",
+  "samples_requested",
+  "samples_dispatched",
+  "sample_approved",
+  "contract_negotiated",
+  "firm_order_secured",
+  "closed_lost",
+  "disqualified",
+] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+/** Activity types recorded against a commercial opportunity */
+export const COMMERCIAL_ACTIVITY_TYPES = [
+  "email",
+  "call",
+  "meeting",
+  "rfq",
+  "sample",
+  "follow_up",
+  "note",
+] as const;
+export type CommercialActivityType = (typeof COMMERCIAL_ACTIVITY_TYPES)[number];
+
+export const QUALIFICATION_BANDS = ["low", "medium", "high"] as const;
+export type QualificationBand = (typeof QUALIFICATION_BANDS)[number];
+
 export const FINANCING_OUTCOME_STATUSES = ["not_started", "application_prepared", "submitted", "approved", "declined", "disbursed", "cancelled"] as const;
 export type FinancingOutcomeStatus = (typeof FINANCING_OUTCOME_STATUSES)[number];
 

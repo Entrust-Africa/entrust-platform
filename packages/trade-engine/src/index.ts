@@ -4,6 +4,7 @@ export * from "./scoring";
 export * from "./knowledge-check";
 export * from "./rubric";
 export * from "./completion";
+export * from "./pipeline";
 export { assignPathway, monthsBefore } from "./pathway";
 export type { PathwayAssignment, PathwayInput } from "./pathway";
 export * from "./plan";

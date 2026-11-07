@@ -57,4 +57,11 @@ export type {
   ExitAssessmentReportView,
   PublicCertificateView,
   RevokeCertificateInput,
+  ActivityView,
+  CreateOpportunityActivityInput,
+  CreateOpportunityInput,
+  ExportJourneyStageView,
+  OpportunityScorecardInput,
+  OpportunityView,
+  UpdateOpportunityStageInput,
 } from "./schemas/trade";

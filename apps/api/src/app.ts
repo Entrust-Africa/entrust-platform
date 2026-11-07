@@ -28,6 +28,7 @@ import { tradePlans } from "./routes/trade/plans";
 import { tradePractice } from "./routes/trade/practice";
 import { tradePublicDiagnostic } from "./routes/trade/public-diagnostic";
 import { tradePrograms } from "./routes/trade/programs";
+import { tradePipeline } from "./routes/trade/pipeline";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSessions } from "./routes/trade/sessions";
 import { tradeSponsors } from "./routes/trade/sponsors";
@@ -91,6 +92,7 @@ export const app = base
   .route("/v1/trade", tradeCertificates)
   .route("/v1/trade", tradeModuleProgress)
   .route("/v1/trade", tradeAssessments)
+  .route("/v1/trade", tradePipeline)
   .route("/v1/trade", tradeWorksheets)
   .route("/v1/trade", tradeEvidence)
   .route("/v1/trade", tradePlans)

@@ -274,6 +274,13 @@
       "when": 1794045014326,
       "tag": "0038_handy_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794056000514,
+      "tag": "0039_tan_nick_fury",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { QUESTION_TYPES } from "@entrust/forms";
 import { MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
 import {
   ASSESSMENT_STATUSES,
+  COMMERCIAL_ACTIVITY_TYPES,
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   EVIDENCE_TARGET_TYPES,
@@ -13,7 +14,10 @@ import {
   MODULE_EXEMPTION_STATUSES,
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
+  PIPELINE_STAGES,
+  QUALIFICATION_BANDS,
   SPONSOR_DATA_KINDS,
+  VERIFICATION_LADDER_STATUSES,
 } from "@entrust/trade-engine";
 import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
@@ -1452,5 +1456,143 @@ export type RevokeCertificateInput = z.infer<typeof RevokeCertificateBody>;
 export type AdminOverrideModuleInput = z.infer<typeof AdminOverrideModuleBody>;
 export type DomainComparisonView = z.infer<typeof DomainComparisonView>;
 export type ExitAssessmentReportView = z.infer<typeof ExitAssessmentReportView>;
+
+// Commercial Opportunity & Pipeline schemas (#68)
+export const OpportunityParam = z
+  .object({
+    id: z.string().uuid().openapi({ description: "Opportunity ID" }),
+  })
+  .openapi("TradeOpportunityParam");
+
+export const PipelineQuery = z
+  .object({
+    organizationId: z.string().optional().openapi({ description: "Organisation ID" }),
+    enrollmentId: z.string().uuid().optional().openapi({ description: "Enrolment ID" }),
+  })
+  .openapi("TradePipelineQuery");
+
+export const CreateOpportunityBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    title: z.string().trim().min(1, "Title is required"),
+    companyName: z.string().trim().min(1, "Company name is required"),
+    buyerName: z.string().trim().optional(),
+    country: z.string().trim().min(1, "Country is required"),
+    website: z.string().trim().url().optional().or(z.literal("")),
+    sourceLinks: z.array(z.string().url()).optional().default([]),
+    decisionMakerRole: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES).optional().default("unverified"),
+    stage: z.enum(PIPELINE_STAGES).optional().default("lead_discovered"),
+    estimatedValue: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+  })
+  .openapi("CreateTradeOpportunityBody");
+
+export const UpdateOpportunityStageBody = z
+  .object({
+    stage: z.enum(PIPELINE_STAGES),
+  })
+  .openapi("UpdateTradeOpportunityStageBody");
+
+export const CreateOpportunityActivityBody = z
+  .object({
+    type: z.enum(COMMERCIAL_ACTIVITY_TYPES),
+    summary: z.string().trim().min(1, "Summary is required"),
+    occurredAt: z.string().datetime(),
+    followUpDate: z.string().datetime().optional().nullable(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeOpportunityActivityBody");
+
+export const OpportunityScorecardBody = z
+  .object({
+    productFit: z.number().int().min(0).max(5),
+    purchasingPowerOrVolume: z.number().int().min(0).max(5),
+    paymentTerms: z.number().int().min(0).max(5),
+    accessToDecisionMaker: z.number().int().min(0).max(5),
+    importExperience: z.number().int().min(0).max(5),
+    timeline: z.number().int().min(0).max(5),
+  })
+  .openapi("TradeOpportunityScorecardBody");
+
+export const ActivityView = z
+  .object({
+    id: z.string().uuid(),
+    opportunityId: z.string().uuid(),
+    organizationId: z.string(),
+    actorUserId: z.string().nullable(),
+    type: z.enum(COMMERCIAL_ACTIVITY_TYPES),
+    summary: z.string(),
+    occurredAt: z.string(),
+    followUpDate: z.string().nullable(),
+    evidenceUrl: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeActivityView");
+
+export const ActivityList = z
+  .object({
+    items: z.array(ActivityView),
+  })
+  .openapi("TradeActivityList");
+
+export const OpportunityView = z
+  .object({
+    id: z.string().uuid(),
+    organizationId: z.string(),
+    enrollmentId: z.string().uuid().nullable(),
+    title: z.string(),
+    companyName: z.string(),
+    buyerName: z.string().nullable(),
+    country: z.string(),
+    website: z.string().nullable(),
+    sourceLinks: z.array(z.string()),
+    decisionMakerRole: z.string().nullable(),
+    notes: z.string().nullable(),
+    verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES),
+    stage: z.enum(PIPELINE_STAGES),
+    scorecard: z.record(z.string(), z.number()).nullable(),
+    scorecardTotal: z.number().nullable(),
+    scorecardBand: z.enum(QUALIFICATION_BANDS).nullable(),
+    estimatedValue: z.number().nullable(),
+    currency: z.string().nullable(),
+    activityCount: z.number(),
+    latestActivity: ActivityView.nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeOpportunityView");
+
+export const OpportunityList = z
+  .object({
+    items: z.array(OpportunityView),
+  })
+  .openapi("TradeOpportunityList");
+
+export const ExportJourneyStageView = z
+  .object({
+    stageNumber: z.number().int().min(1).max(10),
+    title: z.string(),
+    description: z.string(),
+    furthestOpportunityId: z.string().uuid().nullable(),
+    activeOpportunitiesCount: z.number().int(),
+    m05DeliverableStatus: z.object({
+      isEligible: z.boolean(),
+      verifiedCount: z.number().int(),
+      missingCount: z.number().int(),
+    }),
+  })
+  .openapi("TradeExportJourneyStageView");
+
+export type CreateOpportunityInput = z.infer<typeof CreateOpportunityBody>;
+export type UpdateOpportunityStageInput = z.infer<typeof UpdateOpportunityStageBody>;
+export type CreateOpportunityActivityInput = z.infer<typeof CreateOpportunityActivityBody>;
+export type OpportunityScorecardInput = z.infer<typeof OpportunityScorecardBody>;
+export type OpportunityView = z.infer<typeof OpportunityView>;
+export type ActivityView = z.infer<typeof ActivityView>;
+export type ExportJourneyStageView = z.infer<typeof ExportJourneyStageView>;
+
 
 
