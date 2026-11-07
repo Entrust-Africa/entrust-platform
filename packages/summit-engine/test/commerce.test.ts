@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  BENEFIT_AREAS,
   COMMERCE_REPORTS,
   boothFigures,
   boothTotals,
@@ -24,6 +23,7 @@ import {
   availability,
   catalogueProblems,
   formatUsd,
+  productPriceLabel,
   priceLabel,
   productProblems,
   toCents,
@@ -52,27 +52,28 @@ describe("the standard catalogue", () => {
     ]);
   });
 
-  it("has the six sponsorship levels at the specified prices, highest first", () => {
+  it("has the six Pan African Chamber of Commerce sponsorship levels, with their approved ranges, highest first", () => {
     const levels = STANDARD_PRODUCTS.filter((p) => p.kind === "sponsorship_level");
-    expect(levels.map((p) => [p.name, p.priceCents / 100])).toEqual([
-      ["Title Partner", 31250],
-      ["Diamond Partner", 18750],
-      ["Platinum Partner", 12500],
-      ["Gold Partner", 6250],
-      ["Silver Partner", 3125],
-      ["Supporting Partner", 1560],
+    expect(levels.map((p) => [p.name, p.priceCents / 100, p.attributes.priceRange])).toEqual([
+      ["Mission Presenting Partner", 50000, "$50,000 and above"],
+      ["Banking & Finance Partner", 25000, "$25,000 to $40,000"],
+      ["Logistics & Supply Chain Partner", 20000, "$20,000 to $30,000"],
+      ["Market Entry Partner", 15000, "$15,000 to $25,000"],
+      ["Travel & Hospitality Partner", 10000, "$10,000 to $25,000, or in-kind"],
+      ["Delegation Supporting Partner", 5000, "$5,000 to $10,000"],
     ]);
   });
 
-  it("does not give every sponsorship level the same benefits", () => {
+  it("promises nothing a level's agreement has not set: no passes, booths, speaking slots or exclusivity", () => {
     const levels = STANDARD_PRODUCTS.filter((p) => p.kind === "sponsorship_level");
-    const texts = levels.map((p) => JSON.stringify(p.benefits));
-    expect(new Set(texts).size).toBe(levels.length);
-    // Only the title partner has category exclusivity, and it is subject to the agreement.
-    expect(levels.filter((p) => p.benefits.exclusivity).map((p) => p.slug)).toEqual(["title-partner"]);
-    expect(bySlug("title-partner").benefits.exclusivity).toMatch(/signed sponsorship agreement/i);
-    // Every benefit area is covered by the Title Partner, which has the most.
-    for (const area of BENEFIT_AREAS) expect(bySlug("title-partner").benefits[area.id], area.label).toBeTruthy();
+    expect(levels.every((p) => Object.keys(p.benefits).length === 0)).toBe(true);
+    expect(new Set(levels.map((p) => p.summary)).size).toBe(levels.length);
+  });
+
+  it("shows a range for a product that has one, and the price for the rest", () => {
+    expect(productPriceLabel(2_500_000, { priceRange: "$25,000 to $40,000" })).toBe("$25,000 to $40,000");
+    expect(productPriceLabel(2_500_000, { priceRange: "  " })).toBe("$25,000");
+    expect(productPriceLabel(0, {})).toBe("Complimentary");
   });
 
   it("has the five delegate categories, the first complimentary and tied to the selection list", () => {
@@ -163,7 +164,7 @@ describe("product checks", () => {
 
   it("refuses benefits by area on anything but a sponsorship level, and a made-up area", () => {
     expect(productProblems({ ...good, benefits: { logo: "Big" } })[0]).toMatch(/only sponsorship levels/);
-    expect(productProblems({ ...bySlug("gold-partner"), benefits: { nonsense: "x" } as never })[0]).toMatch(/area that doesn't exist/);
+    expect(productProblems({ ...bySlug("banking-finance-partner"), benefits: { nonsense: "x" } as never })[0]).toMatch(/area that doesn't exist/);
   });
 
   it("finds two products with the same address", () => {

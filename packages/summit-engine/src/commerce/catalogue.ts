@@ -6,9 +6,9 @@ import type { Benefits, PaymentMethod, ProductDefinition } from "./types";
 // edits everything in the admin screens, so this file is a starting point and never the live data.
 //
 // Prices, booth sizes and the lists of what each delegate category and exhibition package includes are the
-// instructions' own. These were not given there and are a proposal for the organisers to confirm or change:
-// the sponsorship levels' benefit text, the descriptions of the additional opportunities, and every capacity (left
-// unset, so nothing sells out until the organisers say how many there are).
+// instructions' own, except the sponsorship levels, which are the Pan African Chamber of Commerce's (see below). These
+// were not given and are a proposal for the organisers to confirm or change: the descriptions of the additional
+// opportunities, and every capacity (left unset, so nothing sells out until the organisers say how many there are).
 
 export const STANDARD_EDITION = {
   slug: "adtis-2027",
@@ -168,84 +168,74 @@ const exhibition: ProductDefinition[] = [
   }),
 ];
 
-const level = (
-  slug: string,
-  name: string,
-  price: number,
-  sortOrder: number,
-  summary: string,
-  benefits: Benefits,
-): ProductDefinition =>
+// The sponsorship levels are the Pan African Chamber of Commerce's "Trade Missions & Commercial Delegations" tiers, which
+// its Diaspora Summit sponsorship plan makes the summit's governing structure. They are bought by partner type, and the
+// approved figure is a range: the price is the lowest figure (what an enquiry is valued at until it is negotiated) and
+// `priceRange` is what the website shows. The wording of what each level offers is the plan's own; no passes, booths or
+// speaking slots are promised in it, so a level lists none. Custom benefits, ticket allocations and any in-kind value are
+// agreed in a signed sponsorship agreement.
+const level = (slug: string, name: string, fromDollars: number, priceRange: string, sortOrder: number, summary: string): ProductDefinition =>
   product({
     kind: "sponsorship_level",
     slug,
     name,
     summary,
-    priceCents: dollars(price),
+    priceCents: dollars(fromDollars),
     sortOrder,
     features: [],
-    benefits,
+    benefits: {},
+    attributes: { priceRange },
   });
 
-// Each level has its own text, and an area a level leaves out stays empty. Confirmed in a signed sponsorship agreement.
 const sponsorship: ProductDefinition[] = [
-  level("title-partner", "Title Partner", 31250, 10, "The summit's headline partner, with the most visibility and category exclusivity.", {
-    logo: "Headline billing as Title Partner. Logo first and largest on the main stage, website, programme, badges and signage.",
-    speaking: "Opening-ceremony keynote and a sponsored conference session.",
-    exhibition: "Two Corporate / Institutional booths in premium positions.",
-    delegates: "20 delegate passes.",
-    digital: "Featured partner page, homepage banner and a place in the pre-summit email campaign.",
-    social: "Pinned announcement and dedicated posts on the summit's channels.",
-    b2b: "Priority access to buyer and investor matchmaking, with a dedicated matchmaking session.",
-    networking: "All networking events, with hosted VIP access.",
-    exclusivity: "Category exclusivity, subject to a signed sponsorship agreement.",
-  }),
-  level("diamond-partner", "Diamond Partner", 18750, 20, "A leading partner with prominent visibility and a speaking slot.", {
-    logo: "Logo on the main stage, website, programme and signage, in the second tier.",
-    speaking: "A keynote or panel slot.",
-    exhibition: "One Corporate / Institutional booth in a premium position.",
-    delegates: "12 delegate passes.",
-    digital: "Featured partner page and logo on the homepage.",
-    social: "Dedicated posts on the summit's channels.",
-    b2b: "Priority B2B introductions.",
-    networking: "All networking events.",
-  }),
-  level("platinum-partner", "Platinum Partner", 12500, 30, "A major partner with stage and programme visibility.", {
-    logo: "Logo on the stage screens, website and programme.",
-    speaking: "One panel seat.",
-    exhibition: "One Corporate / Institutional booth.",
-    delegates: "8 delegate passes.",
-    digital: "Partner page on the website.",
-    social: "Two mentions on the summit's channels.",
-    b2b: "Priority B2B introductions.",
-    networking: "All networking events.",
-  }),
-  level("gold-partner", "Gold Partner", 6250, 40, "A partner with a booth and a place in the programme.", {
-    logo: "Logo on the website and programme.",
-    speaking: "Welcome remarks at a networking session.",
-    exhibition: "One Premium SME booth.",
-    delegates: "5 delegate passes.",
-    digital: "Partner listing with a link to its website.",
-    social: "One mention on the summit's channels.",
-    b2b: "Access to B2B matchmaking.",
-    networking: "General networking sessions.",
-  }),
-  level("silver-partner", "Silver Partner", 3125, 50, "A partner with a booth and delegate passes.", {
-    logo: "Logo on the website.",
-    exhibition: "One Standard SME booth.",
-    delegates: "3 delegate passes.",
-    digital: "Partner listing on the website.",
-    social: "Included in a thank-you post to all partners.",
-    b2b: "Access to B2B matchmaking.",
-    networking: "General networking sessions.",
-  }),
-  level("supporting-partner", "Supporting Partner", 1560, 60, "Show support for the summit with a table-top display and a pass.", {
-    logo: "Name in the partners list on the website.",
-    exhibition: "A table-top display.",
-    delegates: "1 delegate pass.",
-    social: "Included in a thank-you post to all partners.",
-    networking: "General networking sessions.",
-  }),
+  level(
+    "mission-presenting-partner",
+    "Mission Presenting Partner",
+    50000,
+    "$50,000 and above",
+    10,
+    "Top branding across the delegation and the summit platform, with executive visibility and premium association.",
+  ),
+  level(
+    "banking-finance-partner",
+    "Banking & Finance Partner",
+    25000,
+    "$25,000 to $40,000",
+    20,
+    "Trade finance, financial readiness, investment education, capital access and investor engagement.",
+  ),
+  level(
+    "logistics-supply-chain-partner",
+    "Logistics & Supply Chain Partner",
+    20000,
+    "$20,000 to $30,000",
+    30,
+    "Freight, logistics, customs and supply-chain expertise, and support for cross-border movement.",
+  ),
+  level(
+    "market-entry-partner",
+    "Market Entry Partner",
+    15000,
+    "$15,000 to $25,000",
+    40,
+    "Legal, tax, compliance, consulting, market intelligence and business-entry support.",
+  ),
+  level(
+    "travel-hospitality-partner",
+    "Travel & Hospitality Partner",
+    10000,
+    "$10,000 to $25,000, or in-kind",
+    50,
+    "Airlines, hotels, ground logistics, guest movement and hospitality support. An in-kind contribution is recorded at an agreed value.",
+  ),
+  level(
+    "delegation-supporting-partner",
+    "Delegation Supporting Partner",
+    5000,
+    "$5,000 to $10,000",
+    60,
+    "Visibility, access, digital recognition and participation support.",
+  ),
 ];
 
 const opportunity = (slug: string, name: string, price: number, sortOrder: number, summary: string): ProductDefinition =>

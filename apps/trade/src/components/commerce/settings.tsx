@@ -287,6 +287,15 @@ export function ProductEditor({ edition, product, onDone }: { edition: EditionDe
           </div>
         </div>
       )}
+      {(kind === "sponsorship_level" || kind === "opportunity") && (
+        <TextBox
+          id="attr-priceRange"
+          label="Price range shown on the website (optional)"
+          value={attrs.priceRange ?? ""}
+          onChange={(v) => setAttrs({ ...attrs, priceRange: v })}
+          hint="For an approved range, type it as it should read, like $25,000 to $40,000. The price above is then the lowest figure. Leave empty to show the price."
+        />
+      )}
       {kind === "sponsorship_level" && (
         <div className="space-y-3">
           <h4 className="text-sm font-bold tracking-wide text-ink-2 uppercase">Benefits by area</h4>

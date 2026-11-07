@@ -110,13 +110,13 @@ describe("the dashboard", () => {
     await verify("exhibitor_booking", b3.id, 50000);
     expect((await post(w.admin, `/exhibitor-bookings/${b3.id}/confirm`)).status).toBe(200);
 
-    // Sponsorship: Gold is still an enquiry; Silver is confirmed and paid; the directory advertisement is confirmed, not paid.
-    await enquiry("gold-partner", "Gold Hopeful");
-    const s2 = await enquiry("silver-partner", "Silver Sponsor");
+    // Sponsorship: Banking & Finance is still an enquiry; Logistics is confirmed and paid; the directory advertisement is confirmed, not paid.
+    await enquiry("banking-finance-partner", "Banking Hopeful");
+    const s2 = await enquiry("logistics-supply-chain-partner", "Logistics Sponsor");
     const s3 = await enquiry("directory-advertisement", "Advert Buyer");
     expect((await post(w.admin, `/sponsor-enquiries/${s2.id}/status`, { status: "confirmed" })).status).toBe(200);
     expect((await post(w.admin, `/sponsor-enquiries/${s3.id}/status`, { status: "confirmed" })).status).toBe(200);
-    await verify("sponsorship", s2.id, 312500);
+    await verify("sponsorship", s2.id, 2000000);
 
     const { status, body } = await dashboard(w.facilitator);
     expect(status).toBe(200);
@@ -136,21 +136,21 @@ describe("the dashboard", () => {
     expect(x.byPackage.find((p: Json) => p.name === "Premium SME Booth")).toMatchObject({ capacity: null, available: null });
 
     const s = body.sponsorship;
-    expect(s).toMatchObject({ enquiries: 3, confirmed: 2, valueCents: 312500 + 31300, pipelineCount: 1, pipelineValueCents: 625000 });
+    expect(s).toMatchObject({ enquiries: 3, confirmed: 2, valueCents: 2000000 + 31300, pipelineCount: 1, pipelineValueCents: 2500000 });
     expect(s.byStatus).toMatchObject({ new: 1, confirmed: 2, declined: 0 });
-    expect(s.byProduct.find((p: Json) => p.name === "Gold Partner")).toMatchObject({ enquiries: 1, confirmed: 0, openValueCents: 625000 });
-    expect(s.byProduct.find((p: Json) => p.name === "Silver Partner")).toMatchObject({ enquiries: 1, confirmed: 1, confirmedValueCents: 312500 });
+    expect(s.byProduct.find((p: Json) => p.name === "Banking & Finance Partner")).toMatchObject({ enquiries: 1, confirmed: 0, openValueCents: 2500000 });
+    expect(s.byProduct.find((p: Json) => p.name === "Logistics & Supply Chain Partner")).toMatchObject({ enquiries: 1, confirmed: 1, confirmedValueCents: 2000000 });
 
     // Delegates: 6,500 paid + 16,000 owed (the cancelled one counts for nothing). Exhibition: 50,000 paid + 50,000 owed.
-    // Sponsorship: 312,500 paid + 31,300 owed. A waiting application (50,000) and an open enquiry (625,000) are only potential.
+    // Sponsorship: 2,000,000 paid + 31,300 owed. A waiting application (50,000) and an open enquiry (2,500,000) are only potential.
     const v = body.revenue;
-    expect(v).toMatchObject({ expectedCents: 466300, receivedCents: 369000, outstandingCents: 97300, refundedCents: 0, potentialCents: 675000 });
+    expect(v).toMatchObject({ expectedCents: 2153800, receivedCents: 2056500, outstandingCents: 97300, refundedCents: 0, potentialCents: 2550000 });
     expect(v.byStream).toEqual([
       { stream: "delegates", label: "Delegate registrations", expectedCents: 22500, receivedCents: 6500, outstandingCents: 16000, refundedCents: 0 },
       { stream: "exhibition", label: "Exhibition", expectedCents: 100000, receivedCents: 50000, outstandingCents: 50000, refundedCents: 0 },
-      { stream: "sponsorship", label: "Sponsorship", expectedCents: 343800, receivedCents: 312500, outstandingCents: 31300, refundedCents: 0 },
+      { stream: "sponsorship", label: "Sponsorship", expectedCents: 2031300, receivedCents: 2000000, outstandingCents: 31300, refundedCents: 0 },
     ]);
-    expect(v.byProduct.find((p: Json) => p.name === "Silver Partner")).toMatchObject({ stream: "sponsorship", kind: "sponsorship_level", expectedCents: 312500, receivedCents: 312500, count: 1 });
+    expect(v.byProduct.find((p: Json) => p.name === "Logistics & Supply Chain Partner")).toMatchObject({ stream: "sponsorship", kind: "sponsorship_level", expectedCents: 2000000, receivedCents: 2000000, count: 1 });
     expect(v.byProduct.find((p: Json) => p.name === "Standard SME Booth")).toMatchObject({ stream: "exhibition", count: 2, expectedCents: 100000, receivedCents: 50000 });
     expect(v.byProduct.find((p: Json) => p.name === "Premium Delegate")).toMatchObject({ stream: "delegates", expectedCents: 16000, receivedCents: 0, outstandingCents: 16000 });
   });
@@ -228,11 +228,11 @@ describe("the reports", () => {
     const exhibitors = csvOf((await file(w.admin, "exhibitors", "csv")).bytes);
     expect(exhibitors).toMatch(/Confirmed Co,Ethiopia,.*Standard SME Booth,Confirmed,A-01,,500,Confirmed/);
     const sponsors = csvOf((await file(w.admin, "sponsorship", "csv")).bytes);
-    expect(sponsors).toMatch(/Silver Sponsor,Kenya,.*Silver Partner,Sponsorship level,Confirmed,3125,Confirmed/);
-    expect(sponsors).toMatch(/Gold Hopeful,Kenya,.*Gold Partner,Sponsorship level,New enquiry,6250,/);
+    expect(sponsors).toMatch(/Logistics Sponsor,Kenya,.*Logistics & Supply Chain Partner,Sponsorship level,Confirmed,20000,Confirmed/);
+    expect(sponsors).toMatch(/Banking Hopeful,Kenya,.*Banking & Finance Partner,Sponsorship level,New enquiry,25000,/);
     const payments = csvOf((await file(w.admin, "payments", "csv")).bytes);
     expect(payments).toContain("Reference,Payer,Email,Type,Item,Status,Amount due (USD),Amount received (USD)");
-    expect(payments).toMatch(/Silver Sponsor,.*Sponsor,Silver Partner,Confirmed,3125,3125,,REF,ds-admin/);
+    expect(payments).toMatch(/Logistics Sponsor,.*Sponsor,Logistics & Supply Chain Partner,Confirmed,20000,20000,,REF,ds-admin/);
   });
 
   it("totals the revenue by stream and for everything, matching the dashboard", async () => {

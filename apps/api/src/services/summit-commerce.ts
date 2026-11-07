@@ -6,7 +6,7 @@ import {
   STANDARD_EDITION,
   STANDARD_PRODUCTS,
   availability,
-  priceLabel,
+  productPriceLabel,
   productProblems,
   type ProductDefinition,
   type ProductKind,
@@ -61,7 +61,7 @@ function publicProduct(row: ProductRow, taken: number): PublicProductView {
     name: row.name,
     summary: row.summary,
     priceCents: row.priceCents,
-    price: priceLabel(row.priceCents),
+    price: productPriceLabel(row.priceCents, row.attributes),
     complimentary: row.priceCents === 0,
     features: row.features,
     benefits: BENEFIT_AREAS.flatMap((area) => {

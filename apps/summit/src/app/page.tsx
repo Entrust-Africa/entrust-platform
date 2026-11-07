@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
 function fromPrice(products: Product[]): string | null {
   const priced = products.filter((p) => !p.complimentary);
   if (priced.length === 0) return null;
-  return `From ${priced.reduce((min, p) => (p.priceCents < min.priceCents ? p : min)).price}`;
+  const lowest = priced.reduce((min, p) => (p.priceCents < min.priceCents ? p : min));
+  // A product with an approved range shows its range as its price; "From" needs the lowest figure alone.
+  return `From ${lowest.attributes.priceRange ? `$${(lowest.priceCents / 100).toLocaleString("en-US")}` : lowest.price}`;
 }
 
 export default async function SummitLandingPage() {

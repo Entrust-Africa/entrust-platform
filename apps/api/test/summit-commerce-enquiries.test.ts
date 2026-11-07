@@ -27,7 +27,7 @@ const product = (slug: string): Json => w.edition.products.find((p: Json) => p.s
 const to = (email: string) => queue.jobs.filter((j) => j.name === "send-email" && j.data.to === email).map((j) => j.data);
 
 const form = (overrides: Record<string, unknown> = {}) => ({
-  productSlug: "gold-partner",
+  productSlug: "banking-finance-partner",
   organisationName: "Awash Bank",
   country: "ET",
   contactName: "Selam Tesfaye",
@@ -86,10 +86,10 @@ describe("the public enquiry form", () => {
   it("needs no sign-in, records a new enquiry at the listed price, and emails a receipt that promises nothing", async () => {
     const res = await submit(form({ email: `  ${PREFIX.toUpperCase()}Spn-${RUN}-Mixed@Example.Test `, requirements: "A speaking slot" }));
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    expect(res.body).toMatchObject({ productName: "Gold Partner", price: "$6,250" });
+    expect(res.body).toMatchObject({ productName: "Banking & Finance Partner", price: "$25,000 to $40,000" });
     expect(res.body.number).toMatch(/^SPN-\d{4,}$/);
     const [row] = await db.select().from(schema.sponsorEnquiry).where(eq(schema.sponsorEnquiry.number, res.body.number));
-    expect(row).toMatchObject({ status: "new", valueCents: 625000, requirements: "A speaking slot", email: `${PREFIX}spn-${RUN}-mixed@example.test` });
+    expect(row).toMatchObject({ status: "new", valueCents: 2500000, requirements: "A speaking slot", email: `${PREFIX}spn-${RUN}-mixed@example.test` });
     const mail = to(row!.email);
     expect(mail).toHaveLength(1);
     expect(JSON.stringify(mail[0].props)).toContain("Nothing is due and nothing is reserved yet");
@@ -138,16 +138,16 @@ describe("the public enquiry form", () => {
   });
 
   it("takes no enquiries for an option whose places are all confirmed", async () => {
-    await setProduct("title-partner", { capacity: 1 });
-    const a = await submitted({ productSlug: "title-partner" });
+    await setProduct("mission-presenting-partner", { capacity: 1 });
+    const a = await submitted({ productSlug: "mission-presenting-partner" });
     expect((await move(w.admin, a.id, "confirmed")).status).toBe(200);
-    expect(await availabilityOf("title-partner")).toEqual({ remaining: 0, soldOut: true });
-    const res = await submit(form({ productSlug: "title-partner" }));
+    expect(await availabilityOf("mission-presenting-partner")).toEqual({ remaining: 0, soldOut: true });
+    const res = await submit(form({ productSlug: "mission-presenting-partner" }));
     expect(res.status).toBe(422);
     expect(res.body.error).toMatch(/no longer available/);
     await move(w.admin, a.id, "declined");
-    expect(await availabilityOf("title-partner")).toEqual({ remaining: 1, soldOut: false });
-    await setProduct("title-partner", { capacity: null });
+    expect(await availabilityOf("mission-presenting-partner")).toEqual({ remaining: 1, soldOut: false });
+    await setProduct("mission-presenting-partner", { capacity: null });
   });
 });
 
@@ -207,7 +207,7 @@ describe("the pipeline", () => {
     expect(res.body).toMatchObject({ valueCents: 500000, notes: "Agreed a discount for a two-year deal" });
     const rows = await db.select().from(schema.auditLog).where(eq(schema.auditLog.entityId, id));
     const updated = rows.find((r) => r.action === "summit.commerce.enquiry.updated");
-    expect(updated?.before).toMatchObject({ valueCents: 625000 });
+    expect(updated?.before).toMatchObject({ valueCents: 2500000 });
     expect(updated?.after).toMatchObject({ valueCents: 500000 });
     // The notes are internal and are not copied into the audit log.
     expect(JSON.stringify(updated)).not.toContain("two-year deal");
@@ -217,8 +217,8 @@ describe("the pipeline", () => {
 
 describe("confirming a sponsor", () => {
   it("opens a payment for the agreed value, emails the payment instructions, and counts against the option", async () => {
-    await setProduct("silver-partner", { capacity: 2 });
-    const { id, email } = await submitted({ productSlug: "silver-partner" });
+    await setProduct("logistics-supply-chain-partner", { capacity: 2 });
+    const { id, email } = await submitted({ productSlug: "logistics-supply-chain-partner" });
     await callV1(w.admin, "PATCH", `/summit/commerce/sponsor-enquiries/${id}`, { valueCents: 300000 });
     queue.jobs.length = 0;
     const res = await move(w.admin, id, "confirmed", "Agreement signed");
@@ -230,34 +230,34 @@ describe("confirming a sponsor", () => {
     expect(mail[0].subject).toMatch(/sponsorship is confirmed/);
     expect(JSON.stringify(mail[0].props)).toContain("Pay to the ADTIS account shown on the invoice.");
     expect(mail[0].props.details).toContainEqual({ label: "Amount due", value: "$3,000 (USD)" });
-    expect(await availabilityOf("silver-partner")).toEqual({ remaining: 1, soldOut: false });
+    expect(await availabilityOf("logistics-supply-chain-partner")).toEqual({ remaining: 1, soldOut: false });
     // Once confirmed the value is fixed here; the payment carries any later change.
     const again = await callV1(w.admin, "PATCH", `/summit/commerce/sponsor-enquiries/${id}`, { valueCents: 1 });
     expect(again.status).toBe(422);
-    await setProduct("silver-partner", { capacity: null });
+    await setProduct("logistics-supply-chain-partner", { capacity: null });
   });
 
   it("marks nothing paid: the sponsor's payment is verified like any other", async () => {
-    const { id } = await submitted({ productSlug: "supporting-partner" });
+    const { id } = await submitted({ productSlug: "delegation-supporting-partner" });
     const confirmed = await move(w.admin, id, "confirmed");
     const paymentId = confirmed.body.payment.id;
     const bare = await callV1(w.admin, "PATCH", `/summit/commerce/payments/${paymentId}`, { status: "confirmed" });
     expect(bare.status).toBe(422);
-    await callV1(w.admin, "PATCH", `/summit/commerce/payments/${paymentId}`, { reference: "WIRE-1", amountReceivedCents: 156000 });
+    await callV1(w.admin, "PATCH", `/summit/commerce/payments/${paymentId}`, { reference: "WIRE-1", amountReceivedCents: 500000 });
     const paid = await callV1(w.admin, "PATCH", `/summit/commerce/payments/${paymentId}`, { status: "confirmed" });
     expect(paid.body.status).toBe("confirmed");
     expect((await enquiry(id)).body.paymentStatus).toBe("confirmed");
   });
 
   it("is refused when the option's places are taken, and the title partner's exclusivity holds for one sponsor", async () => {
-    await setProduct("gold-partner", { capacity: 1 });
-    const a = await submitted({ productSlug: "gold-partner" });
-    const b = await submitted({ productSlug: "gold-partner" });
+    await setProduct("banking-finance-partner", { capacity: 1 });
+    const a = await submitted({ productSlug: "banking-finance-partner" });
+    const b = await submitted({ productSlug: "banking-finance-partner" });
     const results = await Promise.all([move(w.admin, a.id, "confirmed"), move(w.admin, b.id, "confirmed")]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 422]);
     const loser = results.find((r) => r.status === 422)!;
     expect(loser.body.error).toMatch(/no place left/);
-    await setProduct("gold-partner", { capacity: null });
+    await setProduct("banking-finance-partner", { capacity: null });
   });
 
   it("declining a confirmed sponsor cancels a payment that was never paid, and leaves a verified one for a refund", async () => {
@@ -283,7 +283,7 @@ describe("confirming a sponsor", () => {
 describe("the list and the pipeline value", () => {
   it("filters by status, kind and search, and totals what is still open and what is confirmed", async () => {
     const tagged = `Searchable-${RUN}`;
-    const a = await submitted({ organisationName: tagged, productSlug: "gold-partner" });
+    const a = await submitted({ organisationName: tagged, productSlug: "banking-finance-partner" });
     const b = await submitted({ organisationName: `Other-${RUN}`, productSlug: "sponsored-conference-session" });
     await move(w.admin, a.id, "proposal_sent");
     await move(w.admin, b.id, "confirmed");
@@ -291,7 +291,7 @@ describe("the list and the pipeline value", () => {
 
     const found = await list(`?q=${tagged}`);
     expect(found.body.items.map((i: Json) => i.organisationName)).toEqual([tagged]);
-    expect(found.body.items[0]).toMatchObject({ number: a.number, status: "proposal_sent", productName: "Gold Partner", productKind: "sponsorship_level", valueCents: 625000 });
+    expect(found.body.items[0]).toMatchObject({ number: a.number, status: "proposal_sent", productName: "Banking & Finance Partner", productKind: "sponsorship_level", valueCents: 2500000 });
     const opportunities = await list(`?kind=opportunity&q=Other-${RUN}`);
     expect(opportunities.body.items.map((i: Json) => i.productKind)).toEqual(["opportunity"]);
     expect(opportunities.body.items[0].paymentStatus).toBe("pending");
