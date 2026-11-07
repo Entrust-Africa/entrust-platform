@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { hasExported, isDiagnosticWorkbook, isYes, readApplications, sameApplicant, sameBusiness, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
+import { PILOT_COHORTS, cohortOfProgramme, hasExported, isDiagnosticWorkbook, isYes, readApplications, sameApplicant, sameBusiness, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
 import type { ApplicationDetailView, ApplicationListView, ApplicationsImportedView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
@@ -83,7 +83,11 @@ export async function getApplication(ctx: Ctx, id: string): Promise<ApplicationD
   };
 }
 
-/** Loads a Google Form's responses for a programme: new responses are added, changed ones updated, the rest left as they are. */
+/**
+ * Loads a Google Form's responses for a programme: new responses are added, changed ones updated, the rest left as they are. A response is
+ * one time sent from one email address, whatever programme it was first stored under, so loading a file again under a different
+ * programme name moves its responses there (and with them, their cohort).
+ */
 export async function importApplications(
   ctx: Ctx,
   input: { program: string; fileName?: string | undefined; contentBase64: string },
@@ -105,12 +109,18 @@ export async function importApplications(
     const existing = await tx
       .select()
       .from(schema.programApplication)
-      .where(and(eq(schema.programApplication.program, input.program), inArray(schema.programApplication.email, [...new Set(applications.map((a) => a.email))])));
+      .where(inArray(schema.programApplication.email, [...new Set(applications.map((a) => a.email))]));
     const responseKey = (submittedAt: string, email: string) => `${submittedAt}|${email}`;
-    const byResponse = new Map(existing.map((row) => [responseKey(row.submittedAt.toISOString(), row.email), row]));
+    // If a response is stored under this programme and another, this programme's copy is the one that is updated.
+    const byResponse = new Map<string, (typeof existing)[number]>();
+    for (const row of existing) {
+      const key = responseKey(row.submittedAt.toISOString(), row.email);
+      if (!byResponse.has(key) || row.program === input.program) byResponse.set(key, row);
+    }
 
     let created = 0;
     let updated = 0;
+    let moved = 0;
     let unchanged = 0;
     for (const application of applications) {
       const values = { program: input.program, ...application, submittedAt: new Date(application.submittedAt), answers: application.answers as Record<string, string> };
@@ -118,9 +128,10 @@ export async function importApplications(
       if (!row) {
         await tx.insert(schema.programApplication).values(values);
         created += 1;
-      } else if (differs(row, application)) {
+      } else if (row.program !== input.program || differs(row, application)) {
         await tx.update(schema.programApplication).set(values).where(eq(schema.programApplication.id, row.id));
         updated += 1;
+        if (row.program !== input.program) moved += 1;
       } else {
         unchanged += 1;
       }
@@ -134,9 +145,11 @@ export async function importApplications(
       action: "program_application.import",
       entityType: "program_application",
       entityId: crypto.randomUUID(),
-      after: { program: input.program, fileName: input.fileName ?? null, total: applications.length, created, updated, unchanged, shown, notShown: applications.length - shown },
+      after: { program: input.program, fileName: input.fileName ?? null, total: applications.length, created, updated, moved, unchanged, shown, notShown: applications.length - shown },
     });
-    return { total: applications.length, created, updated, unchanged, shown, notShown: applications.length - shown, warnings };
+    const number = cohortOfProgramme(input.program);
+    const cohort = number === null ? null : { number, name: PILOT_COHORTS.find((c) => c.number === number)?.name ?? `Cohort ${number}` };
+    return { total: applications.length, created, updated, moved, unchanged, cohort, shown, notShown: applications.length - shown, warnings };
   });
 }
 

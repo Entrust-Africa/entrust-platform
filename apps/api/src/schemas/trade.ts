@@ -795,7 +795,10 @@ export const ApplicationList = z
 
 export const ImportApplicationsBody = z
   .object({
-    program: z.string().trim().min(1).max(200).openapi({ description: "The programme the form is for. Loading the same programme again updates its responses." }),
+    program: z.string().trim().min(1).max(200).openapi({
+      description:
+        "The programme the form is for; its name decides which catalogue cohort the businesses are in. Loading the same file again updates its responses, and a response already stored under another programme is moved to this one.",
+    }),
     fileName: z.string().trim().max(200).optional(),
     contentBase64: z.string().min(1).max(14_000_000).openapi({ description: "The .xlsx file's bytes, base64 encoded. At most about 10 MB." }),
   })
@@ -806,7 +809,12 @@ export const ApplicationsImported = z
     total: z.number().int().openapi({ description: "Responses read from the sheet." }),
     created: z.number().int(),
     updated: z.number().int(),
+    moved: z.number().int().openapi({ description: "Of the updated, how many were stored under another programme and now belong to this one." }),
     unchanged: z.number().int(),
+    cohort: z
+      .object({ number: z.number().int(), name: z.string() })
+      .nullable()
+      .openapi({ description: "The catalogue cohort this programme's name puts the businesses in; null when its name is in none, so they are not in the catalogue." }),
     shown: z.number().int().openapi({ description: "How many are from Ethiopia, so can be listed." }),
     notShown: z.number().int().openapi({ description: "How many are kept but won't be listed: from outside Ethiopia, or not saying where from." }),
     warnings: z.array(z.string()).openapi({ description: "Things to check in the sheet. They name businesses in Ethiopia only." }),

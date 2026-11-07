@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card } from "@entrust/ui";
 import { browserApi, errorText, ok } from "@/lib/summit-api";
 
-type Imported = { total: number; created: number; updated: number; unchanged: number; shown: number; notShown: number; warnings: string[] };
+type Imported = { total: number; created: number; updated: number; moved: number; unchanged: number; cohort: { number: number; name: string } | null; shown: number; notShown: number; warnings: string[] };
 
 async function toBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -29,7 +29,10 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [program, setProgram] = useState(programs.length === 1 ? (programs[0] ?? "") : "");
+  // Left empty until a file is chosen, which fills in the file's name. Not filled with an existing programme: the programme decides the
+  // cohort, so loading a new form under the last one's name puts its businesses in the wrong cohort.
+  const [program, setProgram] = useState("");
+  const [typedProgram, setTypedProgram] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const [result, setResult] = useState<Imported>();
@@ -61,8 +64,8 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
         <h2 className="font-display text-base font-bold">{hasRecords ? "Update from the form" : "Load the form's responses"}</h2>
         <p className="mt-1 text-sm text-ink-2">
           In Google Forms, open Responses, then Link to Sheets, then File, Download, Microsoft Excel (.xlsx), and choose that file. Every response is saved. Only
-          those from Ethiopia are listed here; the rest are kept in the database and not shown. A response is matched on its programme, time sent and email, so
-          loading the file again adds the new ones and leaves the others as they are.
+          those from Ethiopia are listed here; the rest are kept in the database and not shown. A response is matched on its time sent and email, so
+          loading the file again adds the new ones and leaves the others as they are. The programme&apos;s name decides which cohort the businesses are in.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -70,7 +73,10 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
           <span className="text-sm font-semibold text-ink">Programme</span>
           <input
             value={program}
-            onChange={(e) => setProgram(e.target.value)}
+            onChange={(e) => {
+              setProgram(e.target.value);
+              setTypedProgram(e.target.value.trim() !== "");
+            }}
             list="application-programs"
             maxLength={200}
             placeholder="Agro-Processing SME Training Program"
@@ -91,7 +97,7 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
             const chosen = e.target.files?.[0] ?? null;
             setFile(chosen);
             setError(undefined);
-            if (chosen && !program.trim()) setProgram(programFrom(chosen.name));
+            if (chosen && !typedProgram) setProgram(programFrom(chosen.name));
           }}
           className="block min-w-0 text-sm text-ink-2 file:mr-3 file:h-10 file:cursor-pointer file:rounded-md file:border file:border-line file:bg-canvas file:px-4 file:text-sm file:font-semibold file:text-ink hover:file:bg-surface"
         />
@@ -115,6 +121,21 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
             {result.shown} {result.shown === 1 ? "is" : "are"} from Ethiopia and listed below. {result.notShown} {result.notShown === 1 ? "is" : "are"} kept in the
             database and not shown, because {result.notShown === 1 ? "it is" : "they are"} from outside Ethiopia or don&apos;t say where from.
           </p>
+          {result.moved > 0 && (
+            <p className="text-ink-2">
+              {result.moved} {result.moved === 1 ? "response was" : "responses were"} stored under another programme and {result.moved === 1 ? "is" : "are"} now under this one.
+            </p>
+          )}
+          {result.cohort ? (
+            <p className="text-ink-2">
+              Under this programme the businesses are in cohort {result.cohort.number}, {result.cohort.name}.
+            </p>
+          ) : (
+            <p role="alert" className="font-semibold text-danger">
+              This programme&apos;s name doesn&apos;t say which cohort the businesses are in, so they won&apos;t appear in the SME catalogue. Put &quot;Export Growth&quot; or &quot;Agro&quot; in the
+              name and load the file again.
+            </p>
+          )}
           {result.warnings.length > 0 && (
             <div>
               <p className="font-semibold text-ink">Check these in the form&apos;s sheet ({result.warnings.length})</p>

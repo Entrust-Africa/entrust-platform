@@ -262,7 +262,7 @@ describe("the Export Growth Companies form", () => {
       ),
     );
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    expect(res.body).toMatchObject({ total: 3, created: 3, shown: 2, notShown: 1, warnings: [] });
+    expect(res.body).toMatchObject({ total: 3, created: 3, moved: 0, shown: 2, notShown: 1, warnings: [], cohort: { number: 3, name: "Export growth companies" } });
 
     const items = mineGrowth((await get(w.reviewer)).body.items);
     expect(items.map((i: Json) => i.businessName)).toEqual(["Bag Makers", "Spice Garden PLC"]);
@@ -309,5 +309,36 @@ describe("the Export Growth Companies form", () => {
     const res = await callV1(w.admin, "POST", "/trade/register/import", { contentBase64: Buffer.from(diagnostic).toString("base64") });
     expect(res.status).toBe(422);
     expect(res.body.error).toMatch(/no businesses in it/);
+  });
+});
+
+// The programme's name decides the cohort, and a form loaded under the wrong name is put right by loading it again under the right one.
+describe("the programme a form is loaded under", () => {
+  const WRONG = `${PREFIX}agro-wrong-programme`;
+  const RIGHT = `${PREFIX}export-growth-right-programme`;
+  const NONE = `${PREFIX}coffee-no-cohort`;
+  const loadAs = (program: string) => load(w.admin, workbook({ "Form Responses 1": [HEADINGS, response({ 0: SERIAL + 500, 1: email("moved"), 2: "Moved Foods PLC" })] }), { program });
+  const rowsFor = () => db.select().from(schema.programApplication).where(eq(schema.programApplication.email, email("moved")));
+
+  it("says which cohort the businesses are in", async () => {
+    expect((await loadAs(WRONG)).body).toMatchObject({ created: 1, moved: 0, cohort: { number: 2, name: "Agro-processing" } });
+  });
+
+  it("moves a response to the programme it is loaded under next, instead of keeping it twice", async () => {
+    const res = await loadAs(RIGHT);
+    expect(res.body).toMatchObject({ total: 1, created: 0, updated: 1, moved: 1, unchanged: 0, cohort: { number: 3, name: "Export growth companies" } });
+    expect((await rowsFor()).map((r) => r.program)).toEqual([RIGHT]);
+  });
+
+  it("then leaves it alone, and records the move in the audit log without naming the business", async () => {
+    expect((await loadAs(RIGHT)).body).toMatchObject({ created: 0, updated: 0, moved: 0, unchanged: 1 });
+    const rows = await db.select().from(schema.auditLog).where(eq(schema.auditLog.actorUserId, w.admin.id));
+    const entry = rows.find((r) => r.action === "program_application.import" && (r.after as Json).program === RIGHT && (r.after as Json).moved === 1);
+    expect(entry).toBeDefined();
+    expect(JSON.stringify(entry)).not.toContain("Moved Foods");
+  });
+
+  it("says when the programme's name puts the businesses in no cohort", async () => {
+    expect((await loadAs(NONE)).body).toMatchObject({ moved: 1, cohort: null });
   });
 });
