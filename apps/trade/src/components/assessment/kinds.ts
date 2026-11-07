@@ -1,4 +1,4 @@
-export type AssessmentKind = "diagnostic" | "placement";
+export type AssessmentKind = "diagnostic" | "placement" | "exit";
 
 export interface KindInfo {
   kind: AssessmentKind;
@@ -43,9 +43,25 @@ export const KINDS: Record<AssessmentKind, KindInfo> = {
       confirmButton: "Submit assessment",
     },
   },
+  exit: {
+    kind: "exit",
+    route: "/assessment/exit",
+    title: "Exit assessment",
+    intro: [
+      "Now that you have completed your modules, answer sections B to G again to measure how much your capabilities have grown.",
+      "Your answers generate your comparative capability report against your placement baseline. It does not alter your learning plan.",
+    ],
+    startButton: "Start the exit assessment",
+    submit: {
+      button: "Review and submit",
+      confirmTitle: "Submit your exit assessment?",
+      confirmBody: "You won't be able to change your answers after this. Your comparative report will be generated immediately.",
+      confirmButton: "Submit exit assessment",
+    },
+  },
 };
 
-export const isKind = (value: string): value is AssessmentKind => value === "diagnostic" || value === "placement";
+export const isKind = (value: string): value is AssessmentKind => value === "diagnostic" || value === "placement" || value === "exit";
 
 /**
  * The diagnostic offers no "I don't know" box: where a person doesn't know, they say so in their own words. The three

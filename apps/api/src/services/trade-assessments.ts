@@ -26,18 +26,18 @@ import type { AssessmentView } from "../schemas/trade";
 import { hasTradeAccess, type Ctx, type Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
-import { rescoreLivePlacement, requireAvenue, scorePlacement } from "./trade-placement";
+import { rescoreLivePlacement, requireAvenue, scorePlacement, scoreExit } from "./trade-placement";
 import { savePrefill, writeSectionOne } from "./trade-profile";
 import { accessTo, recordTradeChange, unwrapAnswer, wrapAnswer, type Access } from "./trade-shared";
 
 export { recordTradeChange } from "./trade-shared";
 
-// The two forms an enrolled SME fills in on TRADE: the onboarding diagnostic (#78) and the placement
-// assessment (#57). They share one implementation: a form definition, answers that save as the person
+// The forms an enrolled SME fills in on TRADE: the onboarding diagnostic (#78), the placement
+// assessment (#57), and the exit assessment (#71). They share one implementation: a form definition, answers that save as the person
 // goes, and a submit that locks them. What differs is only how a kind checks its answers and what its
-// submit leaves behind (the diagnostic assigns an avenue; the placement assessment waits for scoring, #58).
+// submit leaves behind (the diagnostic assigns an avenue; the placement assessment builds the plan; the exit assessment rescores capability without touching the plan).
 
-export const ASSESSMENT_FORM_KINDS = ["placement", "diagnostic"] as const;
+export const ASSESSMENT_FORM_KINDS = ["placement", "diagnostic", "exit"] as const;
 export type FormKind = (typeof ASSESSMENT_FORM_KINDS)[number];
 
 type AssessmentRow = typeof schema.tradeAssessment.$inferSelect;
@@ -189,9 +189,71 @@ function kitFor(kind: FormKind, version?: string): Kit {
     if (!rules) throw new ServiceError("not_found", "No such version of the placement assessment.");
     return placementKit(rules);
   }
+  if (kind === "exit") {
+    const rules = version ? findTradeRules(version) : latestTradeRules();
+    if (!rules) throw new ServiceError("not_found", "No such version of the exit assessment.");
+    return exitKit(rules);
+  }
   const template = version ? findDiagnosticTemplate(version) : latestDiagnosticTemplate();
   if (!template) throw new ServiceError("not_found", "No such version of the diagnostic.");
   return diagnosticKit(template);
+}
+
+function exitKit(rules: TradeRules): Kit {
+  const base = placementKit(rules);
+  const exitQuestions = new Map(rules.template.questions.filter((q) => q.section !== "A").map((q) => [q.id, q]));
+  const form: FormDefinition = {
+    ...base.form,
+    id: "trade.exit",
+    title: "TRADE Exit Assessment",
+    sections: base.form.sections.filter((s) => s.id !== "A"),
+    questions: base.form.questions.filter((q) => exitQuestions.has(q.id)),
+  };
+  return {
+    kind: "exit",
+    version: rules.version,
+    form,
+    encode(questionId, wire) {
+      if (!exitQuestions.has(questionId)) throw new ServiceError("invalid", `${questionId}: this form has no such question`);
+      return base.encode(questionId, wire);
+    },
+    decode: base.decode,
+    check(rows) {
+      const answers = Object.fromEntries(
+        rows.filter((r) => hasAnswer(r) && exitQuestions.has(r.questionId)).map((r) => [r.questionId, (r.unscored ?? r.answer) as EngineAnswer]),
+      );
+      const visible = placementVisible(rules, answers).filter((q) => q.section !== "A");
+      const result = validateResponses(rules, answers, { submit: true });
+      const bad = new Set(result.errors.filter((e) => e.code !== "missing").map((e) => e.question));
+      const bySection: Check["progress"]["bySection"] = {};
+      let answered = 0;
+      for (const q of visible) {
+        const done = q.id in answers && !bad.has(q.id);
+        bySection[q.section] ??= { answered: 0, total: 0 };
+        bySection[q.section]!.total += 1;
+        if (done) {
+          answered += 1;
+          bySection[q.section]!.answered += 1;
+        }
+      }
+      const exitErrors = result.errors.filter((e) => {
+        const q = rules.template.questions.find((x) => x.id === e.question);
+        return q && q.section !== "A";
+      });
+      return {
+        errors: exitErrors.filter((e) => e.code !== "missing").map((e) => e.message),
+        incomplete: exitErrors.filter((e) => e.code === "missing").map((e) => e.message),
+        conflicts: result.conflicts.map((c) => ({ code: c.code, questions: c.questions, message: c.message })),
+        ignored: [...result.ignored],
+        progress: {
+          total: visible.length,
+          answered,
+          percent: visible.length ? Math.floor((answered / visible.length) * 100) : 100,
+          bySection,
+        },
+      };
+    },
+  };
 }
 
 /** The form to show, for a kind and a version (the newest unless named). */
@@ -579,6 +641,7 @@ export async function submitAssessment(ctx: Ctx, id: string): Promise<Assessment
     let saved = submitted ?? row;
     // The placement assessment is scored on submit: it becomes scored, or review_required when staff have something to look at.
     if (row.kind === "placement") saved = { ...saved, status: await scorePlacement(tx, ctx, row, enrollment.organizationId, "submitted") };
+    else if (row.kind === "exit") saved = { ...saved, status: await scoreExit(tx, ctx, row, enrollment.organizationId) };
     await recordTradeChange(tx, ctx.principal.userId, {
       action: "trade.assessment.submitted",
       organizationId: enrollment.organizationId,
@@ -678,6 +741,7 @@ export async function approveNotApplicable(ctx: Ctx, id: string, questionId: str
     // An approval takes the question out of the denominator, so the placement assessment is scored again and may be ready.
     let current = row;
     if (row.kind === "placement") current = { ...row, status: await scorePlacement(tx, ctx, row, found.enrollment.organizationId, "approval") };
+    else if (row.kind === "exit") current = { ...row, status: await scoreExit(tx, ctx, row, found.enrollment.organizationId) };
     return buildView(tx, { ...found, row: current }, ctx.now);
   });
 }

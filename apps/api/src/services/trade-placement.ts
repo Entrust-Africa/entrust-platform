@@ -176,6 +176,37 @@ export async function scorePlacement(
 }
 
 /**
+ * Scores a submitted exit assessment in the caller's transaction.
+ * Exit assessment evaluates domain capability post-program, writes scores to capabilityScore,
+ * and crucially NEVER modifies the learning plan (#71).
+ */
+export async function scoreExit(
+  tx: Executor,
+  ctx: Pick<Ctx, "principal" | "now">,
+  assessment: Pick<AssessmentRow, "id" | "enrollmentId" | "templateVersion">,
+  organizationId: string,
+): Promise<PlacementOutcome["assessmentStatus"]> {
+  const rules = rulesFor(assessment.templateVersion);
+  const { answers, approvedNotApplicable } = await inputsOf(tx, rules, assessment.id);
+  const outcome = scoreDomains(rules, { answers, approvedNotApplicable });
+
+  await tx.delete(schema.capabilityScore).where(eq(schema.capabilityScore.assessmentId, assessment.id));
+  await tx.insert(schema.capabilityScore).values(
+    outcome.domains.map((r) => scoreRow(assessment.id, "domain", r)),
+  );
+
+  await tx.update(schema.tradeAssessment).set({ status: "scored" }).where(eq(schema.tradeAssessment.id, assessment.id));
+  await recordTradeChange(tx, ctx.principal.userId, {
+    action: "trade.assessment.scored",
+    organizationId,
+    entityId: assessment.id,
+    after: { kind: "exit", rulesVersion: rules.version },
+  });
+
+  return "scored";
+}
+
+/**
  * The avenue or an approval changed: scores and plan are made again for the enrolment's placement assessment, if it has
  * a submitted one. A plan that waited for staff to confirm the avenue is ready once they have.
  */

@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
+import { MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
 import {
   ASSESSMENT_STATUSES,
   EVIDENCE_CONFIDENCE,
@@ -111,7 +112,7 @@ export const PracticeEventList = z
 
 // ---- Assessments: the onboarding diagnostic and the placement assessment (#57, #78) ----
 
-const FormKind = z.enum(["placement", "diagnostic"]).openapi({ description: "The onboarding diagnostic or the placement assessment." });
+const FormKind = z.enum(["placement", "diagnostic", "exit"]).openapi({ description: "The onboarding diagnostic, placement assessment, or exit assessment." });
 
 export const AssessmentForm = z
   .object({
@@ -1107,6 +1108,8 @@ export const ModuleProgressSchema = z
     status: z.enum(MODULE_PROGRESS_STATUSES),
     lessonProgress: z.record(z.string(), z.unknown()),
     startedAt: z.string().nullable(),
+    theoryCompletedAt: z.string().nullable().optional(),
+    knowledgeCheckScore: z.number().nullable().optional(),
     completedAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -1140,4 +1143,314 @@ export const RecordModuleProgressBody = z
 export type ModuleProgressView = z.infer<typeof ModuleProgressSchema>;
 export type ModuleProgressQueryInput = z.infer<typeof ModuleProgressQuery>;
 export type RecordModuleProgressInput = z.infer<typeof RecordModuleProgressBody>;
+
+// ---- Knowledge Checks (#63) ----
+export const KnowledgeCheckAttemptInput = z
+  .object({
+    enrollmentId: z.uuid(),
+    contentVersion: z.string().trim().optional(),
+    answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  })
+  .openapi("TradeKnowledgeCheckAttemptInput");
+
+export const QuestionGradingResultSchema = z
+  .object({
+    questionId: z.string(),
+    questionText: z.string(),
+    submittedAnswers: z.array(z.string()),
+    correctAnswers: z.array(z.string()),
+    isCorrect: z.boolean(),
+    explanation: z.string().optional(),
+    lessonId: z.string().optional(),
+  })
+  .openapi("TradeQuestionGradingResult");
+
+export const KnowledgeCheckAttemptResult = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string(),
+    attemptNumber: z.number().int(),
+    score: z.number(),
+    passed: z.boolean(),
+    totalQuestions: z.number().int(),
+    correctCount: z.number().int(),
+    results: z.array(QuestionGradingResultSchema),
+    theoryCompletedAt: z.string().nullable().optional(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeKnowledgeCheckAttemptResult");
+
+export const KnowledgeCheckHistoryItem = z
+  .object({
+    id: z.uuid(),
+    attemptNumber: z.number().int(),
+    score: z.number(),
+    passed: z.boolean(),
+    totalQuestions: z.number().int(),
+    correctCount: z.number().int(),
+    contentVersion: z.string(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryItem");
+
+export const KnowledgeCheckHistoryList = z
+  .object({
+    items: z.array(KnowledgeCheckHistoryItem),
+    bestScore: z.number().nullable(),
+    hasPassed: z.boolean(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryList");
+
+export const KnowledgeCheckHistoryQuery = z
+  .object({
+    enrollmentId: z.uuid(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryQuery");
+
+export const CohortModuleKnowledgeCheckStat = z
+  .object({
+    moduleId: z.enum(MODULE_IDS),
+    attemptsCount: z.number().int(),
+    learnersPassed: z.number().int(),
+    totalLearners: z.number().int(),
+    passRate: z.number(),
+  })
+  .openapi("TradeCohortModuleKnowledgeCheckStat");
+
+export const CohortKnowledgeCheckStats = z
+  .object({
+    cohortId: z.uuid(),
+    modules: z.array(CohortModuleKnowledgeCheckStat),
+  })
+  .openapi("TradeCohortKnowledgeCheckStats");
+
+export type KnowledgeCheckAttemptInput = z.infer<typeof KnowledgeCheckAttemptInput>;
+export type KnowledgeCheckAttemptResult = z.infer<typeof KnowledgeCheckAttemptResult>;
+export type KnowledgeCheckHistoryList = z.infer<typeof KnowledgeCheckHistoryList>;
+export type CohortKnowledgeCheckStats = z.infer<typeof CohortKnowledgeCheckStats>;
+
+// ---- Module Submissions & Rubric Scoring (#67) ----
+export const CreateModuleSubmissionBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string().trim().optional(),
+    worksheetVersionId: z.uuid().optional(),
+    evidenceRecordIds: z.array(z.uuid()).optional().default([]),
+  })
+  .openapi("CreateTradeModuleSubmissionBody");
+
+export const RubricCriterionScoreInput = z.object({
+  points: z.number().int().min(0),
+  comment: z.string().trim().optional(),
+});
+
+export const RubricScoredCriterionView = z.object({
+  criterionId: z.string(),
+  title: z.string(),
+  points: z.number(),
+  maxPoints: z.number(),
+  mustHave: z.boolean(),
+  comment: z.string().optional(),
+  passed: z.boolean(),
+});
+
+export const RubricAssessmentView = z
+  .object({
+    id: z.uuid(),
+    submissionId: z.uuid(),
+    assessorUserId: z.string().nullable(),
+    assessorName: z.string().nullable().optional(),
+    isFirstScore: z.boolean(),
+    scores: z.record(z.string(), z.object({ points: z.number(), comment: z.string().optional() })),
+    criterionResults: z.array(RubricScoredCriterionView),
+    confirmedCriticalFailures: z.array(z.string()),
+    totalPoints: z.number(),
+    maxPoints: z.number(),
+    percentage: z.number(),
+    band: z.string(),
+    passed: z.boolean(),
+    outcome: z.enum(RUBRIC_SCORE_OUTCOMES),
+    feedback: z.string().nullable().optional(),
+    overriddenByUserId: z.string().nullable().optional(),
+    overrideReason: z.string().nullable().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeRubricAssessmentView");
+
+export const ModuleSubmissionView = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    organizationName: z.string().optional(),
+    cohortId: z.uuid().optional(),
+    cohortName: z.string().optional(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string(),
+    version: z.number().int(),
+    status: z.enum(MODULE_SUBMISSION_STATUSES),
+    worksheetVersionId: z.uuid().nullable(),
+    evidenceRecordIds: z.array(z.string()),
+    worksheetSnapshot: z.record(z.string(), z.unknown()),
+    waitingTimeHours: z.number().optional(),
+    submittedAt: z.string(),
+    reviewedAt: z.string().nullable(),
+    officialScore: RubricAssessmentView.nullable().optional(),
+    scoresCount: z.number().int().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeModuleSubmissionView");
+
+export const ModuleSubmissionList = z
+  .object({
+    items: z.array(ModuleSubmissionView),
+  })
+  .openapi("TradeModuleSubmissionList");
+
+export const ModuleSubmissionListQuery = z
+  .object({
+    cohortId: z.uuid().optional(),
+    moduleId: z.enum(MODULE_IDS).optional(),
+    status: z.enum(MODULE_SUBMISSION_STATUSES).optional(),
+    enrollmentId: z.uuid().optional(),
+  })
+  .openapi("TradeModuleSubmissionListQuery");
+
+export const SubmissionParam = z
+  .object({
+    id: z.uuid(),
+  })
+  .openapi("TradeSubmissionParam");
+
+export const ScoreSubmissionBody = z
+  .object({
+    scores: z.record(z.string(), RubricCriterionScoreInput),
+    confirmedCriticalFailures: z.array(z.string()).optional().default([]),
+    feedback: z.string().trim().optional(),
+  })
+  .openapi("ScoreTradeSubmissionBody");
+
+export const OverrideScoreBody = z
+  .object({
+    scores: z.record(z.string(), RubricCriterionScoreInput).optional(),
+    confirmedCriticalFailures: z.array(z.string()).optional(),
+    feedback: z.string().trim().optional(),
+    overrideReason: z.string().trim().min(1, "A reason is required to override a score"),
+  })
+  .openapi("OverrideTradeScoreBody");
+
+export const SubmissionScoresList = z
+  .object({
+    items: z.array(RubricAssessmentView),
+    officialScore: RubricAssessmentView.nullable(),
+  })
+  .openapi("TradeSubmissionScoresList");
+
+export type CreateModuleSubmissionInput = z.infer<typeof CreateModuleSubmissionBody>;
+export type ModuleSubmissionView = z.infer<typeof ModuleSubmissionView>;
+export type ModuleSubmissionListQueryInput = z.infer<typeof ModuleSubmissionListQuery>;
+export type ScoreSubmissionInput = z.infer<typeof ScoreSubmissionBody>;
+export type OverrideScoreInput = z.infer<typeof OverrideScoreBody>;
+export type RubricAssessmentView = z.infer<typeof RubricAssessmentView>;
+export type SubmissionScoresList = z.infer<typeof SubmissionScoresList>;
+
+// ---- Certificates & Program Completion (#71) ----
+
+export const CertificateCodeParam = z.object({
+  code: z.string().min(1).openapi({ example: "TRADE-2026-F98A-32B1" }),
+});
+
+export const CertificateParam = z.object({
+  id: z.uuid(),
+});
+
+export const CertificateView = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    code: z.string().openapi({ example: "TRADE-2026-F98A-32B1" }),
+    recipientName: z.string(),
+    recipientOrganizationName: z.string(),
+    programName: z.string(),
+    cohortName: z.string(),
+    pathway: z.string(),
+    issuedAt: z.iso.datetime(),
+    isValid: z.boolean(),
+    isRevoked: z.boolean(),
+    revokedAt: z.iso.datetime().nullable(),
+    revocationReason: z.string().nullable(),
+    verificationUrl: z.string(),
+  })
+  .openapi("TradeCertificate");
+
+export const PublicCertificateView = z
+  .object({
+    code: z.string().openapi({ example: "TRADE-2026-F98A-32B1" }),
+    recipientName: z.string(),
+    recipientOrganizationName: z.string(),
+    programName: z.string(),
+    cohortName: z.string(),
+    pathway: z.string(),
+    issuedAt: z.iso.datetime(),
+    isValid: z.boolean(),
+    isRevoked: z.boolean(),
+    revokedAt: z.iso.datetime().nullable(),
+    revocationReason: z.string().nullable(),
+  })
+  .openapi("PublicTradeCertificate");
+
+export const RevokeCertificateBody = z
+  .object({
+    reason: z.string().trim().min(3, "Revocation reason is required"),
+  })
+  .openapi("RevokeTradeCertificateBody");
+
+export const AdminOverrideModuleBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    reason: z.string().trim().min(3, "Reason for manual completion override is required"),
+  })
+  .openapi("AdminOverrideModuleBody");
+
+export const DomainComparisonView = z
+  .object({
+    domainId: z.string(),
+    domainTitle: z.string(),
+    placementScore: z.number().nullable(),
+    placementBand: z.string().nullable(),
+    placementBandLabel: z.string().nullable(),
+    exitScore: z.number().nullable(),
+    exitBand: z.string().nullable(),
+    exitBandLabel: z.string().nullable(),
+    deltaScore: z.number().nullable(),
+  })
+  .openapi("TradeDomainComparison");
+
+export const ExitAssessmentReportView = z
+  .object({
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    organizationName: z.string(),
+    cohortName: z.string(),
+    placementAssessmentId: z.uuid().nullable(),
+    exitAssessmentId: z.uuid().nullable(),
+    placementScores: z.array(ScoreView),
+    exitScores: z.array(ScoreView),
+    comparisons: z.array(DomainComparisonView),
+  })
+  .openapi("TradeExitAssessmentReport");
+
+export type CertificateView = z.infer<typeof CertificateView>;
+export type PublicCertificateView = z.infer<typeof PublicCertificateView>;
+export type RevokeCertificateInput = z.infer<typeof RevokeCertificateBody>;
+export type AdminOverrideModuleInput = z.infer<typeof AdminOverrideModuleBody>;
+export type DomainComparisonView = z.infer<typeof DomainComparisonView>;
+export type ExitAssessmentReportView = z.infer<typeof ExitAssessmentReportView>;
+
 

@@ -168,7 +168,7 @@ describe("the forms", () => {
   });
 
   it("refuses a kind or a version it doesn't have", async () => {
-    expect((await get(w.owner, "/assessments/template?kind=exit")).status).toBe(400);
+    expect((await get(w.owner, "/assessments/template?kind=unknown")).status).toBe(400);
     expect((await get(w.owner, "/assessments/template?kind=diagnostic&version=9.9.9")).status).toBe(404);
   });
 });

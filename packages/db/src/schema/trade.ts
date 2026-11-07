@@ -392,7 +392,12 @@ export const moduleProgress = trade.table(
     status: text("status", { enum: MODULE_PROGRESS_STATUSES }).notNull().default("not_started"),
     lessonProgress: jsonb("lesson_progress").notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
+    theoryCompletedAt: timestamp("theory_completed_at", { withTimezone: true }),
+    knowledgeCheckScore: numeric("knowledge_check_score", { precision: 5, scale: 2 }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    adminOverrideByUserId: text("admin_override_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    adminOverrideReason: text("admin_override_reason"),
+    adminOverrideAt: timestamp("admin_override_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -401,6 +406,141 @@ export const moduleProgress = trade.table(
   },
   (t) => [
     uniqueIndex("trade_module_progress_enrollment_module_uidx").on(t.enrollmentId, t.moduleId),
+  ],
+);
+
+// An attempt by an enrolled learner at a module's knowledge check.
+export const knowledgeCheckAttempt = trade.table(
+  "knowledge_check_attempt",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    contentVersion: text("content_version").notNull(),
+    attemptNumber: integer("attempt_number").notNull().default(1),
+    score: numeric("score", { precision: 5, scale: 2 }).notNull(),
+    passed: boolean("passed").notNull(),
+    totalQuestions: integer("total_questions").notNull(),
+    correctCount: integer("correct_count").notNull(),
+    answers: jsonb("answers").notNull().default({}),
+    results: jsonb("results").notNull().default([]),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_kc_attempt_enrollment_idx").on(t.enrollmentId),
+    index("trade_kc_attempt_enr_module_idx").on(t.enrollmentId, t.moduleId),
+  ],
+);
+
+export const MODULE_SUBMISSION_STATUSES = ["submitted", "scored", "revision_required", "passed"] as const;
+export type ModuleSubmissionStatus = (typeof MODULE_SUBMISSION_STATUSES)[number];
+
+export const RUBRIC_SCORE_OUTCOMES = ["passed", "revision_required"] as const;
+export type RubricScoreOutcome = (typeof RUBRIC_SCORE_OUTCOMES)[number];
+
+// A practical deliverable submission by an SME for a module (#67).
+export const moduleSubmission = trade.table(
+  "module_submission",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    contentVersion: text("content_version").notNull(),
+    version: integer("version").notNull().default(1),
+    status: text("status", { enum: MODULE_SUBMISSION_STATUSES }).notNull().default("submitted"),
+    worksheetVersionId: uuid("worksheet_version_id").references(() => worksheetVersion.id, { onDelete: "set null" }),
+    evidenceRecordIds: text("evidence_record_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    worksheetSnapshot: jsonb("worksheet_snapshot").$type<Record<string, unknown>>().notNull().default({}),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_module_submission_enrollment_idx").on(t.enrollmentId),
+    index("trade_module_submission_enr_mod_idx").on(t.enrollmentId, t.moduleId),
+    index("trade_module_submission_status_idx").on(t.status),
+    index("trade_module_submission_submitted_at_idx").on(t.submittedAt),
+  ],
+);
+
+// An assessor's rubric scoring of a practical module submission (#67).
+export const rubricAssessment = trade.table(
+  "rubric_assessment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => moduleSubmission.id, { onDelete: "cascade" }),
+    assessorUserId: text("assessor_user_id").references(() => user.id, { onDelete: "set null" }),
+    isFirstScore: boolean("is_first_score").notNull().default(true),
+    scores: jsonb("scores").$type<Record<string, { points: number; comment?: string }>>().notNull().default({}),
+    criterionResults: jsonb("criterion_results").$type<unknown[]>().notNull().default([]),
+    confirmedCriticalFailures: text("confirmed_critical_failures")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    totalPoints: integer("total_points").notNull(),
+    maxPoints: integer("max_points").notNull(),
+    percentage: numeric("percentage", { precision: 5, scale: 2 }).notNull(),
+    band: text("band").notNull(),
+    passed: boolean("passed").notNull(),
+    outcome: text("outcome", { enum: RUBRIC_SCORE_OUTCOMES }).notNull(),
+    feedback: text("feedback"),
+    overriddenByUserId: text("overridden_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    overrideReason: text("override_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_rubric_assessment_submission_idx").on(t.submissionId),
+    index("trade_rubric_assessment_assessor_idx").on(t.assessorUserId),
+  ],
+);
+
+// A certificate issued to an SME upon completion of the TRADE program (#71).
+export const certificate = trade.table(
+  "certificate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    code: text("code").notNull().unique(),
+    recipientName: text("recipient_name").notNull(),
+    recipientOrganizationName: text("recipient_organization_name").notNull(),
+    programName: text("program_name").notNull(),
+    cohortName: text("cohort_name").notNull(),
+    pathway: text("pathway").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: text("revoked_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    revocationReason: text("revocation_reason"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("trade_certificate_enrollment_idx").on(t.enrollmentId),
+    uniqueIndex("trade_certificate_code_uidx").on(t.code),
   ],
 );
 
@@ -554,6 +694,8 @@ export const enrollmentRelations = relations(enrollment, ({ one, many }) => ({
   assessments: many(tradeAssessment),
   learningPlans: many(learningPlan),
   moduleProgress: many(moduleProgress),
+  submissions: many(moduleSubmission),
+  certificates: many(certificate),
   moduleExemptions: many(moduleExemption),
   evidenceRecords: many(evidenceRecord),
   commercialOpportunities: many(commercialOpportunity),
@@ -600,6 +742,30 @@ export const moduleAssignmentRelations = relations(moduleAssignment, ({ one }) =
 
 export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
   enrollment: one(enrollment, { fields: [moduleProgress.enrollmentId], references: [enrollment.id] }),
+  adminOverrideByUser: one(user, { fields: [moduleProgress.adminOverrideByUserId], references: [user.id] }),
+}));
+
+export const knowledgeCheckAttemptRelations = relations(knowledgeCheckAttempt, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [knowledgeCheckAttempt.enrollmentId], references: [enrollment.id] }),
+  submittedByUser: one(user, { fields: [knowledgeCheckAttempt.submittedByUserId], references: [user.id] }),
+}));
+
+export const moduleSubmissionRelations = relations(moduleSubmission, ({ one, many }) => ({
+  enrollment: one(enrollment, { fields: [moduleSubmission.enrollmentId], references: [enrollment.id] }),
+  worksheetVersion: one(worksheetVersion, { fields: [moduleSubmission.worksheetVersionId], references: [worksheetVersion.id] }),
+  submittedByUser: one(user, { fields: [moduleSubmission.submittedByUserId], references: [user.id] }),
+  scores: many(rubricAssessment),
+}));
+
+export const rubricAssessmentRelations = relations(rubricAssessment, ({ one }) => ({
+  submission: one(moduleSubmission, { fields: [rubricAssessment.submissionId], references: [moduleSubmission.id] }),
+  assessorUser: one(user, { fields: [rubricAssessment.assessorUserId], references: [user.id] }),
+  overriddenByUser: one(user, { fields: [rubricAssessment.overriddenByUserId], references: [user.id] }),
+}));
+
+export const certificateRelations = relations(certificate, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [certificate.enrollmentId], references: [enrollment.id] }),
+  revokedByUser: one(user, { fields: [certificate.revokedByUserId], references: [user.id] }),
 }));
 
 export const moduleExemptionRelations = relations(moduleExemption, ({ one }) => ({
