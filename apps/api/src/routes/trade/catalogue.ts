@@ -14,7 +14,7 @@ const listRoute = createRoute({
   tags,
   summary: "The pilot SMEs, by cohort",
   description:
-    "Cohort 1 is the leather businesses in the SME register; cohort 2 is the agro-processing businesses that applied to the training programme, listed once each, from Ethiopia only. A business that is in both is marked. Entrust staff only.",
+    "Cohort 1 is the leather businesses in the SME register; cohort 2 is the agro-processing businesses that applied to the training programme, and cohort 3 the Export Growth Companies cohort, each listed once, from Ethiopia only. A business that is in more than one cohort is marked in each. Entrust staff only.",
   responses: { 200: { description: "The catalogue", content: json(Catalogue) }, ...listErrors, 403: problem("The caller isn't Entrust staff") },
 });
 
