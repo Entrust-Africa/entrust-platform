@@ -15,18 +15,22 @@ function LevelCard({ product, featured }: { product: Product; featured: boolean 
     <article className={featured ? "flex flex-col border border-amber bg-ink text-white" : "flex flex-col border border-line bg-white"}>
       <div className="p-8">
         <p className="font-mono text-[11px] tracking-[0.2em] text-amber uppercase">{product.name}</p>
-        <p className="mt-5 font-display text-6xl leading-none">{product.price}</p>
+        <p className={product.price.length > 12 ? "mt-5 font-display text-4xl leading-tight" : "mt-5 font-display text-6xl leading-none"}>{product.price}</p>
         <p className={featured ? "mt-5 text-sm leading-relaxed text-white/70" : "mt-5 text-sm leading-relaxed text-ink/70"}>{product.summary}</p>
         {note && <p className={`mt-4 inline-block px-2 py-1 font-mono text-[11px] tracking-wide uppercase ${soldOut ? "bg-white text-ink" : "bg-amber/25 text-amber"}`}>{note}</p>}
       </div>
-      <dl className={featured ? "flex-1 space-y-4 border-t border-white/15 px-8 py-6" : "flex-1 space-y-4 border-t border-line px-8 py-6"}>
-        {product.benefits.map((b) => (
-          <div key={b.area}>
-            <dt className={featured ? "font-mono text-[11px] tracking-[0.14em] text-amber uppercase" : "font-mono text-[11px] tracking-[0.14em] text-amber-ink uppercase"}>{b.label}</dt>
-            <dd className="mt-1 text-sm leading-relaxed">{b.text}</dd>
-          </div>
-        ))}
-      </dl>
+      {product.benefits.length > 0 ? (
+        <dl className={featured ? "flex-1 space-y-4 border-t border-white/15 px-8 py-6" : "flex-1 space-y-4 border-t border-line px-8 py-6"}>
+          {product.benefits.map((b) => (
+            <div key={b.area}>
+              <dt className={featured ? "font-mono text-[11px] tracking-[0.14em] text-amber uppercase" : "font-mono text-[11px] tracking-[0.14em] text-amber-ink uppercase"}>{b.label}</dt>
+              <dd className="mt-1 text-sm leading-relaxed">{b.text}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <div className="flex-1" />
+      )}
       {soldOut ? (
         <span className={featured ? "inline-flex h-14 items-center justify-center bg-white/10 text-sm font-semibold text-white/60" : "inline-flex h-14 items-center justify-center bg-ink/10 text-sm font-semibold text-ink/50"}>
           No longer available
@@ -74,7 +78,7 @@ export default async function SponsorPage() {
             </section>
           )}
 
-          {levels.length > 0 && (
+          {levels.some((p) => p.benefits.length > 0) && (
             <section className="bg-white px-6 py-20 lg:px-16 lg:py-28">
               <div className="mx-auto max-w-[82rem]">
                 <SectionLabel>Compare the levels</SectionLabel>

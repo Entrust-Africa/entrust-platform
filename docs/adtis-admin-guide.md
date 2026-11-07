@@ -12,8 +12,9 @@ to change a price, a benefit, a booth number or a payment instruction.
 ## 1. Before the website sells anything: set up the edition
 
 1. Open **Settings**. If no edition exists, press **Create the edition** to start ADTIS 2027 from the standard catalogue (the
-   five exhibition packages, six sponsorship levels, five delegate categories and seven additional opportunities, at the prices
-   in the website instructions). The first edition becomes the one the website sells.
+   five exhibition packages, six sponsorship levels, five delegate categories and seven additional opportunities; the
+   sponsorship levels are the Pan African Chamber of Commerce's trade-mission tiers and the rest are at the prices in the
+   website instructions). The first edition becomes the one the website sells.
 2. **Edition settings**
    - *Dates*: shown as words on the website. Keep "January 2027 (exact dates to be announced)" until the days are fixed. The
      site never shows a date you haven't typed.
@@ -31,10 +32,13 @@ to change a price, a benefit, a booth number or a payment instruction.
      sells out. Once set, the website stops taking applications for a package when it is full, and shows "Sold out".
    - **Status**: *Draft* is hidden, *Published* is on the website, *Archived* is kept for the records that name it but hidden.
      Nothing is ever deleted.
-   - **Sponsorship benefits** are text for each area (logo, speaking, exhibition space, delegate passes, website and digital,
-     social media, B2B matchmaking, networking, category exclusivity). Each level has its own text; an empty area means the
-     level doesn't include it. **The text that comes with the standard catalogue is a proposal: read and edit every level before
-     you tell sponsors about them.**
+   - **Sponsorship levels** come from the Pan African Chamber of Commerce's approved ranges, so a level's **price** is its
+     lowest figure (what an enquiry is valued at until you negotiate it) and **Price range shown on the website** is what
+     visitors read, like "$25,000 to $40,000". Leave the range empty to show the price alone.
+   - **Sponsorship benefits** are optional text for each area (logo, speaking, exhibition space, delegate passes, website and
+     digital, social media, B2B matchmaking, networking, category exclusivity). The standard levels list none, because the
+     Chamber's plan promises no passes, booths or speaking slots; add text only for what a signed agreement will give, and an
+     empty area means the level doesn't include it.
    - Changing a price changes it from now on. Bookings already made keep the price they were made at.
 4. **Starting ADTIS 2028**: in Settings, *Start a new edition* and choose *a copy of* the current one. Prices, benefits and
    settings come across; bookings and registrations don't.
@@ -61,7 +65,7 @@ to change a price, a benefit, a booth number or a payment instruction.
   Declined*. Add a note to a move; the history keeps who moved it and when.
 - Set the **value** if the deal is negotiated (it starts as the listed price) and keep private **notes**.
 - **Confirmed** makes the organisation a sponsor: it opens a payment for the value, emails the payment instructions and counts
-  against the level's number available. For category exclusivity, set the Title Partner's number available to 1: a second
+  against the level's number available. For category exclusivity, set the level's number available to 1: a second
   confirmation is then refused. Benefits are confirmed in a signed sponsorship agreement, which this system doesn't replace.
 
 ## 4. Delegates and check-in

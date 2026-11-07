@@ -64,7 +64,7 @@ describe("creating an edition from the standard catalogue", () => {
     expect(productsOf(body, "exhibition_package").map((p) => [p.name, p.priceCents])).toEqual(
       expect.arrayContaining([["Standard SME Booth", 50000], ["Premium SME Booth", 90000], ["Corporate / Institutional Booth", 160000], ["International Exhibitor Booth", 150000], ["SME Table-top Exhibition", 25000]]),
     );
-    expect(productsOf(body, "sponsorship_level").map((p) => p.priceCents).sort((a, b) => b - a)).toEqual([3125000, 1875000, 1250000, 625000, 312500, 156000]);
+    expect(productsOf(body, "sponsorship_level").map((p) => p.priceCents).sort((a, b) => b - a)).toEqual([5000000, 2500000, 2000000, 1500000, 1000000, 500000]);
     expect(productsOf(body, "delegate_category").map((p) => p.priceCents).sort((a, b) => a - b)).toEqual([0, 6500, 15000, 16000, 25000]);
     expect(productsOf(body, "opportunity")).toHaveLength(7);
     expect(body.products.every((p: Json) => p.status === "published" && p.capacity === null && p.taken === 0)).toBe(true);
@@ -100,7 +100,7 @@ describe("the public catalogue", () => {
     expect(body.edition).toMatchObject({ name: "Public test summit", currency: "USD", pricesIncludeTax: null });
     expect(body.edition.taxNote).toMatch(/VAT/);
     expect(body.exhibition.map((p: Json) => p.price)).toEqual(["$500", "$900", "$1,600", "$1,500", "$250"]);
-    expect(body.sponsorship.map((p: Json) => p.price)).toEqual(["$31,250", "$18,750", "$12,500", "$6,250", "$3,125", "$1,560"]);
+    expect(body.sponsorship.map((p: Json) => p.price)).toEqual(["$50,000 and above", "$25,000 to $40,000", "$20,000 to $30,000", "$15,000 to $25,000", "$10,000 to $25,000, or in-kind", "$5,000 to $10,000"]);
     expect(body.delegates.map((p: Json) => p.price)).toEqual(["Complimentary", "$65", "$160", "$150", "$250"]);
     expect(body.delegates[0]).toMatchObject({ complimentary: true });
     expect(body.opportunities.map((p: Json) => p.price)).toEqual(["$4,700", "$3,125", "$1,875", "$1,560", "$313", "$625", "$3,125"]);
@@ -108,15 +108,19 @@ describe("the public catalogue", () => {
     expect(body.comparisonRows.map((r: Json) => r.id)).toContain("boothSize");
   });
 
-  it("lists a sponsorship level's own benefits, and leaves out an area it doesn't include", async () => {
+  it("lists a sponsorship level's own benefits when it has them, and leaves out an area it doesn't include", async () => {
+    const created = await createEdition(w.admin);
+    await makeCurrent(created.body.id);
+    const level = created.body.products.find((p: Json) => p.slug === "banking-finance-partner");
+    const set = await callV1(w.admin, "PATCH", `/summit/commerce/products/${level.id}`, { benefits: { logo: "Logo on the website.", b2b: "Access to B2B matchmaking." } });
+    expect(set.status).toBe(200);
     const { body } = await catalogue();
-    const title = body.sponsorship.find((p: Json) => p.slug === "title-partner");
-    const supporting = body.sponsorship.find((p: Json) => p.slug === "supporting-partner");
-    expect(title.benefits.map((b: Json) => b.area)).toContain("exclusivity");
-    expect(title.benefits.find((b: Json) => b.area === "exclusivity").text).toMatch(/signed sponsorship agreement/);
-    expect(supporting.benefits.map((b: Json) => b.area)).not.toContain("exclusivity");
-    expect(supporting.benefits.map((b: Json) => b.area)).not.toContain("speaking");
-    expect(title.benefits.length).toBeGreaterThan(supporting.benefits.length);
+    const banking = body.sponsorship.find((p: Json) => p.slug === "banking-finance-partner");
+    const presenting = body.sponsorship.find((p: Json) => p.slug === "mission-presenting-partner");
+    expect(banking.benefits.map((b: Json) => b.area)).toEqual(["logo", "b2b"]);
+    expect(banking.price).toBe("$25,000 to $40,000");
+    expect(banking.priceCents).toBe(2500000);
+    expect(presenting.benefits).toEqual([]);
   });
 
   it("holds no payment instructions, drafts or archived products", async () => {
@@ -125,13 +129,13 @@ describe("the public catalogue", () => {
     await callV1(w.admin, "PATCH", `/summit/commerce/editions/${created.body.id}`, {
       paymentMethods: [{ id: "bank", label: "Bank transfer", instructions: "Account 000-SECRET-111" }],
     });
-    const gold = created.body.products.find((p: Json) => p.slug === "gold-partner");
-    const silver = created.body.products.find((p: Json) => p.slug === "silver-partner");
+    const gold = created.body.products.find((p: Json) => p.slug === "banking-finance-partner");
+    const silver = created.body.products.find((p: Json) => p.slug === "logistics-supply-chain-partner");
     await callV1(w.admin, "PATCH", `/summit/commerce/products/${gold.id}`, { status: "draft" });
     await callV1(w.admin, "PATCH", `/summit/commerce/products/${silver.id}`, { status: "archived" });
     const { body } = await catalogue();
-    expect(body.sponsorship.map((p: Json) => p.slug)).not.toContain("gold-partner");
-    expect(body.sponsorship.map((p: Json) => p.slug)).not.toContain("silver-partner");
+    expect(body.sponsorship.map((p: Json) => p.slug)).not.toContain("banking-finance-partner");
+    expect(body.sponsorship.map((p: Json) => p.slug)).not.toContain("logistics-supply-chain-partner");
     expect(JSON.stringify(body)).not.toMatch(/SECRET|paymentMethods|instructions/);
   });
 
@@ -166,7 +170,7 @@ describe("the public catalogue", () => {
 describe("changing a product", () => {
   it("changes its price, benefits and capacity and writes what changed to the audit log", async () => {
     const created = await createEdition(w.admin);
-    const title = created.body.products.find((p: Json) => p.slug === "title-partner");
+    const title = created.body.products.find((p: Json) => p.slug === "mission-presenting-partner");
     const res = await callV1(w.admin, "PATCH", `/summit/commerce/products/${title.id}`, {
       priceCents: 3500000,
       capacity: 1,
@@ -176,13 +180,13 @@ describe("changing a product", () => {
     expect(res.body).toMatchObject({ priceCents: 3500000, capacity: 1 });
     expect(res.body.benefits.speaking).toBe("Closing keynote");
     const [row] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, title.id), eq(schema.auditLog.action, "summit.commerce.product.updated")));
-    expect(row?.before).toMatchObject({ priceCents: 3125000, capacity: null });
+    expect(row?.before).toMatchObject({ priceCents: 5000000, capacity: null });
     expect(row?.after).toMatchObject({ priceCents: 3500000, capacity: 1 });
   });
 
   it("leaves every field the patch doesn't name as it was", async () => {
     const created = await createEdition(w.admin);
-    const gold = created.body.products.find((p: Json) => p.slug === "gold-partner");
+    const gold = created.body.products.find((p: Json) => p.slug === "banking-finance-partner");
     const res = await callV1(w.admin, "PATCH", `/summit/commerce/products/${gold.id}`, { capacity: 5 });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ capacity: 5, status: "published", summary: gold.summary, sortOrder: gold.sortOrder, priceCents: gold.priceCents });
@@ -192,7 +196,7 @@ describe("changing a product", () => {
 
   it("writes nothing to the audit log when nothing changed", async () => {
     const created = await createEdition(w.admin);
-    const gold = created.body.products.find((p: Json) => p.slug === "gold-partner");
+    const gold = created.body.products.find((p: Json) => p.slug === "banking-finance-partner");
     expect((await callV1(w.admin, "PATCH", `/summit/commerce/products/${gold.id}`, { priceCents: gold.priceCents })).status).toBe(200);
     const rows = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.entityId, gold.id), eq(schema.auditLog.action, "summit.commerce.product.updated")));
     expect(rows).toHaveLength(0);
@@ -266,8 +270,8 @@ describe("copying an edition", () => {
       paymentMethods: [{ id: "bank", label: "Bank", instructions: "Details." }],
       pricesIncludeTax: true,
     });
-    const gold = source.body.products.find((p: Json) => p.slug === "gold-partner");
-    const silver = source.body.products.find((p: Json) => p.slug === "silver-partner");
+    const gold = source.body.products.find((p: Json) => p.slug === "banking-finance-partner");
+    const silver = source.body.products.find((p: Json) => p.slug === "logistics-supply-chain-partner");
     await callV1(w.admin, "PATCH", `/summit/commerce/products/${gold.id}`, { priceCents: 700000, capacity: 3 });
     await callV1(w.admin, "PATCH", `/summit/commerce/products/${silver.id}`, { status: "archived", markedSoldOut: true });
 
@@ -275,13 +279,13 @@ describe("copying an edition", () => {
     expect(copy.status, JSON.stringify(copy.body)).toBe(201);
     expect(copy.body).toMatchObject({ pricesIncludeTax: true, isCurrent: false, applicationPeriodId: null, productCount: 22 });
     expect(copy.body.paymentMethods[0].label).toBe("Bank");
-    const copiedGold = copy.body.products.find((p: Json) => p.slug === "gold-partner");
+    const copiedGold = copy.body.products.find((p: Json) => p.slug === "banking-finance-partner");
     expect(copiedGold).toMatchObject({ priceCents: 700000, capacity: 3, markedSoldOut: false });
-    expect(copy.body.products.map((p: Json) => p.slug)).not.toContain("silver-partner");
+    expect(copy.body.products.map((p: Json) => p.slug)).not.toContain("logistics-supply-chain-partner");
     // The copy is its own: editing it leaves the source alone.
     await callV1(w.admin, "PATCH", `/summit/commerce/products/${copiedGold.id}`, { priceCents: 1 });
     const after = await callV1(w.admin, "GET", `/summit/commerce/editions/${source.body.id}`);
-    expect(after.body.products.find((p: Json) => p.slug === "gold-partner").priceCents).toBe(700000);
+    expect(after.body.products.find((p: Json) => p.slug === "banking-finance-partner").priceCents).toBe(700000);
   });
 
   it("answers 404 when the edition to copy doesn't exist", async () => {

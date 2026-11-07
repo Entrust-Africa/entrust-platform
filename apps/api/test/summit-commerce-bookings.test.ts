@@ -144,7 +144,7 @@ describe("applying for a booth", () => {
 
   it("refuses a package that doesn't exist, a draft one, or one that isn't an exhibition package", async () => {
     expect((await apply(form({ packageSlug: "no-such-booth" }))).status).toBe(404);
-    expect((await apply(form({ packageSlug: "title-partner" }))).status).toBe(404);
+    expect((await apply(form({ packageSlug: "mission-presenting-partner" }))).status).toBe(404);
     await setProduct("premium-sme-booth", { status: "draft" });
     expect((await apply(form({ packageSlug: "premium-sme-booth" }))).status).toBe(404);
     await setProduct("premium-sme-booth", { status: "published" });

@@ -5,7 +5,7 @@ import {
   ENQUIRY_STATUSES,
   ENQUIRY_TRANSITIONS,
   availability,
-  priceLabel,
+  productPriceLabel,
   type EnquiryStatus,
 } from "@entrust/summit-engine";
 import type { z } from "@hono/zod-openapi";
@@ -131,12 +131,12 @@ export async function submitEnquiry(ctx: Pick<Ctx, "db" | "now">, body: z.infer<
       details: [
         { label: "Reference", value: row.number },
         { label: "Interested in", value: product.name },
-        { label: "Listed price", value: `${amountText(product.priceCents)} (USD)` },
+        { label: "Listed price", value: `${product.attributes.priceRange?.trim() || amountText(product.priceCents)} (USD)` },
       ],
     });
     if (queued) await ctx.db.update(schema.sponsorEnquiry).set({ receiptSentAt: ctx.now }).where(eq(schema.sponsorEnquiry.id, row.id));
   }
-  return { number: row.number, productName: product.name, price: priceLabel(product.priceCents) };
+  return { number: row.number, productName: product.name, price: productPriceLabel(product.priceCents, product.attributes) };
 }
 
 // ---- Reading ----

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { HOST } from "@/lib/content";
+import { HOST, SUPPORT_EMAIL } from "@/lib/content";
 import { Page, SectionLabel, amberButton } from "@/components/site";
-import { PARTNERS } from "@/lib/info";
+import { PARTNERS, PARTNERSHIP_KINDS, PARTNERSHIP_LIMITS, STRATEGIC_PARTNER_PROFILES } from "@/lib/info";
 
 export const metadata = { title: "Partners · Africa Diaspora Trade & Investment Summit 2027" };
 
@@ -36,6 +36,65 @@ export default function PartnersPage() {
           <Link href="/sponsor" className={amberButton}>
             Become a Sponsor or Institutional Partner
           </Link>
+        </div>
+      </section>
+
+      <section className="bg-paper px-6 py-20 lg:px-16 lg:py-28">
+        <div className="mx-auto max-w-[82rem] space-y-16">
+          <div>
+            <SectionLabel>Sponsor or strategic partner</SectionLabel>
+            <h2 className="mt-6 max-w-3xl font-display text-[clamp(2rem,4vw,3rem)] leading-[1.05] uppercase">You can buy sponsorship. Strategic partnership is qualified.</h2>
+            <div className="mt-10 grid gap-6 md:grid-cols-2">
+              {PARTNERSHIP_KINDS.map((k) => (
+                <article key={k.name} className="border border-line bg-white p-8">
+                  <h3 className="font-display text-3xl leading-tight uppercase">{k.name}</h3>
+                  <dl className="mt-6 space-y-4 text-sm leading-relaxed">
+                    <div>
+                      <dt className="font-mono text-[11px] tracking-[0.14em] text-amber-ink uppercase">Gives</dt>
+                      <dd className="mt-1">{k.gives}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-mono text-[11px] tracking-[0.14em] text-amber-ink uppercase">Receives</dt>
+                      <dd className="mt-1">{k.receives}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-mono text-[11px] tracking-[0.14em] text-amber-ink uppercase">How</dt>
+                      <dd className="mt-1">{k.how}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-12 lg:grid-cols-2">
+            <div>
+              <SectionLabel>Who we would like to work with</SectionLabel>
+              <ul className="mt-6 space-y-3 text-base leading-relaxed">
+                {STRATEGIC_PARTNER_PROFILES.map((p) => (
+                  <li key={p} className="border-t border-line pt-3">
+                    {p}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("ADTIS 2027 strategic partnership")}`}
+                className={`${amberButton} mt-8`}
+              >
+                Discuss strategic partnership
+              </a>
+            </div>
+            <div>
+              <SectionLabel>What sponsorship and partnership do not include</SectionLabel>
+              <ul className="mt-6 space-y-3 text-sm leading-relaxed text-ink/80">
+                {PARTNERSHIP_LIMITS.map((l) => (
+                  <li key={l} className="border-t border-line pt-3">
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
     </Page>
