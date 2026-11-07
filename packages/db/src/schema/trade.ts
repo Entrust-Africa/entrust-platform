@@ -28,6 +28,7 @@ import {
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
   OPPORTUNITY_STATUSES,
+  OUTCOME_EVIDENCE_TIERS,
   COMMERCIAL_ACTIVITY_TYPES,
   PIPELINE_STAGES,
   QUALIFICATION_BANDS,
@@ -681,7 +682,7 @@ export const commercialActivity = trade.table(
 export const OUTCOME_KINDS = ["financing", "export"] as const;
 export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
 
-// A financing or export outcome for an enrolled SME.
+// A financing or export outcome for an enrolled SME (#69).
 export const outcome = trade.table(
   "outcome",
   {
@@ -692,6 +693,30 @@ export const outcome = trade.table(
     enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     kind: text("kind", { enum: OUTCOME_KINDS }).notNull(),
     status: text("status").notNull(),
+    // Financing outcome fields
+    lenderName: text("lender_name"),
+    financingType: text("financing_type"),
+    amountRequested: numeric("amount_requested", { precision: 14, scale: 2 }),
+    amountApproved: numeric("amount_approved", { precision: 14, scale: 2 }),
+    amountDisbursed: numeric("amount_disbursed", { precision: 14, scale: 2 }),
+    currency: text("currency").default("USD"),
+    approvalDate: timestamp("approval_date", { withTimezone: true }),
+    disbursementDate: timestamp("disbursement_date", { withTimezone: true }),
+    // Export outcome fields
+    opportunityId: uuid("opportunity_id").references(() => commercialOpportunity.id, { onDelete: "set null" }),
+    buyerName: text("buyer_name"),
+    destinationCountry: text("destination_country"),
+    productDescription: text("product_description"),
+    valuePlanned: numeric("value_planned", { precision: 14, scale: 2 }),
+    valueShipped: numeric("value_shipped", { precision: 14, scale: 2 }),
+    valuePaid: numeric("value_paid", { precision: 14, scale: 2 }),
+    shipmentDate: timestamp("shipment_date", { withTimezone: true }),
+    deliveryDate: timestamp("delivery_date", { withTimezone: true }),
+    paymentDate: timestamp("payment_date", { withTimezone: true }),
+    // Shared metadata
+    notes: text("notes"),
+    evidenceTier: text("evidence_tier", { enum: OUTCOME_EVIDENCE_TIERS }).notNull().default("self_reported"),
+    evidenceUrl: text("evidence_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -701,6 +726,7 @@ export const outcome = trade.table(
   (t) => [
     index("trade_outcome_org_idx").on(t.organizationId),
     index("trade_outcome_enrollment_idx").on(t.enrollmentId),
+    index("trade_outcome_opp_idx").on(t.opportunityId),
     check(
       "trade_outcome_financing_status_check",
       sql`${t.kind} <> 'financing' or ${t.status} in ('not_started', 'application_prepared', 'submitted', 'approved', 'declined', 'disbursed', 'cancelled')`,
@@ -712,6 +738,31 @@ export const outcome = trade.table(
   ],
 );
 export const tradeOutcome = outcome;
+
+// Audit history for financing and export outcome status changes (#69).
+export const outcomeEvent = trade.table(
+  "outcome_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    outcomeId: uuid("outcome_id")
+      .notNull()
+      .references(() => outcome.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    previousStatus: text("previous_status"),
+    newStatus: text("new_status").notNull(),
+    evidenceTier: text("evidence_tier", { enum: OUTCOME_EVIDENCE_TIERS }).notNull().default("self_reported"),
+    evidenceUrl: text("evidence_url"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_outcome_event_outcome_idx").on(t.outcomeId),
+    index("trade_outcome_event_org_idx").on(t.organizationId),
+  ],
+);
 
 // ---- Table Relations ----
 
@@ -856,12 +907,29 @@ export const commercialActivityRelations = relations(commercialActivity, ({ one 
   }),
 }));
 
-export const tradeOutcomeRelations = relations(outcome, ({ one }) => ({
+export const tradeOutcomeRelations = relations(outcome, ({ one, many }) => ({
   organization: one(organization, {
     fields: [outcome.organizationId],
     references: [organization.id],
   }),
   enrollment: one(enrollment, { fields: [outcome.enrollmentId], references: [enrollment.id] }),
+  opportunity: one(commercialOpportunity, { fields: [outcome.opportunityId], references: [commercialOpportunity.id] }),
+  events: many(outcomeEvent),
+}));
+
+export const outcomeEventRelations = relations(outcomeEvent, ({ one }) => ({
+  outcome: one(outcome, {
+    fields: [outcomeEvent.outcomeId],
+    references: [outcome.id],
+  }),
+  organization: one(organization, {
+    fields: [outcomeEvent.organizationId],
+    references: [organization.id],
+  }),
+  actorUser: one(user, {
+    fields: [outcomeEvent.actorUserId],
+    references: [user.id],
+  }),
 }));
 
 

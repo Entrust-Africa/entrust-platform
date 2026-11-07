@@ -64,4 +64,10 @@ export type {
   OpportunityScorecardInput,
   OpportunityView,
   UpdateOpportunityStageInput,
+  CreateExportOutcomeInput,
+  CreateFinancingOutcomeInput,
+  OutcomeEventView,
+  OutcomeView,
+  UpdateExportStatusInput,
+  UpdateFinancingStatusInput,
 } from "./schemas/trade";

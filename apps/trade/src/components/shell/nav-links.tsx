@@ -9,6 +9,7 @@ import {
   Calculator,
   CheckSquare,
   ClipboardList,
+  Coins,
   ExternalLink,
   FlaskConical,
   FolderGit2,
@@ -136,6 +137,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/worksheets", label: "Worksheets", icon: Calculator, match: (path) => path.startsWith("/worksheets") },
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
+    { href: "/outcomes", label: "Outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
     simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },
   ];

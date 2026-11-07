@@ -81,6 +81,24 @@ export type CommercialActivityType = (typeof COMMERCIAL_ACTIVITY_TYPES)[number];
 export const QUALIFICATION_BANDS = ["low", "medium", "high"] as const;
 export type QualificationBand = (typeof QUALIFICATION_BANDS)[number];
 
+export const FINANCING_TYPES = [
+  "working_capital",
+  "invoice_discounting",
+  "po_finance",
+  "letter_of_credit",
+  "equity",
+  "grant",
+  "other",
+] as const;
+export type FinancingType = (typeof FINANCING_TYPES)[number];
+
+export const OUTCOME_EVIDENCE_TIERS = [
+  "self_reported",
+  "documented",
+  "formal_bank_decision",
+] as const;
+export type OutcomeEvidenceTier = (typeof OUTCOME_EVIDENCE_TIERS)[number];
+
 export const FINANCING_OUTCOME_STATUSES = ["not_started", "application_prepared", "submitted", "approved", "declined", "disbursed", "cancelled"] as const;
 export type FinancingOutcomeStatus = (typeof FINANCING_OUTCOME_STATUSES)[number];
 

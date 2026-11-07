@@ -397,12 +397,35 @@ export async function getExportJourneyStage(
     .from(schema.commercialOpportunity)
     .where(eq(schema.commercialOpportunity.organizationId, organizationId));
 
+  const exportOutcomes = await db
+    .select({
+      status: schema.outcome.status,
+      valueShipped: schema.outcome.valueShipped,
+      valuePaid: schema.outcome.valuePaid,
+      shipmentDate: schema.outcome.shipmentDate,
+      deliveryDate: schema.outcome.deliveryDate,
+      paymentDate: schema.outcome.paymentDate,
+    })
+    .from(schema.outcome)
+    .where(and(eq(schema.outcome.organizationId, organizationId), eq(schema.outcome.kind, "export")));
+
+  const hasPaymentReceived = exportOutcomes.some(
+    (o) => o.status === "paid" || (o.valuePaid !== null && Number(o.valuePaid) > 0) || o.paymentDate !== null
+  );
+  const hasDelivered = exportOutcomes.some(
+    (o) => o.status === "delivered" || o.deliveryDate !== null
+  );
+  const hasShipmentUnderway = exportOutcomes.some(
+    (o) => o.status === "shipped" || (o.valueShipped !== null && Number(o.valueShipped) > 0) || o.shipmentDate !== null
+  );
+
   const journey = mapExportJourneyStage(
     opportunities.map((o) => ({
       id: o.id,
       stage: o.stage as PipelineStage,
       verificationStatus: o.verificationStatus as VerificationLadderStatus,
-    }))
+    })),
+    { hasShipmentUnderway, hasDelivered, hasPaymentReceived }
   );
   const m05Deliverable = validateM05Deliverable(
     opportunities.map((o) => ({ verificationStatus: o.verificationStatus as VerificationLadderStatus }))

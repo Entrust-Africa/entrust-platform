@@ -8,12 +8,16 @@ import {
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
   EVIDENCE_TARGET_TYPES,
+  EXPORT_OUTCOME_STATUSES,
   FIELD_KINDS,
+  FINANCING_OUTCOME_STATUSES,
+  FINANCING_TYPES,
   LEARNING_PLAN_STATUSES,
   MODULE_ASSIGNMENT_SOURCES,
   MODULE_EXEMPTION_STATUSES,
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
+  OUTCOME_EVIDENCE_TIERS,
   PIPELINE_STAGES,
   QUALIFICATION_BANDS,
   SPONSOR_DATA_KINDS,
@@ -1593,6 +1597,155 @@ export type OpportunityScorecardInput = z.infer<typeof OpportunityScorecardBody>
 export type OpportunityView = z.infer<typeof OpportunityView>;
 export type ActivityView = z.infer<typeof ActivityView>;
 export type ExportJourneyStageView = z.infer<typeof ExportJourneyStageView>;
+
+// Financing & Export Outcomes schemas (#69)
+export const OutcomeParam = z
+  .object({
+    id: z.string().uuid().openapi({ description: "Outcome ID" }),
+  })
+  .openapi("TradeOutcomeParam");
+
+export const OutcomeQuery = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    kind: z.enum(["financing", "export"]).optional(),
+  })
+  .openapi("TradeOutcomeQuery");
+
+export const CreateFinancingOutcomeBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    lenderName: z.string().trim().min(1, "Lender name is required"),
+    financingType: z.enum(FINANCING_TYPES),
+    amountRequested: z.number().positive("Amount requested must be positive"),
+    amountApproved: z.number().nonnegative().optional().nullable(),
+    amountDisbursed: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+    status: z.enum(FINANCING_OUTCOME_STATUSES).optional().default("application_prepared"),
+    approvalDate: z.string().datetime().optional().nullable(),
+    disbursementDate: z.string().datetime().optional().nullable(),
+    notes: z.string().trim().optional(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeFinancingOutcomeBody");
+
+export const UpdateFinancingStatusBody = z
+  .object({
+    status: z.enum(FINANCING_OUTCOME_STATUSES),
+    amountApproved: z.number().nonnegative().optional().nullable(),
+    amountDisbursed: z.number().nonnegative().optional().nullable(),
+    approvalDate: z.string().datetime().optional().nullable(),
+    disbursementDate: z.string().datetime().optional().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+    notes: z.string().trim().optional(),
+  })
+  .openapi("UpdateTradeFinancingStatusBody");
+
+export const CreateExportOutcomeBody = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.string().uuid().optional(),
+    opportunityId: z.string().uuid().optional().nullable(),
+    buyerName: z.string().trim().min(1, "Buyer name is required"),
+    destinationCountry: z.string().trim().min(1, "Destination country is required"),
+    productDescription: z.string().trim().min(1, "Product description is required"),
+    valuePlanned: z.number().nonnegative().optional().nullable(),
+    valueShipped: z.number().nonnegative().optional().nullable(),
+    valuePaid: z.number().nonnegative().optional().nullable(),
+    currency: z.string().trim().default("USD"),
+    status: z.enum(EXPORT_OUTCOME_STATUSES).optional().default("planned"),
+    shipmentDate: z.string().datetime().optional().nullable(),
+    deliveryDate: z.string().datetime().optional().nullable(),
+    paymentDate: z.string().datetime().optional().nullable(),
+    notes: z.string().trim().optional(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+  })
+  .openapi("CreateTradeExportOutcomeBody");
+
+export const UpdateExportStatusBody = z
+  .object({
+    status: z.enum(EXPORT_OUTCOME_STATUSES),
+    valueShipped: z.number().nonnegative().optional().nullable(),
+    valuePaid: z.number().nonnegative().optional().nullable(),
+    shipmentDate: z.string().datetime().optional().nullable(),
+    deliveryDate: z.string().datetime().optional().nullable(),
+    paymentDate: z.string().datetime().optional().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
+    evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+    notes: z.string().trim().optional(),
+  })
+  .openapi("UpdateTradeExportStatusBody");
+
+export const OutcomeEventView = z
+  .object({
+    id: z.string().uuid(),
+    outcomeId: z.string().uuid(),
+    organizationId: z.string(),
+    actorUserId: z.string().nullable(),
+    previousStatus: z.string().nullable(),
+    newStatus: z.string(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS),
+    evidenceUrl: z.string().nullable(),
+    notes: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeOutcomeEventView");
+
+export const OutcomeView = z
+  .object({
+    id: z.string().uuid(),
+    organizationId: z.string(),
+    enrollmentId: z.string().uuid().nullable(),
+    kind: z.enum(["financing", "export"]),
+    status: z.string(),
+    // Financing
+    lenderName: z.string().nullable(),
+    financingType: z.string().nullable(),
+    amountRequested: z.number().nullable(),
+    amountApproved: z.number().nullable(),
+    amountDisbursed: z.number().nullable(),
+    currency: z.string().nullable(),
+    approvalDate: z.string().nullable(),
+    disbursementDate: z.string().nullable(),
+    // Export
+    opportunityId: z.string().uuid().nullable(),
+    buyerName: z.string().nullable(),
+    destinationCountry: z.string().nullable(),
+    productDescription: z.string().nullable(),
+    valuePlanned: z.number().nullable(),
+    valueShipped: z.number().nullable(),
+    valuePaid: z.number().nullable(),
+    shipmentDate: z.string().nullable(),
+    deliveryDate: z.string().nullable(),
+    paymentDate: z.string().nullable(),
+    // Shared
+    notes: z.string().nullable(),
+    evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS),
+    evidenceUrl: z.string().nullable(),
+    events: z.array(OutcomeEventView).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeOutcomeView");
+
+export const OutcomeList = z
+  .object({
+    items: z.array(OutcomeView),
+  })
+  .openapi("TradeOutcomeList");
+
+export type CreateFinancingOutcomeInput = z.infer<typeof CreateFinancingOutcomeBody>;
+export type UpdateFinancingStatusInput = z.infer<typeof UpdateFinancingStatusBody>;
+export type CreateExportOutcomeInput = z.infer<typeof CreateExportOutcomeBody>;
+export type UpdateExportStatusInput = z.infer<typeof UpdateExportStatusBody>;
+export type OutcomeEventView = z.infer<typeof OutcomeEventView>;
+export type OutcomeView = z.infer<typeof OutcomeView>;
+
 
 
 

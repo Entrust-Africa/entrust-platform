@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   Building2,
   Calendar,
   CheckCircle2,
   Clock,
+  Coins,
   ExternalLink,
   Filter,
   Globe2,
@@ -383,6 +385,13 @@ export function PipelineDashboard({
                 )}
               </div>
             </div>
+            <Link
+              href="/outcomes"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas transition-colors shadow-xs"
+            >
+              <Coins className="size-4 text-ink-3" />
+              Financing & Outcomes →
+            </Link>
             <Button
               variant="primary"
               onClick={() => setAddModalOpen(true)}
