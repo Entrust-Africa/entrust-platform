@@ -9,6 +9,7 @@ export {
   type UploadFileOptions,
 } from "./upload-field";
 export { StatusBadge, type StatusTone } from "./status-badge";
+export { EvidenceLabel, type EvidenceLabelProps, type EvidenceTier } from "./evidence-label";
 export { Card } from "./card";
 export { Patchwork } from "./patchwork";
 export { emailTheme } from "./email-theme";

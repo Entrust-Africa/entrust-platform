@@ -1,7 +1,16 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { ASSESSMENT_STATUSES, EVIDENCE_CONFIDENCE, FIELD_KINDS, LEARNING_PLAN_STATUSES, MODULE_STATUSES, SPONSOR_DATA_KINDS } from "@entrust/trade-engine";
+import {
+  ASSESSMENT_STATUSES,
+  EVIDENCE_CONFIDENCE,
+  EVIDENCE_REVIEW_STATUSES,
+  EVIDENCE_TARGET_TYPES,
+  FIELD_KINDS,
+  LEARNING_PLAN_STATUSES,
+  MODULE_STATUSES,
+  SPONSOR_DATA_KINDS,
+} from "@entrust/trade-engine";
 import { SPONSOR_ROLES } from "@entrust/roles";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { CaseIdParam, Facts, Role } from "./clear";
@@ -833,3 +842,100 @@ export const Catalogue = z
   })
   .openapi("TradeCatalogue");
 export type CatalogueView = z.infer<typeof Catalogue>;
+
+// ---- Evidence Records & Reviews (#59) ----
+
+export const EvidenceFileSchema = z
+  .object({
+    id: z.uuid(),
+    filename: z.string(),
+    contentType: z.string(),
+    size: z.number().int(),
+    url: z.string().optional(),
+  })
+  .openapi("EvidenceFile");
+
+export const EvidenceRecordSchema = z
+  .object({
+    id: z.uuid(),
+    organizationId: z.string(),
+    organizationName: z.string().optional(),
+    enrollmentId: z.uuid().nullable(),
+    fileId: z.uuid().nullable(),
+    file: EvidenceFileSchema.nullable().optional(),
+    title: z.string(),
+    targetType: z.enum(EVIDENCE_TARGET_TYPES),
+    targetId: z.string().nullable(),
+    confidence: z.enum(EVIDENCE_CONFIDENCE),
+    status: z.enum(EVIDENCE_REVIEW_STATUSES),
+    reviewedByUserId: z.string().nullable(),
+    reviewedByUserName: z.string().nullable().optional(),
+    reviewedAt: z.iso.datetime().nullable(),
+    reviewComment: z.string().nullable(),
+    requestedByUserId: z.string().nullable(),
+    requestedByUserName: z.string().nullable().optional(),
+    requestedAt: z.iso.datetime().nullable(),
+    requestPrompt: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .openapi("TradeEvidenceRecord");
+
+export const EvidenceRecordList = z
+  .object({
+    items: z.array(EvidenceRecordSchema),
+  })
+  .openapi("TradeEvidenceRecordList");
+
+export const CreateEvidenceBody = z
+  .object({
+    organizationId: z.string().optional(),
+    title: z.string().trim().min(1, "Title is required"),
+    fileId: z.uuid().optional(),
+    enrollmentId: z.uuid().optional(),
+    targetType: z.enum(EVIDENCE_TARGET_TYPES).default("assessment_question"),
+    targetId: z.string().trim().optional(),
+    confidence: z.enum(EVIDENCE_CONFIDENCE).optional(),
+  })
+  .openapi("CreateEvidenceBody");
+
+export const ReviewEvidenceBody = z
+  .object({
+    status: z.enum(["under_review", "accepted", "rejected", "resubmission_required"]),
+    comment: z.string().trim().optional(),
+    confidence: z.enum(EVIDENCE_CONFIDENCE).optional(),
+  })
+  .openapi("ReviewEvidenceBody");
+
+export const RequestEvidenceBody = z
+  .object({
+    organizationId: z.string().min(1),
+    enrollmentId: z.uuid().optional(),
+    title: z.string().trim().min(1, "Title is required"),
+    targetType: z.enum(EVIDENCE_TARGET_TYPES).default("assessment_question"),
+    targetId: z.string().trim().optional(),
+    prompt: z.string().trim().min(1, "Instructions/prompt are required"),
+  })
+  .openapi("RequestEvidenceBody");
+
+export const EvidenceListQuery = z
+  .object({
+    organizationId: z.string().optional(),
+    enrollmentId: z.uuid().optional(),
+    targetType: z.enum(EVIDENCE_TARGET_TYPES).optional(),
+    targetId: z.string().optional(),
+    status: z.enum(EVIDENCE_REVIEW_STATUSES).optional(),
+  })
+  .openapi("EvidenceListQuery");
+
+export const EvidenceParam = z
+  .object({
+    id: z.uuid(),
+  })
+  .openapi("EvidenceParam");
+
+export type EvidenceRecordView = z.infer<typeof EvidenceRecordSchema>;
+export type CreateEvidenceInput = z.infer<typeof CreateEvidenceBody>;
+export type ReviewEvidenceInput = z.infer<typeof ReviewEvidenceBody>;
+export type RequestEvidenceInput = z.infer<typeof RequestEvidenceBody>;
+export type EvidenceListQueryInput = z.infer<typeof EvidenceListQuery>;

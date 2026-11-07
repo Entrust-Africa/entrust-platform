@@ -19,6 +19,7 @@ import {
   SUMMIT_DATA_KINDS,
   EVIDENCE_CONFIDENCE,
   EVIDENCE_REVIEW_STATUSES,
+  EVIDENCE_TARGET_TYPES,
   ENROLLMENT_STATUSES,
   EXPORT_OUTCOME_STATUSES,
   FINANCING_OUTCOME_STATUSES,
@@ -410,7 +411,16 @@ export const evidenceRecord = trade.table(
     enrollmentId: uuid("enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     fileId: uuid("file_id").references(() => file.id, { onDelete: "set null" }),
     title: text("title").notNull(),
+    targetType: text("target_type", { enum: EVIDENCE_TARGET_TYPES }).notNull().default("assessment_question"),
+    targetId: text("target_id"),
+    confidence: text("confidence", { enum: EVIDENCE_CONFIDENCE }).notNull().default("self_reported"),
     status: text("status", { enum: EVIDENCE_REVIEW_STATUSES }).notNull().default("not_submitted"),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewComment: text("review_comment"),
+    requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    requestedAt: timestamp("requested_at", { withTimezone: true }),
+    requestPrompt: text("request_prompt"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -420,6 +430,7 @@ export const evidenceRecord = trade.table(
   (t) => [
     index("trade_evidence_record_org_idx").on(t.organizationId),
     index("trade_evidence_record_enrollment_idx").on(t.enrollmentId),
+    index("trade_evidence_record_target_idx").on(t.targetType, t.targetId),
   ],
 );
 
@@ -561,6 +572,8 @@ export const evidenceRecordRelations = relations(evidenceRecord, ({ one }) => ({
   }),
   enrollment: one(enrollment, { fields: [evidenceRecord.enrollmentId], references: [enrollment.id] }),
   file: one(file, { fields: [evidenceRecord.fileId], references: [file.id] }),
+  reviewedByUser: one(user, { fields: [evidenceRecord.reviewedByUserId], references: [user.id] }),
+  requestedByUser: one(user, { fields: [evidenceRecord.requestedByUserId], references: [user.id] }),
 }));
 
 export const commercialOpportunityRelations = relations(commercialOpportunity, ({ one }) => ({
