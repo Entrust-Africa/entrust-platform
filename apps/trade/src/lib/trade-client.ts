@@ -10,7 +10,7 @@ export interface TradeResult<T> {
 }
 
 /** A call from the browser to a TRADE endpoint, with the session cookie. Never throws: a network failure comes back as an error message. */
-export async function tradeFetch<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<TradeResult<T>> {
+export async function tradeFetch<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<TradeResult<T>> {
   try {
     const response = await fetch(`${api}/v1/trade${path}`, {
       method,

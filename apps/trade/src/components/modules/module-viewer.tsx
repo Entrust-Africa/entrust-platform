@@ -24,6 +24,7 @@ import type {
   KnowledgeCheckAttemptResult,
   KnowledgeCheckHistoryList,
   ModuleProgressView,
+  ModuleSubmissionView,
 } from "@/lib/types";
 
 export interface LearnerLesson {
@@ -69,6 +70,7 @@ export interface LearnerQuestion {
 export interface LearnerRubricCriterion {
   id: string;
   title: string;
+  description?: string;
   maxPoints: number;
   mustHave: boolean;
 }
@@ -98,7 +100,7 @@ export interface LearnerModuleData {
     passMark: number;
     mustHaveMinimum: number;
     bands: Array<{ label: string; from: number }>;
-    criticalFailures: Array<{ id: string; text: string }>;
+    criticalFailures: Array<{ id: string; text: string; autoCheck?: string }>;
   };
   aiPrompts: LearnerAiPrompt[];
 }
@@ -139,6 +141,7 @@ export function ModuleViewer({
   const [attemptHistory, setAttemptHistory] = useState<KnowledgeCheckHistoryList | null>(null);
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState<KnowledgeCheckAttemptResult | null>(null);
+  const [latestSubmission, setLatestSubmission] = useState<ModuleSubmissionView | null>(null);
   const [shuffledOptions, setShuffledOptions] = useState<Record<string, Array<{ id: string; text: string }>>>(() => {
     const map: Record<string, Array<{ id: string; text: string }>> = {};
     for (const q of module.knowledgeCheck.questions) {
@@ -160,6 +163,16 @@ export function ModuleViewer({
         setAttemptHistory(res.data);
       }
     });
+
+    tradeFetch<{ items: ModuleSubmissionView[] }>(
+      "GET",
+      `/module-submissions?enrollmentId=${enrollmentId}&moduleId=${module.module}`
+    ).then((res) => {
+      if (!cancelled && res.ok && res.data?.items?.[0]) {
+        setLatestSubmission(res.data.items[0]);
+      }
+    });
+
     return () => {
       cancelled = true;
     };
@@ -270,21 +283,31 @@ export function ModuleViewer({
       return;
     }
 
+    const hasPassedTheory = Boolean(
+      initialProgress?.theoryCompletedAt || quizFeedback?.passed || attemptHistory?.hasPassed
+    );
+    if (!hasPassedTheory) {
+      setErrorMessage(
+        "You must pass the Knowledge Check in Tab 4 before submitting your practical deliverable."
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const res = await tradeFetch<ModuleProgressView>("POST", "/module-progress", {
+    const res = await tradeFetch<ModuleSubmissionView>("POST", "/module-submissions", {
       enrollmentId,
       moduleId: module.module,
-      status: "submitted",
       contentVersion: module.version,
     });
 
     setIsSubmitting(false);
 
     if (res.ok && res.data) {
+      setLatestSubmission(res.data);
       setStatus("submitted");
-      setSubmissionFeedback("Deliverable successfully submitted for review!");
+      setSubmissionFeedback("Deliverable successfully submitted for assessor review!");
     } else {
       setErrorMessage(res.error ?? "Failed to submit deliverable. Please try again.");
     }
@@ -980,16 +1003,84 @@ export function ModuleViewer({
           {activeTab === "deliverable" && (
             <Card className="p-6 space-y-6">
               <div className="border-b border-line pb-4">
-                <span className="text-xs uppercase font-semibold text-ink-3">Module Completion</span>
+                <span className="text-xs uppercase font-semibold text-ink-3">Module Practical Output</span>
                 <h2 className="font-display text-xl font-bold text-ink">{module.deliverable}</h2>
                 <p className="mt-1 text-xs text-ink-2">
-                  Check off your readiness against the rubric criteria below before submitting your deliverable for facilitator review.
+                  Complete your worksheets and review readiness against the rubric criteria below before submitting for assessor evaluation.
                 </p>
               </div>
 
+              {/* Official Assessor Evaluation Feedback */}
+              {latestSubmission?.officialScore && (
+                <div
+                  className={`p-5 rounded-lg border space-y-3 ${
+                    latestSubmission.officialScore.passed
+                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                      : "bg-amber-50/70 border-amber-200 text-amber-950"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      {latestSubmission.officialScore.passed ? (
+                        <CheckCircle2 className="size-5 text-emerald-600 mt-0.5 shrink-0" />
+                      ) : (
+                        <AlertCircle className="size-5 text-amber-600 mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <div className="text-sm font-bold">
+                          {latestSubmission.officialScore.passed
+                            ? "Deliverable Passed!"
+                            : "Deliverable Revision Required"}
+                        </div>
+                        <div className="text-xs opacity-90 mt-0.5">
+                          Score: {latestSubmission.officialScore.totalPoints} / {latestSubmission.officialScore.maxPoints} pts
+                          {" "}({latestSubmission.officialScore.percentage}%) • Band: {latestSubmission.officialScore.band}
+                        </div>
+                        {latestSubmission.officialScore.feedback && (
+                          <div className="text-xs mt-2 p-2.5 rounded bg-surface border border-line text-ink">
+                            <span className="font-semibold text-ink">Assessor Feedback: </span>
+                            {latestSubmission.officialScore.feedback}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Criterion Breakdown */}
+                  {latestSubmission.officialScore.criterionResults?.length > 0 && (
+                    <div className="mt-3 divide-y divide-line/60 rounded-md border border-line bg-surface text-xs text-ink">
+                      {latestSubmission.officialScore.criterionResults.map((cr) => (
+                        <div key={cr.criterionId} className="p-2.5 flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{cr.title}</span>
+                            {cr.comment && <div className="text-ink-3 text-[11px] mt-0.5">{cr.comment}</div>}
+                          </div>
+                          <span className="font-mono font-semibold">
+                            {cr.points} / {cr.maxPoints} pts
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pending Review Notice */}
+              {latestSubmission?.status === "submitted" && !latestSubmission.officialScore && (
+                <div className="p-4 rounded-lg border border-brand-200 bg-brand-50 text-xs text-brand-950 flex items-start gap-2.5">
+                  <Clock className="size-4 text-brand-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Deliverable Under Review (Attempt v{latestSubmission.version})</span>
+                    <p className="mt-0.5 text-brand-900 opacity-90">
+                      Your work has been submitted to the Entrust assessor queue. An assessor will evaluate it against the module rubric.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Rubric Criteria Checklist */}
               <div className="space-y-3">
-                <div className="text-xs font-semibold text-ink uppercase tracking-wider">Completion Criteria</div>
+                <div className="text-xs font-semibold text-ink uppercase tracking-wider">Evaluation Rubric Criteria</div>
                 <div className="divide-y divide-line/60 rounded-lg border border-line">
                   {module.rubric.criteria.map((crit) => (
                     <div key={crit.id} className="flex items-center justify-between gap-3 p-3 text-xs">
@@ -999,7 +1090,7 @@ export function ModuleViewer({
                           <div className="font-medium text-ink">{crit.title}</div>
                           {crit.mustHave && (
                             <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200">
-                              Must-Have Criterion
+                              Must-Have Criterion (min {module.rubric.mustHaveMinimum} pts)
                             </span>
                           )}
                         </div>
@@ -1032,6 +1123,16 @@ export function ModuleViewer({
                   </p>
                 ) : isReadOnly ? (
                   <p className="text-xs text-ink-3">Staff view is read-only.</p>
+                ) : !initialProgress?.theoryCompletedAt && !quizFeedback?.passed && !attemptHistory?.hasPassed ? (
+                  <div className="p-3 rounded border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                      Pass the Theory Knowledge Check in Tab 4 before submitting.
+                    </span>
+                    <Button variant="secondary" size="sm" onClick={() => setActiveTab("knowledge")}>
+                      Go to Knowledge Check
+                    </Button>
+                  </div>
                 ) : (
                   <div className="pt-2">
                     <Button
@@ -1043,6 +1144,8 @@ export function ModuleViewer({
                         ? "Submitted for Review"
                         : status === "passed"
                         ? "Module Passed"
+                        : status === "needs_revision"
+                        ? "Resubmit Revised Deliverable"
                         : isSubmitting
                         ? "Submitting..."
                         : "Submit Deliverable for Review"}

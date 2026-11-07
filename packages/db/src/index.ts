@@ -13,7 +13,11 @@ export {
   DELIVERY_MODES,
   ENROLLMENT_STATUSES,
   ATTENDANCE_STATUSES,
+  MODULE_SUBMISSION_STATUSES,
+  RUBRIC_SCORE_OUTCOMES,
   type DeliveryMode,
   type EnrollmentStatus,
   type AttendanceStatus,
+  type ModuleSubmissionStatus,
+  type RubricScoreOutcome,
 } from "./schema/trade";

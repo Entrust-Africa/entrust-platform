@@ -36,6 +36,7 @@ export type {
 // The shapes the TRADE endpoints return.
 export type {
   CohortKnowledgeCheckStats,
+  CreateModuleSubmissionInput,
   KnowledgeCheckAttemptInput,
   KnowledgeCheckAttemptResult,
   KnowledgeCheckHistoryList,
@@ -44,4 +45,10 @@ export type {
   ModuleAssignmentView,
   ModuleExemptionView,
   ModuleProgressView,
+  ModuleSubmissionListQueryInput,
+  ModuleSubmissionView,
+  OverrideScoreInput,
+  RubricAssessmentView,
+  ScoreSubmissionInput,
+  SubmissionScoresList,
 } from "./schemas/trade";

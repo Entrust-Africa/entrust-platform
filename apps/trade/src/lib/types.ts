@@ -247,6 +247,7 @@ export interface PlacementReportData {
 
 export type {
   CohortKnowledgeCheckStats,
+  CreateModuleSubmissionInput,
   KnowledgeCheckAttemptInput,
   KnowledgeCheckAttemptResult,
   KnowledgeCheckHistoryList,
@@ -255,6 +256,12 @@ export type {
   ModuleAssignmentView,
   ModuleExemptionView,
   ModuleProgressView,
+  ModuleSubmissionListQueryInput,
+  ModuleSubmissionView,
+  OverrideScoreInput,
+  RubricAssessmentView,
+  ScoreSubmissionInput,
+  SubmissionScoresList,
 } from "@entrust/api/client";
 
 export interface ModuleItemSummary {

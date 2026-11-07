@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
+import { MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
 import {
   ASSESSMENT_STATUSES,
   EVIDENCE_CONFIDENCE,
@@ -1229,4 +1230,132 @@ export type KnowledgeCheckAttemptInput = z.infer<typeof KnowledgeCheckAttemptInp
 export type KnowledgeCheckAttemptResult = z.infer<typeof KnowledgeCheckAttemptResult>;
 export type KnowledgeCheckHistoryList = z.infer<typeof KnowledgeCheckHistoryList>;
 export type CohortKnowledgeCheckStats = z.infer<typeof CohortKnowledgeCheckStats>;
+
+// ---- Module Submissions & Rubric Scoring (#67) ----
+export const CreateModuleSubmissionBody = z
+  .object({
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string().trim().optional(),
+    worksheetVersionId: z.uuid().optional(),
+    evidenceRecordIds: z.array(z.uuid()).optional().default([]),
+  })
+  .openapi("CreateTradeModuleSubmissionBody");
+
+export const RubricCriterionScoreInput = z.object({
+  points: z.number().int().min(0),
+  comment: z.string().trim().optional(),
+});
+
+export const RubricScoredCriterionView = z.object({
+  criterionId: z.string(),
+  title: z.string(),
+  points: z.number(),
+  maxPoints: z.number(),
+  mustHave: z.boolean(),
+  comment: z.string().optional(),
+  passed: z.boolean(),
+});
+
+export const RubricAssessmentView = z
+  .object({
+    id: z.uuid(),
+    submissionId: z.uuid(),
+    assessorUserId: z.string().nullable(),
+    assessorName: z.string().nullable().optional(),
+    isFirstScore: z.boolean(),
+    scores: z.record(z.string(), z.object({ points: z.number(), comment: z.string().optional() })),
+    criterionResults: z.array(RubricScoredCriterionView),
+    confirmedCriticalFailures: z.array(z.string()),
+    totalPoints: z.number(),
+    maxPoints: z.number(),
+    percentage: z.number(),
+    band: z.string(),
+    passed: z.boolean(),
+    outcome: z.enum(RUBRIC_SCORE_OUTCOMES),
+    feedback: z.string().nullable().optional(),
+    overriddenByUserId: z.string().nullable().optional(),
+    overrideReason: z.string().nullable().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeRubricAssessmentView");
+
+export const ModuleSubmissionView = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    organizationId: z.string(),
+    organizationName: z.string().optional(),
+    cohortId: z.uuid().optional(),
+    cohortName: z.string().optional(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string(),
+    version: z.number().int(),
+    status: z.enum(MODULE_SUBMISSION_STATUSES),
+    worksheetVersionId: z.uuid().nullable(),
+    evidenceRecordIds: z.array(z.string()),
+    worksheetSnapshot: z.record(z.string(), z.unknown()),
+    waitingTimeHours: z.number().optional(),
+    submittedAt: z.string(),
+    reviewedAt: z.string().nullable(),
+    officialScore: RubricAssessmentView.nullable().optional(),
+    scoresCount: z.number().int().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeModuleSubmissionView");
+
+export const ModuleSubmissionList = z
+  .object({
+    items: z.array(ModuleSubmissionView),
+  })
+  .openapi("TradeModuleSubmissionList");
+
+export const ModuleSubmissionListQuery = z
+  .object({
+    cohortId: z.uuid().optional(),
+    moduleId: z.enum(MODULE_IDS).optional(),
+    status: z.enum(MODULE_SUBMISSION_STATUSES).optional(),
+    enrollmentId: z.uuid().optional(),
+  })
+  .openapi("TradeModuleSubmissionListQuery");
+
+export const SubmissionParam = z
+  .object({
+    id: z.uuid(),
+  })
+  .openapi("TradeSubmissionParam");
+
+export const ScoreSubmissionBody = z
+  .object({
+    scores: z.record(z.string(), RubricCriterionScoreInput),
+    confirmedCriticalFailures: z.array(z.string()).optional().default([]),
+    feedback: z.string().trim().optional(),
+  })
+  .openapi("ScoreTradeSubmissionBody");
+
+export const OverrideScoreBody = z
+  .object({
+    scores: z.record(z.string(), RubricCriterionScoreInput).optional(),
+    confirmedCriticalFailures: z.array(z.string()).optional(),
+    feedback: z.string().trim().optional(),
+    overrideReason: z.string().trim().min(1, "A reason is required to override a score"),
+  })
+  .openapi("OverrideTradeScoreBody");
+
+export const SubmissionScoresList = z
+  .object({
+    items: z.array(RubricAssessmentView),
+    officialScore: RubricAssessmentView.nullable(),
+  })
+  .openapi("TradeSubmissionScoresList");
+
+export type CreateModuleSubmissionInput = z.infer<typeof CreateModuleSubmissionBody>;
+export type ModuleSubmissionView = z.infer<typeof ModuleSubmissionView>;
+export type ModuleSubmissionListQueryInput = z.infer<typeof ModuleSubmissionListQuery>;
+export type ScoreSubmissionInput = z.infer<typeof ScoreSubmissionBody>;
+export type OverrideScoreInput = z.infer<typeof OverrideScoreBody>;
+export type RubricAssessmentView = z.infer<typeof RubricAssessmentView>;
+export type SubmissionScoresList = z.infer<typeof SubmissionScoresList>;
 

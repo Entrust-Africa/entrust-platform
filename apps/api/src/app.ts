@@ -20,6 +20,7 @@ import { tradeCatalogue } from "./routes/trade/catalogue";
 import { tradeEvidence } from "./routes/trade/evidence";
 import { tradeModules } from "./routes/trade/modules";
 import { tradeKnowledgeChecks } from "./routes/trade/knowledge-checks";
+import { tradeSubmissions } from "./routes/trade/submissions";
 import { tradeWorksheets } from "./routes/trade/worksheets";
 import { tradeModuleProgress } from "./routes/trade/progress";
 import { tradePlans } from "./routes/trade/plans";
@@ -84,6 +85,7 @@ export const app = base
   .route("/v1/trade", tradePublicDiagnostic)
   .route("/v1/trade", tradeModules)
   .route("/v1/trade", tradeKnowledgeChecks)
+  .route("/v1/trade", tradeSubmissions)
   .route("/v1/trade", tradeModuleProgress)
   .route("/v1/trade", tradeAssessments)
   .route("/v1/trade", tradeWorksheets)
