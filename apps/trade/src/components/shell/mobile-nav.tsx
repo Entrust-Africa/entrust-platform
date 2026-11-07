@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import Link from "next/link";
 import { LogOut, Menu, X } from "lucide-react";
 import { Patchwork } from "@entrust/ui";
@@ -149,9 +150,7 @@ export function MobileNav({ user }: MobileNavProps) {
                     aria-label="TRADE Platform"
                     className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
                   >
-                    <span className="flex size-9 items-center justify-center rounded-md bg-brand-600 font-display text-sm font-black text-white shadow-xs">
-                      TR
-                    </span>
+                    <Image src="/logo.png" alt="" width={36} height={36} className="size-9 object-contain" />
                     <span className="font-display text-base font-extrabold tracking-tight text-ink">
                       TRADE
                     </span>
