@@ -1,6 +1,6 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { deriveRegister, isApplicationResponses, readRegister, sameBusiness, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
+import { deriveRegister, isApplicationResponses, isDiagnosticWorkbook, readRegister, sameBusiness, summariseRegister, type RegisterInput } from "@entrust/trade-engine";
 import type { RegisterDetailView, RegisterImportedView, RegisterListView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
@@ -63,7 +63,8 @@ export async function getRegisterRecord(ctx: Ctx, id: string): Promise<RegisterD
 export async function importRegister(ctx: Ctx, input: { fileName?: string | undefined; contentBase64: string }): Promise<RegisterImportedView> {
   requireStaff(ctx.principal, ["admin", "facilitator"], "load the SME register");
   const sheets = readUploadedWorkbook(input.contentBase64);
-  if (isApplicationResponses(sheets)) {
+  // The diagnostic workbook is told by its master sheet first, since a form's "Company Name" heading is also in it.
+  if (!isDiagnosticWorkbook(sheets) && isApplicationResponses(sheets)) {
     throw new ServiceError("invalid", "That is a form's responses, not the diagnostic workbook. Load it on the Applications tab.");
   }
 
