@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Building2, Info } from "lucide-react";
 import { Card, StatusBadge } from "@entrust/ui";
+import { afriConnectSignInShown } from "@entrust/auth/africonnect";
 import { getMe, serverApi } from "@/lib/api";
 import { ok } from "@/lib/summit-api";
 import { formatDateTime, smeOrganizations, statusCopy, type SummitPeriod } from "@/lib/summit";
@@ -52,7 +53,7 @@ export default async function ApplyPage() {
             <h2 className="font-display text-xl font-bold text-ink">Tell us about your business</h2>
             <p className="mt-1 text-base text-ink-2">You apply as a business. Add yours and create your account, then carry on with the application.</p>
           </div>
-          <ApplyStart countries={period?.countries ?? AFRICAN_COUNTRIES} />
+          <ApplyStart countries={period?.countries ?? AFRICAN_COUNTRIES} afriConnect={afriConnectSignInShown()} />
         </Card>
       </div>
     );
