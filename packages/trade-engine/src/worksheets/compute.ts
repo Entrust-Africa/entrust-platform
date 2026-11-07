@@ -1,6 +1,9 @@
 import { isDate } from "@entrust/forms";
 import {
   briefDateChecks,
+  calculateBOM,
+  calculateBackwardSchedule,
+  calculateNetCapacity,
   cashFlowForecast,
   cashSchedule,
   checklistCompletion,
@@ -186,6 +189,111 @@ const COMPUTE: Record<string, (v: WorksheetValues, acc: Acc, ctx: WorksheetConte
     };
     for (const code of failures?.candidates ?? []) flag(acc, code, "critical_candidate", critical[code]?.message ?? code, critical[code]?.fields ?? []);
   },
+  "m07-order-fulfilment-plan"(v, acc) {
+    const orderQty = num(v, "order_quantity", acc) ?? 0;
+    const machines = num(v, "machines", acc) ?? 1;
+    const workHours = num(v, "working_hours_per_day", acc) ?? 8;
+    const cycleTime = num(v, "cycle_time_minutes", acc) ?? 60;
+    const scrapRate = num(v, "scrap_rate", acc) ?? 0;
+    const committedHours = num(v, "committed_hours_per_day", acc) ?? 0;
+    const allowOvertime = yes(v, "allow_overtime") ?? false;
+    const overtimeHours = num(v, "overtime_hours_per_day", acc) ?? 0;
+    const outsourcedUnits = num(v, "outsourced_units", acc) ?? 0;
+    const daysAvailable = num(v, "days_available", acc);
+
+    // 1. Capacity
+    const cap = calculateNetCapacity({
+      orderQuantity: orderQty,
+      machines,
+      workingHoursPerDay: workHours,
+      cycleTimeMinutes: cycleTime,
+      scrapRate,
+      committedHoursPerDay: committedHours,
+      allowOvertime,
+      overtimeHoursPerDay: overtimeHours,
+      daysAvailable,
+      outsourcedUnits,
+    });
+
+    acc.computed.gross_hours_per_day = cap.grossHoursPerDay;
+    acc.computed.net_hours_per_day = cap.netHoursPerDay;
+    acc.computed.daily_output_units = cap.dailyOutputUnits;
+    acc.computed.production_days_required = cap.daysRequired;
+
+    if (cap.isOverCapacityWithoutMitigation) {
+      flag(
+        acc,
+        "output_exceeds_net_capacity",
+        "critical_candidate",
+        "Order quantity exceeds available net capacity with no overtime or outsourcing scheduled. That is a critical failure candidate.",
+        ["order_quantity", "machines", "days_available"],
+      );
+    }
+
+    // 2. BOM
+    const rawBomRows = rowsOf(v, "bom");
+    const bomInputItems = rawBomRows.map((r, i) => ({
+      id: `bom-${i + 1}`,
+      item: typeof r.item === "string" ? r.item : `Item ${i + 1}`,
+      unit: typeof r.unit === "string" ? r.unit : "units",
+      baseQuantityPerUnit: typeof r.base_qty_per_unit === "number" ? r.base_qty_per_unit : 0,
+      wastePercentage: typeof r.waste_percent === "number" ? r.waste_percent : 0,
+      unitCost: typeof r.unit_cost === "number" ? r.unit_cost : 0,
+    }));
+
+    const bomResult = calculateBOM({
+      orderQuantity: orderQty,
+      items: bomInputItems,
+    });
+
+    acc.rows.bom = bomResult.lines.map((l) => ({
+      required_qty: l.requiredQuantity,
+      total_cost: l.totalCost,
+    }));
+    acc.computed.total_materials_cost = bomResult.totalMaterialsCost;
+
+    const laborCost = num(v, "labor_cost", acc) ?? 0;
+    const overheadCost = num(v, "overhead_cost", acc) ?? 0;
+    acc.computed.total_production_cost = bomResult.totalMaterialsCost + laborCost + overheadCost;
+
+    // 3. Backward Schedule
+    const leadDays = num(v, "material_lead_days", acc) ?? 0;
+    const transitDays = num(v, "transit_days_to_port", acc) ?? 0;
+    const packagingDays = num(v, "packaging_days", acc) ?? 1;
+    const inspectionDays = num(v, "inspection_days", acc) ?? 1;
+    const hasQc = yes(v, "has_qc_before_dispatch") ?? false;
+    const contractDeadline = text(v, "contract_deadline");
+    const handoverDate = text(v, "handover_date");
+    const m04CashDate = text(v, "m04_cash_milestone_date");
+
+    const sched = calculateBackwardSchedule({
+      contractDeadline,
+      handoverDate,
+      productionDays: cap.daysRequired,
+      materialLeadDays: leadDays,
+      transitDaysToPort: transitDays,
+      packagingDays,
+      inspectionDays,
+      hasQualityCheckpointBeforeDispatch: hasQc,
+      m04CashMilestoneDate: m04CashDate,
+    });
+
+    acc.computed.procurement_start_date = sched.milestones.procurementStartDate;
+    acc.computed.procurement_due_date = sched.milestones.procurementDueDate;
+    acc.computed.production_start_date = sched.milestones.productionStartDate;
+    acc.computed.production_end_date = sched.milestones.productionEndDate;
+    acc.computed.dispatch_date = sched.milestones.dispatchDate;
+
+    for (const issue of sched.issues) {
+      flag(
+        acc,
+        issue.code,
+        issue.severity === "critical" ? "critical_candidate" : "warning",
+        issue.message,
+        issue.fields,
+      );
+    }
+  },
 };
 
 /** Whether a field should be shown, from the values so far. */
@@ -275,5 +383,18 @@ export function prefillFrom(targetId: string, source: { id: string; values: Work
   // M04's funding gap starts from the working-capital brief: the same currency and rate, the cash the SME puts in, and the buyer's advance.
   for (const id of ["currency", "exchange_rate", "rate_date", "internal_cash"]) copy(id);
   if (typeof source.values.buyer_advance === "number") out.advances = [{ amount: source.values.buyer_advance }];
+
+  // M07's fulfilment plan prefills order identity and cash milestones from M04's transaction brief
+  if (targetId === "m07-order-fulfilment-plan") {
+    for (const id of ["currency", "exchange_rate", "rate_date", "contract_value", "incoterm"]) copy(id);
+    if (!isBlank(source.values.buyer_name)) out.customer_name = source.values.buyer_name;
+    if (!isBlank(source.values.product)) out.product = source.values.product;
+    if (!isBlank(source.values.delivery_date)) {
+      out.contract_deadline = source.values.delivery_date;
+      out.handover_date = source.values.delivery_date;
+    }
+    if (!isBlank(source.values.payment_method)) out.financing_source = source.values.payment_method;
+    if (!isBlank(source.values.repayment_date)) out.m04_cash_milestone_date = source.values.repayment_date;
+  }
   return out;
 }

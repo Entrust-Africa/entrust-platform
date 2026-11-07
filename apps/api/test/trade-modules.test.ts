@@ -56,22 +56,23 @@ describe("module listing and content", () => {
       expect(body.items.map((m: { id: string }) => m.id)).toEqual(["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12"]);
       expect(body.items.find((m: { id: string }) => m.id === "M01").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
-      expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("in_production");
+      expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("ready");
+      expect(body.items.find((m: { id: string }) => m.id === "M08").contentStatus).toBe("in_production");
       expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
     }
   });
 
   it("shows a module with no content", async () => {
-    const { status, body } = await get(w.learner, "/modules/M07");
+    const { status, body } = await get(w.learner, "/modules/M08");
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id: "M07", contentStatus: "in_production", content: null });
+    expect(body).toMatchObject({ id: "M08", contentStatus: "in_production", content: null });
   });
 
   it("finds no module or version that isn't there", async () => {
     expect((await get(w.learner, "/modules/M99")).status).toBe(404);
     expect((await get(w.admin, "/modules/m04")).status).toBe(404);
-    expect((await get(w.learner, "/modules/M07?version=0.1.0")).status).toBe(404);
-    expect((await get(w.admin, "/modules/M07?version=0.1.0")).status).toBe(404);
+    expect((await get(w.learner, "/modules/M08?version=0.1.0")).status).toBe(404);
+    expect((await get(w.admin, "/modules/M08?version=0.1.0")).status).toBe(404);
   });
 });
 

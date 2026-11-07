@@ -243,6 +243,10 @@ describe("the calculator registry", () => {
       "funding_gap",
       "brief_date_checks",
       "critical_failure_candidates",
+      "net_capacity",
+      "bill_of_materials",
+      "backward_schedule",
+      "m07_critical_failure_candidates",
     ]);
   });
 

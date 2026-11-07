@@ -20,6 +20,7 @@ const PUBLISHED: Record<string, string> = {
   "M01@0.1.0": "73abc3d9c3bbb5ee98e90227fca6a2da7e7cda5f107b90e885d3ee5f4a130528",
   "M03@0.1.0": "d1aa13df57617e3b9a6e357650c93b806c6c2ec02b4a0cc470ea1c9c48cc0b35",
   "M04@0.1.0": "75541b37d6e52679fba4ca720a15b7f6e03f7684fd1fda8048ef28f2ba1e9f5e",
+  "M07@0.1.0": "b54b6f5a5c1a0c8ea58f90dc49391d9db0fec5a1616a29f96763ee406fbc78da",
 };
 
 const sha256 = async (text: string) =>

@@ -6,6 +6,7 @@ import { validateModuleContent } from "./validate";
 import { M01_V0_1_0 } from "./versions/m01";
 import { M03_V0_1_0 } from "./versions/m03";
 import { M04_V0_1_0 } from "./versions/m04";
+import { M07_V0_1_0 } from "./versions/m07";
 
 export * from "./schema";
 export { learnerModuleSchema, toLearnerView } from "./learner";
@@ -20,6 +21,7 @@ export const MODULE_CONTENT: readonly ModuleContent[] = [
   M01_V0_1_0,
   M03_V0_1_0,
   M04_V0_1_0,
+  M07_V0_1_0,
 ];
 
 // Content that doesn't validate never reaches a learner: loading the package fails instead.
