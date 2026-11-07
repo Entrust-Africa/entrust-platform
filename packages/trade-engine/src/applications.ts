@@ -6,31 +6,49 @@ import { asText, letters, type Cell, type SheetGrid } from "./register";
 
 /** The questions the form asks, in the order they are shown, by the key an answer is stored under. */
 export const APPLICATION_QUESTIONS = [
-  { key: "produces", label: "What the business produces", heading: /^what does your business produce/ },
-  { key: "category", label: "Category", heading: /^which category best describes/ },
-  { key: "mainProducts", label: "Main products", heading: /^what are your main products/ },
-  { key: "capacity", label: "Monthly production capacity", heading: /^monthly production capacity/ },
+  // Two forms have been loaded so far: the agro-processing training programme's, and the Export Growth Companies cohort's, which
+  // words many of the same questions differently ("Current production capacity?"), so a question may be found by either wording.
+  { key: "position", label: "Position of the contact", heading: /^position$/ },
+  { key: "contactEmail", label: "Other email address", heading: /(?!)/ }, // never found by a heading: it is the form's second email column, when that differs
+  { key: "website", label: "Website", heading: /^website/ },
+  { key: "socialMedia", label: "Social media", heading: /^social media/ },
+  { key: "registrationNumber", label: "Business registration number", heading: /^business registration number/ },
+  { key: "tin", label: "TIN", heading: /^tin$/ },
+  { key: "produces", label: "What the business produces", heading: /^what does your business produce|^what products and services do you offer/ },
+  { key: "category", label: "Category", heading: /^which category best describes|^business profile/ },
+  // "Wat are are your top 3 products?" is how the Export Growth form spells it.
+  { key: "mainProducts", label: "Main products", heading: /^what are your main products|^wh?at are (?:are )?your top 3 products/ },
+  { key: "capacity", label: "Monthly production capacity", heading: /^monthly production capacity|^current production capacity/ },
+  { key: "customers", label: "Main customers", heading: /^main customers/ },
   { key: "employees", label: "Employees", heading: /^number of employees/ },
-  { key: "yearEstablished", label: "Year established", heading: /^year business was established/ },
+  { key: "yearEstablished", label: "Year established", heading: /^year business was established|^year established/ },
+  { key: "ownership", label: "Ownership", heading: /^is your business/ },
   { key: "sellsWhere", label: "Where it sells now", heading: /^where do you currently sal/ },
   { key: "revenue", label: "Average monthly revenue", heading: /^average monthly revenue/ },
+  { key: "turnover", label: "Approximate annual turnover", heading: /^approximate annual turnover/ },
   { key: "challenges", label: "Biggest challenges in growing", heading: /^what are the your biggest challenges|^what are your biggest challenges/ },
+  { key: "exportStage", label: "Where it is with exporting", heading: /^which best describes your company/ },
   { key: "exportedBefore", label: "Has exported before", heading: /^have you exported before/ },
+  { key: "exportingTo", label: "Countries it exports to now", heading: /^which countries do you currently export to/ },
+  { key: "exportSales", label: "Average annual export sales", heading: /^average annual export sales/ },
   { key: "documents", label: "Has these", heading: /^do you have any of the following/ },
   { key: "standards", label: "Quality or safety standards", heading: /^do your products meet any/ },
-  { key: "exportMarkets", label: "Export markets of interest", heading: /^what markets/ },
+  { key: "exportMarkets", label: "Export markets of interest", heading: /^what markets|^which countries are you targeting/ },
   { key: "constraint", label: "Biggest operational constraint", heading: /^what is your biggest operational constraint/ },
   { key: "canIncreaseProduction", label: "Can increase production if demand grows", heading: /^are you able to increase production/ },
-  { key: "supportNeeded", label: "Support needed most", heading: /^what support do you need/ },
-  { key: "hasBankAccount", label: "Has a business bank account", heading: /^do you currently have a business bank account/ },
+  { key: "supportNeeded", label: "Support needed most", heading: /^what support do you need|^business needs/ },
+  { key: "hasBankAccount", label: "Has a business bank account", heading: /^do you currently have a business bank account|^do you currently work with a bank/ },
   { key: "bank", label: "Bank", heading: /^which bank do you use/ },
-  { key: "hadLoan", label: "Has had a business loan", heading: /^have you ever accessed a business loan/ },
+  { key: "hadLoan", label: "Has had a business loan", heading: /^have you ever accessed a business loan|^h(?:ave|e) you ever received business financing/ },
+  { key: "auditedStatements", label: "Has audited financial statements", heading: /^do you have audited financial statements/ },
   { key: "zemenInterest", label: "Interested in financing through Zemen Bank", heading: /^are you .*financing opportunities through zemen/ },
   { key: "whyJoin", label: "Why they want to join", heading: /^why do you want to join/ },
   { key: "expectations", label: "What they expect from the training", heading: /^what do you expect to achieve/ },
-  { key: "availability", label: "Can attend every session", heading: /^are you available to attend all/ },
+  { key: "availability", label: "Can attend every session", heading: /^are you available to attend all|^can the owner or ceo attend all/ },
   { key: "heardFrom", label: "How they heard of the programme", heading: /^how did you hear/ },
+  { key: "documentsUploaded", label: "Documents uploaded", heading: /^documents upload/ },
   { key: "additional", label: "Anything else", heading: /^any additional information/ },
+  { key: "declaration", label: "Declaration", heading: /^final declaration/ },
 ] as const;
 export type ApplicationQuestionKey = (typeof APPLICATION_QUESTIONS)[number]["key"];
 
@@ -140,16 +158,27 @@ export function tidyPhone(raw: string | null, country: string | null): string | 
 
 // ---- Reading the sheet ----
 
-type Structured = "timestamp" | "email" | "emailAlt" | "businessName" | "contactName" | "phone" | "location";
+type Structured = "timestamp" | "email" | "emailAlt" | "businessName" | "contactName" | "phone" | "location" | "address" | "region";
 const STRUCTURED: readonly { key: Structured; heading: RegExp }[] = [
   { key: "timestamp", heading: /^timestamp/ },
   { key: "email", heading: /^email address/ },
   { key: "emailAlt", heading: /^email address/ },
-  { key: "businessName", heading: /^business name/ },
+  { key: "businessName", heading: /^(?:business|company) name/ },
   { key: "contactName", heading: /^contact person/ },
-  { key: "phone", heading: /^phone number/ },
+  { key: "phone", heading: /^(?:phone|mobile) number/ },
+  // One column ("City / Region"), or two: the Export Growth form asks for an address and, apart from it, a region.
   { key: "location", heading: /^city region/ },
+  { key: "address", heading: /^company address/ },
+  { key: "region", heading: /^region$/ },
 ];
+
+/** Where a business says it is when the form asks for an address and a region: "Address, Region", leaving out a region that is only a number or that the address already names. */
+function placeOf(address: string | null, region: string | null): string | null {
+  const area = region !== null && /^\d+$/.test(region) ? null : region;
+  if (address === null) return area;
+  if (area === null || address.toLowerCase().includes(area.toLowerCase())) return address;
+  return `${address}, ${area}`;
+}
 
 /** Days since 1899-12-30, which is how a spreadsheet keeps a time. A time typed as text is read as a date and time. */
 function timeOf(cell: Cell): string | null {
@@ -178,24 +207,24 @@ export interface ReadApplicationsResult {
   warnings: string[];
 }
 
-/** Which sheet holds the responses: the first with "Timestamp" and "Business Name" headings. */
+/** Which sheet holds the responses: the first with "Timestamp" and "Business Name" (or "Company Name") headings. */
 function findResponses(sheets: Readonly<Record<string, SheetGrid>>): { grid: SheetGrid; headRow: number } | null {
   for (const grid of Object.values(sheets)) {
     for (let i = 0; i < Math.min(grid.length, 5); i++) {
       const headings = (grid[i] ?? []).map((c) => letters(asText(c) ?? ""));
-      if (headings.some((h) => /^timestamp/.test(h)) && headings.some((h) => /^business name/.test(h))) return { grid, headRow: i };
+      if (headings.some((h) => /^timestamp/.test(h)) && headings.some((h) => /^(?:business|company) name/.test(h))) return { grid, headRow: i };
     }
   }
   return null;
 }
 
-/** Whether the sheets are a form's responses: one has "Timestamp" and "Business Name" headings. */
+/** Whether the sheets are a form's responses: one has "Timestamp" and "Business Name" (or "Company Name") headings. */
 export const isApplicationResponses = (sheets: Readonly<Record<string, SheetGrid>>): boolean => findResponses(sheets) !== null;
 
 /** Reads the responses from a Google Forms export. Throws a sentence fit to show when the sheet isn't one. */
 export function readApplications(sheets: Readonly<Record<string, SheetGrid>>): ReadApplicationsResult {
   const found = findResponses(sheets);
-  if (!found) throw new Error(`This isn't a form's responses: no sheet has "Timestamp" and "Business Name" headings.`);
+  if (!found) throw new Error(`This isn't a form's responses: no sheet has "Timestamp" and "Business Name" (or "Company Name") headings.`);
   const { grid, headRow } = found;
 
   const structured = new Map<Structured, number>();
@@ -218,7 +247,7 @@ export function readApplications(sheets: Readonly<Record<string, SheetGrid>>): R
     const email = (asText(at("email")) ?? asText(at("emailAlt")))?.toLowerCase() ?? null;
     if (row.every((c) => asText(c) === null)) continue;
 
-    const location = asText(at("location"));
+    const location = asText(at("location")) ?? placeOf(asText(at("address")), asText(at("region")));
     const country = applicationCountry({ location, email, phone: asText(at("phone")) });
     // A response from Ethiopia may be named in a warning; any other is only counted.
     const who = country === "ET" ? (businessName ?? email ?? "A response") : "A response";
@@ -241,6 +270,9 @@ export function readApplications(sheets: Readonly<Record<string, SheetGrid>>): R
       const answer = answerOf(row[index]);
       if (answer !== null) answers[key] = answer;
     }
+    // The second email column is the contact's own address, and is kept when it isn't the one the form was sent from.
+    const otherEmail = asText(at("emailAlt"))?.toLowerCase();
+    if (otherEmail && otherEmail !== email && EMAIL.test(otherEmail)) answers.contactEmail = otherEmail;
     applications.push({ submittedAt, email, businessName, contactName: asText(at("contactName")), phone, location, country, answers });
   }
 
@@ -263,3 +295,18 @@ export const sameApplicant = (a: Pick<ApplicationInput, "email" | "businessName"
 
 /** Whether an answer to a yes or no question is a yes. */
 export const isYes = (answer: string | undefined): boolean => /^\s*y(es)?\b/i.test(answer ?? "");
+
+/**
+ * Whether a response says the business has exported: the yes or no it gave when asked, or, on a form that asks where the business is
+ * with exporting, "Exported previously" or "Currently exporting" (a yes) against "Preparing to export" or "Not yet exporting" (a no).
+ * Null when it doesn't say.
+ */
+export function hasExported(answers: Partial<Record<string, string>>): boolean | null {
+  const asked = answers.exportedBefore;
+  if (asked !== undefined) return isYes(asked) ? true : /^\s*n/i.test(asked) ? false : null;
+  const stage = answers.exportStage;
+  if (stage === undefined) return null;
+  if (/^\s*(?:exported previously|currently exporting)/i.test(stage)) return true;
+  if (/^\s*(?:preparing to export|not yet exporting)/i.test(stage)) return false;
+  return null;
+}

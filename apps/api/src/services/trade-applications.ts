@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { isDiagnosticWorkbook, isYes, readApplications, sameApplicant, sameBusiness, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
+import { hasExported, isDiagnosticWorkbook, isYes, readApplications, sameApplicant, sameBusiness, timesApplied, type ApplicationInput } from "@entrust/trade-engine";
 import type { ApplicationDetailView, ApplicationListView, ApplicationsImportedView } from "../schemas/trade";
 import { requireStaff, type Ctx } from "./access";
 import { ServiceError } from "./errors";
@@ -31,7 +31,7 @@ export async function listApplications(ctx: Ctx): Promise<ApplicationListView> {
     summary: {
       shown: rows.length,
       notShown: others?.n ?? 0,
-      exportedBefore: rows.filter((r) => isYes(r.answers.exportedBefore)).length,
+      exportedBefore: rows.filter((r) => hasExported(r.answers) === true).length,
       interestedInZemen: rows.filter((r) => isYes(r.answers.zemenInterest)).length,
       repeatApplications: times.filter((t) => t > 1).length,
     },

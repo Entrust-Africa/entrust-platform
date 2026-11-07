@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { APPLICATION_QUESTIONS, isYes, type ApplicationQuestionKey } from "@entrust/trade-engine";
+import { APPLICATION_QUESTIONS, hasExported, isYes, type ApplicationQuestionKey } from "@entrust/trade-engine";
 import { Card, StatusBadge } from "@entrust/ui";
 import { ok } from "@/lib/summit-api";
 import { load, requireUser } from "@/lib/summit-server";
@@ -12,10 +12,11 @@ const LABEL = Object.fromEntries(APPLICATION_QUESTIONS.map((q) => [q.key, q.labe
 
 // The form's questions, grouped the way staff read them. A group with no answers is left out.
 const GROUPS: { id: string; title: string; keys: ApplicationQuestionKey[] }[] = [
-  { id: "business", title: "The business", keys: ["produces", "category", "mainProducts", "capacity", "employees", "yearEstablished", "sellsWhere", "revenue", "challenges"] },
-  { id: "exporting", title: "Exporting", keys: ["exportedBefore", "documents", "standards", "exportMarkets", "constraint", "canIncreaseProduction", "supportNeeded"] },
-  { id: "finance", title: "Banking and finance", keys: ["hasBankAccount", "bank", "hadLoan", "zemenInterest"] },
-  { id: "programme", title: "The programme", keys: ["whyJoin", "expectations", "availability", "heardFrom", "additional"] },
+  { id: "details", title: "Contact and registration", keys: ["position", "contactEmail", "website", "socialMedia", "registrationNumber", "tin"] },
+  { id: "business", title: "The business", keys: ["produces", "category", "mainProducts", "capacity", "customers", "employees", "yearEstablished", "ownership", "sellsWhere", "revenue", "turnover", "challenges"] },
+  { id: "exporting", title: "Exporting", keys: ["exportStage", "exportedBefore", "exportingTo", "exportSales", "documents", "standards", "exportMarkets", "constraint", "canIncreaseProduction", "supportNeeded"] },
+  { id: "finance", title: "Banking and finance", keys: ["hasBankAccount", "bank", "hadLoan", "auditedStatements", "zemenInterest"] },
+  { id: "programme", title: "The programme", keys: ["whyJoin", "expectations", "availability", "heardFrom", "documentsUploaded", "additional", "declaration"] },
 ];
 const KNOWN = new Set<string>(GROUPS.flatMap((g) => g.keys));
 
@@ -51,7 +52,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {a.timesApplied > 1 && <StatusBadge tone="info">{`Applied ${a.timesApplied} times`}</StatusBadge>}
           {a.answers.zemenInterest && <StatusBadge tone={isYes(a.answers.zemenInterest) ? "ok" : "idle"}>{isYes(a.answers.zemenInterest) ? "Wants Zemen financing" : "Not asking for Zemen financing"}</StatusBadge>}
-          {isYes(a.answers.exportedBefore) && <StatusBadge tone="ok">Has exported</StatusBadge>}
+          {hasExported(a.answers) === true && <StatusBadge tone="ok">Has exported</StatusBadge>}
         </div>
       </header>
 
