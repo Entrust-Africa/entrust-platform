@@ -27,7 +27,9 @@ export function SiteHeader({ overHero = false }: { overHero?: boolean }) {
   return (
     <header className={overHero ? "relative z-30 px-6 py-6 lg:px-16" : "relative z-30 bg-ink px-6 py-5 text-white lg:px-16"}>
       <div className="mx-auto flex max-w-[82rem] flex-wrap items-center justify-between gap-x-8 gap-y-4 text-white">
-        <Link href="/" className="font-display text-2xl leading-none tracking-wide">
+        <Link href="/" className="flex items-center gap-4 font-display text-2xl leading-none tracking-wide">
+          {/* The logo's maroon and green only read on a light ground, so it sits on its own white tile. */}
+          <img src="/images/adtis-logo.jpg" alt="" width={800} height={803} className="size-14 bg-white sm:size-16" />
           ADTIS-27
         </Link>
         <nav aria-label="Main" className="order-3 flex w-full flex-wrap items-center gap-x-8 gap-y-3 font-mono text-xs tracking-wide md:order-none md:w-auto">
