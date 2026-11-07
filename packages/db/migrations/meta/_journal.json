@@ -253,6 +253,13 @@
       "when": 1794011621193,
       "tag": "0035_open_triathlon",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794042891148,
+      "tag": "0036_next_hitman",
+      "breakpoints": true
     }
   ]
 }

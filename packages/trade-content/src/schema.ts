@@ -85,6 +85,8 @@ export const knowledgeQuestionSchema = z
     correct: z.array(slug).min(1, "a question needs a correct answer"),
     /** Absent where the content has none: feedback then shows the right answer and links to the lesson. */
     explanation: text.optional(),
+    /** The lesson slug this question tests, for linking feedback back to the lesson. */
+    lessonId: slug.optional(),
   })
   .strict();
 

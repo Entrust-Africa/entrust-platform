@@ -435,6 +435,8 @@ describe("API documentation", () => {
         "/v1/trade/module-progress",
         "/v1/trade/modules",
         "/v1/trade/modules/{id}",
+        "/v1/trade/modules/{id}/knowledge-check/attempts",
+        "/v1/trade/cohorts/{id}/knowledge-check-stats",
         "/v1/trade/worksheet-versions/{id}",
         "/v1/trade/worksheet-versions/{id}/submit",
         "/v1/trade/worksheet-versions/{id}/values",

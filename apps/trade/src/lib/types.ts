@@ -246,6 +246,10 @@ export interface PlacementReportData {
 }
 
 export type {
+  CohortKnowledgeCheckStats,
+  KnowledgeCheckAttemptInput,
+  KnowledgeCheckAttemptResult,
+  KnowledgeCheckHistoryList,
   LearningPlanRecord,
   LearningPlanView,
   ModuleAssignmentView,

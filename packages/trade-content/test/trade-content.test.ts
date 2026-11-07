@@ -16,7 +16,11 @@ const withQuestion = (index: number, change: Partial<ModuleContent["knowledgeChe
 // The content of every approved version. Every learner keeps the version they started, so an approved
 // version must not change: put a correction in a new version instead. Add a line here, keyed
 // "M04@0.1.0", when a version is approved. Drafts can still change and aren't listed.
-const PUBLISHED: Record<string, string> = {};
+const PUBLISHED: Record<string, string> = {
+  "M01@0.1.0": "73abc3d9c3bbb5ee98e90227fca6a2da7e7cda5f107b90e885d3ee5f4a130528",
+  "M03@0.1.0": "d1aa13df57617e3b9a6e357650c93b806c6c2ec02b4a0cc470ea1c9c48cc0b35",
+  "M04@0.1.0": "75541b37d6e52679fba4ca720a15b7f6e03f7684fd1fda8048ef28f2ba1e9f5e",
+};
 
 const sha256 = async (text: string) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -126,11 +130,17 @@ describe("what each audience sees", () => {
   const content = [fixture({ version: "0.1.0" }), approved({ version: "0.2.0" }), approved({ version: "0.10.0", title: "Newest" }), fixture({ module: "M01", title: "M01 draft", version: "0.3.0" })];
 
   it("lists all twelve modules, in production until content is loaded", () => {
-    const modules = listModules("learner");
+    const modules = listModules("learner", []);
     expect(modules.map((m) => m.id)).toEqual([...MODULE_IDS]);
     expect(modules.every((m) => m.contentStatus === "in_production" && m.latestVersion === null && m.versions.length === 0)).toBe(true);
     expect(modules.find((m) => m.id === "M04")?.title).toBe("Trade Finance and Payment Risk");
-    expect(listModules("staff")).toEqual(modules);
+    expect(listModules("staff", [])).toEqual(modules);
+
+    const loaded = listModules("learner");
+    expect(loaded.find((m) => m.id === "M01")?.contentStatus).toBe("ready");
+    expect(loaded.find((m) => m.id === "M03")?.contentStatus).toBe("ready");
+    expect(loaded.find((m) => m.id === "M04")?.contentStatus).toBe("ready");
+    expect(loaded.find((m) => m.id === "M02")?.contentStatus).toBe("in_production");
   });
 
   it("shows an SME only approved versions, newest first by number", () => {

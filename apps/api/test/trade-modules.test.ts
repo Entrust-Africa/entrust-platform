@@ -49,13 +49,15 @@ describe("who can open the modules", () => {
   });
 });
 
-describe("modules without content", () => {
-  it("lists all twelve as content in production", async () => {
+describe("module listing and content", () => {
+  it("lists all twelve modules with loaded or in-production status", async () => {
     for (const user of [w.learner, w.admin]) {
       const { body } = await get(user, "/modules");
       expect(body.items.map((m: { id: string }) => m.id)).toEqual(["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12"]);
-      expect(body.items.every((m: { contentStatus: string; latestVersion: unknown; versions: unknown[] }) => m.contentStatus === "in_production" && m.latestVersion === null && m.versions.length === 0)).toBe(true);
-      expect(body.items[3]).toMatchObject({ id: "M04", title: "Trade Finance and Payment Risk", deliverable: "Transaction finance and payment-risk brief" });
+      expect(body.items.find((m: { id: string }) => m.id === "M01").contentStatus).toBe("ready");
+      expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
+      expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("in_production");
+      expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
     }
   });
 
@@ -68,8 +70,8 @@ describe("modules without content", () => {
   it("finds no module or version that isn't there", async () => {
     expect((await get(w.learner, "/modules/M99")).status).toBe(404);
     expect((await get(w.admin, "/modules/m04")).status).toBe(404);
-    expect((await get(w.learner, "/modules/M04?version=0.1.0")).status).toBe(404);
-    expect((await get(w.admin, "/modules/M04?version=0.1.0")).status).toBe(404);
+    expect((await get(w.learner, "/modules/M07?version=0.1.0")).status).toBe(404);
+    expect((await get(w.admin, "/modules/M07?version=0.1.0")).status).toBe(404);
   });
 });
 

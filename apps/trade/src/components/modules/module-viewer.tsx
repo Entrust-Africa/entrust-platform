@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -14,12 +14,17 @@ import {
   FileText,
   HelpCircle,
   PlayCircle,
+  RotateCcw,
   Sparkles,
   Video,
 } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeFetch } from "@/lib/trade-client";
-import type { ModuleProgressView } from "@/lib/types";
+import type {
+  KnowledgeCheckAttemptResult,
+  KnowledgeCheckHistoryList,
+  ModuleProgressView,
+} from "@/lib/types";
 
 export interface LearnerLesson {
   id: string;
@@ -131,8 +136,76 @@ export function ModuleViewer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string[]>>({});
+  const [attemptHistory, setAttemptHistory] = useState<KnowledgeCheckHistoryList | null>(null);
+  const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
+  const [quizFeedback, setQuizFeedback] = useState<KnowledgeCheckAttemptResult | null>(null);
+  const [shuffledOptions, setShuffledOptions] = useState<Record<string, Array<{ id: string; text: string }>>>(() => {
+    const map: Record<string, Array<{ id: string; text: string }>> = {};
+    for (const q of module.knowledgeCheck.questions) {
+      map[q.id] = [...q.options];
+    }
+    return map;
+  });
   const [submissionFeedback, setSubmissionFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enrollmentId) return;
+    let cancelled = false;
+    tradeFetch<KnowledgeCheckHistoryList>(
+      "GET",
+      `/modules/${module.module}/knowledge-check/attempts?enrollmentId=${enrollmentId}`
+    ).then((res) => {
+      if (!cancelled && res.ok && res.data) {
+        setAttemptHistory(res.data);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enrollmentId, module.module]);
+
+  const handleRetakeQuiz = () => {
+    setQuizAnswers({});
+    setQuizFeedback(null);
+    const newMap: Record<string, Array<{ id: string; text: string }>> = {};
+    for (const q of module.knowledgeCheck.questions) {
+      newMap[q.id] = [...q.options].sort(() => Math.random() - 0.5);
+    }
+    setShuffledOptions(newMap);
+  };
+
+  const handleSubmitQuiz = async () => {
+    if (!enrollmentId || isReadOnly || isSubmittingQuiz) return;
+    setIsSubmittingQuiz(true);
+    setErrorMessage(null);
+    const res = await tradeFetch<KnowledgeCheckAttemptResult>(
+      "POST",
+      `/modules/${module.module}/knowledge-check/attempts`,
+      {
+        enrollmentId,
+        contentVersion: module.version,
+        answers: quizAnswers,
+      }
+    );
+    setIsSubmittingQuiz(false);
+    if (res.ok && res.data) {
+      setQuizFeedback(res.data);
+      if (res.data.passed && status === "not_started") {
+        setStatus("in_progress");
+      }
+      tradeFetch<KnowledgeCheckHistoryList>(
+        "GET",
+        `/modules/${module.module}/knowledge-check/attempts?enrollmentId=${enrollmentId}`
+      ).then((histRes) => {
+        if (histRes.ok && histRes.data) {
+          setAttemptHistory(histRes.data);
+        }
+      });
+    } else {
+      setErrorMessage(res.error ?? "Failed to submit knowledge check.");
+    }
+  };
 
   const activeLesson = module.lessons.find((l) => l.id === activeLessonId) ?? module.lessons[0];
 
@@ -707,12 +780,72 @@ export function ModuleViewer({
           {/* Tab 4: Knowledge Check */}
           {activeTab === "knowledge" && (
             <Card className="p-6 space-y-6">
-              <div className="border-b border-line pb-3">
-                <h2 className="font-display text-xl font-bold text-ink">Knowledge Check</h2>
-                <p className="mt-0.5 text-xs text-ink-2">
-                  Test your understanding before submitting. Pass mark: {module.knowledgeCheck.passMark}%.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line pb-4">
+                <div>
+                  <h2 className="font-display text-xl font-bold text-ink">Knowledge Check</h2>
+                  <p className="mt-0.5 text-xs text-ink-2">
+                    Test your understanding with automatic server grading. Pass mark: {module.knowledgeCheck.passMark}%.
+                  </p>
+                </div>
+
+                {attemptHistory && attemptHistory.items.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-canvas text-ink-2 px-2.5 py-1 rounded-full border border-line">
+                      {attemptHistory.items.length} {attemptHistory.items.length === 1 ? "attempt" : "attempts"}
+                    </span>
+                    {attemptHistory.bestScore !== null && (
+                      <span className="text-xs bg-canvas text-ink px-2.5 py-1 rounded-full border border-line font-medium">
+                        Best: {attemptHistory.bestScore}%
+                      </span>
+                    )}
+                    {attemptHistory.hasPassed ? (
+                      <span className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full font-semibold">
+                        Passed
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
+                        In progress
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Feedback / Evaluation Banner */}
+              {quizFeedback && (
+                <div
+                  className={`p-4 rounded-lg border ${
+                    quizFeedback.passed
+                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                      : "bg-amber-50/70 border-amber-200 text-amber-950"
+                  } space-y-2`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      {quizFeedback.passed ? (
+                        <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <div className="text-sm font-bold">
+                          {quizFeedback.passed ? "Knowledge Check Passed!" : `Score: ${quizFeedback.score}%`}
+                        </div>
+                        <div className="text-xs opacity-90 mt-0.5">
+                          {quizFeedback.passed
+                            ? `You scored ${quizFeedback.score}% (${quizFeedback.correctCount} of ${quizFeedback.totalQuestions} correct). Theory requirement completed.`
+                            : `You scored ${quizFeedback.score}% (${quizFeedback.correctCount} of ${quizFeedback.totalQuestions} correct). You need ${module.knowledgeCheck.passMark}% to pass. Retakes are unlimited.`}
+                        </div>
+                      </div>
+                    </div>
+                    {!isReadOnly && (
+                      <Button variant="secondary" size="sm" onClick={handleRetakeQuiz} className="shrink-0">
+                        <RotateCcw className="size-3.5 mr-1.5" /> Retake
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {module.knowledgeCheck.questions.length === 0 ? (
                 <div className="text-xs text-ink-3">No knowledge check questions registered for this module.</div>
@@ -720,33 +853,60 @@ export function ModuleViewer({
                 <div className="space-y-6">
                   {module.knowledgeCheck.questions.map((q, qIndex) => {
                     const selected = quizAnswers[q.id] ?? [];
+                    const options = shuffledOptions[q.id] ?? q.options;
+                    const qResult = quizFeedback?.results.find((r) => r.questionId === q.id);
 
                     return (
                       <div key={q.id} className="space-y-3 rounded-lg border border-line/80 p-4 bg-canvas/40">
-                        <div className="text-xs font-semibold text-ink">
-                          {qIndex + 1}. {q.text}
-                          {q.multiple && <span className="text-ink-3 ml-1 font-normal">(select all that apply)</span>}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-xs font-semibold text-ink">
+                            {qIndex + 1}. {q.text}
+                            {q.multiple && <span className="text-ink-3 ml-1 font-normal">(select all that apply)</span>}
+                          </div>
+                          {qResult && (
+                            <span
+                              className={`text-[11px] font-semibold px-2 py-0.5 rounded shrink-0 ${
+                                qResult.isCorrect ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {qResult.isCorrect ? "Correct" : "Incorrect"}
+                            </span>
+                          )}
                         </div>
 
                         <div className="space-y-2">
-                          {q.options.map((opt) => {
+                          {options.map((opt) => {
                             const isChosen = selected.includes(opt.id);
+                            const isAnswerKey = qResult?.correctAnswers.includes(opt.id);
+
+                            let borderBgStyle = isChosen
+                              ? "border-brand-600 bg-brand-50/60 font-medium text-brand-900"
+                              : "border-line bg-surface hover:bg-canvas text-ink";
+
+                            if (qResult) {
+                              if (isAnswerKey) {
+                                borderBgStyle = "border-emerald-500 bg-emerald-50 text-emerald-950 font-medium";
+                              } else if (isChosen && !isAnswerKey) {
+                                borderBgStyle = "border-red-400 bg-red-50 text-red-950 line-through";
+                              } else {
+                                borderBgStyle = "border-line bg-surface/60 text-ink-3";
+                              }
+                            }
 
                             return (
                               <label
                                 key={opt.id}
-                                className={`flex items-start gap-2.5 rounded-md border p-2.5 text-xs cursor-pointer transition-colors ${
-                                  isChosen
-                                    ? "border-brand-600 bg-brand-50/60 font-medium text-brand-900"
-                                    : "border-line bg-surface hover:bg-canvas text-ink"
+                                className={`flex items-start gap-2.5 rounded-md border p-2.5 text-xs transition-colors ${borderBgStyle} ${
+                                  quizFeedback || isReadOnly ? "cursor-default" : "cursor-pointer"
                                 }`}
                               >
                                 <input
                                   type={q.multiple ? "checkbox" : "radio"}
                                   name={`question-${q.id}`}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || !!quizFeedback}
                                   checked={isChosen}
                                   onChange={() => {
+                                    if (quizFeedback || isReadOnly) return;
                                     if (q.multiple) {
                                       setQuizAnswers((prev) => ({
                                         ...prev,
@@ -765,9 +925,52 @@ export function ModuleViewer({
                             );
                           })}
                         </div>
+
+                        {/* Question Feedback: Explanation and Lesson Link */}
+                        {qResult && (
+                          <div className="mt-3 p-3 rounded-md bg-canvas text-xs space-y-2 border border-line">
+                            {qResult.explanation && (
+                              <div className="text-ink-2">
+                                <span className="font-semibold text-ink">Explanation: </span>
+                                {qResult.explanation}
+                              </div>
+                            )}
+                            {qResult.lessonId && (
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveTab("lesson");
+                                    setActiveLessonId(qResult.lessonId!);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 underline"
+                                >
+                                  <BookOpen className="size-3.5" />
+                                  Review Lesson:{" "}
+                                  {module.lessons.find((l) => l.id === qResult.lessonId)?.title ?? qResult.lessonId}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Submit Button */}
+              {!quizFeedback && !isReadOnly && module.knowledgeCheck.questions.length > 0 && (
+                <div className="flex items-center justify-between border-t border-line pt-4">
+                  <div className="text-xs text-ink-3">
+                    {Object.keys(quizAnswers).length} of {module.knowledgeCheck.questions.length} questions answered
+                  </div>
+                  <Button
+                    onClick={handleSubmitQuiz}
+                    disabled={isSubmittingQuiz || Object.keys(quizAnswers).length === 0}
+                  >
+                    {isSubmittingQuiz ? "Grading..." : "Submit Knowledge Check"}
+                  </Button>
                 </div>
               )}
             </Card>

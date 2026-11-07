@@ -1107,6 +1107,8 @@ export const ModuleProgressSchema = z
     status: z.enum(MODULE_PROGRESS_STATUSES),
     lessonProgress: z.record(z.string(), z.unknown()),
     startedAt: z.string().nullable(),
+    theoryCompletedAt: z.string().nullable().optional(),
+    knowledgeCheckScore: z.number().nullable().optional(),
     completedAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -1140,4 +1142,91 @@ export const RecordModuleProgressBody = z
 export type ModuleProgressView = z.infer<typeof ModuleProgressSchema>;
 export type ModuleProgressQueryInput = z.infer<typeof ModuleProgressQuery>;
 export type RecordModuleProgressInput = z.infer<typeof RecordModuleProgressBody>;
+
+// ---- Knowledge Checks (#63) ----
+export const KnowledgeCheckAttemptInput = z
+  .object({
+    enrollmentId: z.uuid(),
+    contentVersion: z.string().trim().optional(),
+    answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  })
+  .openapi("TradeKnowledgeCheckAttemptInput");
+
+export const QuestionGradingResultSchema = z
+  .object({
+    questionId: z.string(),
+    questionText: z.string(),
+    submittedAnswers: z.array(z.string()),
+    correctAnswers: z.array(z.string()),
+    isCorrect: z.boolean(),
+    explanation: z.string().optional(),
+    lessonId: z.string().optional(),
+  })
+  .openapi("TradeQuestionGradingResult");
+
+export const KnowledgeCheckAttemptResult = z
+  .object({
+    id: z.uuid(),
+    enrollmentId: z.uuid(),
+    moduleId: z.enum(MODULE_IDS),
+    contentVersion: z.string(),
+    attemptNumber: z.number().int(),
+    score: z.number(),
+    passed: z.boolean(),
+    totalQuestions: z.number().int(),
+    correctCount: z.number().int(),
+    results: z.array(QuestionGradingResultSchema),
+    theoryCompletedAt: z.string().nullable().optional(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeKnowledgeCheckAttemptResult");
+
+export const KnowledgeCheckHistoryItem = z
+  .object({
+    id: z.uuid(),
+    attemptNumber: z.number().int(),
+    score: z.number(),
+    passed: z.boolean(),
+    totalQuestions: z.number().int(),
+    correctCount: z.number().int(),
+    contentVersion: z.string(),
+    createdAt: z.string(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryItem");
+
+export const KnowledgeCheckHistoryList = z
+  .object({
+    items: z.array(KnowledgeCheckHistoryItem),
+    bestScore: z.number().nullable(),
+    hasPassed: z.boolean(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryList");
+
+export const KnowledgeCheckHistoryQuery = z
+  .object({
+    enrollmentId: z.uuid(),
+  })
+  .openapi("TradeKnowledgeCheckHistoryQuery");
+
+export const CohortModuleKnowledgeCheckStat = z
+  .object({
+    moduleId: z.enum(MODULE_IDS),
+    attemptsCount: z.number().int(),
+    learnersPassed: z.number().int(),
+    totalLearners: z.number().int(),
+    passRate: z.number(),
+  })
+  .openapi("TradeCohortModuleKnowledgeCheckStat");
+
+export const CohortKnowledgeCheckStats = z
+  .object({
+    cohortId: z.uuid(),
+    modules: z.array(CohortModuleKnowledgeCheckStat),
+  })
+  .openapi("TradeCohortKnowledgeCheckStats");
+
+export type KnowledgeCheckAttemptInput = z.infer<typeof KnowledgeCheckAttemptInput>;
+export type KnowledgeCheckAttemptResult = z.infer<typeof KnowledgeCheckAttemptResult>;
+export type KnowledgeCheckHistoryList = z.infer<typeof KnowledgeCheckHistoryList>;
+export type CohortKnowledgeCheckStats = z.infer<typeof CohortKnowledgeCheckStats>;
 

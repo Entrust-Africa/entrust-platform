@@ -35,6 +35,10 @@ export type {
 
 // The shapes the TRADE endpoints return.
 export type {
+  CohortKnowledgeCheckStats,
+  KnowledgeCheckAttemptInput,
+  KnowledgeCheckAttemptResult,
+  KnowledgeCheckHistoryList,
   LearningPlanRecord,
   LearningPlanView,
   ModuleAssignmentView,

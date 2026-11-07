@@ -392,6 +392,8 @@ export const moduleProgress = trade.table(
     status: text("status", { enum: MODULE_PROGRESS_STATUSES }).notNull().default("not_started"),
     lessonProgress: jsonb("lesson_progress").notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
+    theoryCompletedAt: timestamp("theory_completed_at", { withTimezone: true }),
+    knowledgeCheckScore: numeric("knowledge_check_score", { precision: 5, scale: 2 }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -401,6 +403,32 @@ export const moduleProgress = trade.table(
   },
   (t) => [
     uniqueIndex("trade_module_progress_enrollment_module_uidx").on(t.enrollmentId, t.moduleId),
+  ],
+);
+
+// An attempt by an enrolled learner at a module's knowledge check.
+export const knowledgeCheckAttempt = trade.table(
+  "knowledge_check_attempt",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    contentVersion: text("content_version").notNull(),
+    attemptNumber: integer("attempt_number").notNull().default(1),
+    score: numeric("score", { precision: 5, scale: 2 }).notNull(),
+    passed: boolean("passed").notNull(),
+    totalQuestions: integer("total_questions").notNull(),
+    correctCount: integer("correct_count").notNull(),
+    answers: jsonb("answers").notNull().default({}),
+    results: jsonb("results").notNull().default([]),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_kc_attempt_enrollment_idx").on(t.enrollmentId),
+    index("trade_kc_attempt_enr_module_idx").on(t.enrollmentId, t.moduleId),
   ],
 );
 
@@ -600,6 +628,11 @@ export const moduleAssignmentRelations = relations(moduleAssignment, ({ one }) =
 
 export const moduleProgressRelations = relations(moduleProgress, ({ one }) => ({
   enrollment: one(enrollment, { fields: [moduleProgress.enrollmentId], references: [enrollment.id] }),
+}));
+
+export const knowledgeCheckAttemptRelations = relations(knowledgeCheckAttempt, ({ one }) => ({
+  enrollment: one(enrollment, { fields: [knowledgeCheckAttempt.enrollmentId], references: [enrollment.id] }),
+  submittedByUser: one(user, { fields: [knowledgeCheckAttempt.submittedByUserId], references: [user.id] }),
 }));
 
 export const moduleExemptionRelations = relations(moduleExemption, ({ one }) => ({

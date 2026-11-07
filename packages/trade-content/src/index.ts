@@ -3,6 +3,10 @@ import type { ContentStatus, ModuleId } from "@entrust/trade-rules";
 import type { ModuleContent } from "./schema";
 import { validateModuleContent } from "./validate";
 
+import { M01_V0_1_0 } from "./versions/m01";
+import { M03_V0_1_0 } from "./versions/m03";
+import { M04_V0_1_0 } from "./versions/m04";
+
 export * from "./schema";
 export { learnerModuleSchema, toLearnerView } from "./learner";
 export type { LearnerModuleContent } from "./learner";
@@ -12,10 +16,11 @@ export { validateModuleContent } from "./validate";
 // ./versions, named for the module and version, exporting a ModuleContent. A draft can still change.
 // An approved version is never edited: test/trade-content.test.ts keeps a hash of each one and
 // fails if it changes, so a correction goes in a new version. A learner keeps the version they started.
-//
-// Nothing is registered yet: Entrust's packages for M01, M03, M04, M05, M07 and M08 haven't been
-// loaded (#61), so all twelve modules show as "content in production".
-export const MODULE_CONTENT: readonly ModuleContent[] = [];
+export const MODULE_CONTENT: readonly ModuleContent[] = [
+  M01_V0_1_0,
+  M03_V0_1_0,
+  M04_V0_1_0,
+];
 
 // Content that doesn't validate never reaches a learner: loading the package fails instead.
 const errors = validateModuleContent(MODULE_CONTENT);
