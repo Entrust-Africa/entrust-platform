@@ -41,7 +41,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
           </div>
           <h1 className="font-display text-3xl font-bold text-ink">Entrust Verification Registry</h1>
           <p className="text-sm text-ink-3">
-            Real-time cryptographic verification of certificates issued under Entrust TRADE.
+            Check a certificate issued under Entrust TRADE.
           </p>
         </div>
 
@@ -68,7 +68,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
             <p className="text-sm text-ink-2">Could not connect to the verification registry. Please try again later.</p>
           </Card>
         ) : cert.isRevoked ? (
-          <Card className="p-6 sm:p-8 space-y-6 border-red-300 bg-white shadow-sm">
+          <Card className="p-6 sm:p-8 space-y-6 border-red-300 bg-surface shadow-sm">
             {/* Revoked Banner */}
             <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
               <ShieldAlert className="size-6 text-red-600 shrink-0 mt-0.5" />
@@ -82,7 +82,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
                   It is no longer valid or recognized.
                 </p>
                 {cert.revocationReason && (
-                  <div className="mt-2 text-xs text-red-800 bg-white/70 p-2.5 rounded border border-red-200">
+                  <div className="mt-2 text-xs text-red-800 bg-surface/70 p-2.5 rounded border border-red-200">
                     <span className="font-bold">Official reason:</span> {cert.revocationReason}
                   </div>
                 )}
@@ -95,7 +95,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
             </div>
 
             {/* Historical Details */}
-            <div className="divide-y divide-border text-sm space-y-3 pt-2">
+            <div className="divide-y divide-line text-sm space-y-3 pt-2">
               <div className="flex justify-between py-2">
                 <span className="text-ink-3">Credential Code</span>
                 <span className="font-mono font-bold text-ink">{cert.code}</span>
@@ -109,7 +109,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
                 <span className="font-semibold text-ink">{cert.recipientOrganizationName}</span>
               </div>
               <div className="flex justify-between py-2">
-                <span className="text-ink-3">Program</span>
+                <span className="text-ink-3">Programme</span>
                 <span className="text-ink">{cert.programName}</span>
               </div>
               <div className="flex justify-between py-2">
@@ -125,7 +125,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
             </div>
           </Card>
         ) : (
-          <Card className="p-6 sm:p-8 space-y-6 bg-white shadow-md border-emerald-200">
+          <Card className="p-6 sm:p-8 space-y-6 bg-surface shadow-md border-emerald-200">
             {/* Valid Badge */}
             <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
               <CheckCircle2 className="size-6 text-emerald-600 shrink-0 mt-0.5" />
@@ -142,8 +142,8 @@ export default async function PublicVerifyPage({ params }: PageProps) {
 
             {/* Certificate Details */}
             <div className="space-y-4 pt-2">
-              <div className="border border-border/80 rounded-xl p-5 bg-canvas/40 space-y-3">
-                <div className="flex items-baseline justify-between border-b border-border/60 pb-3">
+              <div className="border border-line/80 rounded-xl p-5 bg-canvas/40 space-y-3">
+                <div className="flex items-baseline justify-between border-b border-line/60 pb-3">
                   <div>
                     <span className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Holder</span>
                     <h3 className="text-lg font-bold text-ink">{cert.recipientName}</h3>
@@ -157,7 +157,7 @@ export default async function PublicVerifyPage({ params }: PageProps) {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
                   <div>
-                    <span className="text-ink-3 block">Program:</span>
+                    <span className="text-ink-3 block">Programme:</span>
                     <span className="font-medium text-ink">{cert.programName}</span>
                   </div>
                   <div>

@@ -21,7 +21,7 @@ export default async function CertificatePage() {
   if (!currentEnrollment) {
     return (
       <div className="mx-auto max-w-xl py-12 text-center space-y-4">
-        <p className="text-sm text-ink-3">No active enrollment found for this organization.</p>
+        <p className="text-sm text-ink-3">No active enrolment found for this organisation.</p>
         <Link href="/" className="text-sm font-semibold text-brand-600 hover:text-brand-700">
           Go to Home
         </Link>
@@ -43,7 +43,7 @@ export default async function CertificatePage() {
             Back to My Plan
           </Link>
           <h1 className="font-display text-2xl font-bold text-ink">Certificate of Completion</h1>
-          <p className="text-sm text-ink-3">Official certification for the Entrust TRADE Program.</p>
+          <p className="text-sm text-ink-3">Official certification for the Entrust TRADE programme.</p>
         </div>
 
         {cert && (
@@ -51,7 +51,7 @@ export default async function CertificatePage() {
             <Link
               href={`/verify/${cert.code}`}
               target="_blank"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-semibold text-ink hover:bg-canvas transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-surface text-xs font-semibold text-ink hover:bg-canvas transition-colors"
             >
               Verify Publicly
             </Link>
@@ -131,7 +131,7 @@ export default async function CertificatePage() {
               </p>
             </div>
 
-            <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/80 text-left">
+            <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-line/80 text-left">
               <div>
                 <span className="text-[11px] text-ink-3 block uppercase tracking-wider font-semibold">Date of Issuance</span>
                 <span className="text-xs font-bold text-ink">

@@ -22,6 +22,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button, Card, StatusBadge, cn } from "@entrust/ui";
+import { StaffNotice } from "@/components/staff-notice";
+import { humanise, totalsByCurrency } from "@/lib/money";
 import { browserApi, errorText } from "@/lib/summit-api";
 import type {
   CreateExportOutcomeInput,
@@ -41,25 +43,30 @@ import {
 interface OutcomesDashboardProps {
   initialOutcomes: OutcomeView[];
   organizationId: string;
+  organizationName: string;
+  /** A reviewer reads a business's outcomes and changes nothing. */
+  readOnly: boolean;
+  /** An administrator or facilitator working in a business's outcomes. What they add is recorded against it. */
+  actingAsStaff: boolean;
 }
 
 const FINANCING_STATUS_CONFIG: Record<string, { label: string; tone: "idle" | "info" | "warn" | "ok" | "product" | "danger" }> = {
-  not_started: { label: "Not Started", tone: "idle" },
-  application_prepared: { label: "Application Prepared", tone: "info" },
-  submitted: { label: "Submitted to Lender", tone: "warn" },
-  approved: { label: "Approved (Undisbursed)", tone: "product" },
+  not_started: { label: "Not started", tone: "idle" },
+  application_prepared: { label: "Application prepared", tone: "info" },
+  submitted: { label: "Sent to the lender", tone: "warn" },
+  approved: { label: "Approved, not paid out", tone: "product" },
   declined: { label: "Declined", tone: "danger" },
-  disbursed: { label: "Disbursed / Active", tone: "ok" },
+  disbursed: { label: "Paid out", tone: "ok" },
   cancelled: { label: "Cancelled", tone: "idle" },
 };
 
 const EXPORT_STATUS_CONFIG: Record<string, { label: string; tone: "idle" | "info" | "warn" | "ok" | "product" | "danger" }> = {
-  planned: { label: "Planned Deal", tone: "idle" },
-  preparing: { label: "Production & Prep", tone: "info" },
-  shipped: { label: "Shipped (Unpaid)", tone: "warn" },
-  delivered: { label: "Delivered to Buyer", tone: "product" },
-  payment_pending: { label: "Payment Pending", tone: "warn" },
-  paid: { label: "Proceeds Paid & Cleared", tone: "ok" },
+  planned: { label: "Planned", tone: "idle" },
+  preparing: { label: "Being prepared", tone: "info" },
+  shipped: { label: "Shipped, not paid", tone: "warn" },
+  delivered: { label: "Delivered", tone: "product" },
+  payment_pending: { label: "Payment pending", tone: "warn" },
+  paid: { label: "Paid", tone: "ok" },
   disputed: { label: "Disputed", tone: "danger" },
   cancelled: { label: "Cancelled", tone: "idle" },
 };
@@ -67,6 +74,9 @@ const EXPORT_STATUS_CONFIG: Record<string, { label: string; tone: "idle" | "info
 export function OutcomesDashboard({
   initialOutcomes,
   organizationId,
+  organizationName,
+  readOnly,
+  actingAsStaff,
 }: OutcomesDashboardProps) {
   const [outcomes, setOutcomes] = useState<OutcomeView[]>(initialOutcomes);
   const [activeTab, setActiveTab] = useState<"financing" | "export">("financing");
@@ -333,96 +343,111 @@ export function OutcomesDashboard({
   const totalExportShipped = exportOutcomes.reduce((acc, c) => acc + (c.valueShipped ?? 0), 0);
   const totalExportPaid = exportOutcomes.reduce((acc, c) => acc + (c.valuePaid ?? 0), 0);
 
+  const hasAny = outcomes.length > 0;
+  const tabHasItems = activeTab === "financing" ? financingOutcomes.length > 0 : exportOutcomes.length > 0;
+
   return (
     <div className="space-y-6">
-      {/* Metric summary banner */}
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Card className="p-4 bg-surface">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-3">Financing Approved</div>
-          <div className="mt-1 font-display text-2xl font-bold text-ink">
-            ${totalFinancingApproved.toLocaleString()}
-          </div>
-          <div className="text-xs text-ink-2 mt-0.5">
-            Requested: ${totalFinancingRequested.toLocaleString()}
-          </div>
-        </Card>
-        <Card className="p-4 bg-surface border-l-4 border-l-brand-600">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-3">Financing Disbursed</div>
-          <div className="mt-1 font-display text-2xl font-bold text-brand-700">
-            ${totalFinancingDisbursed.toLocaleString()}
-          </div>
-          <div className="text-xs text-ink-2 mt-0.5">Cleared liquidity in account</div>
-        </Card>
-        <Card className="p-4 bg-surface">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-3">Export Cargo Shipped</div>
-          <div className="mt-1 font-display text-2xl font-bold text-ink">
-            ${totalExportShipped.toLocaleString()}
-          </div>
-          <div className="text-xs text-ink-2 mt-0.5">Vessel / air cargo dispatched</div>
-        </Card>
-        <Card className="p-4 bg-surface border-l-4 border-l-emerald-600">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-3">Proceeds Received</div>
-          <div className="mt-1 font-display text-2xl font-bold text-emerald-700">
-            ${totalExportPaid.toLocaleString()}
-          </div>
-          <div className="text-xs text-ink-2 mt-0.5">Cleared foreign exchange receipts</div>
-        </Card>
-      </div>
+      <StaffNotice readOnly={readOnly} actingAsStaff={actingAsStaff} organizationName={organizationName} />
 
-      {/* Tabs Switcher & Action Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-3">
-        <div className="flex items-center gap-2">
+      {/* Figures: only once there is something to count */}
+      {hasAny && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Card className="p-4">
+            <div className="text-xs font-semibold text-ink-3">Approved by lenders</div>
+            <div className="mt-1 break-words font-display text-xl font-bold leading-tight text-ink">
+              {totalsByCurrency(financingOutcomes.map((o) => ({ currency: o.currency, amount: o.amountApproved }))).map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+            <div className="mt-1 text-xs text-ink-2">
+              Asked for: {totalsByCurrency(financingOutcomes.map((o) => ({ currency: o.currency, amount: o.amountRequested })), "nothing yet").join(" + ")}
+            </div>
+          </Card>
+          <Card className="border-l-4 border-l-brand-600 p-4">
+            <div className="text-xs font-semibold text-ink-3">Money received from lenders</div>
+            <div className="mt-1 break-words font-display text-xl font-bold leading-tight text-brand-700">
+              {totalsByCurrency(financingOutcomes.map((o) => ({ currency: o.currency, amount: o.amountDisbursed }))).map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+            <div className="mt-1 text-xs text-ink-2">Paid into your account</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs font-semibold text-ink-3">Goods shipped</div>
+            <div className="mt-1 break-words font-display text-xl font-bold leading-tight text-ink">
+              {totalsByCurrency(exportOutcomes.map((o) => ({ currency: o.currency, amount: o.valueShipped }))).map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+            <div className="mt-1 text-xs text-ink-2">Value of goods sent to buyers</div>
+          </Card>
+          <Card className="border-l-4 border-l-emerald-600 p-4">
+            <div className="text-xs font-semibold text-ink-3">Payment received from buyers</div>
+            <div className="mt-1 break-words font-display text-xl font-bold leading-tight text-emerald-700">
+              {totalsByCurrency(exportOutcomes.map((o) => ({ currency: o.currency, amount: o.valuePaid }))).map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+            <div className="mt-1 text-xs text-ink-2">Money from buyers that has reached you</div>
+          </Card>
+        </div>
+      )}
+
+      {/* The two lists, and the button that adds to the one you are on */}
+      <div className="flex flex-col gap-3 border-b border-line pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div role="group" aria-label="Show" className="grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1 sm:flex">
           <button
             type="button"
             onClick={() => setActiveTab("financing")}
+            aria-pressed={activeTab === "financing"}
             className={cn(
-              "px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2",
-              activeTab === "financing"
-                ? "bg-brand-600 text-white shadow-xs"
-                : "bg-canvas text-ink-2 hover:bg-canvas-2"
+              "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-2 text-center text-sm font-semibold leading-tight transition-colors sm:min-h-10 sm:flex-row sm:gap-2 sm:px-4",
+              activeTab === "financing" ? "bg-surface text-ink shadow-xs" : "text-ink-2 hover:text-ink",
             )}
           >
-            <Landmark className="size-4" />
-            Trade Financing ({financingOutcomes.length})
+            <Landmark className="size-4" aria-hidden="true" />
+            Trade financing ({financingOutcomes.length})
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("export")}
+            aria-pressed={activeTab === "export"}
             className={cn(
-              "px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2",
-              activeTab === "export"
-                ? "bg-brand-600 text-white shadow-xs"
-                : "bg-canvas text-ink-2 hover:bg-canvas-2"
+              "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-2 text-center text-sm font-semibold leading-tight transition-colors sm:min-h-10 sm:flex-row sm:gap-2 sm:px-4",
+              activeTab === "export" ? "bg-surface text-ink shadow-xs" : "text-ink-2 hover:text-ink",
             )}
           >
-            <Ship className="size-4" />
-            Export Shipments & Proceeds ({exportOutcomes.length})
+            <Ship className="size-4" aria-hidden="true" />
+            Export shipments ({exportOutcomes.length})
           </button>
         </div>
 
-        <div>
-          {activeTab === "financing" ? (
-            <Button variant="primary" onClick={() => setFinancingModalOpen(true)} className="flex items-center gap-1.5">
-              <Plus className="size-4" />
-              New Financing Application
-            </Button>
-          ) : (
-            <Button variant="primary" onClick={() => setExportModalOpen(true)} className="flex items-center gap-1.5">
-              <Plus className="size-4" />
-              Record Export Deal
-            </Button>
-          )}
-        </div>
+        {!readOnly && tabHasItems && (
+          <div>
+            {activeTab === "financing" ? (
+              <Button variant="primary" onClick={() => setFinancingModalOpen(true)} className="flex w-full items-center justify-center gap-1.5 sm:w-auto">
+                <Plus className="size-4" aria-hidden="true" />
+                New financing application
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => setExportModalOpen(true)} className="flex w-full items-center justify-center gap-1.5 sm:w-auto">
+                <Plus className="size-4" aria-hidden="true" />
+                Record an export deal
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Financing Outcomes Tab */}
       {activeTab === "financing" && (
         <Card className="overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-line flex items-center justify-between">
             <div>
-              <h3 className="font-display font-bold text-ink">Trade Finance Applications</h3>
+              <h3 className="font-display font-bold text-ink">Trade finance applications</h3>
               <p className="text-xs text-ink-2 mt-0.5">
-                Separate credit committee approval from actual bank disbursement.
+                Approval by the lender and the money actually paid out are tracked separately.
               </p>
             </div>
           </div>
@@ -430,16 +455,18 @@ export function OutcomesDashboard({
           {financingOutcomes.length === 0 ? (
             <div className="p-12 text-center">
               <Landmark className="size-12 mx-auto text-ink-3/40 mb-3" />
-              <h4 className="font-display text-base font-bold text-ink">No trade finance applications recorded</h4>
+              <h4 className="font-display text-base font-bold text-ink">No trade finance applications yet</h4>
               <p className="text-sm text-ink-2 max-w-md mx-auto mt-1">
                 Record working capital, PO finance, invoice discounting, or LC facilities applied for during your trade journey.
               </p>
-              <Button variant="primary" onClick={() => setFinancingModalOpen(true)} className="mt-4">
-                Record First Application
+              {!readOnly && (
+<Button variant="primary" onClick={() => setFinancingModalOpen(true)} className="mt-4">
+                Record your first application
               </Button>
+)}
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-line">
               {financingOutcomes.map((item) => {
                 const conf = FINANCING_STATUS_CONFIG[item.status] ?? { label: item.status, tone: "idle" as const };
                 return (
@@ -448,27 +475,27 @@ export function OutcomesDashboard({
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-display text-lg font-bold text-ink">{item.lenderName}</span>
-                          <span className="rounded bg-canvas-2 px-2 py-0.5 text-xs font-semibold uppercase text-ink-2">
+                          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-semibold uppercase text-ink-2">
                             {item.financingType?.replace("_", " ")}
                           </span>
                           <StatusBadge tone={conf.tone}>{conf.label}</StatusBadge>
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
-                            Evidence: {item.evidenceTier}
+                            Evidence: {humanise(item.evidenceTier)}
                           </span>
                         </div>
 
                         {/* Milestone separation callouts */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                           <div className="rounded bg-canvas p-2.5 text-xs">
-                            <span className="text-ink-3 block">Requested Facility:</span>
+                            <span className="text-ink-3 block">Asked for</span>
                             <span className="font-bold text-ink text-sm">
                               {item.currency} {item.amountRequested?.toLocaleString() ?? "—"}
                             </span>
                           </div>
                           <div className="rounded bg-canvas p-2.5 text-xs border-l-2 border-l-brand-500">
-                            <span className="text-ink-3 block">Approved by Credit:</span>
+                            <span className="text-ink-3 block">Approved by the lender</span>
                             <span className="font-bold text-brand-700 text-sm">
-                              {item.amountApproved ? `${item.currency} ${item.amountApproved.toLocaleString()}` : "Pending Approval"}
+                              {item.amountApproved ? `${item.currency} ${item.amountApproved.toLocaleString()}` : "Waiting for approval"}
                             </span>
                             {item.approvalDate && (
                               <span className="block text-[10px] text-ink-3 mt-0.5">
@@ -477,9 +504,9 @@ export function OutcomesDashboard({
                             )}
                           </div>
                           <div className="rounded bg-canvas p-2.5 text-xs border-l-2 border-l-emerald-500">
-                            <span className="text-ink-3 block">Disbursed to Account:</span>
+                            <span className="text-ink-3 block">Paid into your account</span>
                             <span className="font-bold text-emerald-700 text-sm">
-                              {item.amountDisbursed ? `${item.currency} ${item.amountDisbursed.toLocaleString()}` : "Not Yet Disbursed"}
+                              {item.amountDisbursed ? `${item.currency} ${item.amountDisbursed.toLocaleString()}` : "Not paid out yet"}
                             </span>
                             {item.disbursementDate && (
                               <span className="block text-[10px] text-ink-3 mt-0.5">
@@ -500,17 +527,19 @@ export function OutcomesDashboard({
                           className="flex items-center gap-1.5 text-xs"
                         >
                           <History className="size-3.5" />
-                          Audit Log ({item.events?.length ?? 1})
+                          History ({item.events?.length ?? 1})
                         </Button>
-                        <Button
+                        {!readOnly && (
+<Button
                           variant="primary"
                           size="sm"
                           onClick={() => openUpdateModal(item)}
                           className="flex items-center gap-1.5 text-xs"
                         >
                           <Coins className="size-3.5" />
-                          Update Milestones
+                          Update progress
                         </Button>
+)}
                       </div>
                     </div>
                   </div>
@@ -524,11 +553,11 @@ export function OutcomesDashboard({
       {/* Export Outcomes Tab */}
       {activeTab === "export" && (
         <Card className="overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-line flex items-center justify-between">
             <div>
-              <h3 className="font-display font-bold text-ink">Export Shipments & Commercial Proceeds</h3>
+              <h3 className="font-display font-bold text-ink">Export shipments and payments</h3>
               <p className="text-xs text-ink-2 mt-0.5">
-                Separate vessel shipment from verified export proceeds settlement.
+                Goods shipped and payment received from the buyer are tracked separately.
               </p>
             </div>
           </div>
@@ -536,16 +565,18 @@ export function OutcomesDashboard({
           {exportOutcomes.length === 0 ? (
             <div className="p-12 text-center">
               <Ship className="size-12 mx-auto text-ink-3/40 mb-3" />
-              <h4 className="font-display text-base font-bold text-ink">No export shipments recorded yet</h4>
+              <h4 className="font-display text-base font-bold text-ink">No export shipments yet</h4>
               <p className="text-sm text-ink-2 max-w-md mx-auto mt-1">
                 Link real export consignments to your buyer opportunities to advance your export journey to Stage 8, 9, and 10.
               </p>
-              <Button variant="primary" onClick={() => setExportModalOpen(true)} className="mt-4">
-                Record First Consignment
+              {!readOnly && (
+<Button variant="primary" onClick={() => setExportModalOpen(true)} className="mt-4">
+                Record your first export deal
               </Button>
+)}
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-line">
               {exportOutcomes.map((item) => {
                 const conf = EXPORT_STATUS_CONFIG[item.status] ?? { label: item.status, tone: "idle" as const };
                 return (
@@ -554,12 +585,12 @@ export function OutcomesDashboard({
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-display text-lg font-bold text-ink">{item.buyerName}</span>
-                          <span className="rounded bg-canvas-2 px-2 py-0.5 text-xs font-bold text-ink-2">
+                          <span className="rounded bg-surface-2 px-2 py-0.5 text-xs font-bold text-ink-2">
                             {item.destinationCountry}
                           </span>
                           <StatusBadge tone={conf.tone}>{conf.label}</StatusBadge>
                           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
-                            Evidence: {item.evidenceTier}
+                            Evidence: {humanise(item.evidenceTier)}
                           </span>
                         </div>
 
@@ -570,15 +601,15 @@ export function OutcomesDashboard({
                         {/* Milestone separation callouts */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                           <div className="rounded bg-canvas p-2.5 text-xs">
-                            <span className="text-ink-3 block">Planned Contract Value:</span>
+                            <span className="text-ink-3 block">Planned deal value</span>
                             <span className="font-bold text-ink text-sm">
                               {item.currency} {item.valuePlanned?.toLocaleString() ?? "—"}
                             </span>
                           </div>
                           <div className="rounded bg-canvas p-2.5 text-xs border-l-2 border-l-amber-500">
-                            <span className="text-ink-3 block">Value Shipped (Stage 8):</span>
+                            <span className="text-ink-3 block">Shipped</span>
                             <span className="font-bold text-amber-700 text-sm">
-                              {item.valueShipped ? `${item.currency} ${item.valueShipped.toLocaleString()}` : "Not Yet Shipped"}
+                              {item.valueShipped ? `${item.currency} ${item.valueShipped.toLocaleString()}` : "Not shipped yet"}
                             </span>
                             {item.shipmentDate && (
                               <span className="block text-[10px] text-ink-3 mt-0.5">
@@ -587,9 +618,9 @@ export function OutcomesDashboard({
                             )}
                           </div>
                           <div className="rounded bg-canvas p-2.5 text-xs border-l-2 border-l-emerald-500">
-                            <span className="text-ink-3 block">Proceeds Paid (Stage 10):</span>
+                            <span className="text-ink-3 block">Paid by the buyer</span>
                             <span className="font-bold text-emerald-700 text-sm">
-                              {item.valuePaid ? `${item.currency} ${item.valuePaid.toLocaleString()}` : "Payment Outstanding"}
+                              {item.valuePaid ? `${item.currency} ${item.valuePaid.toLocaleString()}` : "Not paid yet"}
                             </span>
                             {item.paymentDate && (
                               <span className="block text-[10px] text-ink-3 mt-0.5">
@@ -610,17 +641,19 @@ export function OutcomesDashboard({
                           className="flex items-center gap-1.5 text-xs"
                         >
                           <History className="size-3.5" />
-                          Audit Log ({item.events?.length ?? 1})
+                          History ({item.events?.length ?? 1})
                         </Button>
-                        <Button
+                        {!readOnly && (
+<Button
                           variant="primary"
                           size="sm"
                           onClick={() => openUpdateModal(item)}
                           className="flex items-center gap-1.5 text-xs"
                         >
                           <Receipt className="size-3.5" />
-                          Update Shipment/Paid
+                          Update shipment or payment
                         </Button>
+)}
                       </div>
                     </div>
                   </div>
@@ -633,14 +666,14 @@ export function OutcomesDashboard({
 
       {/* New Financing Modal */}
       {financingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl border border-border my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="font-display text-lg font-bold text-ink">New Financing Application</h3>
+        <div className="fixed inset-0 z-50 flex overflow-y-auto bg-ink/60 p-4">
+          <div className="m-auto w-full max-w-lg rounded-xl bg-surface p-5 shadow-2xl border border-line sm:p-6" role="dialog" aria-modal="true" aria-label="New financing application">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
+              <h3 className="font-display text-lg font-bold text-ink">New financing application</h3>
               <button
                 type="button"
                 onClick={() => setFinancingModalOpen(false)}
-                className="text-ink-3 hover:text-ink text-xl font-bold"
+                aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-md text-xl font-bold text-ink-3 hover:bg-surface-2 hover:text-ink"
               >
                 ×
               </button>
@@ -654,42 +687,42 @@ export function OutcomesDashboard({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Financial Institution / Lender *</label>
+                <label className="block text-xs font-semibold text-ink mb-1">Lender *</label>
                 <input
                   required
                   type="text"
                   placeholder="e.g. Equity Bank Kenya, Ecobank, Afreximbank"
                   value={financingForm.lenderName}
                   onChange={(e) => setFinancingForm({ ...financingForm, lenderName: e.target.value })}
-                  className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Facility Type *</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Type of financing *</label>
                   <select
                     value={financingForm.financingType}
                     onChange={(e) => setFinancingForm({ ...financingForm, financingType: e.target.value as any })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {FINANCING_TYPES.map((t) => (
                       <option key={t} value={t}>
-                        {t.replace(/_/g, " ").toUpperCase()}
+                        {humanise(t)}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Evidence Quality</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Evidence</label>
                   <select
                     value={financingForm.evidenceTier}
                     onChange={(e) => setFinancingForm({ ...financingForm, evidenceTier: e.target.value as any })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {OUTCOME_EVIDENCE_TIERS.map((tier) => (
                       <option key={tier} value={tier}>
-                        {tier.replace(/_/g, " ")}
+                        {humanise(tier)}
                       </option>
                     ))}
                   </select>
@@ -698,7 +731,7 @@ export function OutcomesDashboard({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-ink mb-1">Amount Requested *</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Amount asked for *</label>
                   <input
                     required
                     type="number"
@@ -706,7 +739,7 @@ export function OutcomesDashboard({
                     placeholder="e.g. 100000"
                     value={financingForm.amountRequested}
                     onChange={(e) => setFinancingForm({ ...financingForm, amountRequested: e.target.value })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -714,7 +747,7 @@ export function OutcomesDashboard({
                   <select
                     value={financingForm.currency}
                     onChange={(e) => setFinancingForm({ ...financingForm, currency: e.target.value })}
-                    className="w-full h-9 rounded-md border border-border px-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -726,22 +759,22 @@ export function OutcomesDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Facility Purpose / Notes</label>
+                <label className="block text-xs font-semibold text-ink mb-1">What it is for</label>
                 <textarea
                   rows={2}
                   placeholder="Pre-shipment inventory purchase, packaging financing, etc."
                   value={financingForm.notes}
                   onChange={(e) => setFinancingForm({ ...financingForm, notes: e.target.value })}
-                  className="w-full rounded-md border border-border p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full rounded-md border border-line bg-surface p-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
                 <Button variant="secondary" type="button" onClick={() => setFinancingModalOpen(false)}>
                   Cancel
                 </Button>
                 <Button variant="primary" type="submit" loading={isSubmitting}>
-                  Record Application
+                  Save application
                 </Button>
               </div>
             </form>
@@ -751,14 +784,14 @@ export function OutcomesDashboard({
 
       {/* New Export Deal Modal */}
       {exportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl border border-border my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="font-display text-lg font-bold text-ink">Record Export Consignment</h3>
+        <div className="fixed inset-0 z-50 flex overflow-y-auto bg-ink/60 p-4">
+          <div className="m-auto w-full max-w-lg rounded-xl bg-surface p-5 shadow-2xl border border-line sm:p-6" role="dialog" aria-modal="true" aria-label="Record an export deal">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
+              <h3 className="font-display text-lg font-bold text-ink">Record an export deal</h3>
               <button
                 type="button"
                 onClick={() => setExportModalOpen(false)}
-                className="text-ink-3 hover:text-ink text-xl font-bold"
+                aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-md text-xl font-bold text-ink-3 hover:bg-surface-2 hover:text-ink"
               >
                 ×
               </button>
@@ -771,20 +804,20 @@ export function OutcomesDashboard({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Overseas Buyer Name *</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Overseas buyer *</label>
                   <input
                     required
                     type="text"
                     placeholder="e.g. Kaffee Welt GmbH"
                     value={exportForm.buyerName}
                     onChange={(e) => setExportForm({ ...exportForm, buyerName: e.target.value })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Destination Country *</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Destination country *</label>
                   <input
                     required
                     type="text"
@@ -792,33 +825,33 @@ export function OutcomesDashboard({
                     placeholder="e.g. DE, US, AE"
                     value={exportForm.destinationCountry}
                     onChange={(e) => setExportForm({ ...exportForm, destinationCountry: e.target.value.toUpperCase() })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Product Description *</label>
+                <label className="block text-xs font-semibold text-ink mb-1">Product *</label>
                 <input
                   required
                   type="text"
                   placeholder="e.g. Grade 1 Washed Coffee Beans (1 Container)"
                   value={exportForm.productDescription}
                   onChange={(e) => setExportForm({ ...exportForm, productDescription: e.target.value })}
-                  className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-ink mb-1">Planned Deal Value</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Planned deal value</label>
                   <input
                     type="number"
                     min={0}
                     placeholder="e.g. 60000"
                     value={exportForm.valuePlanned}
                     onChange={(e) => setExportForm({ ...exportForm, valuePlanned: e.target.value })}
-                    className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -826,7 +859,7 @@ export function OutcomesDashboard({
                   <select
                     value={exportForm.currency}
                     onChange={(e) => setExportForm({ ...exportForm, currency: e.target.value })}
-                    className="w-full h-9 rounded-md border border-border px-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -836,22 +869,22 @@ export function OutcomesDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Consignment Notes</label>
+                <label className="block text-xs font-semibold text-ink mb-1">Notes</label>
                 <textarea
                   rows={2}
                   placeholder="Port of departure, carrier, terms (FOB/CIF)..."
                   value={exportForm.notes}
                   onChange={(e) => setExportForm({ ...exportForm, notes: e.target.value })}
-                  className="w-full rounded-md border border-border p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full rounded-md border border-line bg-surface p-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
                 <Button variant="secondary" type="button" onClick={() => setExportModalOpen(false)}>
                   Cancel
                 </Button>
                 <Button variant="primary" type="submit" loading={isSubmitting}>
-                  Save Consignment
+                  Save export deal
                 </Button>
               </div>
             </form>
@@ -861,12 +894,12 @@ export function OutcomesDashboard({
 
       {/* Update Milestone Modal (Financing & Export) */}
       {selectedOutcomeForUpdate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl border border-border my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div className="fixed inset-0 z-50 flex overflow-y-auto bg-ink/60 p-4">
+          <div className="m-auto w-full max-w-lg rounded-xl bg-surface p-5 shadow-2xl border border-line sm:p-6" role="dialog" aria-modal="true" aria-label="Update progress">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
               <div>
                 <h3 className="font-display text-lg font-bold text-ink">
-                  Update {selectedOutcomeForUpdate.kind === "financing" ? "Financing" : "Export"} Milestones
+                  Update {selectedOutcomeForUpdate.kind === "financing" ? "financing" : "export"} progress
                 </h3>
                 <p className="text-xs text-ink-2 mt-0.5">
                   {selectedOutcomeForUpdate.kind === "financing"
@@ -877,7 +910,7 @@ export function OutcomesDashboard({
               <button
                 type="button"
                 onClick={() => setSelectedOutcomeForUpdate(null)}
-                className="text-ink-3 hover:text-ink text-xl font-bold"
+                aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-md text-xl font-bold text-ink-3 hover:bg-surface-2 hover:text-ink"
               >
                 ×
               </button>
@@ -892,13 +925,13 @@ export function OutcomesDashboard({
 
               {selectedOutcomeForUpdate.kind === "financing" ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Application Status *</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Status *</label>
                       <select
                         value={updateFinancingForm.status}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, status: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {FINANCING_OUTCOME_STATUSES.map((st) => (
                           <option key={st} value={st}>
@@ -908,15 +941,15 @@ export function OutcomesDashboard({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Evidence Tier *</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
                       <select
                         value={updateFinancingForm.evidenceTier}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, evidenceTier: e.target.value as any })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {OUTCOME_EVIDENCE_TIERS.map((tier) => (
                           <option key={tier} value={tier}>
-                            {tier.replace(/_/g, " ")}
+                            {humanise(tier)}
                           </option>
                         ))}
                       </select>
@@ -932,70 +965,70 @@ export function OutcomesDashboard({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Amount Approved</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Amount approved</label>
                       <input
                         type="number"
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountApproved}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, amountApproved: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Approval Date</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Approval date</label>
                       <input
                         type="datetime-local"
                         value={updateFinancingForm.approvalDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, approvalDate: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Amount Disbursed</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Amount paid out</label>
                       <input
                         type="number"
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountDisbursed}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, amountDisbursed: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Disbursement Date</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Payout date</label>
                       <input
                         type="datetime-local"
                         value={updateFinancingForm.disbursementDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, disbursementDate: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Transition Note / Reference</label>
+                    <label className="block text-xs font-semibold text-ink mb-1">Note or reference</label>
                     <textarea
                       rows={2}
                       placeholder="e.g. Facility agreement executed, funds disbursed via RTGS..."
                       value={updateFinancingForm.notes}
                       onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, notes: e.target.value })}
-                      className="w-full rounded-md border border-border p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full rounded-md border border-line bg-surface p-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Consignment Status *</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Status *</label>
                       <select
                         value={updateExportForm.status}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, status: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {EXPORT_OUTCOME_STATUSES.map((st) => (
                           <option key={st} value={st}>
@@ -1005,15 +1038,15 @@ export function OutcomesDashboard({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Evidence Tier *</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
                       <select
                         value={updateExportForm.evidenceTier}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, evidenceTier: e.target.value as any })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {OUTCOME_EVIDENCE_TIERS.map((tier) => (
                           <option key={tier} value={tier}>
-                            {tier.replace(/_/g, " ")}
+                            {humanise(tier)}
                           </option>
                         ))}
                       </select>
@@ -1029,79 +1062,79 @@ export function OutcomesDashboard({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Value Shipped (Stage 8)</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Value shipped</label>
                       <input
                         type="number"
                         placeholder="e.g. 60000"
                         value={updateExportForm.valueShipped}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valueShipped: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Shipment Date</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Shipment date</label>
                       <input
                         type="datetime-local"
                         value={updateExportForm.shipmentDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, shipmentDate: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Delivery Date (Stage 9)</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Delivery date</label>
                       <input
                         type="datetime-local"
                         value={updateExportForm.deliveryDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, deliveryDate: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Proceeds Settled (Stage 10)</label>
+                      <label className="block text-xs font-semibold text-ink mb-1">Payment received</label>
                       <input
                         type="number"
                         placeholder="e.g. 60000"
                         value={updateExportForm.valuePaid}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valuePaid: e.target.value })}
-                        className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Payment Date</label>
+                    <label className="block text-xs font-semibold text-ink mb-1">Payment date</label>
                     <input
                       type="datetime-local"
                       value={updateExportForm.paymentDate}
                       onChange={(e) => setUpdateExportForm({ ...updateExportForm, paymentDate: e.target.value })}
-                      className="w-full h-9 rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Transition Note / Bill of Lading</label>
+                    <label className="block text-xs font-semibold text-ink mb-1">Note or bill of lading</label>
                     <textarea
                       rows={2}
                       placeholder="e.g. BL issued, Swift message MT103 received..."
                       value={updateExportForm.notes}
                       onChange={(e) => setUpdateExportForm({ ...updateExportForm, notes: e.target.value })}
-                      className="w-full rounded-md border border-border p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full rounded-md border border-line bg-surface p-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
                 <Button variant="secondary" type="button" onClick={() => setSelectedOutcomeForUpdate(null)}>
                   Cancel
                 </Button>
                 <Button variant="primary" type="submit" loading={isSubmitting}>
-                  Save Milestones
+                  Save progress
                 </Button>
               </div>
             </form>
@@ -1111,11 +1144,11 @@ export function OutcomesDashboard({
 
       {/* Events Audit Trail Modal */}
       {selectedOutcomeForEvents && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl border border-border my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div className="fixed inset-0 z-50 flex overflow-y-auto bg-ink/60 p-4">
+          <div className="m-auto w-full max-w-lg rounded-xl bg-surface p-5 shadow-2xl border border-line sm:p-6" role="dialog" aria-modal="true" aria-label="History">
+            <div className="flex items-center justify-between pb-3 border-b border-line">
               <div>
-                <h3 className="font-display text-lg font-bold text-ink">Outcome Audit History</h3>
+                <h3 className="font-display text-lg font-bold text-ink">History</h3>
                 <p className="text-xs text-ink-2 mt-0.5">
                   {selectedOutcomeForEvents.kind === "financing"
                     ? selectedOutcomeForEvents.lenderName
@@ -1125,7 +1158,7 @@ export function OutcomesDashboard({
               <button
                 type="button"
                 onClick={() => setSelectedOutcomeForEvents(null)}
-                className="text-ink-3 hover:text-ink text-xl font-bold"
+                aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-md text-xl font-bold text-ink-3 hover:bg-surface-2 hover:text-ink"
               >
                 ×
               </button>
@@ -1138,7 +1171,7 @@ export function OutcomesDashboard({
                 <p className="text-xs text-ink-3 italic">No status change events recorded.</p>
               ) : (
                 eventsList.map((ev, idx) => (
-                  <div key={ev.id} className="rounded-lg bg-canvas p-3 border border-border text-xs space-y-1">
+                  <div key={ev.id} className="rounded-lg bg-canvas p-3 border border-line text-xs space-y-1">
                     <div className="flex items-center justify-between font-bold text-ink">
                       <span>
                         {ev.previousStatus ? `${ev.previousStatus} → ` : ""}
@@ -1149,8 +1182,8 @@ export function OutcomesDashboard({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded bg-canvas-2 px-2 py-0.5 text-[10px] font-semibold text-ink-2">
-                        Evidence: {ev.evidenceTier}
+                      <span className="rounded bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-ink-2">
+                        Evidence: {humanise(ev.evidenceTier)}
                       </span>
                     </div>
                     {ev.notes && <p className="text-ink-2 pt-0.5">{ev.notes}</p>}
@@ -1159,7 +1192,7 @@ export function OutcomesDashboard({
               )}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-border mt-4">
+            <div className="flex justify-end pt-4 border-t border-line mt-4">
               <Button variant="secondary" onClick={() => setSelectedOutcomeForEvents(null)}>
                 Close
               </Button>

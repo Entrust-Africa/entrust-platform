@@ -79,7 +79,7 @@ export function CreateCohortDialog({
                   No programs exist yet or you chose to create a new program. First define the program, then create cohorts within it.
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Program Name</label>
+                  <label className="block text-xs font-semibold text-ink">Programme name</label>
                   <input
                     type="text"
                     name="name"
@@ -93,7 +93,7 @@ export function CreateCohortDialog({
                   <textarea
                     name="description"
                     rows={3}
-                    placeholder="Program goals, target SME profile, or curriculum details..."
+                    placeholder="Programme goals, target SME profile or curriculum details…"
                     className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
@@ -109,7 +109,7 @@ export function CreateCohortDialog({
                     </Button>
                   )}
                   <Button type="submit" variant="primary" disabled={pending}>
-                    {pending ? "Creating..." : "Save Program"}
+                    {pending ? "Creating…" : "Save programme"}
                   </Button>
                 </div>
               </form>
@@ -117,13 +117,13 @@ export function CreateCohortDialog({
               <form onSubmit={handleCohortSubmit} className="mt-4 space-y-4">
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-semibold text-ink">Program</label>
+                    <label className="block text-xs font-semibold text-ink">Programme</label>
                     <button
                       type="button"
                       onClick={() => setShowNewProgram(true)}
                       className="text-xs text-brand-600 hover:underline"
                     >
-                      + New Program
+                      + New programme
                     </button>
                   </div>
                   <select

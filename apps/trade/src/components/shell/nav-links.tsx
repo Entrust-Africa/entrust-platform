@@ -7,6 +7,7 @@ import {
   BookOpen,
   Briefcase,
   Calculator,
+  CalendarRange,
   CheckSquare,
   ClipboardList,
   Coins,
@@ -14,6 +15,8 @@ import {
   FlaskConical,
   FolderGit2,
   GraduationCap,
+  Handshake,
+  Inbox,
   LayoutDashboard,
   ListChecks,
   ShieldCheck,
@@ -55,7 +58,7 @@ interface NavGroup {
 function committeeLinks(): NavItem[] {
   return [
     { href: "/summit/committee", label: "Committee", icon: Gavel, match: (path) => path.startsWith("/summit/committee") },
-    { href: "/summit/dashboard", label: "Dashboard", icon: BarChart3, match: (path) => path.startsWith("/summit/dashboard") },
+    { href: "/summit/dashboard", label: "Selection dashboard", icon: BarChart3, match: (path) => path.startsWith("/summit/dashboard") },
     { href: "/summit/reports", label: "Summit reports", icon: FileText, match: (path) => path.startsWith("/summit/reports") },
   ];
 }
@@ -86,7 +89,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/register", label: "SME register", icon: ClipboardList, match: (path) => path.startsWith("/register") },
           { href: "/diagnostics", label: "Diagnostics", icon: ListChecks, match: (path) => path.startsWith("/diagnostics") },
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
-          { href: "/reports", label: "Reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
+          { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
           simulator,
         ],
       },
@@ -94,7 +97,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
     // sponsors, delegates, the directory).
     const summit: NavItem[] = [
-      { href: "/summit/review", label: "Applications", icon: ClipboardList, match: (path) => path.startsWith("/summit/review") },
+      { href: "/summit/review", label: "Applications", icon: Inbox, match: (path) => path.startsWith("/summit/review") },
     ];
     // The committee's screens are for its members and the administrators and facilitators who run the selection.
     if (user?.staffRole === "admin" || user?.staffRole === "facilitator") summit.push(...committeeLinks());
@@ -102,11 +105,11 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     else summit.push(committeeLinks()[2]!);
     // Only an administrator sets application periods.
     if (user?.staffRole === "admin") {
-      summit.push({ href: "/summit/admin/periods", label: "Application periods", icon: FileText, match: (path) => path.startsWith("/summit/admin") });
+      summit.push({ href: "/summit/admin/periods", label: "Application periods", icon: CalendarRange, match: (path) => path.startsWith("/summit/admin") });
     }
     // The ADTIS exhibition, sponsorship and delegate screens are for administrators and facilitators.
     if (user?.staffRole === "admin" || user?.staffRole === "facilitator") {
-      summit.push({ href: "/summit/commerce", label: "Commercial (ADTIS)", icon: Store, match: (path) => path.startsWith("/summit/commerce") });
+      summit.push({ href: "/summit/commerce", label: "Commercial (ADTIS)", icon: Handshake, match: (path) => path.startsWith("/summit/commerce") });
     }
     if (summit.length > 0) groups.push({ heading: "Summit", items: summit });
     groups.push({ items: [account] });
@@ -137,7 +140,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/worksheets", label: "Worksheets", icon: Calculator, match: (path) => path.startsWith("/worksheets") },
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
-    { href: "/outcomes", label: "Outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
+    { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
     simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },
   ];

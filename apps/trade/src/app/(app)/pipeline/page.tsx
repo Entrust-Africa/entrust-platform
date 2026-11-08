@@ -4,7 +4,7 @@ import { tradeGet } from "@/lib/trade-api";
 import { PipelineDashboard } from "@/components/pipeline/pipeline-dashboard";
 import type { ExportJourneyStageView, OpportunityView } from "@/lib/types";
 
-export const metadata = { title: "Commercial Pipeline" };
+export const metadata = { title: "Commercial pipeline" };
 
 interface PipelinePageProps {
   searchParams?: Promise<{ organizationId?: string }>;
@@ -46,9 +46,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink">Commercial Pipeline</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">Commercial pipeline</h1>
         <p className="mt-1 text-sm text-ink-2">
-          Track buyer inquiries, evaluate lead qualification scorecards, and progress across your export journey.
+          Keep track of the buyers you are talking to, score each lead, and see how far you are on your export journey.
         </p>
       </div>
 
@@ -56,6 +56,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
         initialOpportunities={opportunities}
         initialJourney={journey}
         organizationId={activeOrg.id}
+        organizationName={activeOrg.name}
+        readOnly={me.staffRole === "reviewer"}
+        actingAsStaff={me.staffRole === "admin" || me.staffRole === "facilitator"}
       />
     </div>
   );

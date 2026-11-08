@@ -172,7 +172,7 @@ export default async function CohortsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">Program Cohorts</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">Programme cohorts</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-2">The training cohorts you enrol businesses into, and the pilot cohorts that have already run with the businesses in each.</p>
         </div>
         <CreateCohortDialog programs={programs} sponsors={orgs} />
@@ -183,7 +183,7 @@ export default async function CohortsPage() {
           Training cohorts <span className="text-sm font-semibold tabular-nums text-ink-3">{trainingCohorts.length}</span>
         </h2>
         {trainingCohorts.length === 0 ? (
-          <EmptyState title="No training cohorts yet" description="Create a cohort under an export readiness program to begin enrolling businesses." />
+          <EmptyState title="No training cohorts yet" description="Create a cohort under an export readiness programme to begin enrolling businesses." />
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trainingCohorts.map((c) => (

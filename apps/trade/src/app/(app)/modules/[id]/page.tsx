@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, BookOpen, Clock } from "lucide-react";
-import { Button, Card, StatusBadge } from "@entrust/ui";
+import { Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type {
@@ -88,7 +88,7 @@ export default async function ModuleDetailPage({
           href="/modules"
           className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline"
         >
-          <ArrowLeft className="size-3.5" /> Back to Modules
+          <ArrowLeft className="size-3.5" /> All modules
         </Link>
       </div>
 
@@ -100,7 +100,7 @@ export default async function ModuleDetailPage({
               <span className="rounded bg-brand-50 px-2.5 py-1 font-mono text-sm font-bold text-brand-700">
                 {moduleDetail.id}
               </span>
-              <StatusBadge tone="idle">CONTENT IN PRODUCTION</StatusBadge>
+              <StatusBadge tone="idle">Coming soon</StatusBadge>
             </div>
 
             <div>
@@ -113,9 +113,9 @@ export default async function ModuleDetailPage({
             <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-xs font-medium text-amber-900 flex items-start gap-3">
               <AlertCircle className="size-5 shrink-0 text-amber-600 mt-0.5" />
               <div>
-                <div className="font-bold">Content in Production</div>
+                <div className="font-bold">This module isn't open yet</div>
                 <div className="mt-0.5 leading-relaxed">
-                  Entrust's learning package for this module is currently in development. You can preview the syllabus and intended deliverable above, but lessons and exercises cannot be started yet.
+                  The lessons and exercises are still being written. You can see below what it will cover and what you'll hand in.
                 </div>
               </div>
             </div>
@@ -123,7 +123,7 @@ export default async function ModuleDetailPage({
             {moduleDetail.objectives.length > 0 && (
               <div className="border-t border-line pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-3">
-                  What this module will cover:
+                  What this module will cover
                 </h3>
                 <ul className="mt-2 space-y-1.5 text-xs text-ink-2">
                   {moduleDetail.objectives.map((obj, i) => (
@@ -136,11 +136,6 @@ export default async function ModuleDetailPage({
               </div>
             )}
 
-            <div className="pt-2">
-              <Button variant="secondary" disabled>
-                Module cannot be started yet
-              </Button>
-            </div>
           </Card>
         </div>
       )}
