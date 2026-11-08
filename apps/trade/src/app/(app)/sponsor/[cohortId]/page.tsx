@@ -12,7 +12,7 @@ interface CohortDetail {
   program: string;
   country: string;
   disclaimer: string;
-  figures: { enrolled: number; byStatus: Record<string, number>; diagnosticsSubmitted: number; pathwayA: number; pathwayB: number };
+  figures: { enrolled: number | null; byStatus: Record<string, number | null>; diagnosticsSubmitted: number | null; pathwayA: number | null; pathwayB: number | null };
   consenting: { organizationId: string; name: string; smeId: string | null; kinds: string[] }[];
 }
 
@@ -84,11 +84,11 @@ export default async function SponsorCohortPage({ params }: { params: Promise<{ 
   );
 }
 
-function Figure({ label, value }: { label: string; value: number }) {
+function Figure({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
       <dt className="text-xs text-ink-3">{label}</dt>
-      <dd className="font-display text-xl font-bold text-ink">{value}</dd>
+      <dd className="font-display text-xl font-bold text-ink">{value ?? "Under 5"}</dd>
     </div>
   );
 }
