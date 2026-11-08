@@ -13,11 +13,19 @@ import { tradeFetch } from "@/lib/trade-client";
 export function ConfirmEmail({ token, proof, email, afriConnect }: { token: string; proof: string; email: string; afriConnect: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
 
   async function confirm() {
     setPending(true);
+    setError(undefined);
     const result = await tradeFetch<{ token?: string }>("POST", `/public/diagnostic/${encodeURIComponent(token)}/verify-email`, { proof });
-    // A spent or wrong proof changes nothing: carry on with the draft as it is.
+    // The request failed, so nothing is confirmed: stay here, with the proof still in the address, to try again.
+    if (!result.ok) {
+      setError(result.error ?? "Something went wrong. Try again.");
+      setPending(false);
+      return;
+    }
+    // A spent or wrong proof changes nothing (it answers 200 with no token): carry on with the draft as it is.
     router.replace(`/onboarding/${encodeURIComponent(result.data?.token ?? token)}`);
   }
 
@@ -30,6 +38,11 @@ export function ConfirmEmail({ token, proof, email, afriConnect }: { token: stri
           to you, so only you can open it.
           {afriConnect ? " It also creates your Entrust Africa account with this email, so you can sign in later." : ""}
         </p>
+        {error && (
+          <p className="rounded-md bg-danger-50 px-3 py-2 text-sm font-medium text-danger" role="alert">
+            {error}
+          </p>
+        )}
         <Button type="button" size="lg" loading={pending} onClick={() => void confirm()}>
           Confirm and continue
         </Button>
