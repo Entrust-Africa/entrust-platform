@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { Markdown } from "@/components/markdown";
+import { AiAssistant } from "@/components/modules/ai-assistant";
 import { tradeFetch } from "@/lib/trade-client";
 import type {
   KnowledgeCheckAttemptResult,
@@ -115,6 +116,9 @@ export interface ModuleViewerProps {
   isReadOnly: boolean;
   initialProgress?: ModuleProgressView | null;
   initialLessonId?: string;
+  /** The assistant can run the prompts. When it is off they can still be copied. */
+  aiAssistantEnabled?: boolean;
+  organizationId?: string | undefined;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -136,6 +140,8 @@ export function ModuleViewer({
   isReadOnly,
   initialProgress,
   initialLessonId,
+  aiAssistantEnabled,
+  organizationId,
 }: ModuleViewerProps) {
   // Determine resume lesson id: from initialLessonId, or lastLessonId in progress, or first lesson
   const savedLastLesson = (initialProgress?.lessonProgress as { lastLessonId?: string })?.lastLessonId;
@@ -1225,6 +1231,8 @@ export function ModuleViewer({
                       {copiedPromptId === item.id ? "Copied!" : "Copy"}
                     </button>
                   </div>
+
+                  {aiAssistantEnabled && <AiAssistant moduleId={module.module} promptId={item.id} organizationId={organizationId} />}
 
                   {item.verification.length > 0 && (
                     <div className="mt-2 space-y-1">
