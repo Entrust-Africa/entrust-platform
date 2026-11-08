@@ -404,8 +404,9 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
           eq(schema.moduleProgress.moduleId, "M01"),
         ),
       );
-    expect(progress!.status).toBe("passed");
-    expect(progress!.completedAt).not.toBeNull();
+    // The practical passes, but this module's lessons aren't done, so the module isn't passed yet.
+    expect(progress!.status).toBe("in_progress");
+    expect(progress!.completedAt).toBeNull();
 
     // Verify audit log
     const [log] = await db
@@ -422,5 +423,10 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
 
     expect(log).toBeDefined();
     expect(log!.actorUserId).toBe(w.admin.id);
+    // The reason has its own column, and the change shows what the failures and marks were before and after.
+    expect(log!.reason).toBeTruthy();
+    expect(log!.before).toHaveProperty("confirmedCriticalFailures");
+    expect(log!.before).toHaveProperty("scores");
+    expect(log!.after).toHaveProperty("confirmedCriticalFailures");
   });
 });

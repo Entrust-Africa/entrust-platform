@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { findTradeRules, type ModuleId } from "@entrust/trade-rules";
 import { findVersion } from "@entrust/trade-content";
@@ -69,11 +69,13 @@ export async function evaluateAndSyncModuleCompletion(
   const isExempt = !!exemption || modProgress?.status === "exempted";
 
   // Check content lessons count
-  const content = findVersion(moduleId, "learner", modProgress?.contentVersion ?? "0.1.0");
-  const lessonsCount = content?.lessons.length ?? 0;
-  const completedLessons = modProgress?.lessonProgress
-    ? Object.values(modProgress.lessonProgress as Record<string, { completed?: boolean }>).filter((l) => l?.completed).length
-    : 0;
+  // Only lessons that are in the content count, so a made-up lesson ID can't stand in for a real one.
+  const content =
+    findVersion(moduleId, "learner", modProgress?.contentVersion ?? undefined) ?? findVersion(moduleId, "learner");
+  const lessonIds = content?.lessons.map((l) => l.id) ?? [];
+  const lessonsCount = lessonIds.length;
+  const recorded = (modProgress?.lessonProgress as { completedLessons?: unknown } | null)?.completedLessons;
+  const completedLessons = Array.isArray(recorded) ? lessonIds.filter((id) => recorded.includes(id)).length : 0;
 
   // Check knowledge check passed
   const kcScore = modProgress?.knowledgeCheckScore ? Number(modProgress.knowledgeCheckScore) : 0;
@@ -285,6 +287,54 @@ export async function evaluateAndSyncModuleCompletion(
   }
 
   return { modulePassed, programCompleted, certificateId };
+}
+
+/**
+ * An override turned a pass into a fail, so what that pass earned no longer stands: the certificate is
+ * revoked, and a completed enrolment and plan go back to active. Attendance, progress and attempts stay.
+ */
+export async function reopenAfterFailedOverride(
+  tx: Executor,
+  ctx: Pick<Ctx, "principal" | "now">,
+  enrollmentId: string,
+  moduleId: ModuleId,
+  reason: string,
+): Promise<void> {
+  const [enrollment] = await tx.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
+  if (!enrollment) return;
+
+  const revocationReason = `Score for ${moduleId} overridden to a fail: ${reason}`;
+  const revoked = await tx
+    .update(schema.certificate)
+    .set({ revokedAt: ctx.now, revokedByUserId: ctx.principal.userId, revocationReason, updatedAt: ctx.now })
+    .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
+    .returning();
+  for (const cert of revoked) {
+    await recordTradeChange(tx, ctx.principal.userId, {
+      action: "trade.certificate.revoked",
+      organizationId: enrollment.organizationId,
+      entityId: cert.id,
+      after: { code: cert.code, revokedAt: ctx.now.toISOString(), revokedBy: ctx.principal.userId, reason: revocationReason },
+    });
+  }
+
+  await tx
+    .update(schema.learningPlan)
+    .set({ status: "active", updatedAt: ctx.now })
+    .where(and(eq(schema.learningPlan.enrollmentId, enrollmentId), eq(schema.learningPlan.status, "completed")));
+
+  if (enrollment.status === "completed") {
+    await tx
+      .update(schema.enrollment)
+      .set({ status: "active", completedAt: null, updatedAt: ctx.now })
+      .where(eq(schema.enrollment.id, enrollmentId));
+    await recordTradeChange(tx, ctx.principal.userId, {
+      action: "trade.program.reopened",
+      organizationId: enrollment.organizationId,
+      entityId: enrollmentId,
+      after: { moduleId, reason: revocationReason },
+    });
+  }
 }
 
 /**

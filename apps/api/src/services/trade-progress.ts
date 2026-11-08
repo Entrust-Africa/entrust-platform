@@ -4,6 +4,7 @@ import type { ModuleProgressStatus } from "@entrust/trade-engine";
 import type { ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ModuleProgressQueryInput,
   ModuleProgressView,
@@ -232,6 +233,13 @@ export async function recordModuleProgress(
       completedLessonsCount: completedLessons.length,
     },
   });
+
+  // The last lesson can be what's left, after the knowledge check and the assessor's score.
+  if (input.completed === true && record.status !== "passed") {
+    await evaluateAndSyncModuleCompletion(db, ctx, input.enrollmentId, input.moduleId);
+    const [latest] = await db.select().from(schema.moduleProgress).where(eq(schema.moduleProgress.id, record.id)).limit(1);
+    if (latest) record = latest;
+  }
 
   return {
     id: record.id,

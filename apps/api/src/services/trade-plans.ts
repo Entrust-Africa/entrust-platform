@@ -10,6 +10,7 @@ import type {
 import type { ModuleId, Pathway } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ApprovePlanInput,
   CreateExemptionInput,
@@ -225,7 +226,7 @@ export async function approvePlan(
 export async function acknowledgePlan(ctx: Ctx, planId: string): Promise<LearningPlanRecord> {
   const { principal, db, now } = ctx;
   const [existing] = await db
-    .select({ status: schema.learningPlan.status, acknowledgedAt: schema.learningPlan.acknowledgedAt, organizationId: schema.enrollment.organizationId })
+    .select({ status: schema.learningPlan.status, acknowledgedAt: schema.learningPlan.acknowledgedAt, enrollmentId: schema.learningPlan.enrollmentId, organizationId: schema.enrollment.organizationId })
     .from(schema.learningPlan)
     .innerJoin(schema.enrollment, eq(schema.enrollment.id, schema.learningPlan.enrollmentId))
     .where(eq(schema.learningPlan.id, planId));
@@ -244,6 +245,8 @@ export async function acknowledgePlan(ctx: Ctx, planId: string): Promise<Learnin
       entityType: "learning_plan",
       entityId: planId,
     });
+    // M01 needs the plan acknowledged, and this can be the last thing it was waiting for.
+    await evaluateAndSyncModuleCompletion(db, ctx, existing.enrollmentId, "M01");
   }
   return getPlan(ctx, planId);
 }

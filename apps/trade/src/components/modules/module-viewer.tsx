@@ -1079,6 +1079,11 @@ export function ModuleViewer({
                           Score: {latestSubmission.officialScore.totalPoints} / {latestSubmission.officialScore.maxPoints} pts
                           {" "}({latestSubmission.officialScore.percentage}%) • Band: {latestSubmission.officialScore.band}
                         </div>
+                        {latestSubmission.officialScore.passed && status !== "passed" && status !== "exempted" && (
+                          <div className="text-xs mt-1 font-medium">
+                            The module is complete once all its lessons and the knowledge check are done too.
+                          </div>
+                        )}
                         {latestSubmission.officialScore.feedback && (
                           <div className="text-xs mt-2 p-2.5 rounded bg-surface border border-line text-ink">
                             <span className="font-semibold text-ink">Assessor Feedback: </span>
