@@ -6,10 +6,12 @@ import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   Clock,
   Copy,
+  Eye,
   FileCheck2,
   FileText,
   HelpCircle,
@@ -19,6 +21,7 @@ import {
   Video,
 } from "lucide-react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
+import { Markdown } from "@/components/markdown";
 import { tradeFetch } from "@/lib/trade-client";
 import type {
   KnowledgeCheckAttemptResult,
@@ -114,6 +117,16 @@ export interface ModuleViewerProps {
   initialLessonId?: string;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  submitted: "Submitted",
+  passed: "Passed",
+  needs_revision: "Needs revision",
+  exempted: "Exempted",
+};
+const statusLabel = (status: string) => STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+
 type TabKey = "lesson" | "example" | "worksheets" | "knowledge" | "deliverable" | "prompts";
 
 export function ModuleViewer({
@@ -134,6 +147,7 @@ export function ModuleViewer({
     initialLessonId ?? savedLastLesson ?? module.lessons[0]?.id ?? ""
   );
   const [activeTab, setActiveTab] = useState<TabKey>("lesson");
+  const [lessonsOpen, setLessonsOpen] = useState(false);
   const [status, setStatus] = useState<string>(initialProgress?.status ?? "not_started");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
@@ -250,6 +264,7 @@ export function ModuleViewer({
   const handleSelectLesson = (lessonId: string) => {
     setActiveLessonId(lessonId);
     setActiveTab("lesson");
+    setLessonsOpen(false);
     void saveLessonProgress(lessonId);
   };
 
@@ -279,7 +294,7 @@ export function ModuleViewer({
     if (isReadOnly || !enrollmentId || isSubmitting) return;
 
     if (!isAssignedInPlan) {
-      setErrorMessage("Modules outside your learning plan can be read as a preview but cannot be submitted.");
+      setErrorMessage("This module isn't in your learning plan. You can read it, but you can't submit work for it.");
       return;
     }
 
@@ -288,7 +303,7 @@ export function ModuleViewer({
     );
     if (!hasPassedTheory) {
       setErrorMessage(
-        "You must pass the Knowledge Check in Tab 4 before submitting your practical deliverable."
+        "Pass the knowledge check before you submit your deliverable."
       );
       return;
     }
@@ -319,18 +334,24 @@ export function ModuleViewer({
 
   return (
     <div className="space-y-6">
-      {/* Read-only or Preview Banners */}
-      {isReadOnly && (
-        <div className="rounded-md border border-sky-300 bg-sky-50 p-4 text-xs font-medium text-sky-900">
-          Staff view (read-only mode). Progress and deliverables cannot be modified in this view.
+      {/* One banner at most: staff see the staff view, a learner outside the plan sees the preview note. */}
+      {isReadOnly ? (
+        <div className="flex items-start gap-3 rounded-lg border border-info/25 bg-info-50 p-4 text-sm text-info">
+          <Eye className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <div className="font-semibold">Staff view</div>
+            <div className="mt-0.5 text-ink-2">You can read everything in this module. Progress, the knowledge check and submissions belong to the learner, so they are switched off here.</div>
+          </div>
         </div>
-      )}
-
-      {!isAssignedInPlan && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-xs font-medium text-amber-900">
-          Preview Mode: This module is outside your current learning plan. You can read the lessons and exercises, but deliverable submission is disabled.
+      ) : !isAssignedInPlan ? (
+        <div className="flex items-start gap-3 rounded-lg border border-warn/30 bg-warn-50 p-4 text-sm text-warn">
+          <Eye className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <div className="font-semibold">Preview only</div>
+            <div className="mt-0.5 text-ink-2">This module isn't in your learning plan. You can read the lessons and exercises, but you can't submit a deliverable for it.</div>
+          </div>
         </div>
-      )}
+      ) : null}
 
       {/* Module Header */}
       <div className="rounded-lg border border-line bg-surface p-6 shadow-xs">
@@ -352,7 +373,7 @@ export function ModuleViewer({
                     : "idle"
                 }
               >
-                {status.replace("_", " ").toUpperCase()}
+                {statusLabel(status)}
               </StatusBadge>
             </div>
             <h1 className="mt-2 font-display text-2xl font-bold text-ink">{module.title}</h1>
@@ -377,7 +398,7 @@ export function ModuleViewer({
         {/* Objectives */}
         {module.objectives.length > 0 && (
           <div className="mt-4 border-t border-line/60 pt-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-ink-3">Key Objectives</div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-ink-3">Key objectives</div>
             <ul className="mt-1.5 grid gap-1 sm:grid-cols-2 text-xs text-ink-2">
               {module.objectives.map((obj, i) => (
                 <li key={i} className="flex items-start gap-1.5">
@@ -391,11 +412,11 @@ export function ModuleViewer({
       </div>
 
       {/* Main Grid: Responsive Phone-First Layout */}
-      <div className="grid gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Navigation Sidebar (Collapsible or scrollable on mobile) */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className="min-w-0 space-y-4 lg:col-span-4">
           <Card className="p-4">
-            <div className="font-display text-sm font-bold text-ink">Module Navigation</div>
+            <div className="font-display text-sm font-bold text-ink">In this module</div>
 
             {/* Mobile Tab Switcher */}
             <div className="mt-3 flex overflow-x-auto pb-2 gap-1 border-b border-line lg:hidden">
@@ -461,60 +482,77 @@ export function ModuleViewer({
               )}
             </div>
 
-            {/* Lesson List */}
-            <div className="mt-3 divide-y divide-line/60">
-              <div className="py-1 text-xs font-semibold uppercase tracking-wider text-ink-3">Lessons</div>
-              {module.lessons.map((lesson, idx) => {
-                const isCurrent = activeTab === "lesson" && activeLesson?.id === lesson.id;
-                const isDone = completedLessons.includes(lesson.id);
+            {/* Lessons: behind a button on a phone, so the lesson itself is not pushed below the whole list */}
+            <button
+              type="button"
+              onClick={() => setLessonsOpen((open) => !open)}
+              aria-expanded={lessonsOpen}
+              className="mt-3 flex w-full items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2.5 text-left lg:hidden"
+            >
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                  Lesson {Math.max(module.lessons.indexOf(activeLesson!), 0) + 1} of {totalLessons}
+                </span>
+                <span className="block truncate text-sm font-semibold text-ink">{activeLesson?.title}</span>
+              </span>
+              <ChevronDown className={`size-4 shrink-0 text-ink-3 transition-transform ${lessonsOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+            </button>
+            <div className={`${lessonsOpen ? "block" : "hidden"} lg:block`}>
+              <div className="mt-3 divide-y divide-line/60">
+                <div className="py-1 text-xs font-semibold uppercase tracking-wider text-ink-3">Lessons</div>
+                {module.lessons.map((lesson, idx) => {
+                  const isCurrent = activeTab === "lesson" && activeLesson?.id === lesson.id;
+                  const isDone = completedLessons.includes(lesson.id);
 
-                return (
-                  <div
-                    key={lesson.id}
-                    className={`flex items-center justify-between gap-2 py-2.5 px-2 rounded-md cursor-pointer transition-colors ${
-                      isCurrent ? "bg-brand-50 border-l-3 border-l-brand-600" : "hover:bg-canvas"
-                    }`}
-                    onClick={() => handleSelectLesson(lesson.id)}
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <button
-                        type="button"
-                        disabled={isReadOnly}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleToggleLessonComplete(lesson.id);
-                        }}
-                        className="mt-0.5 shrink-0 text-ink-3 hover:text-brand-600 focus:outline-hidden"
-                        title={isDone ? "Mark as incomplete" : "Mark as complete"}
-                      >
-                        {isDone ? (
-                          <CheckCircle2 className="size-4 text-emerald-600" />
-                        ) : (
-                          <Circle className="size-4" />
+                  return (
+                    <div
+                      key={lesson.id}
+                      className={`flex items-center justify-between gap-2 py-2.5 px-2 rounded-md cursor-pointer transition-colors ${
+                        isCurrent ? "bg-brand-50 border-l-3 border-l-brand-600" : "hover:bg-canvas"
+                      }`}
+                      onClick={() => handleSelectLesson(lesson.id)}
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleToggleLessonComplete(lesson.id);
+                            }}
+                            className="mt-0.5 shrink-0 text-ink-3 hover:text-brand-600 focus:outline-hidden"
+                            title={isDone ? "Mark as incomplete" : "Mark as complete"}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="size-4 text-emerald-600" />
+                            ) : (
+                              <Circle className="size-4" />
+                            )}
+                          </button>
                         )}
-                      </button>
-                      <div className="min-w-0">
-                        <div className={`text-xs font-medium truncate ${isCurrent ? "text-brand-900 font-bold" : "text-ink"}`}>
-                          {idx + 1}. {lesson.title}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-3">
-                          {lesson.minutes && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="size-3" /> {lesson.minutes} min
-                            </span>
-                          )}
-                          {lesson.videoUrl && (
-                            <span className="flex items-center gap-1 text-brand-600">
-                              <Video className="size-3" /> Video
-                            </span>
-                          )}
+                        <div className="min-w-0">
+                          <div className={`text-sm font-medium leading-snug ${isCurrent ? "text-brand-900 font-bold" : "text-ink"}`}>
+                            {idx + 1}. {lesson.title}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-3">
+                            {lesson.minutes && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="size-3" /> {lesson.minutes} min
+                              </span>
+                            )}
+                            {lesson.videoUrl && (
+                              <span className="flex items-center gap-1 text-brand-600">
+                                <Video className="size-3" /> Video
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <ChevronRight className={`size-3.5 text-ink-3 shrink-0 ${isCurrent ? "text-brand-600" : ""}`} />
                     </div>
-                    <ChevronRight className={`size-3.5 text-ink-3 shrink-0 ${isCurrent ? "text-brand-600" : ""}`} />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Desktop Navigation Links */}
@@ -591,7 +629,7 @@ export function ModuleViewer({
         </div>
 
         {/* Content Viewer Panel */}
-        <div className="lg:col-span-8">
+        <div className="min-w-0 lg:col-span-8">
           {errorMessage && (
             <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 text-xs font-medium text-red-900 flex items-center gap-2">
               <AlertCircle className="size-4 shrink-0" />
@@ -616,28 +654,29 @@ export function ModuleViewer({
                   </div>
                   <h2 className="font-display text-xl font-bold text-ink">{activeLesson.title}</h2>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={isReadOnly}
-                    onClick={() => handleToggleLessonComplete(activeLesson.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      completedLessons.includes(activeLesson.id)
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-300"
-                        : "bg-surface border border-line text-ink hover:bg-canvas"
-                    }`}
-                  >
-                    {completedLessons.includes(activeLesson.id) ? (
-                      <>
-                        <CheckCircle2 className="size-3.5 text-emerald-600" /> Completed
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="size-3.5" /> Mark complete
-                      </>
-                    )}
-                  </button>
-                </div>
+                {!isReadOnly && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLessonComplete(activeLesson.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        completedLessons.includes(activeLesson.id)
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-300"
+                          : "bg-surface border border-line text-ink hover:bg-canvas"
+                      }`}
+                    >
+                      {completedLessons.includes(activeLesson.id) ? (
+                        <>
+                          <CheckCircle2 className="size-3.5 text-emerald-600" /> Completed
+                        </>
+                      ) : (
+                        <>
+                          <Circle className="size-3.5" /> Mark complete
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Optional Video link */}
@@ -659,12 +698,10 @@ export function ModuleViewer({
               )}
 
               {/* Lesson Text (Phone-first readable typography) */}
-              <div className="prose prose-sm max-w-none text-ink leading-relaxed whitespace-pre-wrap font-sans">
-                {activeLesson.body}
-              </div>
+              <Markdown source={activeLesson.body} dropLeadingTitle={activeLesson.title} />
 
               {/* Next / Previous Lesson Buttons */}
-              <div className="flex items-center justify-between border-t border-line pt-4 text-xs font-semibold">
+              <div className="flex flex-col-reverse gap-3 border-t border-line pt-4 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between">
                 {(() => {
                   const currentIndex = module.lessons.indexOf(activeLesson);
                   const prevLesson = module.lessons[currentIndex - 1];
@@ -676,7 +713,7 @@ export function ModuleViewer({
                         <button
                           type="button"
                           onClick={() => handleSelectLesson(prevLesson.id)}
-                          className="text-brand-600 hover:underline flex items-center gap-1"
+                          className="flex min-h-10 items-center gap-1 text-left text-brand-600 hover:underline"
                         >
                           ← {prevLesson.title}
                         </button>
@@ -685,6 +722,7 @@ export function ModuleViewer({
                       {nextLesson ? (
                         <Button
                           variant="secondary"
+                          className="h-auto min-h-11 w-full whitespace-normal py-2 text-left sm:w-auto"
                           onClick={() => {
                             if (!completedLessons.includes(activeLesson.id)) {
                               void handleToggleLessonComplete(activeLesson.id);
@@ -697,9 +735,10 @@ export function ModuleViewer({
                       ) : (
                         <Button
                           variant="primary"
+                          className="h-auto min-h-11 w-full whitespace-normal py-2 sm:w-auto"
                           onClick={() => setActiveTab("deliverable")}
                         >
-                          Review Deliverable →
+                          Review the deliverable →
                         </Button>
                       )}
                     </>
@@ -716,9 +755,7 @@ export function ModuleViewer({
                 <span className="text-xs uppercase font-semibold text-ink-3">Case Study</span>
                 <h2 className="font-display text-xl font-bold text-ink">{module.workedExample.title}</h2>
               </div>
-              <div className="prose prose-sm max-w-none text-ink leading-relaxed whitespace-pre-wrap">
-                {module.workedExample.body}
-              </div>
+              <Markdown source={module.workedExample.body} dropLeadingTitle={module.workedExample.title} />
             </Card>
           )}
 
@@ -1113,7 +1150,7 @@ export function ModuleViewer({
                     </p>
                   </div>
                   <StatusBadge tone={status === "submitted" || status === "passed" ? "ok" : "idle"}>
-                    {status.toUpperCase()}
+                    {statusLabel(status)}
                   </StatusBadge>
                 </div>
 
@@ -1127,7 +1164,7 @@ export function ModuleViewer({
                   <div className="p-3 rounded border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-center justify-between">
                     <span className="flex items-center gap-1.5 font-medium">
                       <AlertCircle className="size-4 text-amber-600 shrink-0" />
-                      Pass the Theory Knowledge Check in Tab 4 before submitting.
+                      Pass the knowledge check before you submit.
                     </span>
                     <Button variant="secondary" size="sm" onClick={() => setActiveTab("knowledge")}>
                       Go to Knowledge Check

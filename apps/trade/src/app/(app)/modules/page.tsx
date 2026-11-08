@@ -10,7 +10,17 @@ import type {
   ModuleProgressView,
 } from "@/lib/types";
 
-export const metadata = { title: "Curriculum Modules" };
+export const metadata = { title: "Modules" };
+
+const STATUS_LABELS: Record<string, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  submitted: "Submitted",
+  passed: "Passed",
+  needs_revision: "Needs revision",
+  exempted: "Exempted",
+};
+const statusLabel = (status: string) => STATUS_LABELS[status] ?? status.replace(/_/g, " ");
 
 function getStatusTone(status: string): "ok" | "info" | "warn" | "danger" | "idle" {
   switch (status) {
@@ -85,20 +95,20 @@ export default async function ModulesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink">Curriculum Modules</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">Modules</h1>
         <p className="mt-1 text-sm text-ink-2">
-          Practical modules designed to build trade execution capability. Lessons, worksheets, and deliverables.
+          Practical modules that build your export capability: lessons, worksheets and a deliverable for each.
         </p>
       </div>
 
       {/* Section 1: Assigned Learning Plan Modules */}
       {planModules.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-line pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
             <div>
-              <h2 className="font-display text-lg font-bold text-ink">Your Learning Plan Modules</h2>
+              <h2 className="font-display text-lg font-bold text-ink">In your learning plan</h2>
               <p className="text-xs text-ink-2">
-                Modules prescribed for your export readiness pathway, ordered by recommended sequence.
+                Chosen for your pathway, in the order we suggest you take them.
               </p>
             </div>
             <StatusBadge tone="info">{`${planModules.length} assigned`}</StatusBadge>
@@ -114,21 +124,18 @@ export default async function ModulesPage() {
               return (
                 <Card key={m.id} className="flex flex-col justify-between p-5 border-l-4 border-l-brand-600">
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="rounded bg-brand-50 px-2 py-0.5 font-mono text-xs font-bold text-brand-700">
-                          Step {assigned?.sequence}: {m.id}
-                        </span>
-                        {isInProduction && <StatusBadge tone="idle">IN PRODUCTION</StatusBadge>}
-                      </div>
-                      <StatusBadge tone={getStatusTone(currentStatus)}>
-                        {currentStatus.replace("_", " ").toUpperCase()}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="rounded bg-brand-50 px-2 py-0.5 font-mono text-xs font-bold text-brand-700">
+                        Step {assigned?.sequence}: {m.id}
+                      </span>
+                      <StatusBadge tone={isInProduction ? "idle" : getStatusTone(currentStatus)}>
+                        {isInProduction ? "Coming soon" : statusLabel(currentStatus)}
                       </StatusBadge>
                     </div>
 
                     <div>
-                      <h3 className="font-display text-base font-bold text-ink line-clamp-1">{m.title}</h3>
-                      <p className="mt-1 text-xs text-ink-2 line-clamp-2">
+                      <h3 className="font-display text-base font-bold leading-snug text-ink">{m.title}</h3>
+                      <p className="mt-1 text-xs text-ink-2">
                         <strong className="text-ink">Deliverable:</strong> {m.deliverable}
                       </p>
                     </div>
@@ -142,13 +149,13 @@ export default async function ModulesPage() {
 
                   <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between">
                     <span className="text-[11px] text-ink-3">
-                      {progress?.completedAt ? `Completed` : progress?.startedAt ? `In progress` : `Not started`}
+                      {isInProduction ? "Not open yet" : progress?.completedAt ? "Completed" : progress?.startedAt ? "In progress" : "Not started"}
                     </span>
                     <Link
                       href={`/modules/${m.id}`}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline"
                     >
-                      {isInProduction ? "Preview outline →" : "Open module →"}
+                      {isInProduction ? "See what it covers →" : "Open module →"}
                     </Link>
                   </div>
                 </Card>
@@ -160,14 +167,14 @@ export default async function ModulesPage() {
 
       {/* Section 2: Elective & Additional Curriculum Modules */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-line pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
           <div>
             <h2 className="font-display text-lg font-bold text-ink">
-              {planModules.length > 0 ? "Elective & Preview Modules" : "All Curriculum Modules"}
+              {planModules.length > 0 ? "Other modules" : "All modules"}
             </h2>
             <p className="text-xs text-ink-2">
               {planModules.length > 0
-                ? "Modules outside your learning plan. Can be previewed, but cannot be submitted for assessment."
+                ? "Not in your learning plan. You can read them, but you can't submit work for them."
                 : "The twelve TRADE capability modules."}
             </p>
           </div>
@@ -181,22 +188,16 @@ export default async function ModulesPage() {
             return (
               <Card key={m.id} className="flex flex-col justify-between p-5">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="rounded bg-canvas px-2 py-0.5 font-mono text-xs font-semibold text-ink-2">
                       {m.id}
                     </span>
-                    {isInProduction ? (
-                      <StatusBadge tone="idle">IN PRODUCTION</StatusBadge>
-                    ) : (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                        Preview only
-                      </span>
-                    )}
+                    {isInProduction && <StatusBadge tone="idle">Coming soon</StatusBadge>}
                   </div>
 
                   <div>
-                    <h3 className="font-display text-base font-bold text-ink line-clamp-1">{m.title}</h3>
-                    <p className="mt-1 text-xs text-ink-2 line-clamp-2">
+                    <h3 className="font-display text-base font-bold leading-snug text-ink">{m.title}</h3>
+                    <p className="mt-1 text-xs text-ink-2">
                       <strong className="text-ink">Deliverable:</strong> {m.deliverable}
                     </p>
                   </div>
@@ -204,13 +205,13 @@ export default async function ModulesPage() {
 
                 <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between">
                   <span className="text-[11px] text-ink-3">
-                    {isInProduction ? "Cannot be started" : "Elective preview"}
+                    {isInProduction ? "Not open yet" : planModules.length > 0 ? "Not in your plan" : "Open to read"}
                   </span>
                   <Link
                     href={`/modules/${m.id}`}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline"
                   >
-                    {isInProduction ? "View outline →" : "Preview →"}
+                    {isInProduction ? "See what it covers →" : "Read →"}
                   </Link>
                 </div>
               </Card>
