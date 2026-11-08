@@ -171,7 +171,7 @@ export default async function CohortDetailPage(props: {
         <Card className="p-4">
           <span className="text-xs text-ink-3 font-medium">Attendance Requirement</span>
           <p className="mt-1 text-sm font-semibold text-ink">
-            {cohort.attendanceRequired !== false ? "Required for Completion" : "Optional"}
+            {cohort.attendanceRequired !== false ? "Recorded, doesn't affect completion" : "Optional"}
           </p>
         </Card>
       </div>
