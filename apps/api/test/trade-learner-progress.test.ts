@@ -213,6 +213,27 @@ describe("TRADE learner module progress & save-and-resume", () => {
     expect(item.lessonProgress.completedLessons).toEqual(["lesson-1", "lesson-2"]);
   });
 
+  it("won't let a learner give a module a result", async () => {
+    for (const status of ["passed", "exempted", "needs_revision"]) {
+      const res = await callV1(w.smeLearner, "POST", "/trade/module-progress", { enrollmentId: w.enrollmentId, moduleId: "M01", status });
+      expect(res.status, status).toBe(403);
+    }
+    const after = await callV1(w.smeLearner, "GET", `/trade/module-progress?enrollmentId=${w.enrollmentId}&moduleId=M01`);
+    expect(after.body.items[0].status).toBe("in_progress");
+  });
+
+  it("won't let a learner's request change a result the module already has", async () => {
+    await db
+      .insert(schema.moduleProgress)
+      .values({ enrollmentId: w.enrollmentId, moduleId: "M02", contentVersion: "0.1.0", status: "passed", lessonProgress: {} });
+    const res = await callV1(w.smeLearner, "POST", "/trade/module-progress", { enrollmentId: w.enrollmentId, moduleId: "M02", status: "in_progress" });
+    expect(res.status).toBe(409);
+    // Opening a lesson of a passed module still works and leaves the result alone.
+    const lesson = await callV1(w.smeLearner, "POST", "/trade/module-progress", { enrollmentId: w.enrollmentId, moduleId: "M02", lessonId: "lesson-1" });
+    expect(lesson.status).toBe(200);
+    expect(lesson.body.status).toBe("passed");
+  });
+
   it("refuses submission of a module outside the learner's active plan", async () => {
     // M05 is NOT in the active learning plan assignments (plan only has M01, M02)
     const res = await callV1(w.smeLearner, "POST", "/trade/module-progress", {
