@@ -13,6 +13,7 @@ import {
   Coins,
   ExternalLink,
   FlaskConical,
+  Ship,
   FolderGit2,
   GraduationCap,
   Handshake,
@@ -76,6 +77,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     icon: Mic2,
     match: (path) => path.startsWith("/summit"),
   };
+  const practice: NavItem = { href: "/practice", label: "Export practice", icon: Ship, match: (path) => path.startsWith("/practice") };
   const simulator: NavItem = { href: SIMULATOR_URL, label: "Export simulator", icon: FlaskConical, match: () => false, external: true };
   const account: NavItem = { href: "/account", label: "Account", icon: User, match: (path) => path.startsWith("/account") };
 
@@ -90,6 +92,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/diagnostics", label: "Diagnostics", icon: ListChecks, match: (path) => path.startsWith("/diagnostics") },
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
           { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
+          practice,
           simulator,
         ],
       },
@@ -141,6 +144,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
     { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
+    practice,
     simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },
   ];

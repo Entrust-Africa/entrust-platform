@@ -92,6 +92,16 @@ export default async function ModuleDetailPage({
         </Link>
       </div>
 
+      {id === "M08" && (
+        <Card className="max-w-3xl border-l-4 border-l-brand-600 p-5">
+          <p className="font-semibold text-ink">Practise a whole export</p>
+          <p className="mt-1 text-sm text-ink-2">Run the ZEBU Coffee case or your own deal from first step to bank closure, on the same rules a real case follows.</p>
+          <Link href="/practice" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">
+            Open export practice →
+          </Link>
+        </Card>
+      )}
+
       {/* When content is still in production */}
       {(!moduleDetail.content || moduleDetail.contentStatus === "in_production") && (
         <div className="space-y-6 max-w-3xl">
