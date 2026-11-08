@@ -1,3 +1,4 @@
+import { AcknowledgePlan } from "@/components/plan/acknowledge-plan";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, BookOpen, CheckCircle2, Circle, Clock, PlayCircle, Award, TrendingUp } from "lucide-react";
@@ -244,6 +245,8 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
 
   return (
     <div className="space-y-6">
+      {!isStaff && activePlan && !activePlan.acknowledgedAt && <AcknowledgePlan planId={activePlan.id} />}
+
       {/* Staff Inspection Banner */}
       {isStaff && queryEnrollmentId && (
         <div className="rounded-md border border-sky-300 bg-sky-50 p-4 text-xs font-medium text-sky-900 flex items-center justify-between">

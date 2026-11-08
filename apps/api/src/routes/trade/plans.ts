@@ -14,6 +14,7 @@ import {
   ReviewExemptionBody,
 } from "../../schemas/trade";
 import {
+  acknowledgePlan,
   approvePlan,
   createExemption,
   getPlan,
@@ -51,6 +52,19 @@ const getPlanRoute = createRoute({
   responses: {
     200: { description: "The learning plan", content: json(LearningPlanSchema) },
     ...listErrors,
+  },
+});
+
+const acknowledgePlanRoute = createRoute({
+  method: "post",
+  path: "/plans/{id}/acknowledge",
+  tags,
+  summary: "Acknowledge a learning plan",
+  description: "A member of the SME confirms it has read its learning plan. Doing it again changes nothing.",
+  request: { params: PlanParam },
+  responses: {
+    200: { description: "The learning plan", content: json(LearningPlanSchema) },
+    ...writeErrors,
   },
 });
 
@@ -134,6 +148,10 @@ const reviewExemptionRoute = createRoute({
 });
 
 export const tradePlans = router
+  .openapi(acknowledgePlanRoute, async (c) => {
+    const ctx = await contextFor(c.get("user"));
+    return c.json(await acknowledgePlan(ctx, c.req.valid("param").id), 200);
+  })
   .openapi(listPlansRoute, async (c) => {
     const ctx = await contextFor(c.get("user"));
     const items = await listPlans(ctx, c.req.valid("query"));

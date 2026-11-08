@@ -467,6 +467,7 @@ describe("API documentation", () => {
         "/v1/trade/pipeline/{id}/stage",
         "/v1/trade/plans",
         "/v1/trade/plans/{id}",
+        "/v1/trade/plans/{id}/acknowledge",
         "/v1/trade/plans/{id}/approve",
         "/v1/trade/plans/{id}/override",
         "/v1/trade/practice-cases",
