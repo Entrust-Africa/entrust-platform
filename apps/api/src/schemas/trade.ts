@@ -572,11 +572,12 @@ export const AddSponsorMemberBody = z
 
 const DataKind = z.enum(SPONSOR_DATA_KINDS);
 const CohortFigures = z.object({
-  enrolled: z.number(),
-  byStatus: z.record(z.string(), z.number()),
-  diagnosticsSubmitted: z.number(),
-  pathwayA: z.number(),
-  pathwayB: z.number(),
+  // Null: the figure covers fewer than five SMEs that haven't all agreed to share it (#72).
+  enrolled: z.number().nullable(),
+  byStatus: z.record(z.string(), z.number().nullable()),
+  diagnosticsSubmitted: z.number().nullable(),
+  pathwayA: z.number().nullable(),
+  pathwayB: z.number().nullable(),
 });
 const SponsorCohort = z.object({
   id: z.uuid(),
@@ -599,6 +600,80 @@ export const SponsorCohortDetail = SponsorCohort.extend({
   /** The SMEs whose owners agreed to share something with this sponsor, and what. */
   consenting: z.array(z.object({ organizationId: z.string(), name: z.string(), smeId: z.string().nullable(), kinds: z.array(DataKind) })),
 }).openapi("TradeSponsorCohort");
+
+// A programme report (#72). A null figure is one the caller may not see: it covers fewer than five SMEs.
+const ReportCount = z.number().nullable();
+const ReportMoney = z.object({ count: ReportCount, amount: z.number().nullable() });
+const ReportScoreDistribution = z.object({
+  smes: ReportCount,
+  average: z.number().nullable(),
+  buckets: z.array(z.object({ bucket: z.string(), count: ReportCount })),
+});
+const ReportCurrencyAmount = z.array(z.object({ currency: z.string(), amount: z.number() })).nullable();
+
+export const ProgrammeReportParam = z.object({ id: z.uuid() });
+export const ProgrammeReport = z
+  .object({
+    scope: z.object({
+      kind: z.enum(["program", "cohort"]),
+      id: z.uuid(),
+      name: z.string(),
+      program: z.string(),
+      cohorts: z.array(z.object({ id: z.uuid(), name: z.string() })),
+    }),
+    audience: z.enum(["staff", "sponsor"]),
+    generatedAt: z.iso.datetime(),
+    minimumSmes: z.number().int(),
+    disclaimer: z.string(),
+    reach: z.object({
+      enrolled: ReportCount,
+      byStatus: z.array(z.object({ status: z.string(), count: ReportCount })),
+      pathwayA: ReportCount,
+      pathwayB: ReportCount,
+    }),
+    engagement: z.object({
+      activeWithinDays: z.number().int(),
+      activeLearners: ReportCount,
+      modules: z.array(z.object({ moduleId: z.string(), started: ReportCount, passed: ReportCount })),
+      knowledgeChecks: z.array(z.object({ moduleId: z.string(), attempted: ReportCount, passed: ReportCount, passRate: z.number().nullable() })),
+      submissionsWaiting: ReportCount,
+    }),
+    capability: z.array(z.object({ domain: z.string(), title: z.string(), placement: ReportScoreDistribution, exit: ReportScoreDistribution })),
+    pipeline: z.object({ leads: ReportCount, verifiedLeads: ReportCount, qualifiedProspects: ReportCount, rfqs: ReportCount, firmOrders: ReportCount }),
+    finance: z.object({
+      byCurrency: z.array(z.object({ currency: z.string(), requests: ReportMoney, approvals: ReportMoney, disbursements: ReportMoney })),
+      fundingGap: z.array(ReportMoney.extend({ currency: z.string() })),
+    }),
+    exportExecution: z.object({
+      byCurrency: z.array(z.object({ currency: z.string(), shipments: ReportMoney, payments: ReportMoney })),
+      paymentMethods: z.array(z.object({ method: z.string(), count: ReportCount })),
+    }),
+    smes: z.array(
+      z.object({
+        organizationId: z.string(),
+        name: z.string(),
+        smeId: z.string().nullable(),
+        cohortId: z.uuid(),
+        cohort: z.string(),
+        status: z.string(),
+        sharedKinds: z.array(DataKind),
+        pathway: z.string().nullable(),
+        placementAverage: z.number().nullable(),
+        exitAverage: z.number().nullable(),
+        modulesStarted: ReportCount,
+        modulesPassed: ReportCount,
+        submissionsWaiting: ReportCount,
+        leads: ReportCount,
+        firmOrders: ReportCount,
+        financingRequested: ReportCurrencyAmount,
+        financingApproved: ReportCurrencyAmount,
+        financingDisbursed: ReportCurrencyAmount,
+        valueShipped: ReportCurrencyAmount,
+        valuePaid: ReportCurrencyAmount,
+      }),
+    ),
+  })
+  .openapi("TradeProgrammeReport");
 
 export const SponsorCohortParam = z.object({ id: z.uuid() });
 export const SponsorSmeParam = z.object({ id: z.uuid(), organizationId: z.string().min(1).max(100) });
