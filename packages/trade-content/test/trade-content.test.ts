@@ -1,4 +1,4 @@
-import { CALCULATOR_NAMES } from "@entrust/trade-engine";
+import { CALCULATOR_NAMES, evaluateRubric } from "@entrust/trade-engine";
 import { MODULE_IDS } from "@entrust/trade-rules";
 import { describe, expect, it } from "vitest";
 import { MODULE_CONTENT, findVersion, learnerModuleSchema, listModules, newerVersion, toLearnerView, validateModuleContent, visibleVersions } from "../src";
@@ -52,6 +52,65 @@ describe("module content", () => {
     const edited = approved();
     edited.lessons[0]!.body += " (corrected)";
     expect(await hashOf(edited)).not.toBe(before);
+  });
+});
+
+// Entrust's Curriculum and Platform Consistency Review, section 5, sets one assessment standard for all
+// twelve modules. M01, M03, M04 and M07 v0.1.0 predate it, so a version joins this list once it meets it.
+describe("modules on Entrust's common assessment standard", () => {
+  const onStandard = MODULE_CONTENT.filter((c) => ["M05", "M08", "M09", "M10"].includes(c.module));
+
+  it("loads the four modules Entrust sent, as drafts until Entrust approves them", () => {
+    expect(onStandard.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M05@1.0.0 draft", "M08@1.0.0 draft", "M09@1.0.0 draft", "M10@1.0.0 draft"]);
+    expect(onStandard.every((c) => c.approval === undefined)).toBe(true);
+    expect(listModules("learner").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "in_production", versions: [] });
+    expect(listModules("staff").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "draft", versions: ["1.0.0"] });
+  });
+
+  it.each(onStandard.map((c) => [c.module, c] as const))("%s has ten questions with four options and one answer, passing at 80%%", (_, content) => {
+    expect(content.knowledgeCheck.passMark).toBe(80);
+    expect(content.knowledgeCheck.questions).toHaveLength(10);
+    for (const q of content.knowledgeCheck.questions) {
+      expect(q.options.map((o) => o.id)).toEqual(["a", "b", "c", "d"]);
+      expect(q.correct).toHaveLength(1);
+    }
+  });
+
+  it.each(onStandard.map((c) => [c.module, c] as const))("%s scores six criteria out of 36 and passes at exactly 24 with no critical failure", (_, content) => {
+    const { rubric } = content;
+    expect(rubric.criteria.map((c) => c.maxPoints)).toEqual([6, 6, 6, 6, 6, 6]);
+    expect(rubric.passMark).toBe(24);
+    expect(rubric.criteria.some((c) => c.mustHave)).toBe(false);
+    expect(rubric.criticalFailures.length).toBeGreaterThan(0);
+
+    const scored = (total: number) => Object.fromEntries(rubric.criteria.map((c, i) => [c.id, { points: Math.floor(total / 6) + (i < total % 6 ? 1 : 0) }]));
+    expect(evaluateRubric(rubric, scored(24))).toMatchObject({ totalPoints: 24, maxPoints: 36, passed: true });
+    expect(evaluateRubric(rubric, scored(23))).toMatchObject({ totalPoints: 23, passed: false });
+    expect(evaluateRubric(rubric, scored(36), [rubric.criticalFailures[0]!.id])).toMatchObject({ totalPoints: 36, passed: false });
+  });
+
+  it("defines one worksheet per required output, ending with the learning plan", () => {
+    expect(onStandard.map((c) => [c.module, c.lessons.length, c.worksheets.length])).toEqual([
+      ["M05", 8, 8],
+      ["M08", 9, 10],
+      ["M09", 9, 9],
+      ["M10", 9, 9],
+    ]);
+    for (const content of onStandard) expect(content.worksheets.at(-1)?.id).toBe("individual_learning_plan");
+  });
+
+  it("gives M09's prompts their verification steps, so approving it won't fail validation", () => {
+    const prompts = onStandard.find((c) => c.module === "M09")!.aiPrompts;
+    expect(prompts.map((p) => p.id)).toEqual(["company-profile", "action-register", "costing-review"]);
+    for (const prompt of prompts) expect(prompt.verification).toHaveLength(7);
+  });
+
+  it("never gives a learner the answers or the staff material", () => {
+    for (const content of onStandard) {
+      const view = JSON.stringify(toLearnerView(content));
+      expect(view).not.toContain('"correct"');
+      expect(view).not.toContain("Assessor scoring guide");
+    }
   });
 });
 
