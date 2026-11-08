@@ -20,6 +20,13 @@ const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const limitAt = args.indexOf("--limit");
 const limit = limitAt >= 0 ? Number(args[limitAt + 1]) : Number.POSITIVE_INFINITY;
+if (limitAt >= 0 && (!Number.isInteger(limit) || limit < 1)) {
+  console.error("--limit needs a whole number of accounts, for example --limit 50.");
+  process.exit(1);
+}
+
+/** Each call can wait out a 10 s timeout, so a run stops once AfriConnect looks down rather than crawling through every row. */
+const MAX_UNAVAILABLE_IN_A_ROW = 5;
 
 if (!afriConnectSignIn) {
   console.error("AFRICONNECT_CLIENT_ID and AFRICONNECT_CLIENT_SECRET are not set.");
@@ -60,23 +67,49 @@ if (!apply) {
 
 const tally: Record<string, number> = {};
 let done = 0;
-for (const user of users) {
-  if (done >= limit) break;
-  const result = await ensureAfriConnectAccount({ email: user.email, name: user.name });
-  tally[result.status] = (tally[result.status] ?? 0) + 1;
-  if (result.status !== "linked") console.log(`  ${user.email}: ${result.status}${"reason" in result ? ` (${result.reason})` : ""}`);
-  done++;
-}
-for (const diagnostic of diagnostics) {
-  if (done >= limit) break;
-  const result = await ensureAfriConnectAccount({ email: diagnostic.email });
-  tally[result.status] = (tally[result.status] ?? 0) + 1;
-  if (result.status === "linked") {
-    await db.update(schema.publicDiagnostic).set({ userId: result.userId }).where(eq(schema.publicDiagnostic.id, diagnostic.id));
-  } else {
-    console.log(`  diagnostic ${diagnostic.id}: ${result.status}${"reason" in result ? ` (${result.reason})` : ""}`);
+let unavailableInARow = 0;
+
+/**
+ * Links one person and reports what happened. A failure on one row (a database error, or someone signing in with the
+ * same email at that moment) is counted and the run carries on. Returns false once the run should stop.
+ */
+async function link(label: string, person: { email: string; name?: string }, onLinked?: (userId: string) => Promise<void>): Promise<boolean> {
+  let status: string;
+  try {
+    const result = await ensureAfriConnectAccount(person);
+    status = result.status;
+    if (result.status === "linked") await onLinked?.(result.userId);
+    else console.log(`  ${label}: ${result.status}${"reason" in result ? ` (${result.reason})` : ""}`);
+  } catch (error) {
+    status = "error";
+    console.error(`  ${label}: failed`, error);
   }
+  tally[status] = (tally[status] ?? 0) + 1;
   done++;
+  unavailableInARow = status === "unavailable" ? unavailableInARow + 1 : 0;
+  return unavailableInARow < MAX_UNAVAILABLE_IN_A_ROW;
+}
+
+const work: Array<() => Promise<boolean>> = [
+  ...users.map((user) => () => link(user.email, { email: user.email, name: user.name })),
+  ...diagnostics.map((diagnostic) => () =>
+    link(`diagnostic ${diagnostic.id}`, { email: diagnostic.email }, async (userId) => {
+      await db.update(schema.publicDiagnostic).set({ userId }).where(eq(schema.publicDiagnostic.id, diagnostic.id));
+    }),
+  ),
+];
+
+let stopped = false;
+for (const step of work) {
+  if (done >= limit) break;
+  if (!(await step())) {
+    stopped = true;
+    break;
+  }
 }
 console.log("Done:", tally);
+if (stopped) {
+  console.error(`Stopped: AfriConnect was unavailable ${MAX_UNAVAILABLE_IN_A_ROW} times in a row. It is safe to run this again.`);
+  process.exit(1);
+}
 process.exit(0);
