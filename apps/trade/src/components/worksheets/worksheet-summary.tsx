@@ -138,7 +138,9 @@ export function WorksheetSummary({ definition, version, canStartNext }: { defini
 
       {version.mizan && <p className="text-xs text-ink-3">{version.mizan.message}</p>}
       <p className="text-xs leading-relaxed text-ink-3">
-        These figures are what the business entered, worked out with TRADE's calculators. They are self-reported until Entrust staff review them, and they are not a credit assessment or a lending decision.
+        {definition.computed.length > 0
+          ? "These figures are what the business entered, worked out with TRADE's calculators. They are self-reported until Entrust staff review them, and they are not a credit assessment or a lending decision."
+          : "These answers are what the business entered. They are self-reported until Entrust staff review them."}
       </p>
     </article>
   );
