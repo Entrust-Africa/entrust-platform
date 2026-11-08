@@ -45,6 +45,8 @@ Switching it on, in this order:
 3. On the Railway services `entrust-clear` and `entrust-trade`, set `AFRICONNECT_SIGN_IN=on`. It is read per request, so a restart is enough. Do steps 2 and 3 together: between them the old sign-up forms show but sign-up is already off.
 4. Optionally give people who registered before this an AfriConnect account too: `apps/api/scripts/link-africonnect-accounts.ts` (a dry run without `--apply`).
 
+The "Meet buyers" cards on the CLEAR and TRADE dashboards (and at the end of a CLEAR case and of the TRADE programme) open AfriConnect's marketplace, `https://www.africonnect.africa.com/marketplace`, in a new tab. They need no setting. To point them elsewhere (a staging AfriConnect, or another page), set `AFRICONNECT_BUYERS_URL` on `entrust-clear` and `entrust-trade`; it is read per request, so a restart is enough.
+
 What happens to whom:
 
 - An existing Entrust account is linked by email the first time its owner signs in, only if the email is verified on both sides. An Entrust account whose email was never verified is refused with a message, so whoever created it cannot take over the real owner's sign-in.
