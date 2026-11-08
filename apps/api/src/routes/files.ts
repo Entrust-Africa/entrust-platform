@@ -60,8 +60,8 @@ const router = new OpenAPIHono<AppEnv>({
 
 // Require signed-in session for file endpoints (scoped so it does not leak into other /v1/* routes)
 router.use("/files/*", async (c, next) => {
-  // Allow unauthenticated local mock storage PUT/GET
-  if (c.req.path.startsWith("/v1/files/mock-storage/") || c.req.path.startsWith("/files/mock-storage/")) {
+  // Mock storage has no login, so it answers only where it is the storage in use: local development and tests.
+  if (process.env.FILE_STORAGE === "memory" && (c.req.path.startsWith("/v1/files/mock-storage/") || c.req.path.startsWith("/files/mock-storage/"))) {
     return next();
   }
   requireUser(c);
@@ -364,6 +364,7 @@ export const files = router
 
 // Mock storage PUT & GET endpoints for local development and testing
 router.put("/files/mock-storage/:key{.+}", async (c) => {
+  if (process.env.FILE_STORAGE !== "memory") return c.text("Not Found", 404);
   const key = decodeURIComponent(c.req.param("key"));
   const contentType = c.req.header("content-type") ?? "application/octet-stream";
   const bodyBuffer = Buffer.from(await c.req.arrayBuffer());
@@ -378,6 +379,7 @@ router.put("/files/mock-storage/:key{.+}", async (c) => {
 });
 
 router.get("/files/mock-storage/:key{.+}", async (c) => {
+  if (process.env.FILE_STORAGE !== "memory") return c.text("Not Found", 404);
   const key = decodeURIComponent(c.req.param("key"));
   const item = MemoryStorageProvider.get(key);
   if (!item) return c.text("Not Found", 404);
