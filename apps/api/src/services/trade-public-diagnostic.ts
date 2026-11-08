@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { ensureAfriConnectAccount, type EnsureAccountResult } from "@entrust/auth";
 import { schema } from "@entrust/db";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import { NOT_KNOWN, checkAnswers, isNotKnown, type FormDefinition, type FormQuestion } from "@entrust/forms";
@@ -102,9 +103,9 @@ function startingAnswers(template: { questions: readonly FormQuestion[] }, input
   return answers;
 }
 
-function linkOf(token: string): string {
+function linkOf(token: string, proof?: string): string {
   const base = (process.env.TRADE_APP_URL ?? "http://localhost:3001").replace(/\/+$/, "");
-  return `${base}/onboarding/${token}`;
+  return `${base}/onboarding/${token}${proof ? `?proof=${proof}` : ""}`;
 }
 
 /**
@@ -132,6 +133,8 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
   }
 
   const token = newToken();
+  // Only the emailed copy of the link carries this, so opening that copy proves the visitor reads the address's mail.
+  const proof = newToken();
   const template = latestDiagnosticTemplate();
   const [row] = await ctx.db
     .insert(schema.publicDiagnostic)
@@ -143,6 +146,7 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
       templateVersion: template.version,
       answers: startingAnswers(template, { email, businessName: input.businessName.trim(), phone: input.phone.trim() }),
       ipHash: input.addressHash ?? null,
+      emailProofHash: await hashToken(proof),
     })
     .returning({ id: schema.publicDiagnostic.id });
   if (!row) throw new Error("The diagnostic was not started.");
@@ -160,7 +164,7 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
           "Thank you for starting the Entrust TRADE onboarding diagnostic. This is your private link. Your answers save as you go, so you can stop and carry on from this link whenever you like, on any device.",
           "Please don't forward it: anyone with the link can read and change your answers.",
         ],
-        action: { label: "Continue the diagnostic", url: linkOf(token) },
+        action: { label: "Continue the diagnostic", url: linkOf(token, proof) },
       },
     });
     await ctx.db.update(schema.publicDiagnostic).set({ linkEmailedAt: ctx.now }).where(eq(schema.publicDiagnostic.id, row.id));
@@ -179,6 +183,8 @@ export interface PublicDiagnosticView {
   phone: string | null;
   businessName: string | null;
   submittedAt: string | null;
+  /** Whether the visitor has opened the link from their email, which proves the address is theirs. */
+  emailVerified: boolean;
   variables: Record<string, string>;
   answers: Record<string, unknown>;
   progress: { total: number; answered: number; percent: number; bySection: Record<string, { answered: number; total: number }> };
@@ -213,6 +219,7 @@ function viewOf(row: Row, now: Date): PublicDiagnosticView {
     phone: row.phone,
     businessName: row.businessName,
     submittedAt: row.submittedAt?.toISOString() ?? null,
+    emailVerified: row.emailVerifiedAt !== null,
     variables: { ...VARIABLES },
     answers: row.answers ?? {},
     progress: { ...check.progress, bySection: { ...check.progress.bySection } },
@@ -224,6 +231,87 @@ function viewOf(row: Row, now: Date): PublicDiagnosticView {
 
 export async function getPublicDiagnostic(ctx: Writer, token: string): Promise<PublicDiagnosticView> {
   return viewOf(await byToken(ctx.db, token), ctx.now);
+}
+
+/** Two equal-length strings compared without an early exit. */
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * The visitor confirmed their email from the link we sent (a button on that page, not the page load, so a mail
+ * scanner opening the link proves nothing): the address is theirs. From now on they have an account, on AfriConnect
+ * and on Entrust (`ensureAccount`), with no password until they first sign in, and the draft records which Entrust
+ * user it is.
+ *
+ * The draft's private link changes at that moment and the new one is emailed, so whoever started the draft with
+ * this address (perhaps not its owner) can no longer read or change it. The new token comes back as `token`.
+ *
+ * A wrong or spent proof changes nothing and says nothing. The account is made once, after the row is saved; if
+ * AfriConnect is down or the accounts disagree, that is logged and left to scripts/link-africonnect-accounts.ts,
+ * so a token holder cannot make the API call AfriConnect again and again.
+ */
+export async function verifyPublicDiagnosticEmail(
+  ctx: Writer,
+  token: string,
+  proof: string,
+  ensureAccount: (person: { email: string }) => Promise<EnsureAccountResult> = ensureAfriConnectAccount,
+): Promise<PublicDiagnosticView & { token?: string }> {
+  const next = newToken();
+  const confirmed = await ctx.db.transaction(async (tx) => {
+    const current = await byToken(tx, token, { lock: true });
+    if (current.emailVerifiedAt || !current.emailProofHash) return { row: current, now: false };
+    if (!/^[A-Za-z0-9_-]{20,80}$/.test(proof) || !sameText(await hashToken(proof), current.emailProofHash)) {
+      return { row: current, now: false };
+    }
+    const [saved] = await tx
+      .update(schema.publicDiagnostic)
+      .set({ emailVerifiedAt: ctx.now, emailProofHash: null, tokenHash: await hashToken(next) })
+      .where(eq(schema.publicDiagnostic.id, current.id))
+      .returning();
+    return { row: saved ?? current, now: true };
+  });
+  if (!confirmed.now) return viewOf(confirmed.row, ctx.now);
+  let row = confirmed.row;
+
+  try {
+    await enqueue(JOB_NAMES.SEND_EMAIL, {
+      to: row.email,
+      subject: "Your email is confirmed",
+      template: "summit-notice",
+      props: {
+        heading: "Your email is confirmed",
+        greeting: row.businessName ? `Hello ${row.businessName},` : "Hello,",
+        paragraphs: [
+          "Thank you for confirming your email. This is your private link to the onboarding diagnostic from now on; the earlier one no longer works.",
+          "Please don't forward it: anyone with the link can read and change your answers.",
+        ],
+        action: { label: "Continue the diagnostic", url: linkOf(next) },
+      },
+    });
+  } catch (error) {
+    console.error(`[trade] The new diagnostic link for ${row.id} could not be queued`, error);
+  }
+
+  try {
+    const result = await ensureAccount({ email: row.email });
+    if (result.status === "linked") {
+      const [linked] = await ctx.db
+        .update(schema.publicDiagnostic)
+        .set({ userId: result.userId })
+        .where(eq(schema.publicDiagnostic.id, row.id))
+        .returning();
+      row = linked ?? row;
+    } else if (result.status !== "disabled") {
+      console.warn(`[trade] No account was made for diagnostic ${row.id}: ${result.status} (${"reason" in result ? result.reason : ""})`);
+    }
+  } catch (error) {
+    console.error(`[trade] No account was made for diagnostic ${row.id}`, error);
+  }
+  return { ...viewOf(row, ctx.now), token: next };
 }
 
 /** The template the visitor's draft was started against, which may be older than the newest. */

@@ -1144,6 +1144,11 @@ export const publicDiagnostic = trade.table(
     // A hash of the visitor's address, only to limit how many forms one address starts in an hour.
     ipHash: text("ip_hash"),
     linkEmailedAt: timestamp("link_emailed_at", { withTimezone: true }),
+    // The link on screen proves nothing about the email; the copy in the email carries a one-time proof, and opening
+    // it sets emailVerifiedAt. Only then does the visitor get an account (on AfriConnect and Entrust, as userId).
+    emailProofHash: text("email_proof_hash"),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authClient } from "@entrust/account";
+import { authClient, continueWithAfriConnect } from "@entrust/account";
 import { Button } from "@entrust/ui";
 import { countryName } from "@/lib/summit";
 import { rememberBusiness } from "@/lib/summit-business";
@@ -15,8 +15,12 @@ const label = "block text-base font-semibold text-ink";
 /**
  * The first step of the application, for a visitor with no account: the business and the person applying for it. It
  * creates the account (a link to confirm the email address follows) and keeps the business for when they come back.
+ *
+ * With `afriConnect`, the account is made on AfriConnect's sign-in page instead: this step asks for the business and
+ * the email, and AfriConnect confirms the email with a code, asks for a name and a password, and sends the visitor back
+ * here, signed in, with an Entrust account as well.
  */
-export function ApplyStart({ countries }: { countries: readonly string[] }) {
+export function ApplyStart({ countries, afriConnect = false }: { countries: readonly string[]; afriConnect?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<{ message: string; haveAccount?: boolean }>();
@@ -27,6 +31,14 @@ export function ApplyStart({ countries }: { countries: readonly string[] }) {
     setPending(true);
     setError(undefined);
     rememberBusiness(business);
+    if (afriConnect) {
+      const failed = await continueWithAfriConnect({ email, product: "trade", callbackPath: "/summit/apply", errorPath: signInHref("/summit/apply") });
+      if (failed) {
+        setError({ message: failed.error });
+        setPending(false);
+      }
+      return;
+    }
     // The link in the email brings them back to the application, signed in.
     const result = await authClient.signUp.email({
       name: String(form.get("name") ?? "").trim(),
@@ -72,39 +84,53 @@ export function ApplyStart({ countries }: { countries: readonly string[] }) {
         </select>
       </div>
 
-      <div className="space-y-5 border-t border-line pt-5">
-        <p className="text-sm text-ink-2">Now your details. You will use them to sign in and follow your application.</p>
-        <div className="space-y-1.5">
-          <label htmlFor="apply-name" className={label}>
-            Your full name
-          </label>
-          <input id="apply-name" name="name" required maxLength={120} autoComplete="name" className={textInput(false)} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="apply-email" className={label}>
-            Email
-          </label>
-          <input id="apply-email" name="email" type="email" required autoComplete="email" className={textInput(false)} />
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="apply-password" className={label}>
-            Password
-          </label>
-          <input
-            id="apply-password"
-            name="password"
-            type="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            aria-describedby="apply-password-hint"
-            className={textInput(false)}
-          />
-          <p id="apply-password-hint" className="text-sm text-ink-3">
-            At least 8 characters.
+      {afriConnect ? (
+        <div className="space-y-5 border-t border-line pt-5">
+          <p className="text-sm text-ink-2">
+            Now your email. On the next page you sign in, or confirm the email with a code and choose a password if you are new, then you come straight back here.
           </p>
+          <div className="space-y-1.5">
+            <label htmlFor="apply-email" className={label}>
+              Email
+            </label>
+            <input id="apply-email" name="email" type="email" required autoComplete="email" className={textInput(false)} />
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-5 border-t border-line pt-5">
+          <p className="text-sm text-ink-2">Now your details. You will use them to sign in and follow your application.</p>
+          <div className="space-y-1.5">
+            <label htmlFor="apply-name" className={label}>
+              Your full name
+            </label>
+            <input id="apply-name" name="name" required maxLength={120} autoComplete="name" className={textInput(false)} />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="apply-email" className={label}>
+              Email
+            </label>
+            <input id="apply-email" name="email" type="email" required autoComplete="email" className={textInput(false)} />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="apply-password" className={label}>
+              Password
+            </label>
+            <input
+              id="apply-password"
+              name="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              aria-describedby="apply-password-hint"
+              className={textInput(false)}
+            />
+            <p id="apply-password-hint" className="text-sm text-ink-3">
+              At least 8 characters.
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="rounded-md bg-danger-50 px-3 py-2 text-sm font-medium text-danger" role="alert">
@@ -131,7 +157,11 @@ export function ApplyStart({ countries }: { countries: readonly string[] }) {
           </Link>
         </p>
       </div>
-      <p className="text-sm text-ink-3">We will email you a link to confirm your address, then you carry on with the application.</p>
+      <p className="text-sm text-ink-3">
+        {afriConnect
+          ? "This creates your Entrust Africa account."
+          : "We will email you a link to confirm your address, then you carry on with the application."}
+      </p>
     </form>
   );
 }

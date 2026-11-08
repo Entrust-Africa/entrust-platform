@@ -14,6 +14,7 @@ import {
   startPublicDiagnostic,
   submitPublicDiagnostic,
   templateForToken,
+  verifyPublicDiagnosticEmail,
 } from "../../services/trade-public-diagnostic";
 import { contextFor } from "../clear/shared";
 
@@ -43,6 +44,8 @@ const startBody = z.object({
   website: z.string().max(500).optional(),
 });
 
+const proofBody = z.object({ proof: z.string().max(100) });
+
 const saveBody = z.object({ answers: z.record(z.string().max(40), z.unknown().nullable()) });
 
 const listQuery = z.object({
@@ -70,6 +73,9 @@ export const tradePublicDiagnostic = new Hono<AppEnv>()
   .get("/public/diagnostic/:token", async (c) => c.json(await getPublicDiagnostic({ db: getDb(), now: now() }, c.req.param("token"))))
   .put("/public/diagnostic/:token/responses", zValidator("json", saveBody, invalid), async (c) =>
     c.json(await savePublicDiagnostic({ db: getDb(), now: now() }, c.req.param("token"), c.req.valid("json"))),
+  )
+  .post("/public/diagnostic/:token/verify-email", zValidator("json", proofBody, invalid), async (c) =>
+    c.json(await verifyPublicDiagnosticEmail({ db: getDb(), now: now() }, c.req.param("token"), c.req.valid("json").proof)),
   )
   .post("/public/diagnostic/:token/submit", async (c) => c.json(await submitPublicDiagnostic({ db: getDb(), now: now() }, c.req.param("token"))))
 

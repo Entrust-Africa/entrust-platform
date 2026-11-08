@@ -1,4 +1,5 @@
 export { authClient } from "./auth-client";
+export { afriConnectErrorMessage, continueWithAfriConnect, type AfriConnectProduct } from "./africonnect";
 export { useSignOut } from "./use-sign-out";
 export type { UserProfile, UserOrganization } from "./types";
 
