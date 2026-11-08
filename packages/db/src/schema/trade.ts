@@ -739,6 +739,32 @@ export const outcome = trade.table(
 );
 export const tradeOutcome = outcome;
 
+export const AI_EXCHANGE_STATUSES = ["completed", "refused", "failed"] as const;
+export type AiExchangeStatus = (typeof AI_EXCHANGE_STATUSES)[number];
+
+// One request to the AI assistant for module exercises (#76), kept for review. It records what was sent and what came
+// back, and the tokens the month's cost cap is counted from. Nothing reads it to set a score, a plan or an evidence status.
+export const aiExchange = trade.table(
+  "ai_exchange",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    organizationId: text("organization_id").references(() => organization.id, { onDelete: "set null" }),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    contentVersion: text("content_version").notNull(),
+    promptId: text("prompt_id").notNull(),
+    input: jsonb("input").$type<Record<string, string>>().notNull(),
+    output: text("output"),
+    status: text("status", { enum: AI_EXCHANGE_STATUSES }).notNull(),
+    model: text("model"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_ai_exchange_user_created_idx").on(t.userId, t.createdAt), index("trade_ai_exchange_created_idx").on(t.createdAt)],
+);
+
 // Audit history for financing and export outcome status changes (#69).
 export const outcomeEvent = trade.table(
   "outcome_event",
