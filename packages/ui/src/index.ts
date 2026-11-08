@@ -11,6 +11,7 @@ export {
 export { StatusBadge, type StatusTone } from "./status-badge";
 export { EvidenceLabel, type EvidenceLabelProps, type EvidenceTier } from "./evidence-label";
 export { Card } from "./card";
+export { AfriConnectCard, type AfriConnectCardProps } from "./africonnect-card";
 export { Patchwork } from "./patchwork";
 export { emailTheme } from "./email-theme";
 export { Skeleton, LoadingShell, ErrorState, EmptyState } from "./skeleton";

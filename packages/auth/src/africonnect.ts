@@ -177,3 +177,23 @@ export async function provisionAfriConnectAccount(
 export function afriConnectSignInShown(env: Record<string, string | undefined> = process.env): boolean {
   return env.AFRICONNECT_SIGN_IN?.trim().toLowerCase() === "on";
 }
+
+/**
+ * Where "Meet buyers" sends someone: AfriConnect's marketplace, on the same site as the issuer. Set
+ * AFRICONNECT_BUYERS_URL in a platform app's settings to point elsewhere (a staging AfriConnect, or another page).
+ * Read per request on the server; anything that is not an http(s) address is ignored.
+ */
+export function afriConnectBuyersUrl(env: Record<string, string | undefined> = process.env): string {
+  const web = (value: string | undefined) => {
+    try {
+      const url = new URL(value?.trim() ?? "");
+      return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+    } catch {
+      return null;
+    }
+  };
+  const chosen = web(env.AFRICONNECT_BUYERS_URL);
+  if (chosen) return chosen.href;
+  const site = web(env.AFRICONNECT_ISSUER) ?? new URL(DEFAULT_ISSUER);
+  return `${site.origin}/marketplace`;
+}

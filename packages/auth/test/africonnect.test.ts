@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  afriConnectBuyersUrl,
   afriConnectOAuthConfig,
   afriConnectSettings,
   fetchAfriConnectUser,
@@ -103,5 +104,23 @@ describe("provisioning an account on AfriConnect", () => {
       status: "unavailable",
       reason: "fetch failed",
     });
+  });
+});
+
+describe("the Meet buyers address", () => {
+  it("is AfriConnect's marketplace on the production site by default", () => {
+    expect(afriConnectBuyersUrl({})).toBe("https://www.africonnect.africa.com/marketplace");
+  });
+
+  it("follows the issuer's site when one is set", () => {
+    expect(afriConnectBuyersUrl({ AFRICONNECT_ISSUER: "http://localhost:3000/api/auth" })).toBe("http://localhost:3000/marketplace");
+  });
+
+  it("can be set outright, and an address that is not http(s) is ignored", () => {
+    expect(afriConnectBuyersUrl({ AFRICONNECT_BUYERS_URL: " https://staging.example.com/buyers " })).toBe("https://staging.example.com/buyers");
+    expect(afriConnectBuyersUrl({ AFRICONNECT_BUYERS_URL: "javascript:alert(1)" })).toBe("https://www.africonnect.africa.com/marketplace");
+    expect(afriConnectBuyersUrl({ AFRICONNECT_BUYERS_URL: "not a url", AFRICONNECT_ISSUER: "also not" })).toBe(
+      "https://www.africonnect.africa.com/marketplace",
+    );
   });
 });
