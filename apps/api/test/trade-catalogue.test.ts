@@ -95,9 +95,9 @@ describe("the cohorts", () => {
     expect(body.cohorts.every((c: Json) => c.count === c.smes.length)).toBe(true);
   });
 
-  it("says the first two cohorts are previous and the third is active", async () => {
+  it("says all three cohorts are previous", async () => {
     const { body } = await get(w.admin);
-    expect(body.cohorts.map((c: Json) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"], [3, "active"]]);
+    expect(body.cohorts.map((c: Json) => [c.number, c.status])).toEqual([[1, "previous"], [2, "previous"], [3, "previous"]]);
   });
 
   it("gives each business the id of its stored record, so its page can be opened", async () => {

@@ -16,9 +16,9 @@ export interface PilotCohort {
   status: CohortStatus;
 }
 
-// Fixed in code, like the split itself: the first two pilot cohorts are over, and the Export Growth Companies cohort is the one being
-// run (its training starts in November 2026). When cohorts and enrolments are managed in the database (#56), the status should come
-// from a cohort's dates instead.
+// Fixed in code, like the split itself: all three pilot cohorts have finished their training, so none is active. The cohort starting on
+// 19 November 2026 is a new one and isn't in this list. When cohorts and enrolments are managed in the database (#56), the status should
+// come from a cohort's dates instead.
 export const PILOT_COHORTS: readonly PilotCohort[] = [
   { number: 1, name: "Leather", description: "The leather businesses in the export readiness diagnostic.", status: "previous" },
   { number: 2, name: "Agro-processing", description: "The agro-processing businesses in Ethiopia that applied to the training programme.", status: "previous" },
@@ -26,7 +26,7 @@ export const PILOT_COHORTS: readonly PilotCohort[] = [
     number: 3,
     name: "Export growth companies",
     description: "The businesses in Ethiopia that applied to the Export Growth Companies cohort, in agro-processing, garments, gemstones, leather, coffee and other sectors.",
-    status: "active",
+    status: "previous",
   },
 ];
 
