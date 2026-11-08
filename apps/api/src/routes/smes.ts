@@ -68,6 +68,7 @@ export const smes = new Hono<AppEnv>()
       }
     }),
     async (c) => {
+      requireUser(c);
       const body = c.req.valid("json");
       const db = getDb();
       const duplicateResult = await checkSmeDuplicates(db, {

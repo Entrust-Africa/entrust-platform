@@ -305,6 +305,21 @@ describe("Files API", () => {
       expect(res.body.error).toMatch(/initiated/i);
     });
 
+    it("has no mock storage unless it is the storage in use", async () => {
+      const before = process.env.FILE_STORAGE;
+      delete process.env.FILE_STORAGE;
+      try {
+        for (const method of ["GET", "PUT"]) {
+          const anonymous = await app.request("/v1/files/mock-storage/some-key", { method, ...(method === "PUT" ? { body: "<script></script>", headers: { "content-type": "text/html" } } : {}) });
+          expect(anonymous.status, method).toBe(401);
+          const signedIn = await app.request("/v1/files/mock-storage/some-key", { method, headers: { cookie: w.ownerA.cookie }, ...(method === "PUT" ? { body: "x" } : {}) });
+          expect(signedIn.status, method).toBe(404);
+        }
+      } finally {
+        process.env.FILE_STORAGE = before;
+      }
+    });
+
     it("supports HTTP PUT and GET via mock-storage endpoints in development/testing", async () => {
       const content = Buffer.from("mock s3 upload payload");
       const sha = createHash("sha256").update(content).digest("hex");

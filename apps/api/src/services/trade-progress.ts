@@ -63,6 +63,9 @@ export async function listEnrollmentProgress(
   }));
 }
 
+const LEARNER_SET_STATUSES: readonly ModuleProgressStatus[] = ["not_started", "in_progress", "submitted"];
+const RESULT_STATUSES: readonly ModuleProgressStatus[] = ["passed", "exempted"];
+
 export async function recordModuleProgress(
   ctx: Ctx,
   input: RecordModuleProgressInput
@@ -155,6 +158,17 @@ export async function recordModuleProgress(
     }
   }
   progressData.completedLessons = completedLessons;
+
+  // A module's result comes from its assessment, an approved exemption or a staff override, never from
+  // the learner's own request. Once it has one, the learner's requests can't change it either.
+  if (input.status) {
+    if (!LEARNER_SET_STATUSES.includes(input.status)) {
+      throw new ServiceError("forbidden", "A module's result comes from its assessment.");
+    }
+    if (existing && RESULT_STATUSES.includes(existing.status as ModuleProgressStatus) && input.status !== existing.status) {
+      throw new ServiceError("invalid_transition", "This module already has a result.");
+    }
+  }
 
   let newStatus: ModuleProgressStatus =
     input.status ?? (existing?.status as ModuleProgressStatus) ?? "in_progress";

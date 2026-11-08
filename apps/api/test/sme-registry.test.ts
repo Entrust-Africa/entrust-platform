@@ -10,6 +10,7 @@ import {
   signUp,
   type TestUser,
 } from "./support";
+import { app } from "../src/app";
 import { normalizeLegalName } from "../src/services/sme-registry";
 
 const w = {} as {
@@ -108,6 +109,23 @@ describe("SME duplicate registration check on creation", () => {
     });
 
     expect(res.status).toBe(201);
+  });
+
+  it("answers the pre-flight duplicate check only for someone signed in", async () => {
+    const res = await callV1(null, "POST", "/smes/check-duplicate", { legalName: "Anyone At All Exports", country: "ET" });
+    expect(res.status).toBe(401);
+  });
+
+  it("won't let an owner delete their organisation and its records", async () => {
+    const org = await createOrganization("sme-reg-delete", [[w.otherUser, "owner"]]);
+    const res = await app.request("/api/auth/organization/delete", {
+      method: "POST",
+      headers: { cookie: w.otherUser.cookie, "content-type": "application/json", origin: "http://localhost:3000" },
+      body: JSON.stringify({ organizationId: org }),
+    });
+    expect(res.status).toBe(404);
+    const [row] = await db.select({ id: schema.organization.id }).from(schema.organization).where(eq(schema.organization.id, org));
+    expect(row?.id).toBe(org);
   });
 
   it("pre-flight duplicate check reports registration number conflict", async () => {
