@@ -57,15 +57,28 @@ describe("module listing and content", () => {
       expect(body.items.find((m: { id: string }) => m.id === "M01").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("ready");
-      expect(body.items.find((m: { id: string }) => m.id === "M08").contentStatus).toBe("in_production");
+      expect(body.items.find((m: { id: string }) => m.id === "M11").contentStatus).toBe("in_production");
+      expect(body.items.find((m: { id: string }) => m.id === "M08").contentStatus).toBe(user === w.admin ? "draft" : "in_production");
       expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
     }
   });
 
   it("shows a module with no content", async () => {
-    const { status, body } = await get(w.learner, "/modules/M08");
+    const { status, body } = await get(w.learner, "/modules/M11");
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id: "M08", contentStatus: "in_production", content: null });
+    expect(body).toMatchObject({ id: "M11", contentStatus: "in_production", content: null });
+  });
+
+  it("shows a draft to staff only", async () => {
+    const learner = await get(w.learner, "/modules/M08");
+    expect(learner.status).toBe(200);
+    expect(learner.body).toMatchObject({ id: "M08", contentStatus: "in_production", content: null });
+    expect((await get(w.learner, "/modules/M08?version=1.0.0")).status).toBe(404);
+
+    const staff = await get(w.admin, "/modules/M08");
+    expect(staff.status).toBe(200);
+    expect(staff.body).toMatchObject({ id: "M08", contentStatus: "draft", title: "Export Execution and Requirements" });
+    expect(staff.body.content.lessons).toHaveLength(9);
   });
 
   it("finds no module or version that isn't there", async () => {

@@ -99,7 +99,7 @@ describe("a learner's journey from enrolment to certificate", () => {
 
   it("passes every assigned module that has content, through lessons, knowledge check and assessor", async () => {
     for (const moduleId of w.modules) {
-      const content = findVersion(moduleId as ModuleId, "staff");
+      const content = findVersion(moduleId as ModuleId, "learner");
       if (!content) continue;
       for (const lesson of content.lessons) {
         ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId, lessonId: lesson.id, completed: true, contentVersion: content.version }));
@@ -117,14 +117,14 @@ describe("a learner's journey from enrolment to certificate", () => {
   });
 
   it("has no certificate while modules with no content are left, and can't open them", async () => {
-    const left = w.modules.filter((m) => !findVersion(m as ModuleId, "staff"));
+    const left = w.modules.filter((m) => !findVersion(m as ModuleId, "learner"));
     expect(left).toEqual(expect.arrayContaining(["M11", "M12"]));
     expect((await get(w.learner, "/modules/M11")).body.content).toBeNull();
     expect((await get(w.learner, `/enrollments/${w.enrollment}/certificate`)).status).toBe(404);
   });
 
   it("finishes the programme and gets a certificate anyone can check, once the rest are overridden", async () => {
-    for (const moduleId of w.modules.filter((m) => !findVersion(m as ModuleId, "staff"))) {
+    for (const moduleId of w.modules.filter((m) => !findVersion(m as ModuleId, "learner"))) {
       ok(await post(w.admin, "/admin/override-module-completion", { enrollmentId: w.enrollment, moduleId, reason: "No content yet" }));
     }
     const certificate = ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`));
