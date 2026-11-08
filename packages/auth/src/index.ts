@@ -120,6 +120,8 @@ export const auth = betterAuth({
     // Always present (with no providers when AfriConnect is off), so the session type keeps every plugin's fields.
     genericOAuth({ config: afriConnect ? [afriConnectOAuthConfig(afriConnect, fillEmptyName)] : [] }),
     organization({
+      // An SME's training, assessment and certificate records hang off its organisation, so an owner can't delete it.
+      disableOrganizationDeletion: true,
       schema: {
         invitation: {
           additionalFields: {
