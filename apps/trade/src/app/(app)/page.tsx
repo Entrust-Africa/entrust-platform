@@ -307,7 +307,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
               </div>
               <Link
                 href="/pipeline"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 shadow-xs transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-surface px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 shadow-xs transition-colors"
               >
                 Commercial Pipeline →
               </Link>
@@ -323,7 +323,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🎉</span>
-                <h2 className="font-display text-lg font-bold text-ink">Congratulations! Program Completed</h2>
+                <h2 className="font-display text-lg font-bold text-ink">Congratulations! Programme completed</h2>
                 <StatusBadge tone="product">COMPLETED</StatusBadge>
               </div>
               <p className="text-xs text-ink-2 max-w-xl leading-relaxed">
@@ -333,7 +333,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 href="/assessment/exit"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-semibold text-ink hover:bg-canvas transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-surface text-xs font-semibold text-ink hover:bg-canvas transition-colors"
               >
                 <TrendingUp className="size-3.5" />
                 Exit Assessment

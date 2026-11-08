@@ -22,7 +22,7 @@ export default async function ExitAssessmentPage() {
   if (!currentEnrollment) {
     return (
       <div className="mx-auto max-w-xl py-12 text-center space-y-4">
-        <p className="text-sm text-ink-3">No active enrollment found for this organization.</p>
+        <p className="text-sm text-ink-3">No active enrolment found for this organisation.</p>
         <Link href="/" className="text-sm font-semibold text-brand-600 hover:text-brand-700">
           Go to Home
         </Link>
@@ -75,7 +75,7 @@ export default async function ExitAssessmentPage() {
       <Card className="p-6 bg-gradient-to-r from-brand-50/50 to-emerald-50/40 border-brand-200 space-y-3">
         <div className="flex items-center gap-2 text-brand-800 font-semibold text-sm">
           <TrendingUp className="size-4" />
-          Program Impact & Capability Advancement
+          Programme impact and capability advancement
         </div>
         <p className="text-xs text-ink-2 leading-relaxed">
           The exit assessment repeats sections B through G of the diagnostic to objectively measure capability progression.
@@ -92,13 +92,13 @@ export default async function ExitAssessmentPage() {
             const delta = c.deltaScore;
             const isPositive = delta !== null && delta > 0;
             return (
-              <Card key={c.domainId} className="p-5 space-y-4 border border-border">
+              <Card key={c.domainId} className="p-5 space-y-4 border border-line">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-bold text-sm text-ink">{c.domainTitle}</h3>
                   {delta !== null && (
                     <span
                       className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full ${
-                        isPositive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-canvas text-ink-3 border border-border"
+                        isPositive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-canvas text-ink-3 border border-line"
                       }`}
                     >
                       {isPositive ? `+${delta}%` : `${delta}%`}
@@ -106,7 +106,7 @@ export default async function ExitAssessmentPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/60">
+                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-line/60">
                   <div className="space-y-1">
                     <span className="text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Placement Baseline</span>
                     <div className="text-lg font-bold text-ink">
@@ -117,7 +117,7 @@ export default async function ExitAssessmentPage() {
                     )}
                   </div>
 
-                  <div className="space-y-1 border-l border-border/60 pl-3">
+                  <div className="space-y-1 border-l border-line/60 pl-3">
                     <span className="text-[11px] font-semibold text-brand-700 uppercase tracking-wider">Exit Score</span>
                     <div className="text-lg font-bold text-emerald-700">
                       {c.exitScore !== null ? `${c.exitScore}%` : "–"}
