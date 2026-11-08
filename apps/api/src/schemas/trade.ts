@@ -73,6 +73,16 @@ export const PracticeScenarioList = z
         ownFacts: z.boolean(),
       }),
     ),
+    /** The questions a case can ask, and the step that normally settles each. */
+    facts: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        help: z.string(),
+        options: z.array(z.object({ value: z.string(), label: z.string() })).nullable(),
+        determinedAt: z.string().nullable(),
+      }),
+    ),
   })
   .openapi("PracticeScenarioList");
 
