@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
-import { serverApi } from "@/lib/api";
+import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
+import { getMe, serverApi } from "@/lib/api";
 import { PHASES } from "@/lib/statuses";
 import { Drawer } from "./drawer";
 import { EvidenceTab } from "./evidence";
@@ -31,11 +32,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 type Search = Record<string, string | string[] | undefined>;
 
+/** From this phase on the goods are shipped or about to be: time to line up the next buyer. */
+const FINAL_STAGES_FROM = 6;
+
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 export default async function CasePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Search> }) {
   const [{ id }, search] = await Promise.all([params, searchParams]);
-  const detail = await loadCase(id);
+  const [detail, me] = await Promise.all([loadCase(id), getMe()]);
+  // Exporters are pointed to AfriConnect once a case reaches its last stretch; Entrust staff have no use for it.
+  const buyers =
+    !me?.staffRole && detail.status !== "cancelled" && (detail.status === "closed" || detail.currentPhase >= FINAL_STAGES_FROM)
+      ? { href: afriConnectBuyersUrl(), closed: detail.status === "closed" }
+      : undefined;
 
   const tabParam = one(search.tab);
   const tab: Tab = TABS.find((t) => t.id === tabParam)?.id ?? "overview";
@@ -49,7 +58,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
     <>
       <CaseHeader detail={detail} view={view} />
       <div className="mt-6">
-        {tab === "overview" && <OverviewTab detail={detail} view={view} />}
+        {tab === "overview" && <OverviewTab detail={detail} view={view} buyers={buyers} />}
         {tab === "steps" && <StepsTab detail={detail} view={view} phase={phase ?? detail.currentPhase} />}
         {tab === "evidence" && <EvidenceTab detail={detail} view={view} />}
         {tab === "flags" && <FlagsTab detail={detail} view={view} />}

@@ -1,7 +1,8 @@
 import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Button, Card, StatusBadge, cn } from "@entrust/ui";
+import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
+import { AfriConnectCard, Button, Card, StatusBadge, cn } from "@entrust/ui";
 import { getMe, serverApi } from "@/lib/api";
 import { countryName, productLabel, readable } from "@/lib/catalogue";
 import { CASE_STATUSES, NEXT_ACTIONS, PHASES } from "@/lib/statuses";
@@ -71,6 +72,9 @@ export default async function CasesPage({
           New case
         </Link>
       </div>
+
+      {/* Exporters get a way across to the buyers; Entrust staff have no use for it. */}
+      {!me?.staffRole && <AfriConnectCard href={afriConnectBuyersUrl()} className="mt-6" />}
 
       <Form action="/" className="mt-6 flex flex-wrap items-end gap-3">
         <SelectField

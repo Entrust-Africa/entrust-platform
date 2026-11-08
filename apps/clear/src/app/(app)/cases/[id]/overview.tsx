@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, CircleDashed, CircleDot, Clock, FileText, Flag } from "lucide-react";
-import { Card, StatusBadge, cn } from "@entrust/ui";
+import { AfriConnectCard, Card, StatusBadge, cn } from "@entrust/ui";
 import { readable } from "@/lib/catalogue";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { CLOCK_STATES, EVIDENCE_STATUSES, FLAG_SEVERITIES, NEXT_ACTIONS, OWNERS } from "@/lib/statuses";
@@ -23,10 +23,31 @@ import {
 type DeadlineClock = Detail["deadlines"][number];
 
 /** The overview tab: what to do next, where the case stands, and what needs someone. */
-export function OverviewTab({ detail, view }: { detail: Detail; view: View }) {
+export function OverviewTab({
+  detail,
+  view,
+  buyers,
+}: {
+  detail: Detail;
+  view: View;
+  /** Set when the case is in its final stretch (or closed): where to send the exporter to meet buyers. */
+  buyers?: { href: string; closed: boolean } | undefined;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <NextStep detail={detail} view={view} />
+      {buyers && (
+        <AfriConnectCard
+          href={buyers.href}
+          emphasis="strong"
+          title="Looking for your next buyer?"
+          description={
+            buyers.closed
+              ? "This export is closed. Meet more buyers on AfriConnect and answer their sourcing requests."
+              : "This export is in its final stretch. Meet your next buyers on AfriConnect while you finish."
+          }
+        />
+      )}
       <Figures detail={detail} />
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
         <NeedsAttention detail={detail} view={view} />

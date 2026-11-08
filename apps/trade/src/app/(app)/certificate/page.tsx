@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Award, CheckCircle2, Download, Printer, ShieldAlert, ArrowLeft } from "lucide-react";
-import { Button, Card, StatusBadge } from "@entrust/ui";
+import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
+import { AfriConnectCard, Button, Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type { CertificateView } from "@/lib/types";
@@ -145,6 +146,17 @@ export default async function CertificatePage() {
               </div>
             </div>
           </div>
+
+          {/* The programme is done: the next step is to meet buyers. Not printed with the certificate. */}
+          {!me.staffRole && (
+            <AfriConnectCard
+              href={afriConnectBuyersUrl()}
+              emphasis="strong"
+              title="You've finished the programme. Now meet buyers."
+              description="Take what you've built to buyers on AfriConnect: show your products and answer their sourcing requests."
+              className="print:hidden"
+            />
+          )}
         </div>
       )}
     </div>

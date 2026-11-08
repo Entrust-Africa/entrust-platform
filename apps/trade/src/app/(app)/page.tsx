@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, BookOpen, CheckCircle2, Circle, Clock, PlayCircle, Award, TrendingUp } from "lucide-react";
-import { Button, Card, StatusBadge } from "@entrust/ui";
+import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
+import { AfriConnectCard, Button, Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments, listSessions } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import { CreateOrganisation } from "@/components/summit/create-organisation";
@@ -314,6 +315,20 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Meet buyers on AfriConnect: a quiet card while training, a stronger one once the programme is done. Not for staff. */}
+      {!isStaff && (
+        <AfriConnectCard
+          href={afriConnectBuyersUrl()}
+          emphasis={currentEnrollment?.status === "completed" ? "strong" : "quiet"}
+          {...(currentEnrollment?.status === "completed"
+            ? {
+                title: "You've finished the programme. Now meet buyers.",
+                description: "Take what you've built to buyers on AfriConnect: show your products and answer their sourcing requests.",
+              }
+            : {})}
+        />
       )}
 
       {/* Program Completed Banner (#71) */}
