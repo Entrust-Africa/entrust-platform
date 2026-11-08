@@ -41,13 +41,16 @@ export function AssessorWorkspace({
     Record<string, { points: number; comment?: string }>
   >(() => {
     const initial: Record<string, { points: number; comment?: string }> = {};
+    // Start from the official score when there is one, so correcting one thing can't reset the rest,
+    // and from zero when there isn't, so nothing passes without being marked.
+    const official = submission.officialScore?.scores as Record<string, { points: number; comment?: string } | undefined> | undefined;
     for (const c of rubric.criteria) {
-      initial[c.id] = { points: c.maxPoints };
+      initial[c.id] = official?.[c.id] ?? { points: 0 };
     }
     return initial;
   });
 
-  const [confirmedFailures, setConfirmedFailures] = useState<string[]>([]);
+  const [confirmedFailures, setConfirmedFailures] = useState<string[]>(submission.officialScore?.confirmedCriticalFailures ?? []);
   const [feedback, setFeedback] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
