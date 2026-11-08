@@ -170,7 +170,8 @@ describe("a sponsor's cohorts", () => {
     const res = await get(w.bankViewer, "/sponsor/cohorts");
     expect(res.status).toBe(200);
     expect(res.body.items.map((c: Json) => c.id)).toEqual([w.cohortA]);
-    expect(res.body.items[0].figures).toMatchObject({ enrolled: 2, byStatus: { active: 2 }, diagnosticsSubmitted: 0, pathwayA: 0, pathwayB: 0 });
+    // Two SMEs and no agreements: every figure that covers them is hidden (#72).
+    expect(res.body.items[0].figures).toMatchObject({ enrolled: null, byStatus: { active: null }, diagnosticsSubmitted: 0, pathwayA: 0, pathwayB: 0 });
     expect(res.body.disclaimer).toContain("not a credit assessment");
     expect(JSON.stringify(res.body)).not.toContain("sp-org");
     expect(JSON.stringify(res.body)).not.toContain(w.org);
@@ -197,7 +198,7 @@ describe("a sponsor's cohorts", () => {
     const [assessment] = await db.insert(schema.tradeAssessment).values({ enrollmentId: w.enrollment, kind: "diagnostic", templateVersion: "1.0.0", status: "submitted" }).returning();
     await db.insert(schema.pathwayAssignment).values({ enrollmentId: w.enrollment, assessmentId: assessment!.id, pathway: "B", status: "provisional", rulesVersion: "0.2.0", reasonCodes: ["PATHWAY_RECENT_SHIPMENT"] });
     const res = await get(w.bankAdmin, `/sponsor/cohorts/${w.cohortA}`);
-    expect(res.body.figures).toMatchObject({ enrolled: 2, diagnosticsSubmitted: 1, pathwayA: 0, pathwayB: 1 });
+    expect(res.body.figures).toMatchObject({ enrolled: null, diagnosticsSubmitted: null, pathwayA: 0, pathwayB: null });
     expect(res.body.consenting).toEqual([]);
   });
 });

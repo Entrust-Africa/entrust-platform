@@ -7,6 +7,9 @@ import {
   isSponsorDataKind,
   SPONSOR_DISCLAIMER,
   consentWording,
+  figureIsVisible,
+  protectGroup,
+  type GroupCell,
   type SponsorDataKind,
 } from "@entrust/trade-engine";
 import type { SponsorRole } from "@entrust/roles";
@@ -181,38 +184,67 @@ async function sponsoredCohort(ctx: Ctx, cohortId: string): Promise<{ cohort: Co
   return { ...found, sponsor: await sponsorOrganization(ctx.db, found.cohort.sponsorOrganizationId) };
 }
 
-/** Figures with no names: how many are enrolled, how many finished the diagnostic, and the split between avenues. */
-async function anonymisedFigures(db: Executor, cohortIds: readonly string[]) {
-  const figures = new Map<string, { enrolled: number; byStatus: Record<string, number>; diagnosticsSubmitted: number; pathwayA: number; pathwayB: number }>(
-    cohortIds.map((id) => [id, { enrolled: 0, byStatus: {}, diagnosticsSubmitted: 0, pathwayA: 0, pathwayB: 0 }]),
-  );
-  if (cohortIds.length === 0) return figures;
+interface CohortFigures {
+  enrolled: number | null;
+  byStatus: Record<string, number | null>;
+  diagnosticsSubmitted: number | null;
+  pathwayA: number | null;
+  pathwayB: number | null;
+}
+
+/**
+ * Figures with no names: how many are enrolled, how many finished the diagnostic, and the split between avenues. A figure
+ * that covers fewer than five SMEs is null unless all of them agreed to share their placement results (#72).
+ */
+async function anonymisedFigures(db: Executor, cohorts: readonly { id: string; sponsorId: string }[]) {
+  const figures = new Map<string, CohortFigures>();
+  if (cohorts.length === 0) return figures;
   const enrollments = await db
-    .select({ id: schema.enrollment.id, cohortId: schema.enrollment.cohortId, status: schema.enrollment.status })
+    .select({ id: schema.enrollment.id, cohortId: schema.enrollment.cohortId, organizationId: schema.enrollment.organizationId, status: schema.enrollment.status })
     .from(schema.enrollment)
-    .where(inArray(schema.enrollment.cohortId, [...cohortIds]));
-  const cohortOf = new Map(enrollments.map((e) => [e.id, e.cohortId]));
-  for (const e of enrollments) {
-    const f = figures.get(e.cohortId)!;
-    f.enrolled += 1;
-    f.byStatus[e.status] = (f.byStatus[e.status] ?? 0) + 1;
-  }
-  if (enrollments.length === 0) return figures;
+    .where(inArray(schema.enrollment.cohortId, cohorts.map((c) => c.id)));
   const ids = enrollments.map((e) => e.id);
-  const diagnostics = await db
-    .select({ enrollmentId: schema.tradeAssessment.enrollmentId })
-    .from(schema.tradeAssessment)
-    .where(and(inArray(schema.tradeAssessment.enrollmentId, ids), eq(schema.tradeAssessment.kind, "diagnostic"), inArray(schema.tradeAssessment.status, ["submitted", "review_required", "scored"])));
-  for (const d of diagnostics) figures.get(cohortOf.get(d.enrollmentId)!)!.diagnosticsSubmitted += 1;
-  const pathways = await db
-    .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway })
-    .from(schema.pathwayAssignment)
-    .where(and(inArray(schema.pathwayAssignment.enrollmentId, ids), ne(schema.pathwayAssignment.status, "superseded")));
-  for (const p of pathways) figures.get(cohortOf.get(p.enrollmentId)!)![p.pathway === "A" ? "pathwayA" : "pathwayB"] += 1;
+  const diagnostics = ids.length
+    ? await db
+        .select({ enrollmentId: schema.tradeAssessment.enrollmentId })
+        .from(schema.tradeAssessment)
+        .where(and(inArray(schema.tradeAssessment.enrollmentId, ids), eq(schema.tradeAssessment.kind, "diagnostic"), inArray(schema.tradeAssessment.status, ["submitted", "review_required", "scored"])))
+    : [];
+  const pathways = ids.length
+    ? await db
+        .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway })
+        .from(schema.pathwayAssignment)
+        .where(and(inArray(schema.pathwayAssignment.enrollmentId, ids), ne(schema.pathwayAssignment.status, "superseded")))
+    : [];
+  const diagnosed = new Set(diagnostics.map((d) => d.enrollmentId));
+
+  for (const { id, sponsorId } of cohorts) {
+    const rows = enrollments.filter((e) => e.cohortId === id);
+    const consents = await liveConsents(db, sponsorId, rows.map((e) => e.organizationId));
+    const consenting = new Set(consents.filter((c) => c.kind === "placement_results").map((c) => c.smeOrganizationId));
+    const cell = (group: typeof rows): GroupCell => ({ value: group.length, smes: new Set(group.map((e) => e.organizationId)) });
+    const everyone = cell(rows);
+    const allVisible = figureIsVisible(everyone.smes, consenting);
+    const statuses = [...new Set(rows.map((e) => e.status))];
+    const statusCounts = protectGroup(statuses.map((s) => cell(rows.filter((e) => e.status === s))), consenting, allVisible);
+    const [submitted] = protectGroup([cell(rows.filter((e) => diagnosed.has(e.id))), cell(rows.filter((e) => !diagnosed.has(e.id)))], consenting, allVisible);
+    const onPathway = (pathway: "A" | "B") => {
+      const enrolled = new Set(pathways.filter((p) => p.pathway === pathway).map((p) => p.enrollmentId));
+      return cell(rows.filter((e) => enrolled.has(e.id)));
+    };
+    const [pathwayA, pathwayB] = protectGroup([onPathway("A"), onPathway("B")], consenting);
+    figures.set(id, {
+      enrolled: allVisible ? rows.length : null,
+      byStatus: Object.fromEntries(statuses.map((s, i) => [s, statusCounts[i] ?? null])),
+      diagnosticsSubmitted: submitted ?? null,
+      pathwayA: pathwayA ?? null,
+      pathwayB: pathwayB ?? null,
+    });
+  }
   return figures;
 }
 
-const cohortSummary = (cohort: CohortRow, program: string, sponsor: SponsorRow, figures: Awaited<ReturnType<typeof anonymisedFigures>> extends Map<string, infer V> ? V : never) => ({
+const cohortSummary = (cohort: CohortRow, program: string, sponsor: SponsorRow, figures: CohortFigures) => ({
   id: cohort.id,
   name: cohort.name,
   program,
@@ -233,7 +265,7 @@ export async function listSponsorCohorts(ctx: Ctx) {
     .innerJoin(schema.organization, eq(schema.organization.id, schema.cohort.sponsorOrganizationId))
     .where(inArray(schema.cohort.sponsorOrganizationId, ids))
     .orderBy(asc(schema.cohort.startDate), asc(schema.cohort.name));
-  const figures = await anonymisedFigures(ctx.db, rows.map((r) => r.cohort.id));
+  const figures = await anonymisedFigures(ctx.db, rows.map((r) => ({ id: r.cohort.id, sponsorId: r.cohort.sponsorOrganizationId! })));
   return {
     disclaimer: SPONSOR_DISCLAIMER,
     items: rows.map((r) => cohortSummary(r.cohort, r.program, { id: r.cohort.sponsorOrganizationId!, name: r.sponsorName, slug: r.sponsorSlug }, figures.get(r.cohort.id)!)),
@@ -261,7 +293,7 @@ async function liveConsents(db: Executor, sponsorId: string, smeOrganizationIds:
 /** A sponsored cohort: the same figures, and the SMEs whose owners agreed to share something, with what. */
 export async function getSponsorCohort(ctx: Ctx, cohortId: string) {
   const { cohort, program, sponsor } = await sponsoredCohort(ctx, cohortId);
-  const figures = await anonymisedFigures(ctx.db, [cohortId]);
+  const figures = await anonymisedFigures(ctx.db, [{ id: cohortId, sponsorId: sponsor.id }]);
   const enrolled = await ctx.db
     .select({ organizationId: schema.enrollment.organizationId, name: schema.organization.name, smeId: schema.smeProfile.smeId })
     .from(schema.enrollment)

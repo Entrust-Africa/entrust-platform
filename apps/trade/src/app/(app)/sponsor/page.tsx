@@ -13,7 +13,7 @@ interface Cohort {
   country: string;
   startDate: string | null;
   endDate: string | null;
-  figures: { enrolled: number; diagnosticsSubmitted: number; pathwayA: number; pathwayB: number };
+  figures: { enrolled: number | null; diagnosticsSubmitted: number | null; pathwayA: number | null; pathwayB: number | null };
 }
 
 export default async function SponsorHomePage() {
@@ -36,7 +36,7 @@ export default async function SponsorHomePage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-ink">Sponsored cohorts</h1>
-        <p className="mt-1 text-sm text-ink-2">The cohorts your organisation sponsors. The figures below name nobody.</p>
+        <p className="mt-1 text-sm text-ink-2">The cohorts your organisation sponsors. The figures below name nobody. "Under 5" means a figure covers too few businesses to show.</p>
       </div>
       {result.data.items.length === 0 ? (
         <EmptyState title="No cohorts yet" description="When Entrust names your organisation as the sponsor of a cohort, it appears here." />
@@ -67,11 +67,11 @@ export default async function SponsorHomePage() {
   );
 }
 
-function Figure({ label, value }: { label: string; value: number }) {
+function Figure({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
       <dt className="text-xs text-ink-3">{label}</dt>
-      <dd className="font-display text-xl font-bold text-ink">{value}</dd>
+      <dd className="font-display text-xl font-bold text-ink">{value ?? "Under 5"}</dd>
     </div>
   );
 }
