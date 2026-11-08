@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
+import { FACTS } from "@entrust/rules";
 import { STEP_WORKERS, type CaseFacts } from "@entrust/gate-engine";
 import type { CaseCreatedView, CaseDetailView, CaseListView } from "../schemas/clear";
 import { actorFor, findCase, hasTradeAccess, requireRole, type Ctx } from "./access";
@@ -28,6 +29,8 @@ export function listPracticeScenarios() {
   return {
     label: PRACTICE_LABEL,
     scenarios: PRACTICE_SCENARIOS.map(({ id, title, summary, ownFacts }) => ({ id, title, summary, ownFacts })),
+    // What the screen asks when the workflow needs a fact settled.
+    facts: FACTS.map((f) => ({ key: f.key, label: f.label, help: f.help, options: f.options ? f.options.map((o) => ({ value: o.value, label: o.label })) : null, determinedAt: f.determinedAt ?? null })),
   };
 }
 
