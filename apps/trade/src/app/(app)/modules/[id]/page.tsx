@@ -25,6 +25,7 @@ interface ModuleDetailPageProps {
 
 interface ApiModuleDetail extends ModuleItemSummary {
   content: LearnerModuleData | null;
+  aiAssistantEnabled: boolean;
 }
 
 export async function generateMetadata({ params }: ModuleDetailPageProps) {
@@ -159,6 +160,8 @@ export default async function ModuleDetailPage({
           isReadOnly={isStaff}
           initialProgress={progress}
           initialLessonId={lesson}
+          aiAssistantEnabled={moduleDetail.aiAssistantEnabled}
+          organizationId={activeOrg?.id}
         />
       )}
     </div>

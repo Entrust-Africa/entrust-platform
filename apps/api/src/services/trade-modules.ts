@@ -3,6 +3,7 @@ import { schema } from "@entrust/db";
 import { findVersion, listModules, toLearnerView, type Audience } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
+import { aiAssistantEnabled } from "./ai-provider";
 import { ServiceError } from "./errors";
 
 // TRADE's module content (#61). The content is files in @entrust/trade-content; the API decides what
@@ -40,5 +41,5 @@ export async function getTradeModule(ctx: Ctx, id: string, version?: string) {
   const found = findVersion(module as ModuleId, audience, version);
   // A version the caller can't open, such as a draft to an SME, looks the same as one that doesn't exist.
   if (version !== undefined && !found) throw new ServiceError("not_found", "That version of the module doesn't exist.");
-  return { ...summary, content: found ? (audience === "staff" ? found : toLearnerView(found)) : null };
+  return { ...summary, content: found ? (audience === "staff" ? found : toLearnerView(found)) : null, aiAssistantEnabled: aiAssistantEnabled() };
 }
