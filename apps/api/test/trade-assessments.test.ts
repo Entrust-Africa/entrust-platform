@@ -126,7 +126,7 @@ async function startFor(user: TestUser, kind: "diagnostic" | "placement", enroll
 
 /** A fresh enrolment of its own, so a test can submit without touching the others. */
 async function freshEnrollment(): Promise<string> {
-  const [cohort] = await db.select().from(schema.cohort).where(like(schema.cohort.name, `${PREFIX}%`)).limit(1);
+  const [cohort] = await db.select().from(schema.cohort).where(eq(schema.cohort.name, `${PREFIX}cohort`)).limit(1);
   const org = await createOrganization(`tr-fresh-${Math.random().toString(36).slice(2, 8)}`, [[w.owner, "owner"]], { platform: "trade" });
   const [row] = await db.insert(schema.enrollment).values({ cohortId: cohort!.id, organizationId: org, status: "active" }).returning();
   return row!.id;

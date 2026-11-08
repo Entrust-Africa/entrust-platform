@@ -7,6 +7,7 @@ import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
   CreateModuleSubmissionInput,
   ModuleSubmissionListQueryInput,
@@ -98,7 +99,38 @@ export async function createModuleSubmission(
   let worksheetVersionId: string | null = input.worksheetVersionId ?? null;
   let worksheetSnapshot: Record<string, unknown> = {};
 
-  if (worksheetVersionId) {
+  // A module whose content carries its worksheets is assessed on every required output, so the assessor sees them all.
+  // The individual learning plan isn't one: it follows the assessor's review.
+  const requiredOutputs = moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
+  if (requiredOutputs.length) {
+    const submitted = await db
+      .select()
+      .from(schema.worksheetVersion)
+      .where(
+        and(
+          eq(schema.worksheetVersion.enrollmentId, input.enrollmentId),
+          eq(schema.worksheetVersion.moduleId, input.moduleId),
+          eq(schema.worksheetVersion.status, "submitted")
+        )
+      )
+      .orderBy(desc(schema.worksheetVersion.version));
+    const newest = requiredOutputs.map((def) => ({ def, version: submitted.find((v) => v.worksheetId === def.id) }));
+    const missing = newest.filter((o) => !o.version).map((o) => o.def.title);
+    if (missing.length) {
+      throw new ServiceError("precondition_failed", `Submit these worksheets first: ${missing.join("; ")}.`);
+    }
+    worksheetVersionId = newest[0]!.version!.id;
+    worksheetSnapshot = {
+      worksheets: newest.map(({ def, version }) => ({
+        id: version!.id,
+        worksheetId: def.id,
+        title: def.title,
+        version: version!.version,
+        values: version!.values,
+        submittedAt: version!.submittedAt?.toISOString() ?? null,
+      })),
+    };
+  } else if (worksheetVersionId) {
     const [ws] = await db
       .select()
       .from(schema.worksheetVersion)

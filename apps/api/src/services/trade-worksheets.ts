@@ -16,7 +16,9 @@ import type { WorksheetDefinitionView, WorksheetVersionView } from "../schemas/t
 import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import { accessTo, recordTradeChange, type Access } from "./trade-shared";
+import { allWorksheetDefinitions, canOpenWorksheet, findWorksheetDefinition, isLearningPlan } from "./trade-worksheet-definitions";
 
 // Worksheets (#64, #65): structured forms an SME fills in while it learns. Values save as they type and are labelled self-reported.
 // Submitting turns a draft into a numbered version that is kept and never edited; editing starts the next draft from it. The
@@ -28,11 +30,15 @@ type EnrollmentRow = typeof schema.enrollment.$inferSelect;
 const MAX_VALUES_BYTES = 200_000;
 const LIVE_ENROLLMENT = ["invited", "registered", "active"] as const;
 
-const definitionOf = (id: string): WorksheetDefinition => {
-  const def = findWorksheet(id);
-  if (!def) throw new ServiceError("not_found", "Worksheet not found.");
+const definitionOf = (id: string, staff = true): WorksheetDefinition => {
+  const def = findWorksheetDefinition(id);
+  if (!def || !canOpenWorksheet(def, staff)) throw new ServiceError("not_found", "Worksheet not found.");
   return def;
 };
+
+/** What a worksheet works out. One carried by a module's content has no calculators, so there is nothing to work out. */
+const computeFor = (def: WorksheetDefinition, values: WorksheetValues, context: WorksheetContext): WorksheetResult =>
+  findWorksheet(def.id) ? computeWorksheet(def.id, values, context) : { computed: {}, rows: {}, etb: {}, flags: [], problems: [] };
 
 // ---- Definitions ----
 
@@ -69,8 +75,9 @@ export function definitionView(def: WorksheetDefinition): WorksheetDefinitionVie
   };
 }
 
-export const listDefinitions = (): WorksheetDefinitionView[] => WORKSHEET_DEFINITIONS.map(definitionView);
-export const getDefinition = (id: string): WorksheetDefinitionView => definitionView(definitionOf(id));
+export const listDefinitions = (ctx: Ctx): WorksheetDefinitionView[] =>
+  allWorksheetDefinitions().filter((def) => canOpenWorksheet(def, !!ctx.principal.staffRole)).map(definitionView);
+export const getDefinition = (ctx: Ctx, id: string): WorksheetDefinitionView => definitionView(definitionOf(id, !!ctx.principal.staffRole));
 
 // ---- Who and which enrolment ----
 
@@ -121,7 +128,7 @@ const FINANCIAL_MODULES = ["M03", "M04"];
 async function buildView(db: Executor, row: VersionRow, organizationId: string, access: Access): Promise<WorksheetVersionView> {
   const def = definitionOf(row.worksheetId);
   const values = row.values as WorksheetValues;
-  const result = row.status === "submitted" && row.result ? (row.result as unknown as WorksheetVersionView["result"]) : wireResult(computeWorksheet(def.id, values, await contextOf(db, row.enrollmentId)));
+  const result = row.status === "submitted" && row.result ? (row.result as unknown as WorksheetVersionView["result"]) : wireResult(computeFor(def, values, await contextOf(db, row.enrollmentId)));
   const [basedOn] = row.basedOnVersionId ? await db.select({ id: schema.worksheetVersion.id, version: schema.worksheetVersion.version }).from(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, row.basedOnVersionId)) : [];
   const [source] = row.prefilledFromVersionId
     ? await db.select({ id: schema.worksheetVersion.id, worksheetId: schema.worksheetVersion.worksheetId, version: schema.worksheetVersion.version }).from(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, row.prefilledFromVersionId))
@@ -141,7 +148,7 @@ async function buildView(db: Executor, row: VersionRow, organizationId: string, 
     values: { ...values },
     result,
     basedOn: basedOn ? { id: basedOn.id, version: basedOn.version } : null,
-    prefilledFrom: source ? { id: source.id, worksheetId: source.worksheetId, title: findWorksheet(source.worksheetId)?.title ?? source.worksheetId, version: source.version } : null,
+    prefilledFrom: source ? { id: source.id, worksheetId: source.worksheetId, title: findWorksheetDefinition(source.worksheetId)?.title ?? source.worksheetId, version: source.version } : null,
     mizan: def.money && FINANCIAL_MODULES.includes(def.module) ? { connected: false, message: "MIZAN not connected yet. Your figures are kept so it can read them once it is." } : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -171,11 +178,11 @@ export async function getVersion(ctx: Ctx, id: string): Promise<WorksheetVersion
 // ---- Listing ----
 
 export async function listWorksheets(ctx: Ctx, input: { enrollmentId?: string | undefined; organizationId?: string | undefined }) {
-  const { enrollment } = await enrollmentFor(ctx.db, ctx, input);
+  const { enrollment, access } = await enrollmentFor(ctx.db, ctx, input);
   const rows = await ctx.db.select().from(schema.worksheetVersion).where(eq(schema.worksheetVersion.enrollmentId, enrollment.id)).orderBy(desc(schema.worksheetVersion.version));
   return {
     enrollmentId: enrollment.id,
-    items: WORKSHEET_DEFINITIONS.map((def) => {
+    items: allWorksheetDefinitions().filter((def) => canOpenWorksheet(def, access.staff)).map((def) => {
       const mine = rows.filter((r) => r.worksheetId === def.id);
       const latest = mine.find((r) => r.status === "submitted");
       const draft = mine.find((r) => r.status === "draft");
@@ -192,7 +199,7 @@ export async function listWorksheets(ctx: Ctx, input: { enrollmentId?: string | 
 }
 
 export async function listVersions(ctx: Ctx, worksheetId: string, input: { enrollmentId?: string | undefined; organizationId?: string | undefined }) {
-  definitionOf(worksheetId);
+  definitionOf(worksheetId, !!ctx.principal.staffRole);
   const { enrollment } = await enrollmentFor(ctx.db, ctx, input);
   const rows = await ctx.db
     .select()
@@ -210,7 +217,7 @@ export async function listVersions(ctx: Ctx, worksheetId: string, input: { enrol
  * the registry knows (the M03 working-capital brief prefills M04's brief).
  */
 export async function startDraft(ctx: Ctx, worksheetId: string, input: { enrollmentId?: string | undefined; organizationId?: string | undefined }): Promise<WorksheetVersionView> {
-  const def = definitionOf(worksheetId);
+  const def = definitionOf(worksheetId, false);
   return ctx.db.transaction(async (tx) => {
     const { enrollment, access } = await enrollmentFor(tx, ctx, input);
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team fills in a worksheet.");
@@ -348,7 +355,7 @@ export async function submitVersion(ctx: Ctx, id: string): Promise<WorksheetVers
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team can submit a worksheet.");
     if (row.status !== "draft") throw new ServiceError("invalid_transition", "This version has already been submitted.");
     const def = definitionOf(row.worksheetId);
-    const result = computeWorksheet(def.id, row.values, await contextOf(tx, row.enrollmentId));
+    const result = computeFor(def, row.values, await contextOf(tx, row.enrollmentId));
     if (result.problems.length) throw new ServiceError("precondition_failed", `Some figures can't be used yet: ${result.problems.slice(0, 4).map((p) => p.message).join(" ")}`);
     const missing = missingFor(def, row.values);
     if (missing.length) throw new ServiceError("precondition_failed", `The worksheet isn't complete. Still to fill in: ${missing.slice(0, 6).join("; ")}${missing.length > 6 ? `; and ${missing.length - 6} more` : ""}.`);
@@ -365,6 +372,8 @@ export async function submitVersion(ctx: Ctx, id: string): Promise<WorksheetVers
       entityId: id,
       after: { worksheetId: row.worksheetId, version: row.version, flags: result.flags.map((f) => f.code) },
     });
+    // The learning plan comes after the assessor's review, so it can be the last thing a module was waiting for.
+    if (isLearningPlan(def)) await evaluateAndSyncModuleCompletion(tx, ctx, row.enrollmentId, def.module);
     return buildView(tx, submitted ?? row, enrollment.organizationId, access);
   });
 }
