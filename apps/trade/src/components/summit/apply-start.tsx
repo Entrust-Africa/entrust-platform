@@ -159,7 +159,7 @@ export function ApplyStart({ countries, afriConnect = false }: { countries: read
       </div>
       <p className="text-sm text-ink-3">
         {afriConnect
-          ? "This creates your Entrust Africa account, which is run with AfriConnect: the same email and password sign you in to both."
+          ? "This creates your Entrust Africa account."
           : "We will email you a link to confirm your address, then you carry on with the application."}
       </p>
     </form>

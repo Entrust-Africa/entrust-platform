@@ -162,9 +162,6 @@ export function SignInView({
                   Continue
                 </Button>
               </form>
-              <p className="mt-6 text-xs leading-relaxed text-ink-3">
-                Your Entrust Africa account is run with AfriConnect: you use the same email and password on both.
-              </p>
             </>
           ) : (
             <>

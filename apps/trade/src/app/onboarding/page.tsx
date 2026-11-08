@@ -32,7 +32,7 @@ export default function OnboardingPage() {
       </Card>
       <p className="text-xs leading-relaxed text-ink-3">
         {afriConnect
-          ? "When you open the link we email you, we also create your Entrust Africa account with that email, run with AfriConnect, so you can sign in later; you choose a password the first time you do. "
+          ? "When you open the link we email you, we also create your Entrust Africa account with that email, so you can sign in later; you choose a password the first time you do. "
           : ""}
         This diagnostic does not guarantee any financing, insurance cover, export approval or contract. Your answers are used by Entrust to plan the training, and are shared with sponsors only with your consent.
       </p>

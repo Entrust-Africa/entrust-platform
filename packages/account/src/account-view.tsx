@@ -154,14 +154,14 @@ export function AccountView({
             <div>
               <h2 className="font-display text-lg font-bold">Password & Security</h2>
               <p className="text-xs text-ink-3">
-                {afriConnect ? "Your account is run with AfriConnect" : "Request a password reset link for your account"}
+                {afriConnect ? "How you sign in" : "Request a password reset link for your account"}
               </p>
             </div>
           </div>
 
           {afriConnect ? (
             <div className="mt-6 space-y-2 text-sm text-ink-2">
-              <p>You sign in with your email and the password you chose on AfriConnect. It is the same on both.</p>
+              <p>You sign in with your email and the password you chose when you first signed in.</p>
               <p>
                 Forgotten it? On the sign-in page, enter your email and choose “Email me a code instead”. The code signs
                 you in without the password.

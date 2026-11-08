@@ -28,7 +28,7 @@ export function ConfirmEmail({ token, proof, email, afriConnect }: { token: stri
         <p className="text-sm leading-relaxed text-ink-2">
           Confirm that <span className="font-semibold text-ink">{email}</span> is your email address. Your diagnostic then gets a new private link, which we email
           to you, so only you can open it.
-          {afriConnect ? " It also creates your Entrust Africa account with this email, run with AfriConnect, so you can sign in later." : ""}
+          {afriConnect ? " It also creates your Entrust Africa account with this email, so you can sign in later." : ""}
         </p>
         <Button type="button" size="lg" loading={pending} onClick={() => void confirm()}>
           Confirm and continue
