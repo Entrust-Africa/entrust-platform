@@ -3,12 +3,11 @@ import { redirect } from "next/navigation";
 import { Card, EmptyState, StatusBadge } from "@entrust/ui";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
-import type { PublicDiagnosticCounts, PublicDiagnosticSummary } from "@/lib/types";
+import type { PublicDiagnosticCounts, PublicDiagnosticPerson } from "@/lib/types";
 import { ActivityBars, AvenueSplit } from "@/components/diagnostics/charts";
+import { PeopleTable } from "@/components/diagnostics/people-table";
 
 export const metadata = { title: "Onboarding diagnostics" };
-
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 const FILTERS = [
   { id: "", label: "All" },
@@ -35,7 +34,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
   const { status = "", q = "" } = await searchParams;
   const filter = status === "submitted" || status === "draft" ? status : "";
   const query = new URLSearchParams({ ...(filter ? { status: filter } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
-  const result = await tradeGet<{ items: PublicDiagnosticSummary[]; counts: PublicDiagnosticCounts }>(`/public-diagnostics${query.size ? `?${query}` : ""}`);
+  const result = await tradeGet<{ items: PublicDiagnosticPerson[]; counts: PublicDiagnosticCounts }>(`/public-diagnostics${query.size ? `?${query}` : ""}`);
   const items = result.data?.items ?? [];
   const counts = result.data?.counts;
   const link = (next: string) => `/diagnostics${next || q.trim() ? `?${new URLSearchParams({ ...(next ? { status: next } : {}), ...(q.trim() ? { q: q.trim() } : {}) })}` : ""}`;
@@ -46,7 +45,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Onboarding diagnostics</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-2">
-            Everyone who started the diagnostic from the public link. Share it as <span className="font-mono text-ink">/onboarding</span>. No account is needed to fill it in.
+            Everyone who started the diagnostic from the public link, one line for each email address. Open a line to see each form they started. Share the link as <span className="font-mono text-ink">/onboarding</span>. No account is needed to fill it in.
           </p>
         </div>
         <a
@@ -64,8 +63,8 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           {counts && (
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Figure label="Submitted" value={counts.submitted} />
-                <Figure label="In progress" value={counts.draft} hint="Started, not yet submitted" />
+                <Figure label="Submitted" value={counts.submitted} hint="People with a submitted form" />
+                <Figure label="In progress" value={counts.draft} hint="Started, nothing submitted yet" />
                 <Figure label="Pathway B, provisional" value={counts.provisional} hint="Need a shipment record checked" />
                 <Figure label="Live order" value={counts.liveOrder} hint="A confirmed order, so M04, M06 and M08 move forward" />
               </div>
@@ -117,52 +116,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           ) : (
             <Card className="overflow-hidden p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-line bg-canvas text-xs font-semibold text-ink-2">
-                    <tr>
-                      <th className="px-4 py-3">Business</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Avenue</th>
-                      <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3">On TRADE</th>
-                      <th className="px-4 py-3 text-right">
-                        <span className="sr-only">Open</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {items.map((d) => (
-                      <tr key={d.id} className="hover:bg-canvas/50">
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-ink">{d.businessName ?? "No name yet"}</div>
-                          <div className="text-xs text-ink-3">{d.email}</div>
-                          {d.phone && <div className="text-xs text-ink-3">{d.phone}</div>}
-                          {d.sameEmail > 1 && <div className="mt-0.5 text-xs text-amber-700">{d.sameEmail} forms from this email</div>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge tone={d.status === "submitted" ? "ok" : "warn"}>{d.status === "submitted" ? "Submitted" : "In progress"}</StatusBadge>
-                        </td>
-                        <td className="px-4 py-3">
-                          {d.pathway ? (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <StatusBadge tone={d.pathway === "B" ? "product" : "info"}>{`Pathway ${d.pathway}${d.pathwayProvisional ? " (provisional)" : ""}`}</StatusBadge>
-                              {d.liveOrder && <StatusBadge tone="warn">Live order</StatusBadge>}
-                            </div>
-                          ) : (
-                            <span className="text-ink-3">—</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-ink-2">{formatDate(d.submittedAt ?? d.startedAt)}</td>
-                        <td className="px-4 py-3 text-ink-2">{d.organization ? d.organization.name : <span className="text-ink-3">Not yet</span>}</td>
-                        <td className="px-4 py-3 text-right">
-                          <Link href={`/diagnostics/${d.id}`} className="font-semibold text-brand-600 hover:underline">
-                            View
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <PeopleTable people={items} />
               </div>
             </Card>
           )}

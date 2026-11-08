@@ -267,9 +267,50 @@ describe("staff reading the submissions", () => {
     expect(today.submitted).toBeGreaterThanOrEqual(1);
   });
 
+  it("shows one line for an email that started several forms, submitted once any of them is", async () => {
+    const shared = email("repeat");
+    const begin = async () => (await post(null, "/public/diagnostic", { email: shared, phone: PHONE, businessName: "Repeat Trading" })).body.token as string;
+    const first = await begin();
+    await begin();
+    const third = await begin();
+    // Only the first one is finished. The third has some answers, and the second has none beyond the three it started with.
+    await put(null, `/public/diagnostic/${first}/responses`, { answers: fillIn(diagnostic, { Q135: "no" }) });
+    expect((await post(null, `/public/diagnostic/${first}/submit`)).status).toBe(200);
+    await put(null, `/public/diagnostic/${third}/responses`, { answers: { Q135: "no" } });
+
+    const res = await get(w.reviewer, `/public-diagnostics?q=${encodeURIComponent(shared)}`);
+    expect(res.body.items).toHaveLength(1);
+    const person = res.body.items[0];
+    expect(person).toMatchObject({ email: shared, status: "submitted", pathway: "A", submittedCount: 1 });
+    expect(person.sessions).toHaveLength(3);
+    expect(person.sessions.filter((s: { status: string }) => s.status === "submitted")).toHaveLength(1);
+    // A finished form carries no progress, an open one says how far it got, and the one with more answers is further along.
+    const open = person.sessions.filter((s: { status: string }) => s.status === "draft") as { progress: { answered: number; total: number; percent: number } }[];
+    expect(open).toHaveLength(2);
+    expect(person.sessions.find((s: { status: string }) => s.status === "submitted").progress).toBeNull();
+    for (const s of open) expect(s.progress.total).toBeGreaterThan(s.progress.answered);
+    expect(Math.max(...open.map((s) => s.progress.answered))).toBeGreaterThan(Math.min(...open.map((s) => s.progress.answered)));
+
+    // The status filter and the figures follow the person, not each form.
+    const submitted = await get(w.reviewer, `/public-diagnostics?status=submitted&q=${encodeURIComponent(shared)}`);
+    expect(submitted.body.items).toHaveLength(1);
+    const draft = await get(w.reviewer, `/public-diagnostics?status=draft&q=${encodeURIComponent(shared)}`);
+    expect(draft.body.items).toHaveLength(0);
+  });
+
+  it("keeps a person in progress while none of their forms is submitted", async () => {
+    const only = email("only-drafts");
+    for (let i = 0; i < 2; i++) await post(null, "/public/diagnostic", { email: only, phone: PHONE, businessName: "Slow Starters" });
+    const res = await get(w.reviewer, `/public-diagnostics?status=draft&q=${encodeURIComponent(only)}`);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({ status: "draft", pathway: null, submittedCount: 0 });
+    expect(res.body.items[0].sessions).toHaveLength(2);
+    expect((await get(w.reviewer, `/public-diagnostics?status=submitted&q=${encodeURIComponent(only)}`)).body.items).toHaveLength(0);
+  });
+
   it("shows one submission's answers", async () => {
     const list = await get(w.reviewer, `/public-diagnostics?q=${encodeURIComponent(submittedEmail)}`);
-    const one = await get(w.reviewer, `/public-diagnostics/${list.body.items[0].id}`);
+    const one = await get(w.reviewer, `/public-diagnostics/${list.body.items[0].sessions[0].id}`);
     expect(one.status).toBe(200);
     expect(one.body.pathway).toMatchObject({ pathway: "A" });
     const answered = one.body.sections.flatMap((section: { items: { id: string; answer: string }[] }) => section.items);

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { ensureAfriConnectAccount, type EnsureAccountResult } from "@entrust/auth";
 import { schema } from "@entrust/db";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
@@ -428,10 +428,9 @@ export async function submitPublicDiagnostic(ctx: Writer, token: string): Promis
 
 // ---- Staff ----
 
-export interface PublicDiagnosticSummary {
+/** One form a person started, with how far they got if it is still open. */
+export interface PublicDiagnosticSession {
   id: string;
-  email: string;
-  phone: string | null;
   businessName: string | null;
   status: Row["status"];
   pathway: Row["pathway"];
@@ -439,10 +438,31 @@ export interface PublicDiagnosticSummary {
   liveOrder: boolean | null;
   submittedAt: string | null;
   startedAt: string;
-  /** Other forms from the same email, so staff can tell a repeat from a new business. */
-  sameEmail: number;
+  /** The questions answered of those the form shows. Only for a form still in progress. */
+  progress: { answered: number; total: number; percent: number } | null;
+}
+
+/**
+ * Everything one email address has started, as one line. The same person often opens the link again, or on another
+ * device, so each start would otherwise be a row of its own.
+ */
+export interface PublicDiagnosticPerson {
+  email: string;
+  phone: string | null;
+  businessName: string | null;
+  /** Submitted as soon as one of their forms is, in progress while every form is. */
+  status: Row["status"];
+  /** From their newest submitted form, if they have one. */
+  pathway: Row["pathway"];
+  pathwayProvisional: boolean | null;
+  liveOrder: boolean | null;
+  /** The latest activity: a submission or a start. */
+  latestAt: string;
+  submittedCount: number;
   /** An organisation on TRADE whose owner or member has this email, if any. */
   organization: { id: string; name: string } | null;
+  /** Newest first. */
+  sessions: PublicDiagnosticSession[];
 }
 
 export interface ListInput {
@@ -451,13 +471,13 @@ export interface ListInput {
   limit?: number | undefined;
 }
 
-/** The forms people have started or submitted, newest first. Entrust staff only. */
+/** `submitted` and `draft` count people, so they match the list: a person is submitted once any of their forms is. The rest count submitted forms. */
 export interface PublicDiagnosticCounts {
   submitted: number;
   draft: number;
   pathwayA: number;
   pathwayB: number;
-  /** Pathway B forms waiting for staff to see a shipment record. */
+  /** Pathway B people waiting for staff to see a shipment record. */
   provisional: number;
   /** A confirmed live order, which moves M04, M06 and M08 forward. */
   liveOrder: number;
@@ -465,44 +485,61 @@ export interface PublicDiagnosticCounts {
   perDay: { date: string; started: number; submitted: number }[];
 }
 
-export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise<{ items: PublicDiagnosticSummary[]; counts: PublicDiagnosticCounts }> {
+/** The people who have started or submitted a form, the most recently active first, each with their forms. Entrust staff only. */
+export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise<{ items: PublicDiagnosticPerson[]; counts: PublicDiagnosticCounts }> {
   requireStaff(ctx.principal);
-  const search = input.q?.trim();
-  const where = and(
-    input.status ? eq(schema.publicDiagnostic.status, input.status) : undefined,
-    search
-      ? or(ilike(schema.publicDiagnostic.email, `%${search}%`), ilike(schema.publicDiagnostic.businessName, `%${search}%`), ilike(schema.publicDiagnostic.phone, `%${search}%`))
-      : undefined,
-  );
+  const table = schema.publicDiagnostic;
+  // Answers are left out: they are large, and only the drafts on screen need them (below), to say how far each got.
   const rows = await ctx.db
-    .select()
-    .from(schema.publicDiagnostic)
-    .where(where)
-    .orderBy(desc(sql`coalesce(${schema.publicDiagnostic.submittedAt}, ${schema.publicDiagnostic.createdAt})`))
-    .limit(Math.min(Math.max(input.limit ?? 200, 1), 1000));
-
-  const [totals] = await ctx.db
     .select({
-      submitted: sql<number>`count(*) filter (where ${schema.publicDiagnostic.status} = 'submitted')::int`,
-      draft: sql<number>`count(*) filter (where ${schema.publicDiagnostic.status} = 'draft')::int`,
-      pathwayA: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'A')::int`,
-      pathwayB: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'B')::int`,
-      provisional: sql<number>`count(*) filter (where ${schema.publicDiagnostic.pathway} = 'B' and ${schema.publicDiagnostic.pathwayProvisional})::int`,
-      liveOrder: sql<number>`count(*) filter (where ${schema.publicDiagnostic.liveOrder})::int`,
+      id: table.id,
+      email: table.email,
+      phone: table.phone,
+      businessName: table.businessName,
+      templateVersion: table.templateVersion,
+      status: table.status,
+      pathway: table.pathway,
+      pathwayProvisional: table.pathwayProvisional,
+      liveOrder: table.liveOrder,
+      submittedAt: table.submittedAt,
+      createdAt: table.createdAt,
     })
-    .from(schema.publicDiagnostic);
+    .from(table)
+    .orderBy(desc(sql`coalesce(${table.submittedAt}, ${table.createdAt})`));
+
+  // Rows come newest first, so the first form met for an email is its newest, and people are in the order they were last active.
+  const byEmail = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const forms = byEmail.get(row.email);
+    if (forms) forms.push(row);
+    else byEmail.set(row.email, [row]);
+  }
+  const people = [...byEmail.values()].map((forms) => {
+    const submitted = forms.filter((f) => f.status === "submitted");
+    return { forms, submitted, lead: submitted[0] ?? forms[0]! };
+  });
+
+  const leads = people.filter((p) => p.submitted.length > 0).map((p) => p.lead);
+  const totals = {
+    submitted: leads.length,
+    draft: people.length - leads.length,
+    pathwayA: leads.filter((l) => l.pathway === "A").length,
+    pathwayB: leads.filter((l) => l.pathway === "B").length,
+    provisional: leads.filter((l) => l.pathway === "B" && l.pathwayProvisional).length,
+    liveOrder: leads.filter((l) => l.liveOrder).length,
+  };
 
   const since = new Date(ctx.now.getTime() - 13 * 24 * HOUR_MS);
   since.setUTCHours(0, 0, 0, 0);
   const started = await ctx.db
-    .select({ day: sql<string>`to_char(${schema.publicDiagnostic.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
-    .from(schema.publicDiagnostic)
-    .where(gt(schema.publicDiagnostic.createdAt, since))
+    .select({ day: sql<string>`to_char(${table.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
+    .from(table)
+    .where(gt(table.createdAt, since))
     .groupBy(sql`1`);
   const submitted = await ctx.db
-    .select({ day: sql<string>`to_char(${schema.publicDiagnostic.submittedAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
-    .from(schema.publicDiagnostic)
-    .where(gt(schema.publicDiagnostic.submittedAt, since))
+    .select({ day: sql<string>`to_char(${table.submittedAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
+    .from(table)
+    .where(gt(table.submittedAt, since))
     .groupBy(sql`1`);
   const startedBy = new Map(started.map((r) => [r.day, r.n]));
   const submittedBy = new Map(submitted.map((r) => [r.day, r.n]));
@@ -511,49 +548,61 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
     return { date, started: startedBy.get(date) ?? 0, submitted: submittedBy.get(date) ?? 0 };
   });
 
-  const emails = [...new Set(rows.map((r) => r.email))];
-  const sameEmail = new Map<string, number>();
+  // The search finds a person when any one of their forms matches, and then shows all of their forms.
+  const search = input.q?.trim().toLowerCase();
+  const matching = people
+    .filter((p) => (input.status === "submitted" ? p.submitted.length > 0 : input.status === "draft" ? p.submitted.length === 0 : true))
+    .filter((p) => !search || p.forms.some((f) => [f.email, f.businessName, f.phone].some((value) => value?.toLowerCase().includes(search))))
+    .slice(0, Math.min(Math.max(input.limit ?? 200, 1), 1000));
+
+  const draftIds = matching.flatMap((p) => p.forms.filter((f) => f.status === "draft").map((f) => f.id));
+  const progressOf = new Map<string, { answered: number; total: number; percent: number }>();
+  if (draftIds.length) {
+    const drafts = await ctx.db.select({ id: table.id, answers: table.answers }).from(table).where(inArray(table.id, draftIds));
+    const versionOf = new Map(rows.map((r) => [r.id, r.templateVersion]));
+    for (const draft of drafts) {
+      const { answered, total, percent } = checkAnswers(templateOf({ templateVersion: versionOf.get(draft.id)! }), answersOf(draft), { today: todayOf(ctx.now) }).progress;
+      progressOf.set(draft.id, { answered, total, percent });
+    }
+  }
+
+  const emails = matching.map((p) => p.lead.email);
   const organizations = new Map<string, { id: string; name: string }>();
   if (emails.length) {
-    const counted = await ctx.db
-      .select({ email: schema.publicDiagnostic.email, n: count() })
-      .from(schema.publicDiagnostic)
-      .where(sql`${schema.publicDiagnostic.email} in ${emails}`)
-      .groupBy(schema.publicDiagnostic.email);
-    for (const c of counted) sameEmail.set(c.email, c.n);
-    const people = await ctx.db
+    const members = await ctx.db
       .select({ email: sql<string>`lower(${schema.user.email})`, id: schema.organization.id, name: schema.organization.name })
       .from(schema.user)
       .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
       .innerJoin(schema.organization, eq(schema.organization.id, schema.member.organizationId))
       .where(sql`lower(${schema.user.email}) in ${emails}`);
-    for (const p of people) if (!organizations.has(p.email)) organizations.set(p.email, { id: p.id, name: p.name });
+    for (const m of members) if (!organizations.has(m.email)) organizations.set(m.email, { id: m.id, name: m.name });
   }
 
   return {
-    items: rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      phone: r.phone,
-      businessName: r.businessName,
-      status: r.status,
-      pathway: r.pathway,
-      pathwayProvisional: r.pathwayProvisional,
-      liveOrder: r.liveOrder,
-      submittedAt: r.submittedAt?.toISOString() ?? null,
-      startedAt: r.createdAt.toISOString(),
-      sameEmail: sameEmail.get(r.email) ?? 1,
-      organization: organizations.get(r.email) ?? null,
+    items: matching.map(({ forms, submitted: done, lead }) => ({
+      email: lead.email,
+      phone: lead.phone ?? forms.find((f) => f.phone)?.phone ?? null,
+      businessName: lead.businessName ?? forms.find((f) => f.businessName)?.businessName ?? null,
+      status: done.length > 0 ? ("submitted" as const) : ("draft" as const),
+      pathway: done.length > 0 ? lead.pathway : null,
+      pathwayProvisional: done.length > 0 ? lead.pathwayProvisional : null,
+      liveOrder: done.length > 0 ? lead.liveOrder : null,
+      latestAt: (forms[0]!.submittedAt ?? forms[0]!.createdAt).toISOString(),
+      submittedCount: done.length,
+      organization: organizations.get(lead.email) ?? null,
+      sessions: forms.map((f) => ({
+        id: f.id,
+        businessName: f.businessName,
+        status: f.status,
+        pathway: f.pathway,
+        pathwayProvisional: f.pathwayProvisional,
+        liveOrder: f.liveOrder,
+        submittedAt: f.submittedAt?.toISOString() ?? null,
+        startedAt: f.createdAt.toISOString(),
+        progress: progressOf.get(f.id) ?? null,
+      })),
     })),
-    counts: {
-      submitted: totals?.submitted ?? 0,
-      draft: totals?.draft ?? 0,
-      pathwayA: totals?.pathwayA ?? 0,
-      pathwayB: totals?.pathwayB ?? 0,
-      provisional: totals?.provisional ?? 0,
-      liveOrder: totals?.liveOrder ?? 0,
-      perDay,
-    },
+    counts: { ...totals, perDay },
   };
 }
 
