@@ -184,13 +184,15 @@ describe("signing in to Entrust with AfriConnect", () => {
           provider: "africonnect",
           callbackURL: `${TRADE}/`,
           errorCallbackURL: `${TRADE}/sign-in`,
-          additionalParams: { product: "trade", idp_hint: "google" },
+          additionalParams: { product: "trade", idp_hint: "google", prompt: "login" },
         }),
       }),
     );
     const authorize = new URL(((await start.json()) as { url: string }).url);
     expect(authorize.searchParams.get("idp_hint")).toBe("google");
     expect(authorize.searchParams.get("login_hint")).toBeNull();
+    // Better Auth has to let this through: it is what stops the next person on a computer coming back as the last one.
+    expect(authorize.searchParams.get("prompt")).toBe("login");
   });
 
   it("a new person gets an Entrust account, named from userinfo, keyed on the subject", async () => {

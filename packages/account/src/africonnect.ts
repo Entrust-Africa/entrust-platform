@@ -26,7 +26,9 @@ export async function continueWithAfriConnect(input: {
       newUserCallbackURL: callbackURL,
       errorCallbackURL: new URL(input.errorPath ?? "/sign-in", origin).href,
       loginHint: input.email?.trim().toLowerCase() || undefined,
-      additionalParams: { product: input.product, ...(input.via ? { idp_hint: input.via } : {}) },
+      // No email goes with Google, so nothing would tell this person apart from whoever is still signed in on
+      // AfriConnect (signing out of Entrust leaves that session). `prompt=login` makes AfriConnect sign them in again.
+      additionalParams: { product: input.product, ...(input.via ? { idp_hint: input.via, prompt: "login" } : {}) },
     });
     if (result.error) return { error: "Sign-in couldn't start. Try again in a moment." };
   } catch {
