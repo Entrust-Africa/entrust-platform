@@ -6,7 +6,7 @@ import { type ModuleId } from "@entrust/trade-rules";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
 import type {
   CreateModuleSubmissionInput,
   ModuleSubmissionListQueryInput,
@@ -528,13 +528,14 @@ export async function scoreModuleSubmission(
       })
       .where(eq(schema.moduleSubmission.id, submissionId));
 
-    // Update module progress
-    const progressStatus = evaluation.passed ? "passed" : "needs_revision";
+    // Update module progress. A passing score is only one requirement: the evaluator below decides
+    // whether the module is passed, once its lessons, knowledge check and plan are done as well.
+    const progressStatus = evaluation.passed ? "in_progress" : "needs_revision";
     await db
       .update(schema.moduleProgress)
       .set({
         status: progressStatus,
-        completedAt: evaluation.passed ? now : null,
+        completedAt: null,
         updatedAt: now,
       })
       .where(
@@ -614,7 +615,16 @@ export async function scoreModuleSubmission(
   };
 }
 
+/** One transaction, so a failed audit write can't leave a score changed with no record of it. */
 export async function overrideRubricScore(
+  ctx: Ctx,
+  submissionId: string,
+  input: OverrideScoreInput
+): Promise<RubricAssessmentView> {
+  return ctx.db.transaction((tx) => applyScoreOverride({ ...ctx, db: tx }, submissionId, input));
+}
+
+async function applyScoreOverride(
   ctx: Ctx,
   submissionId: string,
   input: OverrideScoreInput
@@ -701,12 +711,12 @@ export async function overrideRubricScore(
     })
     .where(eq(schema.moduleSubmission.id, submissionId));
 
-  const progressStatus = evaluation.passed ? "passed" : "needs_revision";
+  const progressStatus = evaluation.passed ? "in_progress" : "needs_revision";
   await db
     .update(schema.moduleProgress)
     .set({
       status: progressStatus,
-      completedAt: evaluation.passed ? now : null,
+      completedAt: null,
       updatedAt: now,
     })
     .where(
@@ -718,6 +728,8 @@ export async function overrideRubricScore(
 
   if (evaluation.passed) {
     await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
+  } else if (officialScore.passed) {
+    await reopenAfterFailedOverride(db, { principal, now }, sub.enrollmentId, sub.moduleId as ModuleId, input.overrideReason);
   }
 
   // Audit log with before and after details (M01 AT-15, M03 AT-15, M04 AT-11)
@@ -728,13 +740,18 @@ export async function overrideRubricScore(
     action: "trade.rubric_assessment.overridden",
     entityType: "trade.rubric_assessment",
     entityId: officialScore.id,
+    reason: input.overrideReason,
     before: {
+      scores: officialScore.scores,
+      confirmedCriticalFailures: officialScore.confirmedCriticalFailures,
       totalPoints: officialScore.totalPoints,
       passed: officialScore.passed,
       outcome: officialScore.outcome,
     },
     after: {
       overrideReason: input.overrideReason,
+      scores: mergedScores,
+      confirmedCriticalFailures: confirmedFailures,
       totalPoints: evaluation.totalPoints,
       passed: evaluation.passed,
       outcome: evaluation.outcome,

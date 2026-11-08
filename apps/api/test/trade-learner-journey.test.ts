@@ -1,4 +1,4 @@
-import { like } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { visibleQuestions, type FormDefinition } from "@entrust/forms";
 import { findVersion } from "@entrust/trade-content";
@@ -11,7 +11,7 @@ import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, typ
 // placement assessment, learning plan, modules, exit assessment and certificate. Nothing is written to the database
 // directly, so a step no route offers fails here. Modules with no content yet are overridden by an administrator.
 
-const w = {} as { learner: TestUser; admin: TestUser; reviewer: TestUser; org: string; enrollment: string; planId: string; modules: string[] };
+const w = {} as { learner: TestUser; admin: TestUser; reviewer: TestUser; org: string; enrollment: string; planId: string; modules: string[]; submissions: Record<string, string> };
 const get = (user: TestUser | null, path: string) => callV1(user, "GET", `/trade${path}`);
 const post = (user: TestUser | null, path: string, body?: unknown) => callV1(user, "POST", `/trade${path}`, body);
 const put = (user: TestUser | null, path: string, body?: unknown) => callV1(user, "PUT", `/trade${path}`, body);
@@ -49,6 +49,7 @@ async function takeAssessment(kind: "diagnostic" | "placement" | "exit", form: F
 }
 
 beforeAll(async () => {
+  w.submissions = {};
   await cleanup();
   const [learner, admin, reviewer] = (await Promise.all(["lj-learner", "lj-admin", "lj-reviewer"].map(signUp))) as [TestUser, TestUser, TestUser];
   Object.assign(w, { learner, admin, reviewer });
@@ -101,9 +102,12 @@ describe("a learner's journey from enrolment to certificate", () => {
     for (const moduleId of w.modules) {
       const content = findVersion(moduleId as ModuleId, "learner");
       if (!content) continue;
-      for (const lesson of content.lessons) {
+      // Every lesson but the last, so the score can't be what finishes the module.
+      const lastLesson = content.lessons.at(-1)!;
+      for (const lesson of content.lessons.slice(0, -1)) {
         ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId, lessonId: lesson.id, completed: true, contentVersion: content.version }));
       }
+      ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId, lessonId: "not-a-real-lesson", completed: true, contentVersion: content.version }));
       const answers = Object.fromEntries(content.knowledgeCheck!.questions.map((q) => [q.id, q.correct.length > 1 ? q.correct : q.correct[0]!]));
       const attempt = ok(await post(w.learner, `/modules/${moduleId}/knowledge-check/attempts`, { enrollmentId: w.enrollment, answers }));
       expect(attempt.passed).toBe(true);
@@ -111,6 +115,11 @@ describe("a learner's journey from enrolment to certificate", () => {
       const scores = Object.fromEntries(content.rubric!.criteria.map((c) => [c.id, { points: c.maxPoints }]));
       const score = ok(await post(w.reviewer, `/module-submissions/${submission.id}/score`, { scores, feedback: "Good." }));
       expect(score.passed).toBe(true);
+      w.submissions[moduleId] = submission.id;
+      const scored = ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`));
+      expect(scored.items[0].status, `${moduleId} with a lesson left`).toBe("in_progress");
+      const finished = ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId, lessonId: lastLesson.id, completed: true, contentVersion: content.version }));
+      expect(finished.status, moduleId).toBe("passed");
       const progress = ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`));
       expect(progress.items[0].status, moduleId).toBe("passed");
     }
@@ -140,5 +149,23 @@ describe("a learner's journey from enrolment to certificate", () => {
     ok(await post(w.learner, `/assessments/${exit.id}/submit`));
     const plan = ok(await get(w.learner, `/plans/${w.planId}`));
     expect(plan.status).toBe("completed");
+  });
+
+  it("takes back the certificate and reopens the programme when an override fails a module", async () => {
+    const before = ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`));
+    const moduleId = Object.keys(w.submissions)[0]!;
+    const content = findVersion(moduleId as ModuleId, "learner")!;
+    const scores = Object.fromEntries(content.rubric.criteria.map((c) => [c.id, { points: 0 }]));
+    const res = await callV1(w.admin, "PATCH", `/trade/module-submissions/${w.submissions[moduleId]}/score`, { scores, overrideReason: "Evidence was fabricated" });
+    expect(res.status).toBe(200);
+    expect(res.body.passed).toBe(false);
+
+    const publicCheck = ok(await get(null, `/certificates/${before.code}/public`));
+    expect(publicCheck).toMatchObject({ isValid: false, isRevoked: true });
+    expect(publicCheck.revocationReason).toContain("Evidence was fabricated");
+    expect(ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`)).items[0].status).toBe("needs_revision");
+    expect(ok(await get(w.learner, `/plans/${w.planId}`)).status).toBe("active");
+    const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, w.enrollment));
+    expect(enrollment).toMatchObject({ status: "active", completedAt: null });
   });
 });
