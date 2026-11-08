@@ -221,6 +221,33 @@ export async function approvePlan(
   return getPlan(ctx, planId);
 }
 
+/** The SME confirms it has read its plan, which M01 asks for (#71). Saying so twice changes nothing. */
+export async function acknowledgePlan(ctx: Ctx, planId: string): Promise<LearningPlanRecord> {
+  const { principal, db, now } = ctx;
+  const [existing] = await db
+    .select({ status: schema.learningPlan.status, acknowledgedAt: schema.learningPlan.acknowledgedAt, organizationId: schema.enrollment.organizationId })
+    .from(schema.learningPlan)
+    .innerJoin(schema.enrollment, eq(schema.enrollment.id, schema.learningPlan.enrollmentId))
+    .where(eq(schema.learningPlan.id, planId));
+  if (!existing) throw new ServiceError("not_found", "Learning plan not found.");
+  if (!principal.smeRoles.has(existing.organizationId)) {
+    throw new ServiceError(principal.staffRole ? "forbidden" : "not_found", "Only the business itself can acknowledge its learning plan.");
+  }
+  if (existing.status === "superseded") throw new ServiceError("invalid_transition", "This learning plan has been replaced by a newer one.");
+  if (!existing.acknowledgedAt) {
+    await db.update(schema.learningPlan).set({ acknowledgedAt: now, updatedAt: now }).where(eq(schema.learningPlan.id, planId));
+    await db.insert(schema.auditLog).values({
+      actorUserId: principal.userId,
+      organizationId: existing.organizationId,
+      platform: "trade",
+      action: "trade.learning_plan.acknowledged",
+      entityType: "learning_plan",
+      entityId: planId,
+    });
+  }
+  return getPlan(ctx, planId);
+}
+
 export async function overridePlan(
   ctx: Ctx,
   planId: string,
