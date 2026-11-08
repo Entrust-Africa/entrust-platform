@@ -175,6 +175,24 @@ describe("signing in to Entrust with AfriConnect", () => {
     expect(params.get("product")).toBe("trade");
   });
 
+  it("Continue with Google asks AfriConnect to go straight on to Google", async () => {
+    const start = await app.fetch(
+      new Request("http://localhost:4000/api/auth/sign-in/social", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: TRADE },
+        body: JSON.stringify({
+          provider: "africonnect",
+          callbackURL: `${TRADE}/`,
+          errorCallbackURL: `${TRADE}/sign-in`,
+          additionalParams: { product: "trade", idp_hint: "google" },
+        }),
+      }),
+    );
+    const authorize = new URL(((await start.json()) as { url: string }).url);
+    expect(authorize.searchParams.get("idp_hint")).toBe("google");
+    expect(authorize.searchParams.get("login_hint")).toBeNull();
+  });
+
   it("a new person gets an Entrust account, named from userinfo, keyed on the subject", async () => {
     const address = email("new");
     const sub = randomUUID();

@@ -14,6 +14,8 @@ export async function continueWithAfriConnect(input: {
   product: AfriConnectProduct;
   callbackPath: string;
   errorPath?: string;
+  /** Go straight on to Google from AfriConnect's page (`idp_hint`). */
+  via?: "google";
 }): Promise<{ error: string } | undefined> {
   const origin = window.location.origin;
   const callbackURL = new URL(input.callbackPath, origin).href;
@@ -24,7 +26,7 @@ export async function continueWithAfriConnect(input: {
       newUserCallbackURL: callbackURL,
       errorCallbackURL: new URL(input.errorPath ?? "/sign-in", origin).href,
       loginHint: input.email?.trim().toLowerCase() || undefined,
-      additionalParams: { product: input.product },
+      additionalParams: { product: input.product, ...(input.via ? { idp_hint: input.via } : {}) },
     });
     if (result.error) return { error: "Sign-in couldn't start. Try again in a moment." };
   } catch {
