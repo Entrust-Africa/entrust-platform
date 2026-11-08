@@ -101,11 +101,9 @@ export interface StaffAssessmentRow {
   pathwayStatus: "provisional" | "confirmed" | null;
 }
 
-/** One onboarding diagnostic filled in through the public link, as the staff list shows it. */
-export interface PublicDiagnosticSummary {
+/** One form a person started through the public link, with how far they got if it is still open. */
+export interface PublicDiagnosticSession {
   id: string;
-  email: string;
-  phone: string | null;
   businessName: string | null;
   status: "draft" | "submitted";
   pathway: "A" | "B" | null;
@@ -113,8 +111,22 @@ export interface PublicDiagnosticSummary {
   liveOrder: boolean | null;
   submittedAt: string | null;
   startedAt: string;
-  sameEmail: number;
+  progress: { answered: number; total: number; percent: number } | null;
+}
+
+/** Everything one email address has started, as the staff list shows it: one line, with their forms underneath. */
+export interface PublicDiagnosticPerson {
+  email: string;
+  phone: string | null;
+  businessName: string | null;
+  status: "draft" | "submitted";
+  pathway: "A" | "B" | null;
+  pathwayProvisional: boolean | null;
+  liveOrder: boolean | null;
+  latestAt: string;
+  submittedCount: number;
   organization: { id: string; name: string } | null;
+  sessions: PublicDiagnosticSession[];
 }
 
 export interface PublicDiagnosticCounts {
