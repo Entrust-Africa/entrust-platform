@@ -36,7 +36,7 @@ Each hostname is a Cloudflare CNAME (DNS only, not proxied) to the `*.up.railway
 
 ## AfriConnect sign-in
 
-People sign in to CLEAR and TRADE with their AfriConnect account (OpenID Connect). Entrust's sign-in page asks only for the email; AfriConnect's page, in the platform's colours, asks for the password or emails a code (and, for someone new, a name and a password), then sends them back signed in. Entrust keeps its own users, organisations and platform access, tied to AfriConnect's subject (`account.provider_id = 'africonnect'`). The provider side is described in AfriConnect's `docs/SHARED_IDENTITY.md`.
+People sign in to CLEAR and TRADE with their AfriConnect account (OpenID Connect). Entrust's sign-in page asks only for the email, or offers "Continue with Google", which goes through AfriConnect straight on to Google (`idp_hint=google`; AfriConnect's production Google client must be set up, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in its Convex settings); AfriConnect's page, in the platform's colours, asks for the password or emails a code (and, for someone new, a name and a password), then sends them back signed in. Entrust keeps its own users, organisations and platform access, tied to AfriConnect's subject (`account.provider_id = 'africonnect'`). The provider side is described in AfriConnect's `docs/SHARED_IDENTITY.md`.
 
 Switching it on, in this order:
 
