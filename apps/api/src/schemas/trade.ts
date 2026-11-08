@@ -56,7 +56,54 @@ export const ModuleDetail = ModuleSummary.extend({
    * get the answer keys and explanations, the auto-check IDs and the staff-only material.
    */
   content: z.union([moduleContentSchema, learnerModuleSchema]).nullable(),
+  /** Whether the AI assistant can run this module's prompts. When it is off they can still be copied into any assistant. */
+  aiAssistantEnabled: z.boolean(),
 }).openapi("TradeModule");
+
+// ---- AI assistant for module exercises (#76) ----
+
+export const AiPromptParam = z.object({ id: z.string(), promptId: z.string() });
+
+/** Only these three go to the provider: never a financial document, an upload or a worksheet. */
+export const RunAiPromptBody = z
+  .object({
+    organizationId: z.string().optional().openapi({ description: "Default: the caller's only organisation." }),
+    product: z.string().trim().min(1).max(200),
+    market: z.string().trim().min(1).max(200),
+    buyer: z.string().trim().max(200).optional(),
+  })
+  .openapi("RunAiPromptBody");
+
+export const AiSuggestion = z
+  .object({
+    /** Always shown with the text. */
+    label: z.literal("AI suggestion"),
+    text: z.string(),
+    verification: z.array(z.string()),
+  })
+  .openapi("TradeAiSuggestion");
+
+export const AiExchangeList = z
+  .object({
+    items: z.array(
+      z.object({
+        id: z.uuid(),
+        userId: z.string().nullable(),
+        organizationId: z.string().nullable(),
+        moduleId: z.string(),
+        promptId: z.string(),
+        input: z.record(z.string(), z.string()),
+        output: z.string().nullable(),
+        status: z.string(),
+        model: z.string().nullable(),
+        costUsd: z.number(),
+        createdAt: z.iso.datetime(),
+      }),
+    ),
+    monthCostUsd: z.number(),
+    monthCapUsd: z.number(),
+  })
+  .openapi("TradeAiExchangeList");
 
 // ---- Practice cases (M08) ----
 
