@@ -166,6 +166,7 @@ export function AssessorWorkspace({
   const wsSnapshot = submission.worksheetSnapshot as {
     values?: Record<string, unknown>;
     result?: { computed?: Record<string, unknown>; flags?: Array<{ code: string; message: string }> };
+    worksheets?: Array<{ id: string; title: string; version: number; values: Record<string, unknown> }>;
   };
 
   return (
@@ -232,7 +233,25 @@ export function AssessorWorkspace({
             </div>
 
             {/* Worksheet Values Snapshot */}
-            {wsSnapshot?.values && Object.keys(wsSnapshot.values).length > 0 ? (
+            {wsSnapshot?.worksheets?.length ? (
+              <div className="space-y-5">
+                {wsSnapshot.worksheets.map((w) => (
+                  <div key={w.id} className="space-y-2">
+                    <div className="text-xs font-semibold text-ink">
+                      {w.title} <span className="font-normal text-ink-3">(version {w.version})</span>
+                    </div>
+                    <div className="rounded-md border border-line divide-y divide-line text-xs bg-canvas/30">
+                      {Object.entries(w.values).map(([k, v]) => (
+                        <div key={k} className="flex flex-col gap-1 p-2.5">
+                          <span className="font-mono text-ink-2">{k}</span>
+                          <span className="font-medium text-ink break-words">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : wsSnapshot?.values && Object.keys(wsSnapshot.values).length > 0 ? (
               <div className="space-y-3">
                 <div className="text-xs font-semibold text-ink">Submitted Worksheet Figures</div>
                 <div className="rounded-md border border-line divide-y divide-line text-xs bg-canvas/30">

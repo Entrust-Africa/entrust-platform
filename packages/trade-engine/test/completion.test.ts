@@ -63,6 +63,13 @@ describe("completion engine", () => {
       expect(allDone.missingCriteria).toHaveLength(0);
     });
 
+    it("requires the individual learning plan only where the module's content has one", () => {
+      const rest = { lessonsCount: 1, completedLessonsCount: 1, knowledgeCheckPassed: true, practicalDeliverablePassed: true, isExempt: false, isM01: false, planAcknowledged: false };
+      expect(checkModuleCompletionCriteria(rest).complete).toBe(true);
+      expect(checkModuleCompletionCriteria({ ...rest, individualPlanSubmitted: true }).complete).toBe(true);
+      expect(checkModuleCompletionCriteria({ ...rest, individualPlanSubmitted: false })).toEqual({ complete: false, missingCriteria: ["Individual learning plan not submitted"] });
+    });
+
     it("requires plan acknowledgement specifically for M01", () => {
       const unack = checkModuleCompletionCriteria({
         lessonsCount: 3,

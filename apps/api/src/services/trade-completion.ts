@@ -17,6 +17,7 @@ import type { Ctx, Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { accessTo, recordTradeChange } from "./trade-shared";
+import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 
 /**
  * Checks module completion criteria and if complete, marks module progress passed.
@@ -124,6 +125,24 @@ export async function evaluateAndSyncModuleCompletion(
 
   const planAcknowledged = activePlan?.acknowledgedAt !== null && activePlan?.acknowledgedAt !== undefined;
 
+  // A module on Entrust's common standard ends with an individual learning plan.
+  const individualPlan = moduleContentWorksheets(moduleId).find(isLearningPlan);
+  let individualPlanSubmitted: boolean | undefined;
+  if (individualPlan) {
+    const [submitted] = await tx
+      .select({ id: schema.worksheetVersion.id })
+      .from(schema.worksheetVersion)
+      .where(
+        and(
+          eq(schema.worksheetVersion.enrollmentId, enrollmentId),
+          eq(schema.worksheetVersion.worksheetId, individualPlan.id),
+          eq(schema.worksheetVersion.status, "submitted")
+        )
+      )
+      .limit(1);
+    individualPlanSubmitted = !!submitted;
+  }
+
   const criteria = checkModuleCompletionCriteria({
     lessonsCount,
     completedLessonsCount: completedLessons,
@@ -132,6 +151,7 @@ export async function evaluateAndSyncModuleCompletion(
     isExempt,
     isM01: moduleId === "M01",
     planAcknowledged,
+    ...(individualPlanSubmitted === undefined ? {} : { individualPlanSubmitted }),
     adminOverride: !!modProgress?.adminOverrideAt,
   });
 

@@ -129,6 +129,14 @@ const STATUS_LABELS: Record<string, string> = {
   needs_revision: "Needs revision",
   exempted: "Exempted",
 };
+interface ModuleWorksheet {
+  id: string;
+  module: string;
+  title: string;
+  latest: { version: number } | null;
+  draft: { version: number } | null;
+}
+
 const statusLabel = (status: string) => STATUS_LABELS[status] ?? status.replace(/_/g, " ");
 
 type TabKey = "lesson" | "example" | "worksheets" | "knowledge" | "deliverable" | "prompts";
@@ -162,6 +170,7 @@ export function ModuleViewer({
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [quizFeedback, setQuizFeedback] = useState<KnowledgeCheckAttemptResult | null>(null);
   const [latestSubmission, setLatestSubmission] = useState<ModuleSubmissionView | null>(null);
+  const [myWorksheets, setMyWorksheets] = useState<ModuleWorksheet[]>([]);
   const [shuffledOptions, setShuffledOptions] = useState<Record<string, Array<{ id: string; text: string }>>>(() => {
     const map: Record<string, Array<{ id: string; text: string }>> = {};
     for (const q of module.knowledgeCheck.questions) {
@@ -190,6 +199,12 @@ export function ModuleViewer({
     ).then((res) => {
       if (!cancelled && res.ok && res.data?.items?.[0]) {
         setLatestSubmission(res.data.items[0]);
+      }
+    });
+
+    tradeFetch<{ items: ModuleWorksheet[] }>("GET", `/worksheets?enrollmentId=${enrollmentId}`).then((res) => {
+      if (!cancelled && res.ok && res.data) {
+        setMyWorksheets(res.data.items.filter((w) => w.module === module.module));
       }
     });
 
@@ -766,7 +781,25 @@ export function ModuleViewer({
           )}
 
           {/* Tab 3: Worksheets */}
-          {activeTab === "worksheets" && (
+          {activeTab === "worksheets" && !isReadOnly && (
+            <div className="space-y-3">
+              {myWorksheets.map((w) => (
+                <Card key={w.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div className="min-w-0 space-y-1">
+                    <h2 className="font-display text-base font-bold text-ink">{w.title}</h2>
+                    {w.latest && <StatusBadge tone="ok">{`Version ${w.latest.version} submitted`}</StatusBadge>}
+                    {!w.latest && w.draft && <StatusBadge tone="warn">Draft saved</StatusBadge>}
+                    {!w.latest && !w.draft && <StatusBadge tone="idle">Not started</StatusBadge>}
+                  </div>
+                  <Link href={`/worksheets/${w.id}`} className="text-sm font-semibold text-brand-600 hover:underline">
+                    Open
+                  </Link>
+                </Card>
+              ))}
+              {myWorksheets.length === 0 && <Card className="p-4 text-sm text-ink-2">This module has no worksheets to fill in.</Card>}
+            </div>
+          )}
+          {activeTab === "worksheets" && isReadOnly && (
             <div className="space-y-6">
               {module.worksheets.map((ws) => (
                 <Card key={ws.id} className="p-6 space-y-4">

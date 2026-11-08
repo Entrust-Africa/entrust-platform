@@ -99,12 +99,10 @@ const submitRoute = createRoute({
 
 export const tradeWorksheets = worksheets
   .openapi(definitionsRoute, async (c) => {
-    await contextFor(c.get("user"));
-    return c.json({ items: listDefinitions() }, 200);
+    return c.json({ items: listDefinitions(await contextFor(c.get("user"))) }, 200);
   })
   .openapi(definitionRoute, async (c) => {
-    await contextFor(c.get("user"));
-    return c.json(getDefinition(c.req.valid("param").id), 200);
+    return c.json(getDefinition(await contextFor(c.get("user")), c.req.valid("param").id), 200);
   })
   .openapi(listRoute, async (c) => c.json(await listWorksheets(await contextFor(c.get("user")), c.req.valid("query")), 200))
   .openapi(versionsRoute, async (c) => c.json(await listVersions(await contextFor(c.get("user")), c.req.valid("param").id, c.req.valid("query")), 200))

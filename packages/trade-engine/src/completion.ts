@@ -8,6 +8,8 @@ export interface ModuleCompletionCheckInput {
   isExempt: boolean;
   isM01: boolean;
   planAcknowledged: boolean;
+  /** Absent for a module whose content has no individual learning plan to submit. */
+  individualPlanSubmitted?: boolean;
   adminOverride?: boolean;
 }
 
@@ -48,6 +50,10 @@ export function checkModuleCompletionCriteria(input: ModuleCompletionCheckInput)
 
   if (input.isM01 && !input.planAcknowledged) {
     missing.push("Learning plan must be acknowledged");
+  }
+
+  if (input.individualPlanSubmitted === false) {
+    missing.push("Individual learning plan not submitted");
   }
 
   return {
