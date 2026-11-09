@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
+import { tradeGet } from "@/lib/trade-api";
 import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
@@ -98,13 +99,15 @@ export default async function CohortDetailPage(props: {
 
   const { id } = await props.params;
   const cohortStaff = me.staffRole === "admin" ? await getCohortStaff(id) : null;
-  const [cohort, waiting, diagnostics, placements, sessions] = await Promise.all([
+  const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
     listDiagnostics(),
     listPlacements(),
     listSessions(id),
+    tradeGet<{ items: { id: string; enrollmentId: string; shipment: { product: string; evidenceStatus: string } | null }[] }>(`/pathway-reviews?cohortId=${encodeURIComponent(id)}&status=open`),
   ]);
+  const reviewOf = new Map((reviews.data?.items ?? []).map((r) => [r.enrollmentId, r]));
   if (!cohort) {
     notFound();
   }
@@ -322,7 +325,7 @@ export default async function CohortDetailPage(props: {
                         <PlacementCell row={placementOf.get(enr.enrollmentId)} />
                       </td>
                       <td className="px-4 py-3">
-                        <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} />
+                        <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} review={reviewOf.get(enr.enrollmentId) ?? null} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <StatusUpdater

@@ -19,14 +19,18 @@ export function PlanAndPathway({
   plan,
   pathway,
   canConfirmPathway,
+  review,
 }: {
   enrollmentId: string;
   plan: { id: string; status: string } | null;
   pathway: { pathway: string; status: string } | null;
   canConfirmPathway: boolean;
+  /** An open pathway review: the business recorded its first completed shipment. */
+  review?: { id: string; shipment: { product: string; evidenceStatus: string } | null } | null;
 }) {
   const router = useRouter();
   const [reason, setReason] = useState("");
+  const [decision, setDecision] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +44,7 @@ export function PlanAndPathway({
     router.refresh();
   };
 
-  if (!plan && !pathway) return <span className="text-ink-3">Not yet</span>;
+  if (!plan && !pathway && !review) return <span className="text-ink-3">Not yet</span>;
   return (
     <div className="min-w-44 space-y-2">
       {pathway && (
@@ -66,6 +70,21 @@ export function PlanAndPathway({
             <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => run(() => tradeFetch("POST", `/plans/${plan.id}/approve`, {}))}>
               Approve plan
             </Button>
+          )}
+        </div>
+      )}
+      {review && (
+        <div className="space-y-1 rounded-md border border-warn/30 bg-warn-50 p-2">
+          <p className="text-xs font-semibold text-warn">
+            First completed shipment recorded{review.shipment ? ` (${review.shipment.product}, ${review.shipment.evidenceStatus.replaceAll("_", " ")})` : ""}. Look at the pathway.
+          </p>
+          {canConfirmPathway && (
+            <>
+              <input aria-label="What you decided about the pathway" placeholder="What did you decide?" className="w-full rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink" value={decision} onChange={(e) => setDecision(e.target.value)} />
+              <Button type="button" size="sm" variant="ghost" disabled={busy || !decision.trim()} onClick={() => run(() => tradeFetch("POST", `/pathway-reviews/${review.id}/resolve`, { resolution: decision.trim() }))}>
+                Mark reviewed
+              </Button>
+            </>
           )}
         </div>
       )}
