@@ -37,7 +37,7 @@ export function AssessmentResult({ view, hideBackLink = false }: { view: ResultV
               </h2>
               {view.pathway.status === "provisional" && (
                 <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  This is provisional. A member of the Entrust team will check your shipment record before it is confirmed.
+                  This rests on what you told us about your shipment. Entrust may ask to see a record of it, and your plan goes ahead in the meantime.
                 </p>
               )}
             </div>

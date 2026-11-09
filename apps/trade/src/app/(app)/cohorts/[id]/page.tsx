@@ -60,7 +60,7 @@ function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
       <StatusBadge tone="ok">Submitted</StatusBadge>
       {row.pathway && (
         <StatusBadge tone={row.pathway === "B" ? "product" : "info"}>
-          {`Pathway ${row.pathway}${row.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+          {`Pathway ${row.pathway}${row.pathwayStatus === "provisional" ? " (self-reported)" : ""}`}
         </StatusBadge>
       )}
       <Link href={`/diagnostic/${row.id}`} className="font-semibold text-brand-600 hover:underline">

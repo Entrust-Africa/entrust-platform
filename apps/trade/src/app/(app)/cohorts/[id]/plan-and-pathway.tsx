@@ -45,17 +45,17 @@ export function PlanAndPathway({
     <div className="min-w-44 space-y-2">
       {pathway && (
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge tone={pathway.status === "provisional" ? "warn" : "info"}>{`Pathway ${pathway.pathway}${pathway.status === "provisional" ? ", provisional" : ""}`}</StatusBadge>
+          <StatusBadge tone={pathway.status === "provisional" ? "warn" : "info"}>{`Pathway ${pathway.pathway}${pathway.status === "provisional" ? ", self-reported" : ""}`}</StatusBadge>
         </div>
       )}
       {pathway?.status === "provisional" && canConfirmPathway && (
         <div className="space-y-1">
           <label className="block text-[11px] font-semibold text-ink-3">
-            Why it's confirmed
+            What record did you see?
             <input className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink" value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
           <Button type="button" size="sm" variant="ghost" disabled={busy || !reason.trim()} onClick={() => run(() => tradeFetch("POST", `/enrollments/${enrollmentId}/pathway`, { pathway: pathway.pathway, reason: reason.trim() }))}>
-            Confirm Pathway {pathway.pathway}
+            Record seen
           </Button>
         </div>
       )}

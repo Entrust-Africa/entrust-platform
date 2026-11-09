@@ -61,7 +61,7 @@ export default async function SponsorSmePage({ params }: { params: Promise<{ coh
                   <>
                     <p>
                       <span className="font-semibold text-ink">{entry.pathway.name}</span> (Pathway {entry.pathway.pathway}
-                      {entry.pathway.status === "provisional" ? ", provisional" : ""})
+                      {entry.pathway.status === "provisional" ? ", self-reported" : ""})
                     </p>
                     <ul className="list-disc pl-5">
                       {entry.pathway.reasons.map((reason) => (

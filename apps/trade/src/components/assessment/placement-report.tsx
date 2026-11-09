@@ -42,11 +42,11 @@ export function PlacementReport({ report, backHref }: { report: PlacementReportD
           <h2 className="font-display text-lg font-bold text-ink">
             Pathway {pathway.id}: {pathway.name}
           </h2>
-          {pathway.provisional && <StatusBadge tone="warn">Provisional</StatusBadge>}
+          {pathway.provisional && <StatusBadge tone="warn">Self-reported</StatusBadge>}
           {pathway.liveOrder && <StatusBadge tone="danger">Live order</StatusBadge>}
         </div>
         {pathway.provisional && (
-          <p className="text-sm text-ink-2">A member of the Entrust team will check your shipment record before this is confirmed.</p>
+          <p className="text-sm text-ink-2">This rests on what you told us about your shipment. Entrust may ask to see a record of it.</p>
         )}
         <div>
           <h3 className="text-sm font-semibold text-ink">Why</h3>

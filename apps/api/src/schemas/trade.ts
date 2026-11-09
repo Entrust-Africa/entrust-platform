@@ -717,6 +717,7 @@ export const ProgrammeReport = z
         status: z.string(),
         sharedKinds: z.array(DataKind),
         pathway: z.string().nullable(),
+        pathwayEvidence: z.enum(["self_reported", "verified"]).nullable(),
         placementAverage: z.number().nullable(),
         exitAverage: z.number().nullable(),
         modulesStarted: ReportCount,

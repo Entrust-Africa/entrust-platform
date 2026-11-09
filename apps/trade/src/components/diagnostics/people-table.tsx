@@ -40,7 +40,7 @@ const statusBadge = (status: "draft" | "submitted") => (
 const avenue = (x: { pathway: "A" | "B" | null; pathwayProvisional: boolean | null; liveOrder: boolean | null }) =>
   x.pathway ? (
     <div className="flex flex-wrap items-center gap-1.5">
-      <StatusBadge tone={x.pathway === "B" ? "product" : "info"}>{`Pathway ${x.pathway}${x.pathwayProvisional ? " (provisional)" : ""}`}</StatusBadge>
+      <StatusBadge tone={x.pathway === "B" ? "product" : "info"}>{`Pathway ${x.pathway}${x.pathwayProvisional ? " (self-reported)" : ""}`}</StatusBadge>
       {x.liveOrder && <StatusBadge tone="warn">Live order</StatusBadge>}
     </div>
   ) : (
