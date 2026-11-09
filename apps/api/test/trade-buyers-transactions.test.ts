@@ -48,12 +48,12 @@ describe("the buyer record", () => {
   it("moves up when a pipeline activity moves the opportunity up, and never down that way", async () => {
     const [first] = ok(await get(w.owner, `/pipeline?organizationId=${w.org}`)).items.filter((o: Json) => o.title === "Hamburg order");
     ok(await post(w.owner, `/pipeline/${first.id}/activities`, { type: "email", summary: "Introduced ourselves", occurredAt: new Date().toISOString() }));
-    const [buyer] = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items;
+    const buyer = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items.find((b: Json) => b.country === "DE");
     expect(buyer.verificationStatus).toBe("identity_checked");
   });
 
   it("lets only staff set the evidence status, and carries it to the buyer's opportunities", async () => {
-    const [buyer] = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items;
+    const buyer = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items.find((b: Json) => b.country === "DE");
     expect((await patch(w.owner, `/buyers/${buyer.id}`, { verificationStatus: "qualified_opportunity" })).status).toBe(403);
     expect((await patch(w.assessor, `/buyers/${buyer.id}`, { verificationStatus: "qualified_opportunity" })).status).toBe(404);
     ok(await patch(w.owner, `/buyers/${buyer.id}`, { website: "https://roaster.example", contactName: "A. Buyer" }));

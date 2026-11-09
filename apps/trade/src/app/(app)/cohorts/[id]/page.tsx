@@ -303,6 +303,11 @@ export default async function CohortDetailPage(props: {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-ink">{enr.organizationName}</div>
                         <div className="font-mono text-ink-3 text-[11px]">{enr.organizationId}</div>
+                        {me.staffRole !== "reviewer" && (
+                          <Link href={`/referrals?organizationId=${encodeURIComponent(enr.organizationId)}&organizationName=${encodeURIComponent(enr.organizationName)}`} className="text-[11px] font-semibold text-brand-600 underline-offset-4 hover:underline">
+                            Refer to a partner
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-ink-2">
                         {enr.legalName ?? "—"}
