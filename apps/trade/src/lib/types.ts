@@ -45,6 +45,8 @@ export interface TradeCohortEnrolment {
   enrolledAt: string;
   completedAt: string | null;
   withdrawnAt: string | null;
+  plan: { id: string; status: string } | null;
+  pathway: { pathway: string; status: string } | null;
 }
 
 export interface TradeCohortDetail extends Omit<TradeCohort, "enrolledCount"> {

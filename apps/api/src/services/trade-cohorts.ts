@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   schema,
   DELIVERY_MODES,
@@ -166,9 +166,28 @@ export async function getCohort(db: Executor, id: string) {
     .where(eq(schema.enrollment.cohortId, id))
     .orderBy(desc(schema.enrollment.enrolledAt));
 
+  // Where each business's plan and pathway stand, so staff can act on what's waiting for them.
+  const enrollmentIds = enrolledSmes.map((e) => e.enrollmentId);
+  const plans = enrollmentIds.length
+    ? await db
+        .select({ id: schema.learningPlan.id, enrollmentId: schema.learningPlan.enrollmentId, status: schema.learningPlan.status })
+        .from(schema.learningPlan)
+        .where(and(inArray(schema.learningPlan.enrollmentId, enrollmentIds), ne(schema.learningPlan.status, "superseded")))
+    : [];
+  const pathways = enrollmentIds.length
+    ? await db
+        .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway, status: schema.pathwayAssignment.status })
+        .from(schema.pathwayAssignment)
+        .where(and(inArray(schema.pathwayAssignment.enrollmentId, enrollmentIds), inArray(schema.pathwayAssignment.status, ["provisional", "confirmed"])))
+    : [];
+
   return {
     ...cohortRow,
-    enrolments: enrolledSmes,
+    enrolments: enrolledSmes.map((e) => ({
+      ...e,
+      plan: plans.find((p) => p.enrollmentId === e.enrollmentId) ?? null,
+      pathway: pathways.find((p) => p.enrollmentId === e.enrollmentId) ?? null,
+    })),
   };
 }
 
@@ -393,6 +412,12 @@ export async function updateEnrollmentStatus(
     throw new ServiceError("invalid", `Invalid enrolment status: ${newStatus}`);
   }
 
+  // A programme completes when its modules do, which is what earns the certificate. Saying so by hand would count an SME as a
+  // graduate with nothing behind it.
+  if (newStatus === "completed") {
+    throw new ServiceError("invalid", "An enrolment completes by itself when every assigned module is passed.");
+  }
+
   // Reason is required for pausing and withdrawing
   if ((newStatus === "paused" || newStatus === "withdrawn") && (!reason || !reason.trim())) {
     throw new ServiceError("invalid", `A reason is required to mark an enrolment as ${newStatus}.`);
@@ -408,7 +433,6 @@ export async function updateEnrollmentStatus(
   const updateData: Record<string, any> = {
     status: newStatus,
     updatedAt: now,
-    ...(newStatus === "completed" ? { completedAt: now } : {}),
     ...(newStatus === "withdrawn" ? { withdrawnAt: now } : {}),
   };
 

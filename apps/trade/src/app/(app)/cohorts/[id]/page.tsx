@@ -5,6 +5,7 @@ import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, list
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
+import { PlanAndPathway } from "./plan-and-pathway";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
 
@@ -288,6 +289,7 @@ export default async function CohortDetailPage(props: {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Onboarding diagnostic</th>
                     <th className="px-4 py-3">Placement assessment</th>
+                    <th className="px-4 py-3">Plan and pathway</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -317,6 +319,9 @@ export default async function CohortDetailPage(props: {
                       </td>
                       <td className="px-4 py-3">
                         <PlacementCell row={placementOf.get(enr.enrollmentId)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <StatusUpdater

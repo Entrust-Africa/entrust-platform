@@ -303,18 +303,14 @@ describe("TRADE Enrolment API", () => {
     expect(noReasonRes.body.error).toContain("A reason is required");
   });
 
-  it("allows staff to complete an enrolment", async () => {
+  it("won't let staff mark an enrolment completed by hand", async () => {
     const completeRes = await callV1(w.admin, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, {
       status: "completed",
     });
-    expect(completeRes.status).toBe(200);
-    expect(completeRes.body.status).toBe("completed");
-
-    const [enrRow] = await db
-      .select()
-      .from(schema.enrollment)
-      .where(eq(schema.enrollment.id, enrollment1Id));
-    expect(enrRow?.completedAt).toBeDefined();
+    expect(completeRes.status).toBe(422);
+    expect(completeRes.body.error).toContain("completes by itself");
+    const [enrRow] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollment1Id));
+    expect(enrRow?.status).not.toBe("completed");
   });
 });
 
