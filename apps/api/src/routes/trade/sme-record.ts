@@ -15,6 +15,7 @@ import {
   updateProduct,
   type ProfileField,
 } from "../../services/trade-sme-record";
+import { getReadinessProfiles, READINESS_AREAS } from "../../services/trade-readiness";
 import { clearRouter, contextFor, json, listErrors, writeErrors } from "../clear/shared";
 
 const tags = ["TRADE SME record"];
@@ -170,6 +171,28 @@ const profilePatch = createRoute({
 });
 const profileHistory = createRoute({ method: "get", path: "/business-profile/history", tags, summary: "Changes to the business's details", request: { query: org }, responses: { 200: ok("The history", History), ...listErrors } });
 
+const Area = z.object({
+  area: z.enum(READINESS_AREAS),
+  label: z.string(),
+  score: z.number().nullable(),
+  classification: z.string().nullable(),
+  evidenceCoverage: z.number().nullable(),
+  reviewStatus: z.enum(["not_assessed", "complete", "awaiting_staff_review", "awaiting_ethiolife_review"]),
+  assessmentId: z.string().nullable(),
+  assessedAt: z.string().nullable(),
+  sections: z.array(z.object({ section: z.string(), score: z.number().nullable(), band: z.string().nullable(), evidenceStatus: z.string() })),
+});
+const Readiness = z.object({ organizationId: z.string(), current: z.array(Area), earlier: z.array(Area).nullable(), note: z.string() }).openapi("TradeReadinessProfiles");
+const readiness = createRoute({
+  method: "get",
+  path: "/readiness-profiles",
+  tags,
+  summary: "A business's six readiness profiles",
+  description: "Financial, insurance and risk, production and operations, market and buyers, export execution, management and digital. Each has its own result. They are never combined into a single score. When an exit assessment exists, the placement result is returned as `earlier` to compare with.",
+  request: { query: org },
+  responses: { 200: ok("The profiles", Readiness), ...listErrors },
+});
+
 export const PROFILE_FIELD_NAMES = Object.keys(PROFILE_FIELDS) as ProfileField[];
 
 export const tradeSmeRecord = router
@@ -186,4 +209,5 @@ export const tradeSmeRecord = router
     const { organizationId, changes } = c.req.valid("json");
     return c.json(await updateBusinessProfile(await contextFor(c.get("user")), { organizationId, changes }), 200);
   })
-  .openapi(profileHistory, async (c) => c.json(await businessProfileHistory(await contextFor(c.get("user")), c.req.valid("query")), 200));
+  .openapi(profileHistory, async (c) => c.json(await businessProfileHistory(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(readiness, async (c) => c.json(await getReadinessProfiles(await contextFor(c.get("user")), c.req.valid("query")), 200));

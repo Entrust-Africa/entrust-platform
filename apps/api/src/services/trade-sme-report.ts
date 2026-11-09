@@ -5,6 +5,7 @@ import type { Ctx } from "./access";
 import { CONTENT_TYPES, render, type ExportCell, type ExportFormat, type ExportTable } from "./export";
 import { ServiceError } from "./errors";
 import { listIntegrations } from "./trade-integrations";
+import { getReadinessProfiles } from "./trade-readiness";
 import { listReferrals } from "./trade-referrals";
 import { accessTo } from "./trade-shared";
 import { businessProfileHistory, getBusinessProfile, listExportHistory, listProducts } from "./trade-sme-record";
@@ -27,6 +28,7 @@ export const SmeReport = z
     modules: z.array(Row),
     outputs: z.array(Row),
     assessments: z.array(Row),
+    readiness: z.array(Row),
     actionPlan: z.object({ total: z.number(), byStatus: z.record(z.string(), z.number()), overdue: z.number() }),
     referrals: z.array(Row).nullable(),
     integrations: z.array(Row),
@@ -102,6 +104,7 @@ export async function getSmeReport(ctx: Ctx, organizationId: string): Promise<z.
     })),
     modules: progress.map((m) => ({ moduleId: m.moduleId, status: m.status, knowledgeCheckScore: m.score === null ? null : Number(m.score), completedAt: m.completedAt?.toISOString() ?? null })),
     outputs,
+    readiness: (await getReadinessProfiles(ctx, { organizationId })).current.map((a) => ({ area: a.label, score: a.score, classification: a.classification, reviewStatus: a.reviewStatus })),
     assessments: assessments.map((a) => ({ kind: a.kind, domain: a.domain, score: a.score === null ? null : Number(a.score), assessedAt: a.assessedAt?.toISOString() ?? null })),
     actionPlan: { total: items.length, byStatus, overdue: items.filter((i) => i.dueDate && i.dueDate < today && !["completed", "closed_without_completion", "cancelled"].includes(i.status)).length },
     // A referral is Entrust's record of who it referred the business to, so the business's own copy of its report leaves it out.
@@ -126,6 +129,7 @@ export async function exportSmeReport(ctx: Ctx, organizationId: string, format: 
   for (const r of report.enrolments) add("Enrolments", r.cohort, r.pathway ? `Pathway ${r.pathway}` : "No pathway yet", r.status);
   for (const r of report.modules) add("Modules", r.moduleId, r.knowledgeCheckScore === null ? null : `Knowledge check ${r.knowledgeCheckScore}%`, r.status);
   for (const r of report.outputs) add("Outputs", r.title, `${r.moduleId}, version ${r.version}`, r.reviewStatus);
+  for (const r of report.readiness) add("Readiness", r.area, r.score === null ? "Not scored" : `${r.score}%`, r.reviewStatus);
   for (const r of report.assessments) add("Assessments", `${r.kind}: ${r.domain}`, r.score, null);
   add("Action plan", "Items", report.actionPlan.total, `${report.actionPlan.overdue} overdue`);
   for (const r of report.referrals ?? []) add("Referrals", r.destination, r.type, r.status);
