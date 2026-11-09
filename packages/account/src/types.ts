@@ -16,6 +16,10 @@ export interface UserProfile {
   staffRole?: "admin" | "facilitator" | "reviewer" | null;
   /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
   summitCommittee?: boolean;
+  /** A member of the Quality role: reads programme reports, changes nothing. Not a staff role. */
+  quality?: boolean;
   platforms?: string[];
+  /** Two-step sign-in, for Entrust staff only. `required` is the deployment's setting; staff must pass it before the TRADE API answers. */
+  mfa?: { required: boolean; enrolled: boolean; verified: boolean } | null;
   organizations?: UserOrganization[];
 }

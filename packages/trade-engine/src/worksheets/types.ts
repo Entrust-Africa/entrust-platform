@@ -62,6 +62,8 @@ export interface WorksheetDefinition {
   prefillFrom?: string;
   /** Section IDs that carry the brief's printable summary for a bank (M04). */
   printable?: boolean;
+  /** Not one of the module's required practical outputs, though a learner can still fill it in. */
+  optional?: boolean;
 }
 
 /** What the learner entered: a scalar for each field, and a list of rows for each table. */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { staffRoleLabel } from "@entrust/roles";
 import { Button, Card } from "@entrust/ui";
 import { assignCohortStaffAction, removeCohortStaffAction } from "../actions";
 
@@ -61,7 +62,7 @@ export function CohortStaffPanel({ cohortId, staff }: { cohortId: string; staff:
             <option value="">Choose someone to add</option>
             {staff.available.map((person) => (
               <option key={person.userId} value={person.userId}>
-                {person.name} ({person.role})
+                {person.name} ({staffRoleLabel(person.role)})
               </option>
             ))}
           </select>

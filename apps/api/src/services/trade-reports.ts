@@ -42,9 +42,9 @@ interface Scope {
   sponsorIds: ReadonlySet<string> | null;
 }
 
-/** The sponsors the caller works for, or null for Entrust staff, who see every cohort. */
+/** The sponsors the caller works for, or null for Entrust staff and the Quality role, who see every cohort. */
 function sponsorScope(ctx: Ctx): ReadonlySet<string> | null {
-  if (ctx.principal.staffRole) return null;
+  if (ctx.principal.staffRole || ctx.principal.quality) return null;
   const ids = new Set(ctx.principal.sponsorRoles.keys());
   // An SME has no programme reports. The route looks the same to it as one that doesn't exist.
   if (ids.size === 0) throw new ServiceError("not_found", "Report not found.");

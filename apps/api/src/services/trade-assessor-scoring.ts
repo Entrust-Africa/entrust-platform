@@ -114,8 +114,9 @@ export async function createModuleSubmission(
   // A module whose content carries its worksheets is assessed on every required output, so the assessor sees them all.
   // The individual learning plan isn't one: it follows the assessor's review.
   // M03's financial pack is four worksheets, and it's assessed on all four in the same way.
-  const engineOutputs = WORKSHEET_DEFINITIONS.filter((d) => d.module === input.moduleId);
-  const requiredOutputs = engineOutputs.length > 1 ? engineOutputs : moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
+  // The engine's own forms for the module are outputs too, except one marked optional (M01's opportunity brief).
+  const engineOutputs = WORKSHEET_DEFINITIONS.filter((d) => d.module === input.moduleId && !d.optional);
+  const requiredOutputs = [...engineOutputs, ...moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d))];
   if (requiredOutputs.length) {
     const submitted = await db
       .select()

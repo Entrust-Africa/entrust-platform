@@ -13,7 +13,7 @@ vi.mock("../src/services/ai-provider", async (original) => {
 });
 
 const w = {} as { learner: TestUser; other: TestUser; stranger: TestUser; admin: TestUser; reviewer: TestUser; org: string; otherOrg: string };
-const RUN = "/trade/modules/M01/ai-prompts/market-research/run";
+const RUN = "/trade/modules/M09/ai-prompts/company-profile/run";
 const BODY = { product: "Washed coffee", market: "Germany", buyer: "A roaster in Hamburg" };
 
 const answer = (over: Partial<AiResult> = {}): AiResult => ({ text: "Check EU residue limits first.", refused: false, model: "claude-opus-5-5", inputTokens: 1000, outputTokens: 500, costUsd: aiCostUsd(1000, 500), ...over });
@@ -59,7 +59,7 @@ describe("running a prompt", () => {
   it("sends the module's prompt and the three details, and nothing else", async () => {
     await callV1(w.learner, "POST", RUN, { ...BODY, statements: "secret figures" });
     const { user, system } = provider.call.mock.calls[0]![0] as { user: string; system: string };
-    expect(user).toContain("Help me analyze trade flows");
+    expect(user).toContain("Act as a business communications assistant");
     expect(user).toContain("Washed coffee");
     expect(user).toContain("Germany");
     expect(user).toContain("A roaster in Hamburg");
@@ -71,7 +71,7 @@ describe("running a prompt", () => {
     const log = await callV1(w.admin, "GET", "/trade/ai-exchanges");
     expect(log.status).toBe(200);
     const row = log.body.items.find((i: Json) => i.userId === w.learner.id);
-    expect(row).toMatchObject({ organizationId: w.org, moduleId: "M01", promptId: "market-research", status: "completed", output: "Check EU residue limits first.", input: BODY });
+    expect(row).toMatchObject({ organizationId: w.org, moduleId: "M09", promptId: "company-profile", status: "completed", output: "Check EU residue limits first.", input: BODY });
     expect(log.body.monthCostUsd).toBeGreaterThan(0);
     expect((await callV1(w.reviewer, "GET", "/trade/ai-exchanges")).status).toBe(403);
     expect((await callV1(w.learner, "GET", "/trade/ai-exchanges")).status).toBe(403);
@@ -90,8 +90,8 @@ describe("who can run a prompt", () => {
   it("needs TRADE access and a real prompt", async () => {
     expect((await callV1(null, "POST", RUN, BODY)).status).toBe(401);
     expect((await callV1(w.stranger, "POST", RUN, BODY)).status).toBe(403);
-    expect((await callV1(w.learner, "POST", "/trade/modules/M01/ai-prompts/nope/run", BODY)).status).toBe(404);
-    expect((await callV1(w.learner, "POST", "/trade/modules/M11/ai-prompts/market-research/run", BODY)).status).toBe(404);
+    expect((await callV1(w.learner, "POST", "/trade/modules/M09/ai-prompts/nope/run", BODY)).status).toBe(404);
+    expect((await callV1(w.learner, "POST", "/trade/modules/M11/ai-prompts/company-profile/run", BODY)).status).toBe(404);
     expect(provider.call).not.toHaveBeenCalled();
   });
 
@@ -106,21 +106,21 @@ describe("who can run a prompt", () => {
     expect(res.status).toBe(422);
     expect(res.body.error).toContain("isn't switched on");
     expect(provider.call).not.toHaveBeenCalled();
-    expect((await callV1(w.learner, "GET", "/trade/modules/M01")).body.aiAssistantEnabled).toBe(false);
+    expect((await callV1(w.learner, "GET", "/trade/modules/M09")).body.aiAssistantEnabled).toBe(false);
     process.env.ANTHROPIC_API_KEY = "test-key-never-sent";
-    expect((await callV1(w.learner, "GET", "/trade/modules/M01")).body.aiAssistantEnabled).toBe(true);
+    expect((await callV1(w.learner, "GET", "/trade/modules/M09")).body.aiAssistantEnabled).toBe(true);
   });
 });
 
 describe("the limits", () => {
   it("stops a user after ten requests in an hour, without stopping anyone else", async () => {
-    await db.insert(schema.aiExchange).values(Array.from({ length: 10 }, () => ({ userId: w.learner.id, moduleId: "M01" as const, contentVersion: "0.1.0", promptId: "market-research", input: {}, status: "completed" as const })));
+    await db.insert(schema.aiExchange).values(Array.from({ length: 10 }, () => ({ userId: w.learner.id, moduleId: "M09" as const, contentVersion: "1.0.0", promptId: "company-profile", input: {}, status: "completed" as const })));
     expect((await callV1(w.learner, "POST", RUN, BODY)).status).toBe(429);
     expect((await callV1(w.other, "POST", RUN, BODY)).status).toBe(200);
   });
 
   it("pauses everyone once the month's cap is reached", async () => {
-    await db.insert(schema.aiExchange).values({ userId: w.other.id, moduleId: "M01", contentVersion: "0.1.0", promptId: "market-research", input: {}, status: "completed", costUsd: "5" });
+    await db.insert(schema.aiExchange).values({ userId: w.other.id, moduleId: "M09", contentVersion: "1.0.0", promptId: "company-profile", input: {}, status: "completed", costUsd: "5" });
     process.env.AI_MONTHLY_CAP_USD = "1";
     const res = await callV1(w.learner, "POST", RUN, BODY);
     expect(res.status).toBe(422);

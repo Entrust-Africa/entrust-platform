@@ -323,6 +323,20 @@
       "when": 1794187509142,
       "tag": "0045_export_transaction",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1794222193960,
+      "tag": "0046_staff_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794222467699,
+      "tag": "0047_file_scan_status",
+      "breakpoints": true
     }
   ]
 }

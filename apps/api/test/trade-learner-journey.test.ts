@@ -35,10 +35,9 @@ async function submitWorksheet(id: string): Promise<void> {
   ok(await put(w.learner, `/worksheet-versions/${draft.id}/values`, { values }));
   ok(await post(w.learner, `/worksheet-versions/${draft.id}/submit`));
 }
-/** The worksheets a learner submits for a module: all of them, except that M01, M04 and M07 are assessed on their first. */
+/** The worksheets a learner submits for a module: all of them. */
 const contentWorksheets = async (moduleId: string): Promise<string[]> => {
-  const ids = ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
-  return ["M01", "M04", "M07"].includes(moduleId) ? ids.slice(0, 1) : ids;
+  return ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
 };
 const ok = (res: { status: number; body: Json }) => {
   expect(res.status, JSON.stringify(res.body).slice(0, 600)).toBeLessThan(300);

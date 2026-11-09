@@ -7,5 +7,9 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
   if (!me) {
     redirect("/sign-in");
   }
+  // Staff who haven't passed the second step go to it first (the API refuses them anything else).
+  if (me.mfa?.required && !me.mfa.verified) {
+    redirect("/mfa");
+  }
   return <AppShell user={me}>{children}</AppShell>;
 }

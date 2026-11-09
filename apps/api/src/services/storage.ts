@@ -39,6 +39,34 @@ export interface StorageProvider {
     expectedSha256: string,
     expectedContentType: string,
   ): Promise<void>;
+  /** The first bytes of an uploaded object, to check it is what its type says. */
+  readHead(storageKey: string, length: number): Promise<Buffer>;
+}
+
+/** How many bytes at the start of a file say what it is. */
+export const SIGNATURE_BYTES = 8;
+
+const SIGNATURES: Record<string, readonly (readonly number[])[]> = {
+  "application/pdf": [[0x25, 0x50, 0x44, 0x46, 0x2d]], // %PDF-
+  "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/png": [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+};
+const EXTENSIONS: Record<string, readonly string[]> = {
+  "application/pdf": ["pdf"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+};
+
+/** Whether the first bytes of a file are the signature of the type it was declared as. A renamed file fails. */
+export function signatureMatches(head: Buffer, contentType: string): boolean {
+  const options = SIGNATURES[contentType];
+  return Boolean(options?.some((signature) => signature.every((byte, i) => head[i] === byte)));
+}
+
+/** Whether the file name ends in an extension that belongs to the declared type, so `report.pdf.exe` or `photo.html` is refused. */
+export function extensionMatches(fileName: string, contentType: string): boolean {
+  const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return Boolean(EXTENSIONS[contentType]?.includes(extension));
 }
 
 /** Formats Content-Disposition header conforming to RFC 5987 / RFC 6266 with ASCII fallback. */
@@ -112,6 +140,12 @@ class MemoryStorageProvider implements StorageProvider {
     const apiUrl = process.env.API_URL ?? "http://localhost:4000";
     const ct = contentType ? `&contentType=${encodeURIComponent(contentType)}` : "";
     return `${apiUrl}/v1/files/mock-storage/${encodeURIComponent(storageKey)}?download=${encodeURIComponent(originalName)}&expires=${expiresInSeconds}${ct}`;
+  }
+
+  async readHead(storageKey: string, length: number): Promise<Buffer> {
+    const item = MemoryStorageProvider.store.get(storageKey);
+    if (!item) throw new ServiceError("invalid", "The uploaded file was not found in storage.");
+    return item.data.subarray(0, length);
   }
 
   async verifyUploadedObject(
@@ -204,6 +238,14 @@ class R2StorageProvider implements StorageProvider {
       ResponseContentDisposition: formatContentDisposition(originalName, "attachment"),
     });
     return getSignedUrl(this.s3, command, { expiresIn: expiresInSeconds });
+  }
+
+  async readHead(storageKey: string, length: number): Promise<Buffer> {
+    const response = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: storageKey, Range: `bytes=0-${length - 1}` }));
+    if (!response.Body) throw new ServiceError("invalid", "Failed to read the uploaded file.");
+    const chunks: Buffer[] = [];
+    for await (const chunk of response.Body as NodeJS.ReadableStream) chunks.push(Buffer.from(chunk as Uint8Array));
+    return Buffer.concat(chunks);
   }
 
   async verifyUploadedObject(

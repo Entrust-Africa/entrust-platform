@@ -58,7 +58,8 @@ describe("module listing and content", () => {
       expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("ready");
       expect(body.items.every((m: { contentStatus: string }) => m.contentStatus === "ready")).toBe(true);
-      expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
+      // Both see the approved 1.0.0 that Entrust sent on 9 Nov 2026; 0.1.0 stays for a learner who started on it.
+      expect(body.items[3]).toMatchObject({ id: "M04", title: "Trade Finance and Payment Risk", deliverable: "Transaction Finance and Payment-Risk Brief", latestVersion: "1.0.0", versions: ["1.0.0", "0.1.0"] });
     }
   });
 

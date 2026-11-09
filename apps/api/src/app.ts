@@ -8,6 +8,8 @@ import { clearCases } from "./routes/clear/cases";
 import { clearMinimumPrices } from "./routes/clear/minimum-prices";
 import { clearRulePacks } from "./routes/clear/rule-packs";
 import { me } from "./routes/me";
+import { mfa } from "./routes/mfa";
+import { mfaGate } from "./services/mfa-gate";
 import { ServiceError } from "./services/errors";
 import { organizations } from "./routes/organizations";
 import { smes } from "./routes/smes";
@@ -65,6 +67,9 @@ base.use("/v1/*", async (c, next) => {
   await next();
 });
 
+// Entrust staff must pass the second step on a session before the API answers anything but the setup routes (#195).
+base.use("/v1/*", mfaGate);
+
 base.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 // Services refuse with a ServiceError; this gives each one its status and the shared error body.
@@ -80,6 +85,7 @@ base.onError((error, c) => {
 export const app = base
   .route("/v1", health)
   .route("/v1", me)
+  .route("/v1", mfa)
   .route("/v1", organizations)
   .route("/v1", smes)
   .route("/v1", jobs)

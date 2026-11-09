@@ -111,6 +111,10 @@ export const ALLOWED_FILE_TYPES = [
 export type AllowedFileType = (typeof ALLOWED_FILE_TYPES)[number];
 export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
+/** Where a file stands with malware scanning. Every file is `unscanned` until a scanner is connected; an `infected` one can no longer be downloaded. */
+export const FILE_SCAN_STATUSES = ["unscanned", "clean", "infected"] as const;
+export type FileScanStatus = (typeof FILE_SCAN_STATUSES)[number];
+
 // Generic file storage for all platforms (CLEAR, TRADE, MIZAN).
 export const file = core.table(
   "file",
@@ -125,6 +129,7 @@ export const file = core.table(
     contentType: text("content_type", { enum: ALLOWED_FILE_TYPES }).notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     sha256: text("sha256").notNull(),
+    scanStatus: text("scan_status", { enum: FILE_SCAN_STATUSES }).notNull().default("unscanned"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [

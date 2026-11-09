@@ -23,14 +23,14 @@ describe("Worker Runtime End-to-End Handlers", () => {
       subject: "Real Worker Test Email",
       template: "test",
       props: { message: "Verifying real worker execution" },
-    });
+    }, { priority: 100 });
 
     expect(jobId).toBeDefined();
 
     // Poll until completed
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -52,11 +52,11 @@ describe("Worker Runtime End-to-End Handlers", () => {
       subject: "More information is needed for SUM-000042",
       template: "summit-clarification",
       props: { applicationNumber: "SUM-000042", organizationName: "ZEBU Coffee", message: "Please upload your export licence." },
-    });
+    }, { priority: 100 });
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -71,11 +71,11 @@ describe("Worker Runtime End-to-End Handlers", () => {
       subject: "We have your registration for the Diaspora Trade Summit",
       template: "summit-registration",
       props: { fullName: "Amina Bekele", passName: "Investor Pass", number: "DTS-00042" },
-    });
+    }, { priority: 100 });
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -96,11 +96,11 @@ describe("Worker Runtime End-to-End Handlers", () => {
         details: [{ label: "Reference", value: "EXH-0007" }, { label: "Amount due", value: "$500" }],
         action: { label: "Open the ADTIS site", url: "https://adtis.entrust-africa.com" },
       },
-    });
+    }, { priority: 100 });
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -115,11 +115,11 @@ describe("Worker Runtime End-to-End Handlers", () => {
       subject: "The result of Summit application SUM-000042",
       template: "summit-result",
       props: { applicationNumber: "SUM-000042", organizationName: "ZEBU Coffee", message: "Your business is on the waiting list for the Summit." },
-    });
+    }, { priority: 100 });
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }

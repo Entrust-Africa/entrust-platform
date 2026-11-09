@@ -1,0 +1,1 @@
+ALTER TABLE "core"."file" ADD COLUMN "scan_status" text DEFAULT 'unscanned' NOT NULL;
