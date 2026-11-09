@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   afriConnectBuyersUrl,
+  afriConnectMarketIntelligenceUrl,
   afriConnectOAuthConfig,
   afriConnectSettings,
   fetchAfriConnectUser,
@@ -108,6 +109,12 @@ describe("provisioning an account on AfriConnect", () => {
 });
 
 describe("the Meet buyers address", () => {
+  it("points to Market Intelligence with Ethiopia chosen", () => {
+    expect(afriConnectMarketIntelligenceUrl({})).toBe("https://www.africonnect.africa.com/export-potential?exporter=ETH");
+    expect(afriConnectMarketIntelligenceUrl({ AFRICONNECT_ISSUER: "https://afri.example/api/auth" })).toBe("https://afri.example/export-potential?exporter=ETH");
+    expect(afriConnectMarketIntelligenceUrl({ AFRICONNECT_ISSUER: "not a url" })).toBe("https://www.africonnect.africa.com/export-potential?exporter=ETH");
+  });
+
   it("is AfriConnect's marketplace on the production site by default", () => {
     expect(afriConnectBuyersUrl({})).toBe("https://www.africonnect.africa.com/marketplace");
   });

@@ -129,6 +129,16 @@ export default async function ModuleDetailPage({
       )}
 
       {id === "M05" && (
+        <Card className="max-w-3xl border-l-4 border-l-brand-600 p-5">
+          <p className="font-semibold text-ink">Practise finding a buyer on AfriConnect</p>
+          <p className="mt-1 text-sm text-ink-2">A short guided simulation: choose a market with Market Intelligence, then find and qualify businesses on the Marketplace. Everything in it is made up.</p>
+          <Link href="/practice/buyer-search" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">
+            Start the simulation →
+          </Link>
+        </Card>
+      )}
+
+      {id === "M05" && (
         <AfriConnectCard
           href={afriConnectBuyersUrl()}
           className="max-w-3xl"
