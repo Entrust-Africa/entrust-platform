@@ -4,6 +4,7 @@ import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { accessTo, assignedOrganizationIds, limitedToAssignedCohorts, recordTradeChange } from "./trade-shared";
 import type { Executor } from "./db";
+import { notify, staffForEnrollment } from "./trade-notifications";
 
 // The SME record (architecture spec sections 5 and 6.7): the completed shipments a business has made and how far each has been
 // checked, the pathway reviews they raise, the products it sells, and its profile with a history of changes. It records what the
@@ -57,7 +58,17 @@ async function flagPathwayReview(db: Executor, organizationId: string, history: 
     .from(schema.enrollment)
     .where(and(eq(schema.enrollment.organizationId, organizationId), inArray(schema.enrollment.status, ["invited", "registered", "active", "paused"])));
   for (const enrolment of enrolments) {
-    await db.insert(schema.pathwayReview).values({ enrollmentId: enrolment.id, exportHistoryId: history.id }).onConflictDoNothing();
+    const [created] = await db.insert(schema.pathwayReview).values({ enrollmentId: enrolment.id, exportHistoryId: history.id }).onConflictDoNothing().returning({ id: schema.pathwayReview.id });
+    if (created) {
+      await notify(db, {
+        userIds: await staffForEnrollment(db, enrolment.id),
+        kind: "admin_alert",
+        title: "A business recorded its first completed shipment",
+        body: `${history.product} was recorded as shipped. Look at the pathway for this enrolment and mark the review done.`,
+        path: "/cohorts",
+        organizationId,
+      });
+    }
   }
 }
 

@@ -112,6 +112,11 @@ const RawSendEmailJobSchema = z.discriminatedUnion("template", [
     template: z.literal("summit-notice"),
     props: SummitNoticeEmailPropsSchema,
   }),
+  // A TRADE notification: the same plain layout as a Summit notice, with the words written by the notification service.
+  BaseEmailSchema.extend({
+    template: z.literal("trade-notice"),
+    props: SummitNoticeEmailPropsSchema,
+  }),
   BaseEmailSchema.extend({
     template: z.literal("trade-session-reminder"),
     props: TradeSessionReminderPropsSchema,
