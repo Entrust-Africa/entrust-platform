@@ -23,6 +23,10 @@
       "localConnectionString": "postgres://entrust:entrust@localhost:5432/entrust_platform"
     }
   ],
+  // 06:00 UTC each day (09:00 in Addis Ababa): the overdue-action and unfinished-learning reminders for TRADE.
+  "triggers": {
+    "crons": ["0 6 * * *"]
+  },
   "observability": {
     "enabled": true
   }
