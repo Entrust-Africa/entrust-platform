@@ -337,6 +337,13 @@
       "when": 1794222467699,
       "tag": "0047_file_scan_status",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794223653387,
+      "tag": "0048_sme_record",
+      "breakpoints": true
     }
   ]
 }

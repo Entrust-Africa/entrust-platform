@@ -39,6 +39,7 @@ import { tradeAi } from "./routes/trade/ai";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSessions } from "./routes/trade/sessions";
 import { tradeSponsors } from "./routes/trade/sponsors";
+import { tradeSmeRecord } from "./routes/trade/sme-record";
 import { summit, summitPublic } from "./routes/summit";
 import { summitCommerce, summitCommercePublic } from "./routes/summit-commerce";
 
@@ -119,6 +120,7 @@ export const app = base
   .route("/v1/trade", tradeSessions)
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)
+  .route("/v1/trade", tradeSmeRecord)
   .route("/v1/summit", summitPublic)
   .route("/v1/summit/commerce", summitCommercePublic)
   .route("/v1/summit", summit)
