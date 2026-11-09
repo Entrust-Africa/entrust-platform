@@ -165,8 +165,16 @@ export async function scorePlacement(
       else assignments.push({ planId: plan.id, moduleId: kept.moduleId, status: kept.status as ModuleStatus, sequence: ++next, reasonCodes: kept.reasonCodes as string[], source: kept.source as ModuleAssignmentSource });
     }
     const list = (ids: string[]) => [...ids].sort().join();
-    if (old.acknowledgedAt && list(previous.map((a) => a.moduleId)) === list(assignments.map((a) => a.moduleId))) {
-      await tx.update(schema.learningPlan).set({ acknowledgedAt: old.acknowledgedAt }).where(eq(schema.learningPlan.id, plan.id));
+    if (list(previous.map((a) => a.moduleId)) === list(assignments.map((a) => a.moduleId))) {
+      // Staff's approval stands too, unless the new plan has something new for them to review.
+      const stillApproved = (old.status === "approved" || old.status === "active") && plan.status === "generated";
+      await tx
+        .update(schema.learningPlan)
+        .set({
+          acknowledgedAt: old.acknowledgedAt,
+          ...(stillApproved ? { status: old.status, reviewedByUserId: old.reviewedByUserId, reviewedAt: old.reviewedAt } : {}),
+        })
+        .where(eq(schema.learningPlan.id, plan.id));
     }
   }
   await tx.insert(schema.moduleAssignment).values(assignments);

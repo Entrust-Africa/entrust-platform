@@ -141,6 +141,7 @@ export async function createModuleSubmission(
         title: def.title,
         version: version!.version,
         values: version!.values,
+        result: version!.result,
         submittedAt: version!.submittedAt?.toISOString() ?? null,
       })),
     };
@@ -501,16 +502,24 @@ export async function getModuleSubmission(
 
 /** One score at a time per submission, so two assessors at once can't both be the official first score. */
 export async function scoreModuleSubmission(ctx: Ctx, submissionId: string, input: ScoreSubmissionInput): Promise<RubricAssessmentView> {
-  return ctx.db.transaction(async (tx) => {
-    await tx.select({ id: schema.moduleSubmission.id }).from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, submissionId)).for("update");
-    return applyScore({ ...ctx, db: tx }, submissionId, input);
+  const after: AfterCommit[] = [];
+  const view = await ctx.db.transaction(async (tx) => {
+    const [locked] = await tx.select({ enrollmentId: schema.moduleSubmission.enrollmentId }).from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, submissionId)).for("update");
+    // The enrolment before the module's progress, the order a lesson save takes them in, so the two can't deadlock.
+    if (locked) await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, locked.enrollmentId)).for("update");
+    return applyScore({ ...ctx, db: tx }, submissionId, input, after);
   });
+  for (const run of after) await run(ctx.db);
+  return view;
 }
+
+type AfterCommit = (db: Ctx["db"]) => Promise<void>;
 
 async function applyScore(
   ctx: Ctx,
   submissionId: string,
-  input: ScoreSubmissionInput
+  input: ScoreSubmissionInput,
+  after: AfterCommit[]
 ): Promise<RubricAssessmentView> {
   const { principal, db } = ctx;
 
@@ -555,6 +564,8 @@ async function applyScore(
   }
 
   const isFirstScore = existingScores.length === 0;
+  // A second assessor's reading is a check on the first, and changes nothing, so it can still come in afterwards.
+  if (isFirstScore) refuseNewWork(row.enrollment.status);
 
   // Evaluate scores against rubric
   const evaluation = evaluateRubric(
@@ -586,6 +597,26 @@ async function applyScore(
 
   // If this is the first score, it counts for learner progress:
   if (isFirstScore) {
+    // An exemption approved before the work was scored can't stand over a confirmed critical failure.
+    if (evaluation.confirmedCriticalFailures.length) {
+      const withdrawn = await db
+        .update(schema.moduleExemption)
+        .set({ status: "rejected", reviewComment: "Withdrawn: the module's submission has a confirmed critical failure.", reviewedAt: now, updatedAt: now })
+        .where(and(eq(schema.moduleExemption.enrollmentId, sub.enrollmentId), eq(schema.moduleExemption.moduleId, sub.moduleId), inArray(schema.moduleExemption.status, ["pending", "approved"])))
+        .returning({ id: schema.moduleExemption.id });
+      for (const { id } of withdrawn) {
+        await db.insert(schema.auditLog).values({
+          actorUserId: principal.userId,
+          organizationId: row.enrollment.organizationId,
+          platform: "trade",
+          action: "trade.module_exemption.withdrawn",
+          entityType: "trade.module_exemption",
+          entityId: id,
+          reason: "Confirmed critical failure",
+        });
+      }
+    }
+
     const submissionStatus = evaluation.passed ? "passed" : "revision_required";
     await db
       .update(schema.moduleSubmission)
@@ -617,30 +648,32 @@ async function applyScore(
       await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
     }
 
-    // Send email notification to SME via worker (#16 with @entrust/notify #17)
-    try {
-      const [ownerUser] = await db
-        .select({ email: schema.user.email })
-        .from(schema.member)
-        .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-        .where(
-          and(
-            eq(schema.member.organizationId, row.enrollment.organizationId),
-            eq(schema.member.role, "owner")
+    // Queued after the score commits: the learner isn't told about a score that rolled back, and a queue problem can't undo one.
+    after.push(async (db) => {
+      try {
+        const [ownerUser] = await db
+          .select({ email: schema.user.email })
+          .from(schema.member)
+          .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+          .where(
+            and(
+              eq(schema.member.organizationId, row.enrollment.organizationId),
+              eq(schema.member.role, "owner")
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (ownerUser?.email) {
-        await enqueue(JOB_NAMES.SEND_EMAIL, {
-          to: ownerUser.email,
-          subject: `TRADE Feedback: Module ${sub.moduleId} submission has been scored`,
-          text: `Your practical deliverable for Module ${sub.moduleId} has been evaluated.\nOutcome: ${evaluation.outcome}\nScore: ${evaluation.totalPoints}/${evaluation.maxPoints} (${evaluation.band})\n\nLog in to the TRADE platform to review your assessor feedback.`,
-        });
+        if (ownerUser?.email) {
+          await enqueue(JOB_NAMES.SEND_EMAIL, {
+            to: ownerUser.email,
+            subject: `TRADE Feedback: Module ${sub.moduleId} submission has been scored`,
+            text: `Your practical deliverable for Module ${sub.moduleId} has been evaluated.\nOutcome: ${evaluation.outcome}\nScore: ${evaluation.totalPoints}/${evaluation.maxPoints} (${evaluation.band})\n\nLog in to the TRADE platform to review your assessor feedback.`,
+          });
+        }
+      } catch (err) {
+        console.warn("[trade:scoring] Could not queue notification email:", err);
       }
-    } catch (err) {
-      console.warn("[trade:scoring] Could not queue notification email:", err);
-    }
+    });
   }
 
   // Audit log

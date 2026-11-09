@@ -303,6 +303,10 @@ export async function overridePlan(
 
   const beforeModules = currentAssignments.map((a) => a.moduleId);
 
+  // Checked before anything changes, so a refused override changes nothing.
+  const softened = (input.additions ?? []).filter((a) => isMandatoryModule(a.moduleId) && !["required", "priority_required"].includes(a.status ?? "required"));
+  if (softened.length) throw new ServiceError("invalid", `${softened.map((a) => a.moduleId).join(", ")} must stay required: every learner has to complete them.`);
+
   if (input.removals && input.removals.length > 0) {
     // M11 and M12 are mandatory for everyone completing the programme (review section 8), so a plan can't drop them.
     const mandatory = latestTradeRules().modules.filter((m) => m.requiredForAll).map((m) => m.id as string);
@@ -324,10 +328,6 @@ export async function overridePlan(
       0
     );
 
-    const mandatory = latestTradeRules().modules.filter((m) => m.requiredForAll).map((m) => m.id as string);
-    const softened = input.additions.filter((a) => mandatory.includes(a.moduleId) && !["required", "priority_required"].includes(a.status ?? "required"));
-    if (softened.length) throw new ServiceError("invalid", `${softened.map((a) => a.moduleId).join(", ")} must stay required: every learner has to complete them.`);
-
     for (const add of input.additions) {
       const seq = add.sequence ?? ++maxSeq;
       const existingItem = currentAssignments.find(
@@ -341,7 +341,7 @@ export async function overridePlan(
             status: add.status ?? "required",
             sequence: seq,
             source: "staff_override",
-            reasonCodes: ["staff_override"],
+            reasonCodes: ["STAFF_OVERRIDE"],
           })
           .where(eq(schema.moduleAssignment.id, existingItem.id));
       } else {
@@ -351,7 +351,7 @@ export async function overridePlan(
           status: add.status ?? "required",
           sequence: seq,
           source: "staff_override",
-          reasonCodes: ["staff_override"],
+          reasonCodes: ["STAFF_OVERRIDE"],
           createdAt: now,
         });
       }
@@ -635,16 +635,16 @@ export async function reviewExemption(
     if (isMandatoryModule(existing.moduleId)) {
       throw new ServiceError("invalid", `${existing.moduleId} can't be exempted: every learner has to complete it.`);
     }
-    // Critical failures block a pass whatever the score, so an exemption can't be the way round one.
-    const [latest] = await db
-      .select({ failures: schema.rubricAssessment.confirmedCriticalFailures })
+    // Critical failures block a pass whatever the score, so an exemption can't be the way round one until a later pass.
+    const scored = await db
+      .select({ failures: schema.rubricAssessment.confirmedCriticalFailures, passed: schema.rubricAssessment.passed })
       .from(schema.moduleSubmission)
       .innerJoin(schema.rubricAssessment, and(eq(schema.rubricAssessment.submissionId, schema.moduleSubmission.id), eq(schema.rubricAssessment.isFirstScore, true)))
       .where(and(eq(schema.moduleSubmission.enrollmentId, existing.enrollmentId), eq(schema.moduleSubmission.moduleId, existing.moduleId)))
-      .orderBy(desc(schema.moduleSubmission.version))
-      .limit(1);
-    if (latest?.failures.length) {
-      throw new ServiceError("invalid", "This module's newest submission has a confirmed critical failure, so it can't be exempted.");
+      .orderBy(desc(schema.moduleSubmission.version));
+    const sinceLastPass = scored.slice(0, scored.findIndex((s) => s.passed) === -1 ? scored.length : scored.findIndex((s) => s.passed));
+    if (sinceLastPass.some((s) => s.failures.length)) {
+      throw new ServiceError("invalid", "This module has a confirmed critical failure, so it can't be exempted.");
     }
   }
 

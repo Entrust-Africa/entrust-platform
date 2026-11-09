@@ -255,7 +255,14 @@ export async function evaluateAndSyncModuleCompletion(
         .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
         .limit(1);
 
-      if (!existingCert) {
+      // A certificate revoked on a finished enrolment stays revoked. Nothing the learner does brings it back: staff reopen
+      // a module by changing its score, which makes the enrolment active again, and passing that earns a new one.
+      const [revokedWhileFinished] =
+        !existingCert && enrollmentRow.enrollment.status === "completed"
+          ? await tx.select({ id: schema.certificate.id }).from(schema.certificate).where(eq(schema.certificate.enrollmentId, enrollmentId)).limit(1)
+          : [];
+
+      if (!existingCert && !revokedWhileFinished) {
         // Fetch recipient name (SME owner or organization name)
         const [owner] = await tx
           .select({ name: schema.user.name })
@@ -300,7 +307,7 @@ export async function evaluateAndSyncModuleCompletion(
             },
           });
         }
-      } else {
+      } else if (existingCert) {
         certificateId = existingCert.id;
       }
     }

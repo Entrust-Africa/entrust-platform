@@ -315,6 +315,7 @@ function checkShape(def: WorksheetDefinition, values: Record<string, unknown>): 
 export async function saveValues(ctx: Ctx, id: string, input: Record<string, unknown>): Promise<WorksheetVersionView> {
   return ctx.db.transaction(async (tx) => {
     const { row, enrollment, access } = await findVersion(tx, ctx, id, { lock: true });
+    if (enrollment.status === "withdrawn") throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team fills in a worksheet.");
     if (row.status !== "draft") throw new ServiceError("invalid_transition", "A submitted version can't be edited. Start a new draft to change it.");
     const def = definitionOf(row.worksheetId);
@@ -356,6 +357,7 @@ function missingFor(def: WorksheetDefinition, values: WorksheetValues): string[]
 export async function submitVersion(ctx: Ctx, id: string): Promise<WorksheetVersionView> {
   return ctx.db.transaction(async (tx) => {
     const { row, enrollment, access } = await findVersion(tx, ctx, id, { lock: true });
+    if (enrollment.status === "withdrawn") throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team can submit a worksheet.");
     if (row.status !== "draft") throw new ServiceError("invalid_transition", "This version has already been submitted.");
     const def = definitionOf(row.worksheetId);

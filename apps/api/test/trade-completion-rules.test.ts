@@ -6,7 +6,7 @@ import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, typ
 
 // What the second audit found: rules that held on one path and not another.
 
-const w = {} as { learner: TestUser; admin: TestUser; reviewer: TestUser; other: TestUser; org: string; cohort: string; otherCohort: string; enrollment: string; plan: string; first: string };
+const w = {} as { earlyExemption: string; learner: TestUser; admin: TestUser; reviewer: TestUser; other: TestUser; org: string; cohort: string; otherCohort: string; enrollment: string; plan: string; first: string };
 const get = (user: TestUser, path: string) => callV1(user, "GET", `/trade${path}`);
 const post = (user: TestUser, path: string, body?: unknown) => callV1(user, "POST", `/trade${path}`, body);
 const ok = (res: { status: number; body: Json }) => {
@@ -89,6 +89,9 @@ describe("assignment limits on staff who aren't on the cohort", () => {
     expect(ok(await trail(w.reviewer)).items.length).toBeGreaterThan(0);
     expect(ok(await trail(w.admin)).items.length).toBeGreaterThan(0);
 
+    await db.insert(schema.auditLog).values({ actorUserId: w.admin.id, organizationId: w.org, action: "organization.created", entityType: "organization", entityId: w.org, after: { tin: "0012345678" } });
+    expect(ok(await callV1(w.other, "GET", `/audit?action=organization.created&organizationId=${w.org}`)).items).toEqual([]);
+
     expect((await callV1(w.reviewer, "GET", "/smes/search?q=cr")).status).toBe(403);
     expect((await get(w.reviewer, "/enrollments/waiting")).status).toBe(403);
     expect((await callV1(w.other, "GET", "/smes/search?q=cr")).status).toBe(200);
@@ -99,9 +102,12 @@ describe("assignment limits on staff who aren't on the cohort", () => {
     const dropped = await post(w.admin, `/plans/${w.plan}/override`, { reason: "x", removals: ["M11"] });
     expect(dropped.status).toBe(422);
     expect(dropped.body.error).toContain("M11");
-    const softened = await post(w.admin, `/plans/${w.plan}/override`, { reason: "x", additions: [{ moduleId: "M12", status: "optional" }] });
+    // A refused override changes nothing, even what it would have removed first.
+    const softened = await post(w.admin, `/plans/${w.plan}/override`, { reason: "x", removals: ["M02"], additions: [{ moduleId: "M12", status: "optional" }] });
     expect(softened.status).toBe(422);
     expect(softened.body.error).toContain("M12");
+    const kept = await db.select().from(schema.moduleAssignment).where(eq(schema.moduleAssignment.planId, w.plan));
+    expect(kept.map((a) => a.moduleId)).toContain("M02");
   });
 });
 
@@ -123,6 +129,9 @@ describe("what counts towards a pass", () => {
 
     const v1 = ok(await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M05" }));
     expect(ok(await post(w.reviewer, `/module-submissions/${v1.id}/score`, { scores: allMarks(), feedback: "Good." })).passed).toBe(true);
+    const [earlyEvidence] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Earlier training" } as never).returning();
+    const [earlyExemption] = await db.insert(schema.moduleExemption).values({ enrollmentId: w.enrollment, moduleId: "M05", evidenceRecordId: earlyEvidence!.id, status: "approved", reason: "Did this before", requestedByUserId: w.learner.id } as never).returning();
+    w.earlyExemption = earlyExemption!.id;
     const v2 = ok(await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M05" }));
     const failed = ok(await post(w.reviewer, `/module-submissions/${v2.id}/score`, { scores: allMarks(), confirmedCriticalFailures: [content.rubric.criticalFailures[0]!.id], feedback: "Fabricated." }));
     expect(failed.passed).toBe(false);
@@ -131,6 +140,10 @@ describe("what counts towards a pass", () => {
     const last = content.lessons.at(-1)!;
     ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId: "M05", lessonId: last.id, completed: true, contentVersion: content.version }));
     expect(await status()).toBe("needs_revision");
+
+    // An exemption approved before the score doesn't survive the critical failure.
+    const [early] = await db.select().from(schema.moduleExemption).where(eq(schema.moduleExemption.id, w.earlyExemption));
+    expect(early?.status).toBe("rejected");
 
     // An exemption can't be the way round it, or round a mandatory module.
     const [evidence] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Prior training" } as never).returning();
@@ -178,6 +191,9 @@ describe("after the programme", () => {
     expect((await post(owner, "/modules/M05/knowledge-check/attempts", { enrollmentId: left, answers })).status).toBe(422);
     expect((await post(owner, "/module-submissions", { enrollmentId: left, moduleId: "M05" })).status).toBe(422);
     expect((await post(owner, "/module-progress", { enrollmentId: left, moduleId: "M05", lessonId: M05().lessons[0]!.id, completed: true })).status).toBe(422);
+    const [version] = await db.insert(schema.worksheetVersion).values({ enrollmentId: left, worksheetId: "m05-ideal-buyer-profile", moduleId: "M05", version: 1, status: "draft", values: {} } as never).returning();
+    expect((await callV1(owner, "PUT", `/trade/worksheet-versions/${version!.id}/values`, { values: {} })).status).toBe(422);
+    expect((await post(owner, `/worksheet-versions/${version!.id}/submit`)).status).toBe(422);
   });
 
   it("keeps an SME's worksheets, and lets it start a new version", async () => {
@@ -187,6 +203,18 @@ describe("after the programme", () => {
     const draft = ok(await post(w.learner, "/worksheets/m05-ideal-buyer-profile/draft", { organizationId: w.org }));
     expect(draft.version).toBe(2);
     await db.delete(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, draft.id));
+  });
+
+  it("keeps a revoked certificate revoked until staff reopen a module", async () => {
+    const before = ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`));
+    ok(await post(w.admin, `/certificates/${before.id}/revoke`, { reason: "Issued in error" }));
+    const lesson = M05().lessons[0]!;
+    ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId: "M02", lessonId: findVersion("M02", "learner")!.lessons[0]!.id, completed: true }));
+    ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId: "M05", lessonId: lesson.id, completed: true }));
+    const certs = await db.select().from(schema.certificate).where(eq(schema.certificate.enrollmentId, w.enrollment));
+    expect(certs).toHaveLength(1);
+    expect(certs[0]?.revokedAt).not.toBeNull();
+    await db.update(schema.certificate).set({ revokedAt: null, revocationReason: null }).where(eq(schema.certificate.id, certs[0]!.id));
   });
 
   it("issues a new certificate when a revoked one is earned again", async () => {

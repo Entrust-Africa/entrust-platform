@@ -786,7 +786,7 @@ export async function setEnrollmentPathway(ctx: Ctx, enrollmentId: string, input
         status: "confirmed",
         liveOrder: old?.liveOrder ?? false,
         rulesVersion: old?.rulesVersion ?? latestTradeRules().version,
-        reasonCodes: changed || !old ? ["STAFF_OVERRIDE"] : [...old.reasonCodes],
+        reasonCodes: changed || !old ? ["STAFF_OVERRIDE"] : old.reasonCodes.filter((code) => code !== "PATHWAY_SHIPMENT_UNVERIFIED"),
         decidedByUserId: principal.userId,
         decisionReason: reason,
       })

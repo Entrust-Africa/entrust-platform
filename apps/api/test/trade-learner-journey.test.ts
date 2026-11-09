@@ -132,6 +132,9 @@ describe("a learner's journey from enrolment to certificate", () => {
     const remade = ok(await get(w.learner, `/plans?enrollmentId=${w.enrollment}`)).items.find((p: Json) => p.status !== "superseded");
     expect(remade.id).not.toBe(added.id);
     expect(remade.modules.find((m: Json) => m.moduleId === "M10")).toMatchObject({ status: "required", source: "staff_override" });
+    // The report reads every reason code, so a staff change has to be one it knows.
+    const placement = ok(await get(w.admin, `/assessments?kind=placement&enrollmentId=${w.enrollment}`)).items[0];
+    ok(await get(w.learner, `/assessments/${placement.id}/report`));
     if (remade.status !== "approved" && remade.status !== "active") ok(await post(w.admin, `/plans/${remade.id}/approve`, {}));
     w.planId = remade.id;
     w.modules = remade.modules.map((m: Json) => m.moduleId);
