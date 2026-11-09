@@ -1,6 +1,6 @@
 import type { ModuleContent } from "../schema";
 
-// Loaded from Entrust's M12 document. A draft until Entrust approves it; content fixes go back to them.
+// Loaded from Entrust's M12 document.
 export const M12_V1_0_0: ModuleContent = {
   module: "M12",
   version: "1.0.0",

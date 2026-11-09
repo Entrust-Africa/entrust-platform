@@ -113,6 +113,21 @@ describe("modules on Entrust's common assessment standard", () => {
     expect(m11.knowledgeCheck.questions.every((q) => q.lessonId?.startsWith("gate-"))).toBe(true);
   });
 
+  it("carries the case materials the exercises rely on, labelled fictional, with the answers for staff only", () => {
+    const lesson = (module: string, id: string) => onStandard.find((c) => c.module === module)!.lessons.find((l) => l.id === id)!.body;
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) expect(lesson("M11", `gate-${n}`), `gate ${n}`).toContain("Case file");
+    for (const [module, id] of [["M05", "lesson-6"], ["M06", "lesson-4"], ["M06", "lesson-7"], ["M08", "lesson-1"], ["M08", "lesson-3"], ["M08", "lesson-5"], ["M08", "lesson-6"], ["M08", "lesson-8"], ["M09", "lesson-5"], ["M09", "lesson-8"]] as const) {
+      const body = lesson(module, id);
+      expect(body, `${module} ${id}`).toContain("fictional training document");
+      // The sample comes before the exercise that uses it.
+      expect(body.indexOf("fictional training document"), `${module} ${id}`).toBeLessThan(body.indexOf("## Practical exercise"));
+    }
+    for (const content of onStandard.filter((c) => ["M05", "M06", "M08", "M09", "M11"].includes(c.module))) {
+      expect(content.staff.facilitatorGuide).toContain("Case material notes");
+      expect(JSON.stringify(toLearnerView(content))).not.toContain("Case material notes");
+    }
+  });
+
   it("holds M12's action register to 5 to 10 actions", () => {
     const register = onStandard.find((c) => c.module === "M12")!.worksheets.find((w) => w.id === "action_register")!;
     expect(register.tables[0]).toMatchObject({ minRows: 5, maxRows: 10 });
