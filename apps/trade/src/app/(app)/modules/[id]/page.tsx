@@ -104,6 +104,26 @@ export default async function ModuleDetailPage({
         </Card>
       )}
 
+      {(id === "M06" || id === "M11" || id === "M12") && (
+        <Card className="max-w-3xl border-l-4 border-l-brand-600 p-5">
+          <p className="font-semibold text-ink">Pricing calculator</p>
+          <p className="mt-1 text-sm text-ink-2">Work out a selling price from the full cost of an order, keeping markup and gross margin apart.</p>
+          <Link href="/tools/pricing" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">
+            Open the calculator →
+          </Link>
+        </Card>
+      )}
+
+      {id === "M09" && (
+        <Card className="max-w-3xl border-l-4 border-l-brand-600 p-5">
+          <p className="font-semibold text-ink">AI Practice Lab</p>
+          <p className="mt-1 text-sm text-ink-2">Approved prompts to copy into whichever approved AI tool you use, with what to check before you use the answer.</p>
+          <Link href="/ai-lab" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">
+            Open the lab →
+          </Link>
+        </Card>
+      )}
+
       {id === "M05" && (
         <AfriConnectCard
           href={afriConnectBuyersUrl()}

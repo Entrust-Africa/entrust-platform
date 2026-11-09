@@ -74,6 +74,14 @@ describe("module listing and content", () => {
     expect(JSON.stringify(staff.body)).toContain("Case material notes");
   });
 
+  it("lists the AI prompts a caller can open, with what to check, for the practice lab", async () => {
+    const { status, body } = await get(w.learner, "/ai-prompts");
+    expect(status).toBe(200);
+    expect(body.items.filter((p: { module: string }) => p.module === "M09").map((p: { id: string }) => p.id)).toEqual(["company-profile", "action-register", "costing-review"]);
+    expect(body.items.every((p: { verification: string[] }) => p.verification.length > 0)).toBe(true);
+    expect((await get(null, "/ai-prompts")).status).toBe(401);
+  });
+
   it("finds no module or version that isn't there", async () => {
     expect((await get(w.learner, "/modules/M99")).status).toBe(404);
     expect((await get(w.admin, "/modules/m04")).status).toBe(404);

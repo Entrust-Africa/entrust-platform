@@ -463,6 +463,7 @@ describe("API documentation", () => {
         "/v1/trade/outcomes/financing/{id}/status",
         "/v1/trade/outcomes/{id}/events",
         "/v1/trade/action-plan",
+        "/v1/trade/ai-prompts",
         "/v1/trade/action-plan/import",
         "/v1/trade/action-plan/items",
         "/v1/trade/action-plan/items/{id}",

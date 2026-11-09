@@ -43,3 +43,15 @@ export async function getTradeModule(ctx: Ctx, id: string, version?: string) {
   if (version !== undefined && !found) throw new ServiceError("not_found", "That version of the module doesn't exist.");
   return { ...summary, content: found ? (audience === "staff" ? found : toLearnerView(found)) : null, aiAssistantEnabled: aiAssistantEnabled() };
 }
+
+/** Every AI prompt in the modules the caller can open, for the AI Practice Lab. They copy them into a tool of their choice. */
+export async function listAiPrompts(ctx: Ctx) {
+  const audience = await audienceFor(ctx);
+  const items = MODULE_IDS.flatMap((id) => {
+    const content = findVersion(id as ModuleId, audience);
+    if (!content) return [];
+    return content.aiPrompts.map((p) => ({ module: id, moduleTitle: content.title, id: p.id, title: p.title, prompt: p.prompt, verification: p.verification }));
+  });
+  return { items };
+}
+

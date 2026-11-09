@@ -1968,3 +1968,7 @@ export type CreateActionItemInput = z.infer<typeof CreateActionItemBody>;
 export type UpdateActionItemInput = z.infer<typeof UpdateActionItemBody>;
 export type RecordActionReviewInput = z.infer<typeof RecordActionReviewBody>;
 
+export const AiPromptList = z
+  .object({ items: z.array(z.object({ module: z.string(), moduleTitle: z.string(), id: z.string(), title: z.string(), prompt: z.string(), verification: z.array(z.string()) })) })
+  .openapi("TradeAiPromptList");
+

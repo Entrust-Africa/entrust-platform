@@ -105,6 +105,26 @@ describe("worksheets carried by a module's content", () => {
     expect(ok(await get(w.learner, `/worksheets/${OUTPUTS[1]}/versions?enrollmentId=${w.enrollment}`)).items.map((v: Json) => v.version)).toEqual([2, 1]);
   });
 
+  it("starts M10's register with M05's buyers, so nobody types them twice", async () => {
+    const pipeline = ok(await post(w.learner, "/worksheets/m05-qualified-buyer-pipeline/draft", { enrollmentId: w.enrollment }));
+    const rows = [1, 2, 3, 4, 5].map((n) => ({ buyer_id: `B${n}`, company_name: `Buyer ${n}`, country: "KE", contact_person: "Asha", product: "Suits", stage: n === 1 ? "closed_won" : "engaged", next_action: "Call", responsible: "Sara", next_follow_up: "2027-01-01" }));
+    ok(await callV1(w.learner, "PUT", `/trade/worksheet-versions/${pipeline.id}/values`, { values: { pipeline: rows } }));
+    ok(await post(w.learner, `/worksheet-versions/${pipeline.id}/submit`));
+
+    const register = ok(await post(w.learner, "/worksheets/m10-relationship-register/draft", { enrollmentId: w.enrollment }));
+    expect(register.prefilledFrom).toMatchObject({ worksheetId: "m05-qualified-buyer-pipeline", title: "Qualified Buyer Pipeline and Follow-up Register" });
+    expect(register.values.buyers).toHaveLength(5);
+    expect(register.values.buyers[0]).toEqual({ legal_name: "Buyer 1", location: "KE", contacts: "Asha", products: "Suits", stage: "transaction_completed", follow_up: "2027-01-01" });
+    expect(register.values.buyers[1].stage).toBe("responded");
+    // Every stage it sets is one the register offers.
+    const definition = ok(await get(w.learner, "/worksheets/definitions/m10-relationship-register"));
+    const offered = definition.tables[0].columns.find((c: Json) => c.id === "stage").options.map((o: Json) => o.value);
+    for (const buyer of register.values.buyers) expect(offered).toContain(buyer.stage);
+    // M05's submitted version in the assessment tests below stays the learner's, whichever draft is open.
+    await db.delete(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, register.id));
+    await db.delete(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, pipeline.id));
+  });
+
   it("won't take the practical until every required output is submitted", async () => {
     const content = ok(await get(w.admin, "/modules/M05")).content;
     const answers = Object.fromEntries(content.knowledgeCheck.questions.map((q: Json) => [q.id, q.correct[0]]));

@@ -1,6 +1,7 @@
 import { createRoute } from "@hono/zod-openapi";
-import { AiExchangeList, AiPromptParam, AiSuggestion, RunAiPromptBody } from "../../schemas/trade";
+import { AiExchangeList, AiPromptList, AiPromptParam, AiSuggestion, RunAiPromptBody } from "../../schemas/trade";
 import { listAiExchanges, runAiPrompt } from "../../services/trade-ai";
+import { listAiPrompts } from "../../services/trade-modules";
 import { clearRouter, contextFor, json, listErrors, problem, writeErrors } from "../clear/shared";
 
 // The AI assistant for module exercises (#76).
@@ -28,7 +29,17 @@ const logRoute = createRoute({
   responses: { 200: { description: "The log", content: json(AiExchangeList) }, ...listErrors, 403: problem("Not an Entrust administrator") },
 });
 
+const promptsRoute = createRoute({
+  method: "get",
+  path: "/ai-prompts",
+  tags,
+  summary: "List the AI prompts for the practice lab",
+  description: "Every AI prompt in the modules the caller can open, with its verification checklist, to copy into a tool of their choice.",
+  responses: { 200: { description: "The prompts", content: json(AiPromptList) }, ...listErrors },
+});
+
 export const tradeAi = ai
+  .openapi(promptsRoute, async (c) => c.json(await listAiPrompts(await contextFor(c.get("user"))), 200))
   .openapi(runRoute, async (c) => {
     const { id, promptId } = c.req.valid("param");
     return c.json(await runAiPrompt(await contextFor(c.get("user")), id, promptId, c.req.valid("json")), 200);

@@ -18,7 +18,7 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import { accessTo, recordTradeChange, type Access } from "./trade-shared";
-import { allWorksheetDefinitions, canOpenWorksheet, findWorksheetDefinition, isLearningPlan } from "./trade-worksheet-definitions";
+import { allWorksheetDefinitions, canOpenWorksheet, findWorksheetDefinition, isLearningPlan, prefillContentWorksheet } from "./trade-worksheet-definitions";
 
 // Worksheets (#64, #65): structured forms an SME fills in while it learns. Values save as they type and are labelled self-reported.
 // Submitting turns a draft into a numbered version that is kept and never edited; editing starts the next draft from it. The
@@ -245,7 +245,9 @@ export async function startDraft(ctx: Ctx, worksheetId: string, input: { enrollm
           .orderBy(desc(schema.worksheetVersion.version))
           .limit(1);
         if (source) {
-          values = prefillFrom(def.id, { id: source.worksheetId, values: source.values, computed: ((source.result as { computed?: WorksheetResult["computed"] } | null)?.computed ?? {}) });
+          values = findWorksheet(def.id)
+            ? prefillFrom(def.id, { id: source.worksheetId, values: source.values, computed: ((source.result as { computed?: WorksheetResult["computed"] } | null)?.computed ?? {}) })
+            : prefillContentWorksheet(def.id, source.values);
           if (Object.keys(values).length) prefilledFromVersionId = source.id;
         }
       }

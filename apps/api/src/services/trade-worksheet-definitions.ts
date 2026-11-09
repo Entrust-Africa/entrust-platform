@@ -7,6 +7,40 @@ import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 
 const LEARNING_PLAN = "individual_learning_plan";
 
+const BUYER_PIPELINE = "m05-qualified-buyer-pipeline";
+const BUYER_REGISTER = "m10-relationship-register";
+const CONTENT_PREFILL: Readonly<Record<string, string>> = { [BUYER_REGISTER]: BUYER_PIPELINE };
+
+// M05's stages end where M10's begin. Where they name the same stage it carries over as it is.
+const REGISTER_STAGE: Readonly<Record<string, string>> = {
+  identified: "identified",
+  researched: "researched",
+  qualified: "qualified",
+  contacted: "contacted",
+  engaged: "responded",
+  requirements_confirmed: "qualified",
+  quotation_submitted: "quotation_submitted",
+  negotiation: "negotiation",
+  order_confirmed: "order_confirmed",
+  closed_won: "transaction_completed",
+  closed_lost: "inactive_or_lost",
+};
+
+/** What a new draft starts with when it builds on another content worksheet: M10's register starts with M05's buyers, so nobody types them twice. */
+export function prefillContentWorksheet(targetId: string, values: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  if (targetId !== BUYER_REGISTER || !Array.isArray(values.pipeline)) return {};
+  const buyers = (values.pipeline as Record<string, unknown>[]).map((row) => ({
+    legal_name: row.company_name,
+    location: row.country,
+    contacts: row.contact_person,
+    products: row.product,
+    verification: row.verification_status,
+    stage: REGISTER_STAGE[String(row.stage)] ?? "identified",
+    follow_up: row.next_follow_up,
+  }));
+  return buyers.length ? { buyers: buyers.map((b) => Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined && v !== null && v !== ""))) } : {};
+}
+
 /** The worksheets a module's newest content version carries, unless the engine already defines that module's worksheets. */
 function fromContent(moduleId: ModuleId): WorksheetDefinition[] {
   if (WORKSHEET_DEFINITIONS.some((d) => d.module === moduleId)) return [];
@@ -22,6 +56,7 @@ function fromContent(moduleId: ModuleId): WorksheetDefinition[] {
     tables: w.tables,
     computed: [],
     sections: [{ id: "form", title: "Your answers", items: [...w.fields.map((f) => f.id), ...w.tables.map((t) => t.id)] }],
+    ...(CONTENT_PREFILL[`${moduleId.toLowerCase()}-${w.id.replaceAll("_", "-")}`] ? { prefillFrom: CONTENT_PREFILL[`${moduleId.toLowerCase()}-${w.id.replaceAll("_", "-")}`]! } : {}),
   }));
 }
 

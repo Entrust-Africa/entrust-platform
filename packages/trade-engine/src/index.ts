@@ -1,4 +1,5 @@
 export * from "./action-plan";
+export * from "./pricing";
 export * from "./statuses";
 export * from "./responses";
 export * from "./scoring";

@@ -41,8 +41,16 @@ export default async function WorksheetsPage() {
           Short forms that work out your numbers as you type. Your figures save as you go. When you submit one, that version is kept as it is, and you can start a new one to change it.
         </p>
       </div>
-      <ul className="grid gap-4 md:grid-cols-2">
-        {list.data.items.map((w) => (
+      {[...new Set(list.data.items.map((w) => w.module))].map((module) => {
+        const items = list.data!.items.filter((w) => w.module === module);
+        const done = items.filter((w) => w.latest).length;
+        return (
+          <details key={module} open={items.some((w) => w.draft)} className="rounded-lg border border-line bg-surface p-4">
+            <summary className="cursor-pointer font-display text-lg font-bold text-ink">
+              {module} <span className="text-sm font-normal text-ink-2">{done} of {items.length} submitted</span>
+            </summary>
+            <ul className="mt-3 grid gap-4 md:grid-cols-2">
+        {items.map((w) => (
           <li key={w.id}>
             <Card className="flex h-full flex-col justify-between gap-3 p-5">
               <div className="space-y-1">
@@ -63,7 +71,10 @@ export default async function WorksheetsPage() {
             </Card>
           </li>
         ))}
-      </ul>
+            </ul>
+          </details>
+        );
+      })}
     </div>
   );
 }
