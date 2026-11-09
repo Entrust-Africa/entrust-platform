@@ -159,7 +159,7 @@ describe("opening the workspace", () => {
       expect(view).toMatchObject({
         applicationId: w.appA,
         status: "under_assessment",
-        rulesVersion: "1.0.0",
+        rulesVersion: "1.1.0",
         approved: true,
         state: "not_started",
         pathway: "trade_and_market_access",
@@ -211,7 +211,7 @@ describe("recording scores", () => {
     expect(res.body.categories.find((c: Json) => c.id === "A").points).toBeNull();
 
     const [assessment] = await db.select().from(schema.assessment).where(eq(schema.assessment.applicationId, w.appA));
-    expect(assessment).toMatchObject({ rulesVersion: "1.0.0", pathway: "trade_and_market_access", seekingInvestment: true });
+    expect(assessment).toMatchObject({ rulesVersion: "1.1.0", pathway: "trade_and_market_access", seekingInvestment: true });
   });
 
   it("never overwrites a recorded score", async () => {

@@ -4,6 +4,7 @@ import { canSubmit, checkAnswers, type Answer, type Answers } from "@entrust/for
 import {
   APPLICANT_RESULTS,
   RESTRICTED_DOCUMENT_KINDS,
+  UPLOADABLE_DOCUMENT_KINDS,
   applicationPathway,
   screenEligibility,
   type ApplicationTemplate,
@@ -496,6 +497,10 @@ export async function saveAnswers(ctx: Ctx, id: string, patch: Readonly<Record<s
 // ---- Documents ----
 
 export async function attachDocument(ctx: Ctx, id: string, input: { fileId: string; kind: DocumentKind }): Promise<ApplicationDetailView> {
+  // Financial records are not asked for: applicants type their key figures in instead.
+  if (!UPLOADABLE_DOCUMENT_KINDS.includes(input.kind)) {
+    throw new ServiceError("invalid", "Financial records are not needed. Type your key figures into the application instead.");
+  }
   return ctx.db.transaction(async (tx) => {
     // While Entrust waits on a request for more information the applicant can add documents, but not change answers.
     const { row, access } = await documentsApplication(ctx, tx, id);
