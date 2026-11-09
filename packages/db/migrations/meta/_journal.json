@@ -351,6 +351,13 @@
       "when": 1794224335706,
       "tag": "0049_buyers_and_transactions",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794225193815,
+      "tag": "0050_notifications",
+      "breakpoints": true
     }
   ]
 }

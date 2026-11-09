@@ -1525,3 +1525,59 @@ export const transactionCost = trade.table(
   },
   (t) => [index("trade_transaction_cost_tx_idx").on(t.transactionId, t.createdAt)],
 );
+
+// ---- Notifications (FRD section 8) ----
+
+export const NOTIFICATION_KINDS = [
+  "diagnostic_completed",
+  "module_assigned",
+  "learning_incomplete",
+  "assessment_result",
+  "session_reminder",
+  "output_review",
+  "overdue_action",
+  "referral_status",
+  "admin_alert",
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+// One message to one person, shown in the platform and, unless they turned it off, emailed. `dedupeKey` keeps a reminder that
+// repeats from being sent twice for the same thing.
+export const notification = trade.table(
+  "notification",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: NOTIFICATION_KINDS }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    /** Where in the TRADE app the message leads, such as /modules/M04. */
+    path: text("path"),
+    dedupeKey: text("dedupe_key"),
+    /** queued: handed to the email queue. skipped: the person turned email off for this kind. failed: the queue refused it. */
+    emailStatus: text("email_status", { enum: ["queued", "skipped", "failed"] }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_notification_user_idx").on(t.userId, t.createdAt),
+    uniqueIndex("trade_notification_dedupe_uidx").on(t.userId, t.dedupeKey).where(sql`${t.dedupeKey} is not null`),
+  ],
+);
+
+// What a person wants for each kind of notification. No row means both on.
+export const notificationPreference = trade.table(
+  "notification_preference",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: NOTIFICATION_KINDS }).notNull(),
+    email: boolean("email").notNull().default(true),
+    inApp: boolean("in_app").notNull().default(true),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind] })],
+);
