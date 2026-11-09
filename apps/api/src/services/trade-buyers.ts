@@ -78,7 +78,7 @@ async function organizationFor(ctx: Ctx, organizationId?: string) {
 
 export async function listBuyers(ctx: Ctx, input: { organizationId?: string | undefined }) {
   const { organizationId } = await organizationFor(ctx, input.organizationId);
-  const buyers = await ctx.db.select().from(schema.smeBuyer).where(eq(schema.smeBuyer.organizationId, organizationId)).orderBy(asc(schema.smeBuyer.name));
+  const buyers = await ctx.db.select().from(schema.smeBuyer).where(eq(schema.smeBuyer.organizationId, organizationId)).orderBy(asc(schema.smeBuyer.name), asc(schema.smeBuyer.country));
   const ids = buyers.map((b) => b.id);
   const opportunities = ids.length ? await ctx.db.select({ buyerId: schema.commercialOpportunity.buyerId }).from(schema.commercialOpportunity).where(inArray(schema.commercialOpportunity.buyerId, ids)) : [];
   const transactions = ids.length ? await ctx.db.select({ buyerId: schema.exportTransaction.buyerId }).from(schema.exportTransaction).where(inArray(schema.exportTransaction.buyerId, ids)) : [];
