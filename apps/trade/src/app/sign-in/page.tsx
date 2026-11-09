@@ -9,9 +9,12 @@ export const metadata = { title: "Sign in" };
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invitationId?: string; next?: string; error?: string }>;
+  searchParams: Promise<{ invitationId?: string; next?: string; error?: string; method?: string }>;
 }) {
-  const { invitationId, next, error } = await searchParams;
+  const { invitationId, next, error, method } = await searchParams;
+  // With AfriConnect on, the page asks only for an email and hands over to AfriConnect. An account that has an Entrust password and
+  // no AfriConnect account (the staff and demo accounts made directly) signs in with /sign-in?method=password. Nothing links to it.
+  const withPassword = method === "password";
   const me = await getMe();
   // A visitor sent here from the Summit comes back to it, even after creating an account and verifying their email.
   const comeBackTo = safeNext(next);
@@ -32,7 +35,7 @@ export default async function SignInPage({
         homePath={comeBackTo ?? "/"}
         currentUser={me}
         invitationId={invitationId}
-        afriConnect={afriConnectSignInShown() ? { product: "trade" } : null}
+        afriConnect={afriConnectSignInShown() && !withPassword ? { product: "trade" } : null}
         errorCode={error}
       />
     </>
