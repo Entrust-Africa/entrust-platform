@@ -115,7 +115,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
             />
           ) : (
             <Card className="overflow-hidden p-0">
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <PeopleTable people={items} />
               </div>
             </Card>

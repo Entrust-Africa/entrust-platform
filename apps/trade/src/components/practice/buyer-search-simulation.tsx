@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Button, Card, StatusBadge } from "@entrust/ui";
+import { Button, Card } from "@entrust/ui";
 import { BUYER_SIMULATION, isStepCorrect, simulationScore, type SimulationAnswer, type SimulationOption } from "@entrust/trade-engine";
 
 const Feedback = ({ correct, children }: { correct: boolean; children: React.ReactNode }) => (
@@ -71,7 +71,7 @@ export function BuyerSearchSimulation({ marketIntelligenceUrl, marketplaceUrl }:
         <p className="text-xs font-semibold text-ink-3">
           Step {index + 1} of {BUYER_SIMULATION.length}
         </p>
-        <StatusBadge tone="info">{step.where}</StatusBadge>
+        <p className="text-xs font-semibold text-brand-700">{step.where}</p>
       </div>
       <h2 className="font-display text-xl font-bold text-ink">{step.title}</h2>
       <p className="text-sm text-ink-2">{step.body}</p>
