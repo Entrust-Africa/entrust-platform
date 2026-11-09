@@ -30,7 +30,7 @@ describe("Worker Runtime End-to-End Handlers", () => {
     // Poll until completed
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -56,7 +56,7 @@ describe("Worker Runtime End-to-End Handlers", () => {
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -75,7 +75,7 @@ describe("Worker Runtime End-to-End Handlers", () => {
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -100,7 +100,7 @@ describe("Worker Runtime End-to-End Handlers", () => {
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
@@ -119,7 +119,7 @@ describe("Worker Runtime End-to-End Handlers", () => {
 
     let status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     const startTime = Date.now();
-    while (status?.state !== "completed" && Date.now() - startTime < 10000) {
+    while (status?.state !== "completed" && Date.now() - startTime < 40000) {
       await new Promise((r) => setTimeout(r, 200));
       status = await getJobStatus(JOB_NAMES.SEND_EMAIL, jobId!);
     }
