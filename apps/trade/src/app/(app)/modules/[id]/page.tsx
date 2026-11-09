@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, BookOpen, Clock } from "lucide-react";
-import { Card, StatusBadge } from "@entrust/ui";
+import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
+import { AfriConnectCard, Card, StatusBadge } from "@entrust/ui";
 import { getMe, listEnrollments } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type {
@@ -101,6 +102,16 @@ export default async function ModuleDetailPage({
             Open export practice →
           </Link>
         </Card>
+      )}
+
+      {id === "M05" && (
+        <AfriConnectCard
+          href={afriConnectBuyersUrl()}
+          className="max-w-3xl"
+          title="Find and research buyers on AfriConnect"
+          description="Use AfriConnect's marketplace and market intelligence while you identify buyers. A listing doesn't prove a buyer is active or legitimate, so verify them before you commit."
+          action="Open AfriConnect"
+        />
       )}
 
       {/* When content is still in production */}
