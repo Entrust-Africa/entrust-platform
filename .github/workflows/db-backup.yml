@@ -9,12 +9,6 @@ on:
   schedule:
     - cron: "17 1 * * *"
   workflow_dispatch:
-  # Testing on the branch before merge; removed once a run has passed.
-  push:
-    branches:
-      - ops/close-deployment-gaps
-    paths:
-      - ".github/workflows/db-backup.yml"
 
 permissions:
   contents: read
