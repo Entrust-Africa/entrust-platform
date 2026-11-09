@@ -5,6 +5,18 @@ import { noShipment, rules, rules010 } from "./helpers";
 
 const assign = (input: Partial<PathwayInput>) => assignPathway(rules, { ...noShipment, ...input });
 
+describe("an exporter who doesn't know the shipment date", () => {
+  it("goes to staff on a provisional Pathway B, and isn't told it hasn't shipped", () => {
+    const assigned = assign({ shipmentDateUnknown: true });
+    expect(assigned).toMatchObject({ pathway: "B", provisional: true });
+    expect(assigned.reasonCodes).toEqual(["PATHWAY_SHIPMENT_UNVERIFIED"]);
+  });
+
+  it("is confirmed once staff accept a record", () => {
+    expect(assign({ shipmentDateUnknown: true, shipmentVerified: true })).toMatchObject({ pathway: "B", provisional: false });
+  });
+});
+
 describe("assignPathway", () => {
   it("gives Pathway B for a verified shipment in the last 24 months", () => {
     expect(assign({ lastShipmentDate: "2025-06-01", shipmentVerified: true })).toEqual({
