@@ -58,10 +58,10 @@ describe("module content", () => {
 // Entrust's Curriculum and Platform Consistency Review, section 5, sets one assessment standard for all
 // twelve modules. M01, M03, M04 and M07 v0.1.0 predate it, so a version joins this list once it meets it.
 describe("modules on Entrust's common assessment standard", () => {
-  const onStandard = MODULE_CONTENT.filter((c) => ["M05", "M08", "M09", "M10"].includes(c.module));
+  const onStandard = MODULE_CONTENT.filter((c) => ["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].includes(c.module));
 
-  it("loads the four modules Entrust sent, as drafts until Entrust approves them", () => {
-    expect(onStandard.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M05@1.0.0 draft", "M08@1.0.0 draft", "M09@1.0.0 draft", "M10@1.0.0 draft"]);
+  it("loads the eight modules Entrust sent, as drafts until Entrust approves them", () => {
+    expect(onStandard.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].map((m) => `${m}@1.0.0 draft`));
     expect(onStandard.every((c) => c.approval === undefined)).toBe(true);
     expect(listModules("learner").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "in_production", versions: [] });
     expect(listModules("staff").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "draft", versions: ["1.0.0"] });
@@ -91,12 +91,31 @@ describe("modules on Entrust's common assessment standard", () => {
 
   it("defines one worksheet per required output, ending with the learning plan", () => {
     expect(onStandard.map((c) => [c.module, c.lessons.length, c.worksheets.length])).toEqual([
+      ["M02", 7, 7],
       ["M05", 8, 8],
+      ["M06", 8, 9],
       ["M08", 9, 10],
       ["M09", 9, 9],
       ["M10", 9, 9],
+      ["M11", 9, 10],
+      ["M12", 6, 6],
     ]);
-    for (const content of onStandard) expect(content.worksheets.at(-1)?.id).toBe("individual_learning_plan");
+    // M12's plan is itself the learner's plan, so it has no individual learning plan after it.
+    for (const content of onStandard) expect(content.worksheets.at(-1)?.id).toBe(content.module === "M12" ? "action_plan" : "individual_learning_plan");
+  });
+
+  it("sets M11 out as eight gates in order, with each output tied to one", () => {
+    const m11 = onStandard.find((c) => c.module === "M11")!;
+    expect(m11.lessons.map((l) => l.id)).toEqual(["introduction", ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `gate-${n}`)]);
+    expect(m11.worksheets.slice(0, 9).map((w) => w.description?.match(/^Gate (\d)/)?.[1])).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "8"]);
+    // M11's document explains its first two answers, and those reach feedback.
+    expect(m11.knowledgeCheck.questions[0]!.explanation).toContain("clarify the commercial requirement");
+    expect(m11.knowledgeCheck.questions.every((q) => q.lessonId?.startsWith("gate-"))).toBe(true);
+  });
+
+  it("holds M12's action register to 5 to 10 actions", () => {
+    const register = onStandard.find((c) => c.module === "M12")!.worksheets.find((w) => w.id === "action_register")!;
+    expect(register.tables[0]).toMatchObject({ minRows: 5, maxRows: 10 });
   });
 
   it("gives M09's prompts their verification steps, so approving it won't fail validation", () => {
