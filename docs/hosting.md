@@ -6,16 +6,19 @@
 | CLEAR (`apps/clear`) | Railway service `entrust-clear` | clear.entrust-africa.com |
 | TRADE (`apps/trade`) | Railway service `entrust-trade` | trade.entrust-africa.com |
 | Summit page (`apps/summit`) | Railway service `entrust-summit` | adtis.entrust-africa.com |
-| Website (`apps/website`) | Cloudflare Worker | entrust-africa.com |
+| Email worker (`apps/worker`) | Railway service `entrust-worker` | none (no web address) |
+| Website (`apps/website`) | Cloudflare Worker `entrust-website` | entrust-africa.com |
 
 ## How a change goes live
 
 1. A pull request merges to `main` and CI runs.
-2. `.github/workflows/deploy.yml` applies the database migrations and deploys the API Worker.
-3. Its last job, `promote-prod`, fast-forwards the `prod` branch to that commit.
-4. Railway builds the three apps from `prod`. A service rebuilds only when files it depends on changed (its own app, `apps/api`, `packages`, the lockfile and the root config).
+2. `.github/workflows/deploy.yml` then runs, in this order: the database migrations, the API Worker, then the four Railway services and the website together, then the smoke checks.
+3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
+4. The smoke checks open the addresses people really use (not the `workers.dev` copies), retrying for up to five minutes while a new build starts, and confirm the worker's newest deployment is running.
 
-So an app never deploys before CI has passed and the API is live. Nobody pushes to `prod` by hand. To roll back, redeploy an earlier deployment of the service in the Railway dashboard.
+So an app never deploys before CI has passed and the API is live. Nothing is deployed by hand any more; if the workflow is down, run `railway up --service <name> --environment production --ci` from a clean checkout of `main`. To roll back, redeploy an earlier deployment of the service in the Railway dashboard.
+
+CLEAR, TRADE and the Summit page used to be built into Cloudflare Workers as well (`entrust-clear`, `entrust-trade`, `entrust-summit`). The workflow no longer deploys them, so whatever is still on those workers is an old, unused copy.
 
 ## Railway
 
@@ -25,10 +28,59 @@ Each service is built by Railpack and configured with service variables, not fil
 
 - `RAILPACK_NODE_VERSION=24`
 - `RAILPACK_BUILD_CMD=pnpm exec turbo run build --filter=@entrust/<app>`
-- `RAILPACK_START_CMD=cd apps/<app> && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}`
+- `RAILPACK_START_CMD=cd apps/<app> && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}` (the three web apps), or `cd apps/worker && node dist/index.mjs` (the worker)
 - `API_URL` and `NEXT_PUBLIC_API_URL` (CLEAR and TRADE), or `API_URL` and `SUMMIT_APP_URL` (Summit page): `https://api.entrust-africa.com`, and `https://trade.entrust-africa.com` for `SUMMIT_APP_URL`. `NEXT_PUBLIC_` values are baked in at build time, so changing one needs a redeploy.
+- The worker's own variables are listed under "Settings" below.
 
 With the Railway CLI: `railway service status --service entrust-trade`, `railway logs --build --service entrust-trade`, `railway service redeploy --service entrust-trade`.
+
+## Email and background jobs
+
+Most emails are not sent by the API. The API puts the email on a queue (pg-boss, in the `pgboss` schema of the same database) and returns; the `entrust-worker` service picks it up and sends it through Resend. That covers the diagnostic links and confirmations, Summit registration, clarification and result emails, assessor notices and session reminders. Sign-in emails (verification, password reset, invitations) are the exception: the API sends those straight to Resend.
+
+- The worker is one Node process with no web address. Look at it with `railway logs --service entrust-worker`.
+- A queued email is `created`; it becomes `completed` when sent, `retry` while it is being retried, and `failed` once the retries run out. `trade.public_diagnostic.link_emailed_at` records that the link was queued, not that it was delivered.
+- **If the worker has been down, look at the queue before starting it again.** It sends everything that is waiting. Cancel what should not go out first (`update pgboss.job set state = 'cancelled', completed_on = now() where name = 'send-email' and state = 'created' and ...`).
+- Run exactly one worker. Its `DATABASE_URL` must be the direct (not pooled) connection string.
+
+## Database
+
+Neon project `entrust-clear` (Postgres 18, AWS us-east-2). The branch called `production` is the default and holds all the live data. Until 9 November 2026 the live data sat on a branch called `staging` while an empty branch was called `production`; the empty one is now `empty-unused` and can be deleted when nobody needs it. Connection strings did not change.
+
+- There is no hosted staging environment. To try something against real-shaped data, branch `production` in Neon and point a local copy at the branch, never at `production` itself.
+- **Two layers of backup.** Neon keeps a point-in-time history for seven days (the setting is `history_retention_seconds` on the Neon project; it was one day), good for "undo what I did an hour ago". On top of that, `.github/workflows/db-backup.yml` runs every night at 01:17 UTC (04:17 in Addis Ababa): it dumps the database with a read-only login (`backup_reader`, secret `BACKUP_DATABASE_URL`), restores the dump into a throwaway Postgres 18 to prove it works, encrypts it, and stores it in the private R2 bucket `entrust-db-backups` as `daily/YYYY/MM/entrust-<timestamp>.pgdump.gpg`. A dump is about 14 MB of data, a few MB compressed, so the bucket stays inside R2's free tier.
+- **The bucket protects itself.** Dumps are deleted after 35 days, and for their first 14 days nothing can delete or overwrite them, not even the job's own credentials. The queue's tables (schema `pgboss`) are left out.
+- **Dumps are encrypted** with the public key in `docs/backup-public-key.asc` (fingerprint `1C6946F3C0CCD4553C4729BCF1C8105DDBB77152`). Only the private key can open them, so keep a copy of it outside GitHub and Cloudflare, such as a password manager. Without it the dumps are useless.
+- **Not in the dump:** uploaded files (the R2 bucket `entrust-platform-files-prod`) and anything in Cloudflare or Railway settings.
+
+### Restoring a backup
+
+1. In the Cloudflare dashboard (R2, then the bucket `entrust-db-backups`), download the dump you want, or create a read-only R2 API token for that bucket and fetch it with any S3 client (endpoint `https://<account id>.r2.cloudflarestorage.com`).
+2. Decrypt it with the private key: `gpg --decrypt entrust-<timestamp>.pgdump.gpg > dump.pgdump`.
+3. Never restore over `production`. Make a Neon branch (`neonctl branches create --name restore-check`), then `pg_restore --no-owner --no-acl --dbname "<branch connection string>" dump.pgdump` with a Postgres 18 client, and look at the data. To go back to it for real, switch the API's `DATABASE_URL` (Worker secret and Hyperdrive) and the worker's to that branch.
+
+## Alerts
+
+- A failed deploy or smoke check fails the "Deploy to production" run, and GitHub emails the people who watch the repository.
+- `.github/workflows/queue-watch.yml` runs every 30 minutes and fails when an email has waited more than 15 minutes or has failed for good in the last day. That is how a stopped worker shows up.
+- The nightly backup fails its run when the dump is empty, does not restore, or cannot be stored, and GitHub emails the same people.
+- There is no error tracker, so an error inside a request is only in the Cloudflare Worker logs (the API) or the Railway logs (the apps) until someone looks.
+
+## Rate limiting
+
+One Cloudflare rate-limit rule on the `entrust-africa.com` zone (the Free plan allows one rule, counted per visitor address over a fixed ten seconds, at no charge): more than 300 requests in ten seconds from one address to the public diagnostic's start, autosave, submit or verify calls (`/v1/trade/public/diagnostic` and its `/responses`, `/submit` and `/verify-email`) are blocked with a 429 for the next ten seconds. 300 is deliberately generous: a room of people on one Wi-Fi network share an address.
+
+It covers only what browsers call directly. TRADE, CLEAR and the Summit page call the API from their Railway servers, so all their visitors arrive from the same few addresses, and a per-address limit on those paths would block real people together. The API also limits diagnostic starts by email (five an hour) and by address (twenty an hour). To change the rule, edit it under Security, WAF, Rate limiting rules in the Cloudflare dashboard.
+
+## Settings
+
+The values live in each service's own settings and can't be read back: Cloudflare Worker settings are write-only secrets (set with `wrangler secret put NAME --name entrust-api`; `wrangler deploy` keeps them), and Railway shows its variables in the dashboard and with `railway variable list`. These are the names the code reads. Not every one is needed everywhere.
+
+- **API Worker `entrust-api`:** `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`, `CORS_ORIGINS`, `CLEAR_APP_URL`, `TRADE_APP_URL`, `SUMMIT_APP_URL`, `SUMMIT_SITE_URL`, `ENTRUST_ORG_ID`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_MODE`, `ANTHROPIC_API_KEY`, `AI_MONTHLY_CAP_USD`, `FILE_STORAGE`, `R2_*`, `AFRICONNECT_CLIENT_ID`, `AFRICONNECT_CLIENT_SECRET`, `AFRICONNECT_ISSUER`, `AFRICONNECT_PROVIDER_ID`. Never replace `CORS_ORIGINS` or `AUTH_COOKIE_DOMAIN` without reading the current value first.
+- **Worker `entrust-worker` (Railway):** `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM` (`Entrust Africa <no-reply@entrust-africa.com>`), `EMAIL_MODE=send`, `NODE_ENV=production`, and the `RAILPACK_*` build variables. The Resend key is the same one the API uses (the domain `entrust-africa.com` is verified in that Resend account).
+- **TRADE and CLEAR (Railway):** `API_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SIMULATOR_URL`, `AFRICONNECT_SIGN_IN`, `AFRICONNECT_BUYERS_URL` (optional).
+- **Summit page (Railway):** `API_URL`, `SUMMIT_APP_URL`.
+- **GitHub Actions secrets:** `DATABASE_URL` (migrations and the queue check), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY` (the website's forms), `RAILWAY_TOKEN` (a project token for the production environment, made in the Railway dashboard under the project's Settings, Tokens), and for the nightly backup `BACKUP_DATABASE_URL` (a direct connection string for the read-only login `backup_reader`), `R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY` (an R2 token limited to the one backup bucket).
 
 ## DNS
 

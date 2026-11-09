@@ -1,0 +1,91 @@
+name: Database backup
+
+# Every night: dump the live database with a read-only login, prove the dump restores into a throwaway Postgres 18,
+# encrypt it with the public key in docs/backup-public-key.asc, and store it in the private R2 bucket
+# entrust-db-backups. The bucket deletes dumps after 35 days and refuses to delete or overwrite one for its first 14.
+# A failed run fails this workflow, and GitHub emails the people who watch the repository.
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  BUCKET: entrust-db-backups
+  PG_IMAGE: postgres:18
+  # The public key's fingerprint. Its private half is not in GitHub or Cloudflare; without it a dump cannot be read.
+  RECIPIENT: 1C6946F3C0CCD4553C4729BCF1C8105DDBB77152
+
+jobs:
+  backup:
+    name: Dump, check, encrypt and store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dump the database
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          test -n "$BACKUP_DATABASE_URL" || { echo "::error::The BACKUP_DATABASE_URL secret is not set."; exit 1; }
+          mkdir -p out
+          # Without the queue's own tables (schema pgboss): they hold the links of emails about to be sent, and rebuild themselves.
+          docker run --rm -e BACKUP_DATABASE_URL "$PG_IMAGE" sh -c 'pg_dump --format=custom --no-owner --no-acl --exclude-schema=pgboss --dbname "$BACKUP_DATABASE_URL"' > out/dump.pgdump
+          size=$(stat -c %s out/dump.pgdump)
+          echo "Dump: $size bytes"
+          test "$size" -gt 100000 || { echo "::error::The dump is suspiciously small ($size bytes)."; exit 1; }
+
+      - name: Prove the dump restores
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          docker run -d --name restorecheck -e POSTGRES_PASSWORD=restorecheck "$PG_IMAGE" > /dev/null
+          for _ in $(seq 1 30); do docker exec restorecheck pg_isready -U postgres > /dev/null 2>&1 && break; sleep 2; done
+          docker exec -i restorecheck pg_restore --username postgres --dbname postgres --no-owner --no-acl --exit-on-error < out/dump.pgdump
+          tables="select count(*) from information_schema.tables where table_type = 'BASE TABLE' and table_schema not in ('pg_catalog', 'information_schema', 'pgboss')"
+          rows="select coalesce(sum((xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text::bigint), 0) from information_schema.tables where table_type = 'BASE TABLE' and table_schema not in ('pg_catalog', 'information_schema', 'pgboss')"
+          restored_tables=$(docker exec restorecheck psql -U postgres -At -c "$tables")
+          restored_rows=$(docker exec restorecheck psql -U postgres -At -c "$rows")
+          live_tables=$(docker run --rm -e BACKUP_DATABASE_URL -e SQL="$tables" "$PG_IMAGE" sh -c 'psql "$BACKUP_DATABASE_URL" -At -c "$SQL"')
+          echo "Tables: $restored_tables restored, $live_tables in the live database. Rows restored: $restored_rows."
+          [ "$restored_tables" = "$live_tables" ] || { echo "::error::The restored copy has $restored_tables tables; the live database has $live_tables."; exit 1; }
+          [ "$restored_rows" -gt 0 ] || { echo "::error::The restored copy has no rows."; exit 1; }
+          echo "TABLES=$restored_tables" >> "$GITHUB_ENV"
+          echo "ROWS=$restored_rows" >> "$GITHUB_ENV"
+
+      - name: Encrypt
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          gpg --batch --quiet --import docs/backup-public-key.asc
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          gpg --batch --yes --quiet --trust-model always --recipient "$RECIPIENT" --output "out/entrust-$stamp.pgdump.gpg" --encrypt out/dump.pgdump
+          ls -l out
+
+      - name: Store in R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          file="out/entrust-${STAMP}.pgdump.gpg"
+          key="daily/$(date -u +%Y)/$(date -u +%m)/entrust-${STAMP}.pgdump.gpg"
+          url="https://${ACCOUNT}.r2.cloudflarestorage.com/${BUCKET}/${key}"
+          sign=(--aws-sigv4 "aws:amz:auto:s3" --user "${R2_ACCESS_KEY_ID}:${R2_SECRET_ACCESS_KEY}")
+          curl --fail-with-body -sS "${sign[@]}" -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" -T "$file" "$url"
+          stored=$(curl -sI --fail "${sign[@]}" "$url" | tr -d '\r' | awk -F': ' 'tolower($1) == "content-length" { print $2 }')
+          [ "$stored" = "$(stat -c %s "$file")" ] || { echo "::error::R2 holds $stored bytes for $key; the file is $(stat -c %s "$file")."; exit 1; }
+          echo "Stored $key ($stored bytes)."
+          {
+            echo "### Database backup"
+            echo "- Stored \`$key\` ($stored bytes, encrypted)"
+            echo "- Restore check passed: $TABLES tables, $ROWS rows"
+          } >> "$GITHUB_STEP_SUMMARY"

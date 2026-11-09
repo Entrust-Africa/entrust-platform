@@ -1,0 +1,37 @@
+name: Email queue watch
+
+# Emails (diagnostic links, Summit notices, session reminders) go through a queue in the database, and the
+# entrust-worker service on Railway sends them. If the worker stops, nothing else notices: the pages work and
+# the emails quietly never leave. This check fails the run, which GitHub emails to the people who watch the
+# repository, when an email has waited too long or has failed for good.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  queue:
+    name: Look for stuck or failed emails
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the queue
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::The DATABASE_URL secret is not set."; exit 1; }
+          read -r stuck failed < <(psql "$DATABASE_URL" -At -F ' ' -c "
+            select
+              count(*) filter (where state in ('created', 'retry') and start_after < now() - interval '15 minutes'),
+              count(*) filter (where state = 'failed' and completed_on > now() - interval '24 hours')
+            from pgboss.job
+            where name = 'send-email'")
+          echo "Emails waiting more than 15 minutes: $stuck"
+          echo "Emails that failed in the last 24 hours: $failed"
+          if [ "$stuck" != "0" ]; then
+            echo "::error::$stuck email(s) have waited over 15 minutes. Is the entrust-worker service on Railway running? (railway logs --service entrust-worker)"
+          fi
+          if [ "$failed" != "0" ]; then
+            echo "::error::$failed email(s) failed for good in the last 24 hours. See the failed jobs in pgboss.job and the entrust-worker logs."
+          fi
+          [ "$stuck" = "0" ] && [ "$failed" = "0" ]
