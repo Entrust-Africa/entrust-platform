@@ -160,7 +160,7 @@ export function TransactionWorkspace({ initial, organizationId, readOnly }: { in
                   })}
                 </fieldset>
               ))}
-              <TransactionRecords transactionId={item.id} readOnly={readOnly} />
+              <TransactionRecords transactionId={item.id} organizationId={organizationId} readOnly={readOnly} />
             </div>
           )}
         </Card>

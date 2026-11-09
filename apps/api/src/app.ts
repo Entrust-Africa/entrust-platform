@@ -58,7 +58,7 @@ base.use(
   "*",
   cors({
     origin: trustedOrigins,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "x-amz-checksum-sha256"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   }),
