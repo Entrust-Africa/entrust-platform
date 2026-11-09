@@ -344,6 +344,13 @@
       "when": 1794223653387,
       "tag": "0048_sme_record",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1794224335706,
+      "tag": "0049_buyers_and_transactions",
+      "breakpoints": true
     }
   ]
 }
