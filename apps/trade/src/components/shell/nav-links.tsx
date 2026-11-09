@@ -144,6 +144,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
     { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
+    { href: "/action-plan", label: "Action plan", icon: ListChecks, match: (path) => path.startsWith("/action-plan") },
     practice,
     simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },

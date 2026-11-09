@@ -18,6 +18,8 @@ import {
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
   OUTCOME_EVIDENCE_TIERS,
+  ACTION_PRIORITIES,
+  ACTION_STATUSES,
   PIPELINE_STAGES,
   QUALIFICATION_BANDS,
   SPONSOR_DATA_KINDS,
@@ -1886,6 +1888,83 @@ export type UpdateExportStatusInput = z.infer<typeof UpdateExportStatusBody>;
 export type OutcomeEventView = z.infer<typeof OutcomeEventView>;
 export type OutcomeView = z.infer<typeof OutcomeView>;
 
+// ---- The 90-day action plan (FR-11, M12) ----
 
+const isoDay = z.iso.date();
+const ActionFields = {
+  description: z.string().trim().min(1, "Say what the action is"),
+  priority: z.enum(ACTION_PRIORITIES).nullable().optional(),
+  responsible: z.string().trim().min(1, "Name the person responsible"),
+  startDate: isoDay.nullable().optional(),
+  resources: z.string().trim().nullable().optional(),
+  expectedResult: z.string().trim().nullable().optional(),
+  performanceIndicator: z.string().trim().nullable().optional(),
+};
 
+export const ActionPlanQuery = z.object({ organizationId: z.string().optional() }).openapi("TradeActionPlanQuery");
+export const ActionItemParam = z.object({ id: z.uuid() }).openapi("TradeActionItemParam");
+
+export const CreateActionItemBody = z
+  .object({ organizationId: z.string().optional(), ...ActionFields, dueDate: isoDay, milestone: z.union([z.literal(30), z.literal(60), z.literal(90)]).optional() })
+  .openapi("CreateTradeActionItemBody");
+
+export const UpdateActionItemBody = z
+  .object({
+    ...ActionFields,
+    description: ActionFields.description.optional(),
+    responsible: ActionFields.responsible.optional(),
+    dueDate: isoDay.optional(),
+    status: z.enum(ACTION_STATUSES).optional(),
+    evidence: z.string().trim().nullable().optional(),
+    reviewComments: z.string().trim().nullable().optional(),
+    milestone: z.union([z.literal(30), z.literal(60), z.literal(90)]).optional(),
+  })
+  .openapi("UpdateTradeActionItemBody");
+
+export const ActionItemView = z
+  .object({
+    id: z.string(),
+    organizationId: z.string(),
+    description: z.string(),
+    priority: z.string().nullable(),
+    responsible: z.string(),
+    startDate: z.string().nullable(),
+    dueDate: z.string().nullable(),
+    resources: z.string().nullable(),
+    expectedResult: z.string().nullable(),
+    performanceIndicator: z.string().nullable(),
+    status: z.enum(ACTION_STATUSES),
+    evidence: z.string().nullable(),
+    reviewComments: z.string().nullable(),
+    milestone: z.number(),
+    fromRegister: z.boolean(),
+    overdue: z.boolean(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeActionItem");
+
+export const ActionReviewView = z
+  .object({ id: z.string(), day: z.number(), answers: z.record(z.string(), z.string()), createdAt: z.string() })
+  .openapi("TradeActionReview");
+
+export const ActionPlanView = z
+  .object({
+    organizationId: z.string(),
+    items: z.array(ActionItemView),
+    milestones: z.array(z.object({ day: z.number(), total: z.number(), completed: z.number(), overdue: z.number() })),
+    questions: z.record(z.string(), z.array(z.object({ id: z.string(), text: z.string() }))),
+    reviews: z.array(ActionReviewView),
+  })
+  .openapi("TradeActionPlan");
+
+export const ImportActionRegisterBody = z.object({ organizationId: z.string().optional() }).openapi("ImportTradeActionRegisterBody");
+export const ImportActionRegisterView = z.object({ imported: z.number() }).openapi("ImportTradeActionRegisterResult");
+
+export const RecordActionReviewBody = z
+  .object({ organizationId: z.string().optional(), day: z.union([z.literal(30), z.literal(60), z.literal(90)]), answers: z.record(z.string(), z.string().trim()) })
+  .openapi("RecordTradeActionReviewBody");
+
+export type CreateActionItemInput = z.infer<typeof CreateActionItemBody>;
+export type UpdateActionItemInput = z.infer<typeof UpdateActionItemBody>;
+export type RecordActionReviewInput = z.infer<typeof RecordActionReviewBody>;
 

@@ -1205,3 +1205,48 @@ export const publicDiagnostic = trade.table(
     index("trade_public_diagnostic_created_idx").on(t.createdAt),
   ],
 );
+
+// An action in an SME's 90-day plan (FR-11, M12). It belongs to the organisation, so it stays available after the certificate.
+export const actionItem = trade.table(
+  "action_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    priority: text("priority"),
+    responsible: text("responsible").notNull(),
+    startDate: date("start_date", { mode: "string" }),
+    dueDate: date("due_date", { mode: "string" }),
+    resources: text("resources"),
+    expectedResult: text("expected_result"),
+    performanceIndicator: text("performance_indicator"),
+    status: text("status").notNull().default("not_started"),
+    evidence: text("evidence"),
+    reviewComments: text("review_comments"),
+    milestone: integer("milestone").notNull().default(90),
+    sourceWorksheetVersionId: uuid("source_worksheet_version_id").references(() => worksheetVersion.id, { onDelete: "set null" }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_action_item_org_idx").on(t.organizationId, t.milestone)],
+);
+
+// A 30, 60 or 90-day follow-up on the plan: the answers to M12's questions at that point.
+export const actionReview = trade.table(
+  "action_review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    day: integer("day").notNull(),
+    answers: jsonb("answers").$type<Record<string, string>>().notNull().default({}),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_action_review_org_idx").on(t.organizationId, t.createdAt)],
+);
+

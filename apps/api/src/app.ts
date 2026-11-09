@@ -31,6 +31,7 @@ import { tradePrograms } from "./routes/trade/programs";
 import { tradePipeline } from "./routes/trade/pipeline";
 import { tradeOutcomes } from "./routes/trade/outcomes";
 import { tradeReports } from "./routes/trade/reports";
+import { tradeActionPlan } from "./routes/trade/action-plan";
 import { tradeAi } from "./routes/trade/ai";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSessions } from "./routes/trade/sessions";
@@ -98,6 +99,7 @@ export const app = base
   .route("/v1/trade", tradePipeline)
   .route("/v1/trade", tradeOutcomes)
   .route("/v1/trade", tradeReports)
+  .route("/v1/trade", tradeActionPlan)
   .route("/v1/trade", tradeAi)
   .route("/v1/trade", tradeWorksheets)
   .route("/v1/trade", tradeEvidence)
