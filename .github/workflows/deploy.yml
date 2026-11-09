@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare
+name: Deploy to production
 
 on:
   workflow_run:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-cloudflare-production
+  group: deploy-production
   cancel-in-progress: false
 
 jobs:
@@ -75,108 +75,58 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @entrust/api run deploy
 
-  deploy-clear:
-    name: Deploy CLEAR Platform (OpenNext)
+  # CLEAR, TRADE, the Summit page and the email worker run on Railway. Railway cannot watch the repository (nobody in the
+  # project has GitHub access), so this job uploads the commit with a project token. It runs only after CI has passed and
+  # the migrations and the API are live, so an app never deploys before the API it needs.
+  deploy-railway:
+    name: Deploy ${{ matrix.service }} (Railway)
     needs: deploy-api
+    timeout-minutes: 30
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [entrust-trade, entrust-clear, entrust-summit, entrust-worker]
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build & Deploy apps/clear
+      - name: Install the Railway CLI
+        run: npm install --global @railway/cli@5.71.0
+      # `railway up` is run detached and the deployment's status is read afterwards. Railway skips a deployment when none of
+      # the service's watched paths changed (a merge that only touches docs or workflows), and `railway up --ci`, which
+      # follows the build log, then waits forever and holds the deploy lock.
+      - name: Upload ${{ matrix.service }} and wait for Railway
         env:
-          CI: "true"
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          NEXT_PUBLIC_API_URL: https://entrust-api.sw-minasefikadu.workers.dev
-          API_URL: https://entrust-api.sw-minasefikadu.workers.dev
-        run: pnpm --filter @entrust/clear run deploy
-
-  deploy-trade:
-    name: Deploy TRADE Platform (OpenNext)
-    needs: deploy-api
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build & Deploy apps/trade
-        env:
-          CI: "true"
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          NEXT_PUBLIC_API_URL: https://api.entrust-africa.com
-          API_URL: https://api.entrust-africa.com
-        run: pnpm --filter @entrust/trade run deploy
-
-  deploy-summit:
-    name: Deploy Summit Landing (OpenNext)
-    needs: deploy-api
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build & Deploy apps/summit
-        env:
-          CI: "true"
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # The page runs on a Worker, so its settings are Worker variables, set at deploy time.
-          # SUMMIT_APP_URL is the GitHub repository variable of the same name; empty, it is left unset
-          # and the page uses its default.
-          SUMMIT_APP_URL: ${{ vars.SUMMIT_APP_URL }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ matrix.service }}
         run: |
-          vars=(--var API_URL:https://entrust-api.sw-minasefikadu.workers.dev)
-          if [ -n "${SUMMIT_APP_URL}" ]; then vars+=(--var "SUMMIT_APP_URL:${SUMMIT_APP_URL}"); fi
-          pnpm --filter @entrust/summit run deploy "${vars[@]}"
-
-  # CLEAR, TRADE and the Summit page run on Railway, which builds from the `prod` branch. Moving `prod` forward only here means
-  # an app deploys after CI has passed and after the API and its migrations are live, never before.
-  promote-prod:
-    name: Promote to prod (Railway builds from it)
-    needs: deploy-api
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
-      - name: Fast-forward prod to this commit
-        run: |
-          git fetch origin prod
-          if git merge-base --is-ancestor HEAD origin/prod; then
-            echo "prod already has this commit."
-          else
-            git push origin HEAD:refs/heads/prod
-          fi
+          test -n "$RAILWAY_TOKEN" || { echo "::error::The RAILWAY_TOKEN secret is not set."; exit 1; }
+          newest() {
+            railway deployment list --service "$SERVICE" --environment production --json |
+              python3 -c "import sys,json; l=json.load(sys.stdin); x=l[0] if l else {}; print(x.get('id',''), x.get('status',''))"
+          }
+          read -r before _ < <(newest)
+          railway up --service "$SERVICE" --environment production --detach
+          for _ in $(seq 1 120); do
+            read -r id status < <(newest)
+            if [ -n "$id" ] && [ "$id" != "$before" ]; then
+              echo "$SERVICE: $status"
+              case "$status" in
+                SUCCESS) exit 0 ;;
+                SKIPPED) echo "Nothing this service uses changed, so Railway skipped the build."; exit 0 ;;
+                REMOVED) echo "A newer deployment replaced this one."; exit 0 ;;
+                FAILED|CRASHED) echo "::error::$SERVICE deployment $status. See: railway logs --build --service $SERVICE"; exit 1 ;;
+              esac
+            fi
+            sleep 10
+          done
+          echo "::error::$SERVICE did not finish deploying within 20 minutes."
+          exit 1
 
   deploy-website:
     name: Deploy Website (OpenNext)
@@ -203,51 +153,50 @@ jobs:
 
   smoke-test:
     name: Post-Deployment Smoke Verification
-    needs: [deploy-api, deploy-clear, deploy-trade, deploy-summit, deploy-website]
+    needs: [deploy-api, deploy-railway, deploy-website]
+    timeout-minutes: 30
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Verify API Health Endpoint
+      # The addresses people use, not the copies on workers.dev. A new Railway build takes a minute or two to start
+      # answering, so each check retries for up to five minutes.
+      - name: Verify the live sites answer
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-api.sw-minasefikadu.workers.dev/v1/health")
-          echo "API Health status: $status"
-          if [ "$status" != "200" ]; then
-            echo "API Health check failed with status $status"
-            exit 1
-          fi
+          check() {
+            local name="$1" url="$2" status=""
+            for _ in $(seq 1 30); do
+              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 15 "$url" || true)
+              if [ "$status" = "200" ]; then echo "$name: 200"; return 0; fi
+              sleep 10
+            done
+            echo "::error::$name ($url) answered $status"
+            return 1
+          }
+          failed=0
+          check "API health" "https://api.entrust-africa.com/v1/health" || failed=1
+          check "CLEAR sign-in" "https://clear.entrust-africa.com/sign-in" || failed=1
+          check "TRADE sign-in" "https://trade.entrust-africa.com/sign-in" || failed=1
+          check "Summit page" "https://adtis.entrust-africa.com" || failed=1
+          check "Website" "https://entrust-africa.com" || failed=1
+          exit $failed
 
-      - name: Verify CLEAR Web App Endpoint
+      # Nothing answers HTTP here, so ask Railway whether the worker's newest deployment is running.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Verify the email worker is running
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-clear.sw-minasefikadu.workers.dev/sign-in")
-          echo "CLEAR Sign-in status: $status"
-          if [ "$status" != "200" ]; then
-            echo "CLEAR check failed with status $status"
-            exit 1
-          fi
-
-      - name: Verify TRADE Web App Endpoint
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-trade.sw-minasefikadu.workers.dev/sign-in")
-          echo "TRADE Sign-in status: $status"
-          if [ "$status" != "200" ]; then
-            echo "TRADE check failed with status $status"
-            exit 1
-          fi
-
-      - name: Verify Summit Landing Endpoint
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-summit.sw-minasefikadu.workers.dev")
-          echo "Summit landing status: $status"
-          if [ "$status" != "200" ]; then
-            echo "Summit landing check failed with status $status"
-            exit 1
-          fi
-
-      - name: Verify Website Endpoint
-        run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://entrust-website.sw-minasefikadu.workers.dev")
-          echo "Website status: $status"
-          if [ "$status" != "200" ]; then
-            echo "Website check failed with status $status"
-            exit 1
-          fi
+          npm install --global @railway/cli@5.71.0
+          for _ in $(seq 1 60); do
+            status=$(railway deployment list --service entrust-worker --environment production --json | python3 -c "import sys,json; print(next((x['status'] for x in json.load(sys.stdin) if x['status'] not in ('SKIPPED', 'REMOVED')), 'NONE'))")
+            echo "entrust-worker: $status"
+            case "$status" in
+              SUCCESS) exit 0 ;;
+              FAILED|CRASHED|REMOVED) echo "::error::The email worker deployment is $status"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The email worker did not come up within ten minutes"
+          exit 1
