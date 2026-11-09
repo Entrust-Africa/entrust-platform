@@ -101,6 +101,10 @@ export default async function ModuleDetailPage({
           <Link href="/practice" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">
             Open export practice →
           </Link>
+          <p className="mt-3 text-sm text-ink-2">Running a live or planned export? Keep its record in your export transactions.</p>
+          <Link href="/transactions" className="mt-1 inline-block text-sm font-semibold text-brand-600 hover:underline">
+            Open export transactions →
+          </Link>
         </Card>
       )}
 

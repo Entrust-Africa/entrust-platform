@@ -27,7 +27,7 @@ import {
   User,
   Users,
   FileText,
-  Gavel, Percent, Sparkles } from "lucide-react";
+  Gavel, Percent, Sparkles, PackageCheck } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { summitAccess } from "@/lib/summit";
@@ -143,6 +143,7 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
     { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
+    { href: "/transactions", label: "Export transactions", icon: PackageCheck, match: (path) => path.startsWith("/transactions") },
     { href: "/action-plan", label: "Action plan", icon: ListChecks, match: (path) => path.startsWith("/action-plan") },
     { href: "/tools/pricing", label: "Pricing calculator", icon: Percent, match: (path) => path.startsWith("/tools/pricing") },
     { href: "/ai-lab", label: "AI Practice Lab", icon: Sparkles, match: (path) => path.startsWith("/ai-lab") },

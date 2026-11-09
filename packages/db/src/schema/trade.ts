@@ -37,6 +37,7 @@ import {
 } from "@entrust/trade-engine";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
+import { exportCase } from "./clear";
 import { file } from "./core";
 
 // TRADE platform PostgreSQL schema (#55).
@@ -1248,5 +1249,49 @@ export const actionReview = trade.table(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("trade_action_review_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+// One planned or active export (FR-10, M08), with the reference a CLEAR case shares when the business runs it there. It records what
+// the business says and has done; it never certifies compliance or approves a shipment.
+export const exportTransaction = trade.table(
+  "export_transaction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    reference: text("reference").notNull().unique(),
+    isPractice: boolean("is_practice").notNull().default(false),
+    stage: text("stage").notNull().default("enquiry"),
+    product: text("product").notNull(),
+    destination: text("destination"),
+    quantity: text("quantity"),
+    buyerName: text("buyer_name"),
+    buyerStatus: text("buyer_status"),
+    orderDocument: text("order_document"),
+    agreedPrice: text("agreed_price"),
+    currency: text("currency"),
+    incoterm: text("incoterm"),
+    namedPlace: text("named_place"),
+    costingAndMargin: text("costing_and_margin"),
+    paymentTerms: text("payment_terms"),
+    paymentRisk: text("payment_risk"),
+    productionStatus: text("production_status"),
+    documentChecklist: text("document_checklist"),
+    logistics: text("logistics"),
+    customsStatus: text("customs_status"),
+    insuranceStatus: text("insurance_status"),
+    exceptions: text("exceptions"),
+    outstandingActions: text("outstanding_actions"),
+    responsible: text("responsible"),
+    paymentStatus: text("payment_status"),
+    actualCosts: text("actual_costs"),
+    closeout: text("closeout"),
+    clearCaseId: uuid("clear_case_id").references(() => exportCase.id, { onDelete: "set null" }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_export_transaction_org_idx").on(t.organizationId, t.createdAt)],
 );
 

@@ -1972,3 +1972,88 @@ export const AiPromptList = z
   .object({ items: z.array(z.object({ module: z.string(), moduleTitle: z.string(), id: z.string(), title: z.string(), prompt: z.string(), verification: z.array(z.string()) })) })
   .openapi("TradeAiPromptList");
 
+// ---- The Export Transaction Workspace (FR-10) ----
+
+export const TRANSACTION_STAGES = ["enquiry", "quoted", "order_confirmed", "in_production", "shipped", "delivered", "closed", "cancelled"] as const;
+
+export const TransactionQuery = z.object({ organizationId: z.string().optional() }).openapi("TradeTransactionQuery");
+export const TransactionParam = z.object({ id: z.uuid() }).openapi("TradeTransactionParam");
+
+export const CreateTransactionBody = z
+  .object({ organizationId: z.string().optional(), product: z.string().trim().min(1, "Say what the product is"), destination: z.string().trim().optional(), isPractice: z.boolean().optional() })
+  .openapi("CreateTradeTransactionBody");
+
+export const UpdateTransactionBody = z
+  .object({
+    stage: z.enum(TRANSACTION_STAGES).optional(),
+    product: z.string().trim().min(1).optional(),
+    destination: z.string().trim().nullable().optional(),
+    quantity: z.string().trim().max(5000).nullable().optional(),
+    buyerName: z.string().trim().max(5000).nullable().optional(),
+    buyerStatus: z.string().trim().max(5000).nullable().optional(),
+    orderDocument: z.string().trim().max(5000).nullable().optional(),
+    agreedPrice: z.string().trim().max(5000).nullable().optional(),
+    currency: z.string().trim().max(5000).nullable().optional(),
+    incoterm: z.string().trim().max(5000).nullable().optional(),
+    namedPlace: z.string().trim().max(5000).nullable().optional(),
+    costingAndMargin: z.string().trim().max(5000).nullable().optional(),
+    paymentTerms: z.string().trim().max(5000).nullable().optional(),
+    paymentRisk: z.string().trim().max(5000).nullable().optional(),
+    productionStatus: z.string().trim().max(5000).nullable().optional(),
+    documentChecklist: z.string().trim().max(5000).nullable().optional(),
+    logistics: z.string().trim().max(5000).nullable().optional(),
+    customsStatus: z.string().trim().max(5000).nullable().optional(),
+    insuranceStatus: z.string().trim().max(5000).nullable().optional(),
+    exceptions: z.string().trim().max(5000).nullable().optional(),
+    outstandingActions: z.string().trim().max(5000).nullable().optional(),
+    responsible: z.string().trim().max(5000).nullable().optional(),
+    paymentStatus: z.string().trim().max(5000).nullable().optional(),
+    actualCosts: z.string().trim().max(5000).nullable().optional(),
+    closeout: z.string().trim().max(5000).nullable().optional(),
+    clearCaseId: z.uuid().nullable().optional(),
+  })
+  .openapi("UpdateTradeTransactionBody");
+
+export const TransactionView = z
+  .object({
+    id: z.string(),
+    organizationId: z.string(),
+    reference: z.string(),
+    isPractice: z.boolean(),
+    stage: z.string(),
+    product: z.string(),
+    destination: z.string().nullable(),
+    quantity: z.string().nullable(),
+    buyerName: z.string().nullable(),
+    buyerStatus: z.string().nullable(),
+    orderDocument: z.string().nullable(),
+    agreedPrice: z.string().nullable(),
+    currency: z.string().nullable(),
+    incoterm: z.string().nullable(),
+    namedPlace: z.string().nullable(),
+    costingAndMargin: z.string().nullable(),
+    paymentTerms: z.string().nullable(),
+    paymentRisk: z.string().nullable(),
+    productionStatus: z.string().nullable(),
+    documentChecklist: z.string().nullable(),
+    logistics: z.string().nullable(),
+    customsStatus: z.string().nullable(),
+    insuranceStatus: z.string().nullable(),
+    exceptions: z.string().nullable(),
+    outstandingActions: z.string().nullable(),
+    responsible: z.string().nullable(),
+    paymentStatus: z.string().nullable(),
+    actualCosts: z.string().nullable(),
+    closeout: z.string().nullable(),
+    clearCase: z.object({ id: z.string(), reference: z.string(), status: z.string() }).nullable(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeTransaction");
+
+export const TransactionList = z
+  .object({ organizationId: z.string(), items: z.array(TransactionView), clearCases: z.array(z.object({ id: z.string(), reference: z.string(), status: z.string() })) })
+  .openapi("TradeTransactionList");
+
+export type CreateTransactionInput = z.infer<typeof CreateTransactionBody>;
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionBody>;
+
