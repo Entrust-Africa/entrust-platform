@@ -8,7 +8,7 @@ interface SubmittedOutput {
   values: Record<string, unknown>;
 }
 
-type Field = LearnerModuleData["worksheets"][number]["fields"][number];
+type Field = NonNullable<LearnerModuleData["worksheets"][number]["fields"]>[number];
 
 const blank = (value: unknown) => value === null || value === undefined || value === "";
 
@@ -35,9 +35,9 @@ export function SubmittedOutputs({ outputs, module }: { outputs: SubmittedOutput
             </summary>
             {def ? (
               <div className="mt-3 space-y-3">
-                {def.fields.length > 0 && (
+                {(def.fields ?? []).length > 0 && (
                   <dl className="space-y-2">
-                    {def.fields.map((field) => (
+                    {(def.fields ?? []).map((field) => (
                       <div key={field.id}>
                         <dt className="text-xs font-semibold text-ink-3">{field.label}</dt>
                         <dd className={`whitespace-pre-wrap break-words text-sm ${blank(output.values[field.id]) ? "text-ink-3" : "text-ink"}`}>{answer(field, output.values[field.id])}</dd>
@@ -45,7 +45,7 @@ export function SubmittedOutputs({ outputs, module }: { outputs: SubmittedOutput
                     ))}
                   </dl>
                 )}
-                {def.tables.map((table) => {
+                {(def.tables ?? []).map((table) => {
                   const rows = Array.isArray(output.values[table.id]) ? (output.values[table.id] as Record<string, unknown>[]) : [];
                   return (
                     <div key={table.id}>
