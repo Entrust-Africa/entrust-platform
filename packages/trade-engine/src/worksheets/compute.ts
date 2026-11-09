@@ -181,11 +181,11 @@ const COMPUTE: Record<string, (v: WorksheetValues, acc: Acc, ctx: WorksheetConte
       }),
     );
     const critical: Record<string, { message: string; fields: string[] }> = {
-      open_account_unverified_buyer: { message: "You chose open account, and you haven't verified the buyer. That is a critical failure candidate: an assessor will confirm it.", fields: ["payment_method", "buyer_verified"] },
-      raw_material_missing: { message: "The cash schedule has no sourcing outlay, so raw material is missing. That is a critical failure candidate.", fields: ["outlays"] },
-      freight_missing: { message: "The cash schedule has no logistics outlay, so freight is missing. That is a critical failure candidate.", fields: ["outlays"] },
-      repayment_after_payment_window: { message: "Repayment falls after the buyer's payment window. That is a critical failure candidate.", fields: ["repayment_date", "payment_window_end"] },
-      no_verified_order: { message: "There is no verified purchase order, contract or pro-forma, and this is a live order. That is a critical failure candidate.", fields: ["order_document_verified"] },
+      open_account_unverified_buyer: { message: "You chose open account, and you haven't verified the buyer. Your assessor will look at this.", fields: ["payment_method", "buyer_verified"] },
+      raw_material_missing: { message: "The cash schedule has no sourcing outlay, so raw material is missing. Your assessor will look at this.", fields: ["outlays"] },
+      freight_missing: { message: "The cash schedule has no logistics outlay, so freight is missing. Your assessor will look at this.", fields: ["outlays"] },
+      repayment_after_payment_window: { message: "Repayment falls after the buyer's payment window. Your assessor will look at this.", fields: ["repayment_date", "payment_window_end"] },
+      no_verified_order: { message: "There is no verified purchase order, contract or pro-forma, and this is a live order. Your assessor will look at this.", fields: ["order_document_verified"] },
     };
     for (const code of failures?.candidates ?? []) flag(acc, code, "critical_candidate", critical[code]?.message ?? code, critical[code]?.fields ?? []);
   },
