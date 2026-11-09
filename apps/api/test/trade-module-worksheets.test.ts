@@ -64,6 +64,7 @@ beforeAll(async () => {
   w.org = await createOrganization("mw-org", [[learner!, "owner"]], { platform: null });
   const program = ok(await post(w.admin, "/programs", { name: `${PREFIX}mw-program` }));
   const cohort = ok(await post(w.admin, "/cohorts", { programId: program.id, name: `${PREFIX}mw-cohort`, country: "ET" }));
+  ok(await post(w.admin, `/cohorts/${cohort.id}/staff`, { userId: w.reviewer.id }));
   w.enrollment = ok(await post(w.admin, "/enrollments", { cohortId: cohort.id, organizationId: w.org })).id;
 });
 

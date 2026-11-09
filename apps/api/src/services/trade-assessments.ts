@@ -28,7 +28,7 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { rescoreLivePlacement, requireAvenue, scorePlacement, scoreExit } from "./trade-placement";
 import { savePrefill, writeSectionOne } from "./trade-profile";
-import { accessTo, recordTradeChange, unwrapAnswer, wrapAnswer, type Access } from "./trade-shared";
+import { accessTo, recordTradeChange, unwrapAnswer, wrapAnswer, type Access, assignedOrganizationIds, limitedToAssignedCohorts } from "./trade-shared";
 
 export { recordTradeChange } from "./trade-shared";
 
@@ -383,7 +383,12 @@ export interface ListInput {
 /** The assessments the caller can see, newest first: their organisations' (or, for staff, everyone's). */
 export async function listAssessments(ctx: Ctx, input: ListInput) {
   const { principal } = ctx;
-  const organizations = principal.staffRole ? (input.organizationId ? [input.organizationId] : null) : [...principal.smeRoles.keys()].filter((o) => !input.organizationId || o === input.organizationId);
+  let organizations = principal.staffRole ? (input.organizationId ? [input.organizationId] : null) : [...principal.smeRoles.keys()].filter((o) => !input.organizationId || o === input.organizationId);
+  // A facilitator or reviewer sees the businesses in their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const assigned = await assignedOrganizationIds(ctx.db, principal.userId);
+    organizations = organizations ? organizations.filter((o) => assigned.includes(o)) : assigned;
+  }
   if (organizations && organizations.length === 0) return [];
   if (!principal.staffRole && organizations) {
     const allowed: string[] = [];

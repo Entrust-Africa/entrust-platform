@@ -62,6 +62,16 @@ export async function listCohorts(programId?: string): Promise<TradeCohort[]> {
 }
 
 /** Cohort details including enrolled SMEs (Entrust staff only). */
+/** Who works on a cohort. Only an administrator can read or change it. */
+export async function getCohortStaff(id: string): Promise<{
+  assigned: { userId: string; name: string; email: string }[];
+  available: { userId: string; name: string; email: string; role: string }[];
+} | null> {
+  const res = await (await serverApi()).v1.trade.cohorts[":id"].staff.$get({ param: { id } });
+  if (!res.ok) return null;
+  return (await res.json()) as never;
+}
+
 export async function getCohort(id: string): Promise<TradeCohortDetail | null> {
   const res = await (await serverApi()).v1.trade.cohorts[":id"].$get({
     param: { id },

@@ -91,6 +91,7 @@ describe("a learner's journey from enrolment to certificate", () => {
   it("is enrolled by Entrust, which opens TRADE for the business", async () => {
     const program = ok(await post(w.admin, "/programs", { name: `${PREFIX}lj-program` }));
     const cohort = ok(await post(w.admin, "/cohorts", { programId: program.id, name: `${PREFIX}lj-cohort`, country: "ET" }));
+    ok(await post(w.admin, `/cohorts/${cohort.id}/staff`, { userId: w.reviewer.id }));
     const enrollment = ok(await post(w.admin, "/enrollments", { cohortId: cohort.id, organizationId: w.org }));
     w.enrollment = enrollment.id;
     ok(await get(w.learner, "/modules"));

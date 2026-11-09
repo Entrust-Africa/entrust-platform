@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getCohort, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
+import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
@@ -94,6 +95,7 @@ export default async function CohortDetailPage(props: {
   }
 
   const { id } = await props.params;
+  const cohortStaff = me.staffRole === "admin" ? await getCohortStaff(id) : null;
   const [cohort, waiting, diagnostics, placements, sessions] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
@@ -175,6 +177,8 @@ export default async function CohortDetailPage(props: {
           </p>
         </Card>
       </div>
+
+      {cohortStaff && <CohortStaffPanel cohortId={cohort.id} staff={cohortStaff} />}
 
       {/* Live Sessions & Workshops Section */}
       <div className="space-y-4">

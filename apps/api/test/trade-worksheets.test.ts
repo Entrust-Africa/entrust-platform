@@ -39,6 +39,7 @@ beforeAll(async () => {
 
   const [program] = await db.insert(schema.program).values({ name: `${PREFIX}ws-program` }).returning();
   const [cohort] = await db.insert(schema.cohort).values({ programId: program!.id, name: `${PREFIX}ws-cohort`, country: "ET" }).returning();
+  await db.insert(schema.cohortStaff).values([facilitator, reviewer].map((staff) => ({ cohortId: cohort!.id, userId: staff.id })));
   const [mine, theirs] = await db
     .insert(schema.enrollment)
     .values([

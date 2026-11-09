@@ -12,6 +12,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import {
   ASSESSMENT_STATUSES,
@@ -87,6 +88,22 @@ export const cohort = trade.table(
     index("trade_cohort_program_idx").on(t.programId),
     index("trade_cohort_sponsor_idx").on(t.sponsorOrganizationId),
   ],
+);
+
+// The Entrust facilitators and reviewers assigned to a cohort. They reach only the SMEs in their cohorts; an administrator reaches all.
+export const cohortStaff = trade.table(
+  "cohort_staff",
+  {
+    cohortId: uuid("cohort_id")
+      .notNull()
+      .references(() => cohort.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assignedByUserId: text("assigned_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.cohortId, t.userId] }), index("trade_cohort_staff_user_idx").on(t.userId)],
 );
 
 // An SME organisation's enrolment in a cohort. One per SME per cohort; an SME may enrol in several cohorts.

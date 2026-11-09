@@ -7,6 +7,7 @@ import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
   CreateModuleSubmissionInput,
@@ -290,6 +291,13 @@ export async function listModuleSubmissions(
     conditions.push(inArray(schema.enrollment.organizationId, userOrgIds));
   }
 
+  // A facilitator or reviewer sees the queue of their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const cohorts = await assignedCohortIds(db, principal.userId);
+    if (cohorts.length === 0) return [];
+    conditions.push(inArray(schema.enrollment.cohortId, cohorts));
+  }
+
   // Queue ordering:
   // If filtering for "submitted" queue, sort by submittedAt asc (oldest waiting time first)
   // Otherwise newest first
@@ -409,6 +417,9 @@ export async function getModuleSubmission(
   if (!principal.staffRole && !principal.smeRoles.has(row.enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  if (principal.staffRole && !(await canReachCohort(db, principal, row.enrollment.cohortId))) {
+    throw new ServiceError("not_found", "Submission not found.");
+  }
 
   const [score] = await db
     .select()
@@ -494,7 +505,8 @@ export async function scoreModuleSubmission(
     .where(eq(schema.moduleSubmission.id, submissionId))
     .limit(1);
 
-  if (!row) {
+  // An assessor scores only the cohorts they're assigned to. To anyone else the submission isn't there.
+  if (!row || !(await canReachCohort(db, principal, row.enrollment.cohortId))) {
     throw new ServiceError("not_found", "Submission not found.");
   }
 
@@ -835,6 +847,9 @@ export async function listSubmissionScores(
 
   if (!principal.staffRole && !principal.smeRoles.has(sub.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
+  }
+  if (principal.staffRole && !(await accessTo(db, principal, sub.organizationId))) {
+    throw new ServiceError("not_found", "Submission not found.");
   }
 
   const scores = await db

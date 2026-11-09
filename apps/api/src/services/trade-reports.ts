@@ -14,7 +14,7 @@ import { MODULE_IDS, latestTradeRules } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
-import { recordTradeChange } from "./trade-shared";
+import { recordTradeChange, assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "./trade-shared";
 
 // Programme reports (#72): who took part, what capabilities improved and what commercial results followed. Entrust staff
 // see everything. A sponsor sees its own cohorts, with no names, and only figures that cover at least five SMEs or SMEs
@@ -56,13 +56,20 @@ async function programScope(ctx: Ctx, id: string): Promise<Scope> {
   const [program] = await ctx.db.select().from(schema.program).where(eq(schema.program.id, id));
   if (!program) throw new ServiceError("not_found", "Report not found.");
   const all = await ctx.db.select().from(schema.cohort).where(eq(schema.cohort.programId, id)).orderBy(asc(schema.cohort.startDate), asc(schema.cohort.name));
-  const cohorts = sponsorIds ? all.filter((c) => c.sponsorOrganizationId && sponsorIds.has(c.sponsorOrganizationId)) : all;
+  let cohorts = sponsorIds ? all.filter((c) => c.sponsorOrganizationId && sponsorIds.has(c.sponsorOrganizationId)) : all;
+  // A facilitator or reviewer gets the part of the programme they work on.
+  if (limitedToAssignedCohorts(ctx.principal)) {
+    const assigned = await assignedCohortIds(ctx.db, ctx.principal.userId);
+    cohorts = cohorts.filter((c) => assigned.includes(c.id));
+    if (cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
+  }
   if (sponsorIds && cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
   return { kind: "program", id, name: program.name, program: program.name, cohorts, sponsorIds };
 }
 
 async function cohortScope(ctx: Ctx, id: string): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
+  if (limitedToAssignedCohorts(ctx.principal) && !(await canReachCohort(ctx.db, ctx.principal, id))) throw new ServiceError("not_found", "Report not found.");
   const [found] = await ctx.db
     .select({ cohort: schema.cohort, program: schema.program.name })
     .from(schema.cohort)

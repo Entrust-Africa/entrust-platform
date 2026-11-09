@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   schema,
   DELIVERY_MODES,
@@ -9,6 +9,7 @@ import {
 import { organizationKind } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { recordTradeChange } from "./trade-shared";
 
 // ---- Program Services ----
 
@@ -427,4 +428,44 @@ export async function updateEnrollmentStatus(
   });
 
   return { ok: true, id: enrollmentId, status: newStatus };
+}
+
+
+// ---- Staff assigned to a cohort ----
+
+/** The facilitators and reviewers on a cohort, and the Entrust staff who could be added. */
+export async function listCohortStaff(db: Executor, cohortId: string) {
+  const assigned = await db
+    .select({ userId: schema.cohortStaff.userId, name: schema.user.name, email: schema.user.email, assignedAt: schema.cohortStaff.createdAt })
+    .from(schema.cohortStaff)
+    .innerJoin(schema.user, eq(schema.user.id, schema.cohortStaff.userId))
+    .where(eq(schema.cohortStaff.cohortId, cohortId));
+  const entrustOrg = process.env.ENTRUST_ORG_ID;
+  const staff = entrustOrg
+    ? await db
+        .select({ userId: schema.user.id, name: schema.user.name, email: schema.user.email, role: schema.member.role })
+        .from(schema.member)
+        .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+        .where(and(eq(schema.member.organizationId, entrustOrg), inArray(schema.member.role, ["facilitator", "reviewer"])))
+    : [];
+  const taken = new Set(assigned.map((a) => a.userId));
+  return { assigned, available: staff.filter((s) => !taken.has(s.userId)) };
+}
+
+export async function assignCohortStaff(db: Executor, actorUserId: string, cohortId: string, userId: string) {
+  const [cohort] = await db.select({ id: schema.cohort.id }).from(schema.cohort).where(eq(schema.cohort.id, cohortId));
+  if (!cohort) throw new ServiceError("not_found", "Cohort not found.");
+  const { available } = await listCohortStaff(db, cohortId);
+  if (!available.some((s) => s.userId === userId)) throw new ServiceError("invalid", "Choose a facilitator or reviewer who isn't on this cohort yet.");
+  await db.insert(schema.cohortStaff).values({ cohortId, userId, assignedByUserId: actorUserId }).onConflictDoNothing();
+  await recordTradeChange(db, actorUserId, { action: "trade.cohort_staff.assigned", organizationId: null, entityType: "cohort", entityId: cohortId, after: { userId } });
+}
+
+export async function removeCohortStaff(db: Executor, actorUserId: string, cohortId: string, userId: string) {
+  const removed = await db
+    .delete(schema.cohortStaff)
+    .where(and(eq(schema.cohortStaff.cohortId, cohortId), eq(schema.cohortStaff.userId, userId)))
+    .returning();
+  if (removed.length === 0) throw new ServiceError("not_found", "That person isn't on this cohort.");
+  await recordTradeChange(db, actorUserId, { action: "trade.cohort_staff.removed", organizationId: null, entityType: "cohort", entityId: cohortId, before: { userId } });
 }
