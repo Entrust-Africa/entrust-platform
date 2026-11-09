@@ -48,6 +48,7 @@ beforeAll(async () => {
   await db.insert(schema.moduleAssignment).values([
     { planId: w.plan, moduleId: "M05", status: "required", sequence: 1, reasonCodes: [] },
     { planId: w.plan, moduleId: "M02", status: "optional", sequence: 2, reasonCodes: [] },
+    { planId: w.plan, moduleId: "M01", status: "optional", sequence: 4, reasonCodes: [] },
     { planId: w.plan, moduleId: "M11", status: "required", sequence: 3, reasonCodes: [] },
   ] as never);
 });
@@ -84,6 +85,14 @@ describe("assignment limits on staff who aren't on the cohort", () => {
 });
 
 describe("what counts towards a pass", () => {
+  it("won't take an older module's submission until its worksheet is in", async () => {
+    const content = findVersion("M01", "learner")!;
+    ok(await post(w.learner, "/modules/M01/knowledge-check/attempts", { enrollmentId: w.enrollment, answers: Object.fromEntries(content.knowledgeCheck.questions.map((q) => [q.id, q.correct[0]!])) }));
+    const res = await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M01" });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("worksheet first");
+  });
+
   it("doesn't let an old pass stand when newer work has failed", async () => {
     const content = M05();
     ok(await post(w.learner, "/modules/M05/knowledge-check/attempts", { enrollmentId: w.enrollment, answers: Object.fromEntries(content.knowledgeCheck.questions.map((q) => [q.id, q.correct[0]!])) }));
