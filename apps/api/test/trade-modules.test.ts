@@ -57,7 +57,7 @@ describe("module listing and content", () => {
       expect(body.items.find((m: { id: string }) => m.id === "M01").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("ready");
-      expect(body.items.find((m: { id: string }) => m.id === "M11").contentStatus).toBe("in_production");
+      expect(body.items.find((m: { id: string }) => m.id === "M11").contentStatus).toBe(user === w.admin ? "draft" : "in_production");
       expect(body.items.find((m: { id: string }) => m.id === "M08").contentStatus).toBe(user === w.admin ? "draft" : "in_production");
       expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
     }
