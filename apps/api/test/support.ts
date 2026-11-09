@@ -42,6 +42,20 @@ export async function signUp(name: string): Promise<TestUser> {
   return { id: userId, cookie };
 }
 
+/** A new session for a user made with signUp, which has not passed any second step. */
+export async function signIn(name: string): Promise<TestUser> {
+  const { headers, response } = await auth.api.signInEmail({
+    body: { email: `${PREFIX}${RUN}-${name}@example.test`, password: "correct-horse-battery" },
+    returnHeaders: true,
+  });
+  const cookie = headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .join("; ");
+  await db.update(schema.session).set({ expiresAt: new Date("2100-01-01") }).where(eq(schema.session.userId, response.user.id));
+  return { id: response.user.id, cookie };
+}
+
 /** An organisation with its members. `smeProfile` gives it the QZ country so cases get QZ references. */
 export async function createOrganization(
   name: string,

@@ -4,6 +4,7 @@ import { ORGANIZATION_KINDS } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { Problem } from "../schemas/problem";
 import { getUserOrganizations, loadPrincipal } from "../services/access";
+import { mfaStatus } from "../services/staff-mfa";
 
 const OrgSummary = z.object({
   id: z.string(),
@@ -24,6 +25,8 @@ const Me = z
     staffRole: z.enum(["admin", "facilitator", "reviewer"]).nullable(),
     /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
     summitCommittee: z.boolean(),
+    /** Two-step sign-in, for Entrust staff only: null for everyone else. */
+    mfa: z.object({ required: z.boolean(), enrolled: z.boolean(), verified: z.boolean() }).nullable(),
     organizations: z.array(OrgSummary).optional(),
   })
   .openapi("Me");
@@ -56,6 +59,7 @@ export const me = new OpenAPIHono<AppEnv>().openapi(route, async (c) => {
       activeOrganizationId: session.activeOrganizationId ?? null,
       staffRole: principal.staffRole ?? null,
       summitCommittee: principal.committee,
+      mfa: principal.staffRole || principal.committee ? await mfaStatus(db, user.id, session.id) : null,
       organizations: userOrgs,
     },
     200,

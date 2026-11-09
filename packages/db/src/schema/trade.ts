@@ -36,7 +36,7 @@ import {
   VERIFICATION_LADDER_STATUSES,
 } from "@entrust/trade-engine";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
-import { organization, user } from "./auth";
+import { organization, session, user } from "./auth";
 import { exportCase } from "./clear";
 import { file } from "./core";
 
@@ -1295,3 +1295,32 @@ export const exportTransaction = trade.table(
   (t) => [index("trade_export_transaction_org_idx").on(t.organizationId, t.createdAt)],
 );
 
+
+// Staff sign-in codes (spec sections 17 and 21). Entrust staff sign in through AfriConnect or Google, so their second
+// step is our own authenticator app (TOTP). One row per person who has started setting it up; `confirmedAt` is set
+// when they prove they hold the secret. The secret is stored encrypted and never leaves the API.
+export const staffMfa = trade.table("staff_mfa", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  secretEncrypted: text("secret_encrypted").notNull(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  /** SHA-256 of each recovery code not yet used. */
+  recoveryHashes: jsonb("recovery_hashes").$type<string[]>().notNull().default([]),
+  /** The 30-second step of the last code accepted, so one code can't be used twice. */
+  lastStep: integer("last_step"),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// A sign-in session that has passed the second step. Deleting the session (signing out, expiry) deletes this.
+export const staffMfaSession = trade.table("staff_mfa_session", {
+  sessionId: text("session_id")
+    .primaryKey()
+    .references(() => session.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }).defaultNow().notNull(),
+});
