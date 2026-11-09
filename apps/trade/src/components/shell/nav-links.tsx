@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { tradeFetch } from "@/lib/trade-client";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
@@ -27,7 +29,7 @@ import {
   User,
   Users,
   FileText,
-  Gavel, Percent, Sparkles, PackageCheck, Building2 } from "lucide-react";
+  Gavel, Percent, Sparkles, PackageCheck, Building2, Bell } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { summitAccess } from "@/lib/summit";
@@ -64,7 +66,7 @@ function committeeLinks(): NavItem[] {
 }
 
 /** The links this visitor gets, in groups: one list for the sidebar and the phone drawer. */
-function groupsFor(user: UserProfile | undefined): NavGroup[] {
+function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
   const activeOrg = user?.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user?.organizations?.[0];
   const isStaff = Boolean(user?.staffRole);
   const isSponsor = activeOrg?.kind === "sponsor";
@@ -165,9 +167,44 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
   return [{ items: [...items, account] }];
 }
 
+/** Everyone gets their notifications, just above their account. */
+function groupsFor(user: UserProfile | undefined): NavGroup[] {
+  const groups = baseGroupsFor(user);
+  const notifications: NavItem = { href: "/notifications", label: "Notifications", icon: Bell, match: (path) => path.startsWith("/notifications") };
+  for (const group of groups) {
+    const at = group.items.findIndex((item) => item.href === "/account");
+    if (at >= 0) {
+      group.items.splice(at, 0, notifications);
+      break;
+    }
+  }
+  return groups;
+}
+
+/** How many notifications are unread, asked again each minute. Quiet when the API can't be reached. */
+function useUnread(enabled: boolean): number {
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    const load = async () => {
+      const res = await tradeFetch<{ unread: number }>("GET", "/notifications?limit=1");
+      if (live && res.data) setUnread(res.data.unread);
+    };
+    void load();
+    const timer = setInterval(() => void load(), 60_000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [enabled]);
+  return unread;
+}
+
 export function NavLinks({ onNavigate, className, user }: NavLinksProps) {
   const pathname = usePathname();
   const groups = groupsFor(user);
+  const unread = useUnread(Boolean(user));
 
   return (
     <nav aria-label="Main Navigation" className={cn("flex flex-col gap-6", className)}>
@@ -208,6 +245,12 @@ export function NavLinks({ onNavigate, className, user }: NavLinksProps) {
               >
                 <Icon className={cn("size-5 shrink-0", isActive ? "text-brand-600" : "text-ink-3")} aria-hidden="true" />
                 <span>{item.label}</span>
+                {item.href === "/notifications" && unread > 0 && (
+                  <span className="ml-auto rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                    {unread > 99 ? "99+" : unread}
+                    <span className="sr-only"> unread</span>
+                  </span>
+                )}
               </Link>
             );
           })}
