@@ -7,9 +7,10 @@ import type {
   ModuleExemptionStatus,
   ModuleStatus,
 } from "@entrust/trade-engine";
-import type { ModuleId, Pathway } from "@entrust/trade-rules";
+import { latestTradeRules, type ModuleId, type Pathway } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { assignedOrganizationIds, canReachOrganization, limitedToAssignedCohorts } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ApprovePlanInput,
@@ -49,6 +50,11 @@ export async function listPlans(
     }
   } else if (query.organizationId) {
     allowedOrgIds = [query.organizationId];
+  }
+  // A facilitator or reviewer sees the plans of the businesses in their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const assigned = await assignedOrganizationIds(db, principal.userId);
+    allowedOrgIds = allowedOrgIds ? allowedOrgIds.filter((o) => assigned.includes(o)) : assigned;
   }
 
   const conditions = [];
@@ -191,7 +197,7 @@ export async function approvePlan(
     )
     .where(eq(schema.learningPlan.id, planId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
 
@@ -258,8 +264,8 @@ export async function overridePlan(
 ): Promise<LearningPlanRecord> {
   const { principal, db, now } = ctx;
 
-  if (!principal.staffRole) {
-    throw new ServiceError("forbidden", "Only Entrust staff can override learning plans.");
+  if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator or facilitator can override learning plans.");
   }
 
   if (!input.reason?.trim()) {
@@ -283,7 +289,7 @@ export async function overridePlan(
     )
     .where(eq(schema.learningPlan.id, planId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
 
@@ -296,6 +302,10 @@ export async function overridePlan(
   const beforeModules = currentAssignments.map((a) => a.moduleId);
 
   if (input.removals && input.removals.length > 0) {
+    // M11 and M12 are mandatory for everyone completing the programme (review section 8), so a plan can't drop them.
+    const mandatory = latestTradeRules().modules.filter((m) => m.requiredForAll).map((m) => m.id as string);
+    const blocked = input.removals.filter((id) => mandatory.includes(id));
+    if (blocked.length) throw new ServiceError("invalid", `${blocked.join(", ")} can't be removed: every learner has to complete them.`);
     await db
       .delete(schema.moduleAssignment)
       .where(
@@ -396,6 +406,11 @@ export async function listExemptions(
     }
   } else if (query.organizationId) {
     allowedOrgIds = [query.organizationId];
+  }
+  // A facilitator or reviewer sees the plans of the businesses in their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const assigned = await assignedOrganizationIds(db, principal.userId);
+    allowedOrgIds = allowedOrgIds ? allowedOrgIds.filter((o) => assigned.includes(o)) : assigned;
   }
 
   const conditions = [];
@@ -574,8 +589,8 @@ export async function reviewExemption(
 ): Promise<ModuleExemptionView> {
   const { principal, db, now } = ctx;
 
-  if (!principal.staffRole) {
-    throw new ServiceError("forbidden", "Only Entrust staff can review exemptions.");
+  if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator or facilitator can review exemptions.");
   }
 
   if (input.status === "rejected" && !input.comment?.trim()) {
@@ -600,7 +615,7 @@ export async function reviewExemption(
     )
     .where(eq(schema.moduleExemption.id, exemptionId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Module exemption not found.");
   }
 

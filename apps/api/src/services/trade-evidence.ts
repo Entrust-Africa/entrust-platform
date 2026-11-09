@@ -8,6 +8,7 @@ import type {
 } from "@entrust/trade-engine";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { assignedOrganizationIds, limitedToAssignedCohorts, canReachOrganization } from "./trade-shared";
 import type {
   CreateEvidenceInput,
   EvidenceListQueryInput,
@@ -29,6 +30,10 @@ export async function listEvidence(
   if (principal.staffRole) {
     if (query.organizationId) {
       orgFilter = [query.organizationId];
+    }
+    if (limitedToAssignedCohorts(principal)) {
+      const assigned = await assignedOrganizationIds(db, principal.userId);
+      orgFilter = orgFilter ? orgFilter.filter((o) => assigned.includes(o)) : assigned;
     }
   } else {
     const userOrgIds = Array.from(principal.smeRoles.keys());
@@ -172,6 +177,9 @@ export async function createEvidence(
       "forbidden",
       "You cannot create evidence for this organization."
     );
+  }
+  if (principal.staffRole && !(await canReachOrganization(db, principal, targetOrgId))) {
+    throw new ServiceError("not_found", "Organisation not found.");
   }
 
   if (input.fileId) {

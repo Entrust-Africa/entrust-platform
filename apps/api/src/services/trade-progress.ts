@@ -4,6 +4,7 @@ import type { ModuleProgressStatus } from "@entrust/trade-engine";
 import type { ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { canReachOrganization } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ModuleProgressQueryInput,
@@ -36,6 +37,8 @@ export async function listEnrollmentProgress(
     if (!principal.smeRoles.has(enrollment.organizationId)) {
       throw new ServiceError("forbidden", "Access denied.");
     }
+  } else if (!(await canReachOrganization(db, principal, enrollment.organizationId))) {
+    throw new ServiceError("not_found", "Enrollment not found.");
   }
 
   const conditions = [eq(schema.moduleProgress.enrollmentId, query.enrollmentId)];

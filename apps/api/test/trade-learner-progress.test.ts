@@ -76,6 +76,7 @@ beforeAll(async () => {
       name: "Learner Progress Cohort",
     })
     .returning();
+  await db.insert(schema.cohortStaff).values([facilitator!].map((staff) => ({ cohortId: cohort!.id, userId: staff.id })));
 
   // 4. Enrollments
   const [enr1] = await db

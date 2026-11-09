@@ -769,7 +769,7 @@ export async function setEnrollmentPathway(ctx: Ctx, enrollmentId: string, input
   if (!reason) throw new ServiceError("invalid", "Say why.");
   return ctx.db.transaction(async (tx) => {
     const [enrollment] = await tx.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId)).for("update");
-    if (!enrollment) throw new ServiceError("not_found", "Enrolment not found.");
+    if (!enrollment || !(await accessTo(tx, principal, enrollment.organizationId))) throw new ServiceError("not_found", "Enrolment not found.");
     const [old] = await tx
       .select()
       .from(schema.pathwayAssignment)

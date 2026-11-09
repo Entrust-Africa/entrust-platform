@@ -38,7 +38,7 @@ export async function canReachCohort(db: Executor, principal: Principal, cohortI
   return !!row;
 }
 
-async function canReachOrganization(db: Executor, principal: Principal, organizationId: string): Promise<boolean> {
+export async function canReachOrganization(db: Executor, principal: Principal, organizationId: string): Promise<boolean> {
   if (!limitedToAssignedCohorts(principal)) return true;
   const [row] = await db
     .select({ cohortId: schema.cohortStaff.cohortId })
