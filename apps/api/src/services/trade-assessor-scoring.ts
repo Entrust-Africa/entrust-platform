@@ -7,7 +7,7 @@ import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
-import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "./trade-shared";
+import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
   CreateModuleSubmissionInput,
@@ -30,6 +30,7 @@ export async function createModuleSubmission(
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
       cohortId: schema.enrollment.cohortId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -47,6 +48,7 @@ export async function createModuleSubmission(
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  refuseNewWork(enrollment.status);
 
   // 1. Verify module assignment in active plan
   const [activePlan] = await db
@@ -111,7 +113,9 @@ export async function createModuleSubmission(
 
   // A module whose content carries its worksheets is assessed on every required output, so the assessor sees them all.
   // The individual learning plan isn't one: it follows the assessor's review.
-  const requiredOutputs = moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
+  // M03's financial pack is four worksheets, and it's assessed on all four in the same way.
+  const engineOutputs = WORKSHEET_DEFINITIONS.filter((d) => d.module === input.moduleId);
+  const requiredOutputs = engineOutputs.length > 1 ? engineOutputs : moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
   if (requiredOutputs.length) {
     const submitted = await db
       .select()
@@ -495,7 +499,15 @@ export async function getModuleSubmission(
   };
 }
 
-export async function scoreModuleSubmission(
+/** One score at a time per submission, so two assessors at once can't both be the official first score. */
+export async function scoreModuleSubmission(ctx: Ctx, submissionId: string, input: ScoreSubmissionInput): Promise<RubricAssessmentView> {
+  return ctx.db.transaction(async (tx) => {
+    await tx.select({ id: schema.moduleSubmission.id }).from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, submissionId)).for("update");
+    return applyScore({ ...ctx, db: tx }, submissionId, input);
+  });
+}
+
+async function applyScore(
   ctx: Ctx,
   submissionId: string,
   input: ScoreSubmissionInput

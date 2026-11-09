@@ -12,6 +12,8 @@ import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { assignedOrganizationIds, canReachOrganization, limitedToAssignedCohorts } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+
+const isMandatoryModule = (moduleId: string): boolean => latestTradeRules().modules.some((m) => m.id === moduleId && m.requiredForAll);
 import type {
   ApprovePlanInput,
   CreateExemptionInput,
@@ -322,6 +324,10 @@ export async function overridePlan(
       0
     );
 
+    const mandatory = latestTradeRules().modules.filter((m) => m.requiredForAll).map((m) => m.id as string);
+    const softened = input.additions.filter((a) => mandatory.includes(a.moduleId) && !["required", "priority_required"].includes(a.status ?? "required"));
+    if (softened.length) throw new ServiceError("invalid", `${softened.map((a) => a.moduleId).join(", ")} must stay required: every learner has to complete them.`);
+
     for (const add of input.additions) {
       const seq = add.sequence ?? ++maxSeq;
       const existingItem = currentAssignments.find(
@@ -516,6 +522,12 @@ export async function createExemption(
       "You cannot request exemptions for this organization."
     );
   }
+  if (principal.staffRole && !principal.smeRoles.has(enr.organizationId) && !(await canReachOrganization(db, principal, enr.organizationId))) {
+    throw new ServiceError("not_found", "Enrollment not found.");
+  }
+  if (isMandatoryModule(input.moduleId)) {
+    throw new ServiceError("invalid", `${input.moduleId} can't be exempted: every learner has to complete it.`);
+  }
 
   const [evidence] = await db
     .select({
@@ -617,6 +629,23 @@ export async function reviewExemption(
 
   if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Module exemption not found.");
+  }
+
+  if (input.status === "approved") {
+    if (isMandatoryModule(existing.moduleId)) {
+      throw new ServiceError("invalid", `${existing.moduleId} can't be exempted: every learner has to complete it.`);
+    }
+    // Critical failures block a pass whatever the score, so an exemption can't be the way round one.
+    const [latest] = await db
+      .select({ failures: schema.rubricAssessment.confirmedCriticalFailures })
+      .from(schema.moduleSubmission)
+      .innerJoin(schema.rubricAssessment, and(eq(schema.rubricAssessment.submissionId, schema.moduleSubmission.id), eq(schema.rubricAssessment.isFirstScore, true)))
+      .where(and(eq(schema.moduleSubmission.enrollmentId, existing.enrollmentId), eq(schema.moduleSubmission.moduleId, existing.moduleId)))
+      .orderBy(desc(schema.moduleSubmission.version))
+      .limit(1);
+    if (latest?.failures.length) {
+      throw new ServiceError("invalid", "This module's newest submission has a confirmed critical failure, so it can't be exempted.");
+    }
   }
 
   await db

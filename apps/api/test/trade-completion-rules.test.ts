@@ -76,11 +76,32 @@ describe("assignment limits on staff who aren't on the cohort", () => {
     expect((await post(w.other, `/cohorts/${w.cohort}/sessions`, { title: "x", startTime: "2027-01-01T09:00:00Z", endTime: "2027-01-01T10:00:00Z" })).status).toBe(404);
   });
 
+  it("won't let them review or request evidence, or read the trail or registry beyond their cohorts", async () => {
+    const [record] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Export licence" } as never).returning();
+    expect((await post(w.other, `/evidence/${record!.id}/review`, { status: "accepted", confidence: "verified" })).status).toBe(404);
+    expect((await post(w.other, "/evidence/request", { organizationId: w.org, title: "x", prompt: "Send it" })).status).toBe(404);
+    const [unchanged] = await db.select().from(schema.evidenceRecord).where(eq(schema.evidenceRecord.id, record!.id));
+    expect(unchanged?.confidence).toBe("self_reported");
+
+    await db.insert(schema.auditLog).values({ actorUserId: w.admin.id, organizationId: w.org, action: "sme.updated", entityType: "sme_profile", entityId: w.org, after: { tin: "0012345678" } });
+    const trail = (user: TestUser) => callV1(user, "GET", `/audit?organizationId=${w.org}&entityType=sme_profile`);
+    expect(ok(await trail(w.other)).items).toEqual([]);
+    expect(ok(await trail(w.reviewer)).items.length).toBeGreaterThan(0);
+    expect(ok(await trail(w.admin)).items.length).toBeGreaterThan(0);
+
+    expect((await callV1(w.reviewer, "GET", "/smes/search?q=cr")).status).toBe(403);
+    expect((await get(w.reviewer, "/enrollments/waiting")).status).toBe(403);
+    expect((await callV1(w.other, "GET", "/smes/search?q=cr")).status).toBe(200);
+  });
+
   it("won't let a reviewer override a plan, and no one drop a mandatory module", async () => {
     expect((await post(w.reviewer, `/plans/${w.plan}/override`, { reason: "x", removals: ["M02"] })).status).toBe(403);
     const dropped = await post(w.admin, `/plans/${w.plan}/override`, { reason: "x", removals: ["M11"] });
     expect(dropped.status).toBe(422);
     expect(dropped.body.error).toContain("M11");
+    const softened = await post(w.admin, `/plans/${w.plan}/override`, { reason: "x", additions: [{ moduleId: "M12", status: "optional" }] });
+    expect(softened.status).toBe(422);
+    expect(softened.body.error).toContain("M12");
   });
 });
 
@@ -110,11 +131,28 @@ describe("what counts towards a pass", () => {
     const last = content.lessons.at(-1)!;
     ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId: "M05", lessonId: last.id, completed: true, contentVersion: content.version }));
     expect(await status()).toBe("needs_revision");
+
+    // An exemption can't be the way round it, or round a mandatory module.
+    const [evidence] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Prior training" } as never).returning();
+    const [exemption] = await db.insert(schema.moduleExemption).values({ enrollmentId: w.enrollment, moduleId: "M05", evidenceRecordId: evidence!.id, status: "pending", reason: "Did this before", requestedByUserId: w.learner.id } as never).returning();
+    const approved = await post(w.admin, `/exemptions/${exemption!.id}/review`, { status: "approved" });
+    expect(approved.status).toBe(422);
+    expect(approved.body.error).toContain("critical failure");
+    expect(await status()).toBe("needs_revision");
+    await db.delete(schema.moduleExemption).where(eq(schema.moduleExemption.id, exemption!.id));
+    const mandatory = await post(w.learner, "/exemptions", { enrollmentId: w.enrollment, moduleId: "M11", evidenceRecordId: evidence!.id, reason: "Did this before" });
+    expect(mandatory.status).toBe(422);
   });
 
   it("passes once the newest work passes", async () => {
     const v3 = ok(await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M05" }));
-    expect(ok(await post(w.reviewer, `/module-submissions/${v3.id}/score`, { scores: allMarks(), feedback: "Corrected." })).passed).toBe(true);
+    // Two assessors at once: one of them is the official first score, never both.
+    const both = await Promise.all([w.reviewer, w.admin].map((user) => post(user, `/module-submissions/${v3.id}/score`, { scores: allMarks(), feedback: "Corrected." })));
+    expect(both.map((r) => r.status)).toEqual([expect.any(Number), expect.any(Number)]);
+    both.forEach((r) => ok(r));
+    const scores = await db.select().from(schema.rubricAssessment).where(eq(schema.rubricAssessment.submissionId, v3.id));
+    expect(scores).toHaveLength(2);
+    expect(scores.filter((s) => s.isFirstScore)).toHaveLength(1);
     expect(await status()).toBe("passed");
   });
 
@@ -128,6 +166,20 @@ describe("what counts towards a pass", () => {
 });
 
 describe("after the programme", () => {
+  it("takes no new work once finished, and a withdrawn business doesn't graduate or carry on", async () => {
+    const answers = Object.fromEntries(M05().knowledgeCheck.questions.map((q) => [q.id, q.correct[0]!]));
+    expect((await post(w.learner, "/modules/M05/knowledge-check/attempts", { enrollmentId: w.enrollment, answers })).status).toBe(422);
+    expect((await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M05" })).status).toBe(422);
+
+    const owner = (await signUp("cr-withdrawn")) as TestUser;
+    const org = await createOrganization("cr-withdrawn-sme", [[owner, "owner"]], { platform: null });
+    const left = ok(await post(w.admin, "/enrollments", { cohortId: w.cohort, organizationId: org })).id;
+    ok(await callV1(w.admin, "PATCH", `/trade/enrollments/${left}/status`, { status: "withdrawn", reason: "Closed the business" }));
+    expect((await post(owner, "/modules/M05/knowledge-check/attempts", { enrollmentId: left, answers })).status).toBe(422);
+    expect((await post(owner, "/module-submissions", { enrollmentId: left, moduleId: "M05" })).status).toBe(422);
+    expect((await post(owner, "/module-progress", { enrollmentId: left, moduleId: "M05", lessonId: M05().lessons[0]!.id, completed: true })).status).toBe(422);
+  });
+
   it("keeps an SME's worksheets, and lets it start a new version", async () => {
     const list = ok(await get(w.learner, `/worksheets?organizationId=${w.org}`));
     expect(list.enrollmentId).toBe(w.enrollment);

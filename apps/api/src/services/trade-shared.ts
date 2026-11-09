@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { hasTradeAccess, type Principal } from "./access";
 import type { Executor } from "./db";
+import { ServiceError } from "./errors";
 
 // What the TRADE assessment services share: who may read or write an SME's forms, and the audit entry for a change.
 
@@ -57,6 +58,12 @@ export async function accessTo(db: Executor, principal: Principal, organizationI
   }
   if (principal.smeRoles.has(organizationId) && (await hasTradeAccess(db, organizationId))) return { staff: false, write: true };
   return null;
+}
+
+/** New work can't go in on a withdrawn enrolment, or on a finished one: a certificate rests on what was assessed. */
+export function refuseNewWork(status: string): void {
+  if (status === "withdrawn") throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
+  if (status === "completed") throw new ServiceError("invalid", "This programme is finished, so its modules can't be assessed again.");
 }
 
 /**

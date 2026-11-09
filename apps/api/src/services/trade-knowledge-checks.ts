@@ -5,7 +5,7 @@ import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { canReachCohort, canReachOrganization } from "./trade-shared";
+import { canReachCohort, canReachOrganization, refuseNewWork } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   CohortKnowledgeCheckStats,
@@ -25,6 +25,7 @@ export async function submitKnowledgeCheckAttempt(
     .select({
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -42,6 +43,7 @@ export async function submitKnowledgeCheckAttempt(
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  refuseNewWork(enrollment.status);
 
   // Load the module content with answer keys (server-side grading).
   // Learners can only take knowledge checks on approved content.

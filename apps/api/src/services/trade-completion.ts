@@ -177,7 +177,8 @@ export async function evaluateAndSyncModuleCompletion(
   let programCompleted = false;
   let certificateId: string | undefined;
 
-  if (activePlan) {
+  // A withdrawn business doesn't graduate, even if the last score comes in after it left.
+  if (activePlan && enrollmentRow.enrollment.status !== "withdrawn") {
     const assigned = await tx
       .select({ moduleId: schema.moduleAssignment.moduleId, status: schema.moduleAssignment.status })
       .from(schema.moduleAssignment)

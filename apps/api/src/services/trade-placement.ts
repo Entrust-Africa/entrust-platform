@@ -11,6 +11,8 @@ import {
   type Answer,
   type Answers,
   type LearningPlan,
+  type ModuleAssignmentSource,
+  type ModuleStatus,
   type PathwayAssignment,
   type PlacementOutcome,
   type PlacementReport,
@@ -152,9 +154,22 @@ export async function scorePlacement(
     .returning();
   if (!plan) throw new Error("The learning plan was not created");
   if (old) await tx.update(schema.learningPlan).set({ supersededById: plan.id }).where(eq(schema.learningPlan.id, old.id));
-  await tx.insert(schema.moduleAssignment).values(
-    outcome.plan.modules.map((m) => ({ planId: plan.id, moduleId: m.module, status: m.status, sequence: m.sequence, reasonCodes: [...m.reasonCodes], source: "engine" as const })),
-  );
+  const assignments = outcome.plan.modules.map((m) => ({ planId: plan.id, moduleId: m.module, status: m.status as ModuleStatus, sequence: m.sequence, reasonCodes: [...m.reasonCodes] as string[], source: "engine" as ModuleAssignmentSource }));
+  // Making the plan again keeps what staff added or changed, and the learner's acknowledgement if they'd see the same modules.
+  if (old) {
+    const previous = await tx.select().from(schema.moduleAssignment).where(eq(schema.moduleAssignment.planId, old.id));
+    let next = assignments.reduce((max, a) => Math.max(max, a.sequence), 0);
+    for (const kept of previous.filter((a) => a.source === "staff_override")) {
+      const same = assignments.find((a) => a.moduleId === kept.moduleId);
+      if (same) Object.assign(same, { status: kept.status, reasonCodes: kept.reasonCodes, source: kept.source });
+      else assignments.push({ planId: plan.id, moduleId: kept.moduleId, status: kept.status as ModuleStatus, sequence: ++next, reasonCodes: kept.reasonCodes as string[], source: kept.source as ModuleAssignmentSource });
+    }
+    const list = (ids: string[]) => [...ids].sort().join();
+    if (old.acknowledgedAt && list(previous.map((a) => a.moduleId)) === list(assignments.map((a) => a.moduleId))) {
+      await tx.update(schema.learningPlan).set({ acknowledgedAt: old.acknowledgedAt }).where(eq(schema.learningPlan.id, plan.id));
+    }
+  }
+  await tx.insert(schema.moduleAssignment).values(assignments);
 
   await tx.update(schema.tradeAssessment).set({ status: outcome.assessmentStatus }).where(eq(schema.tradeAssessment.id, assessment.id));
   await recordTradeChange(tx, ctx.principal.userId, {

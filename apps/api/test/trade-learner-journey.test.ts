@@ -35,10 +35,10 @@ async function submitWorksheet(id: string): Promise<void> {
   ok(await put(w.learner, `/worksheet-versions/${draft.id}/values`, { values }));
   ok(await post(w.learner, `/worksheet-versions/${draft.id}/submit`));
 }
-/** The worksheets a learner submits for a module. The four older modules are assessed on their first one here. */
+/** The worksheets a learner submits for a module: all of them, except that M01, M04 and M07 are assessed on their first. */
 const contentWorksheets = async (moduleId: string): Promise<string[]> => {
   const ids = ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
-  return ["M01", "M03", "M04", "M07"].includes(moduleId) ? ids.slice(0, 1) : ids;
+  return ["M01", "M04", "M07"].includes(moduleId) ? ids.slice(0, 1) : ids;
 };
 const ok = (res: { status: number; body: Json }) => {
   expect(res.status, JSON.stringify(res.body).slice(0, 600)).toBeLessThan(300);
@@ -122,6 +122,22 @@ describe("a learner's journey from enrolment to certificate", () => {
     expect(res.acknowledgedAt).not.toBeNull();
     // A second time keeps the first date.
     expect(ok(await post(w.learner, `/plans/${w.planId}/acknowledge`)).acknowledgedAt).toBe(res.acknowledgedAt);
+  });
+
+  it("keeps staff's changes and the acknowledgement when confirming a pathway makes the plan again", async () => {
+    ok(await post(w.admin, `/plans/${w.planId}/override`, { reason: "Needs this for an order", additions: [{ moduleId: "M10", status: "required" }] }));
+    const added = ok(await get(w.learner, `/plans?enrollmentId=${w.enrollment}`)).items.find((p: Json) => p.status !== "superseded");
+    ok(await post(w.learner, `/plans/${added.id}/acknowledge`));
+    ok(await post(w.admin, `/enrollments/${w.enrollment}/pathway`, { pathway: "A", reason: "Checked with the business" }));
+    const remade = ok(await get(w.learner, `/plans?enrollmentId=${w.enrollment}`)).items.find((p: Json) => p.status !== "superseded");
+    expect(remade.id).not.toBe(added.id);
+    expect(remade.modules.find((m: Json) => m.moduleId === "M10")).toMatchObject({ status: "required", source: "staff_override" });
+    if (remade.status !== "approved" && remade.status !== "active") ok(await post(w.admin, `/plans/${remade.id}/approve`, {}));
+    w.planId = remade.id;
+    w.modules = remade.modules.map((m: Json) => m.moduleId);
+    const stored = ok(await get(w.learner, `/plans/${remade.id}`));
+    if (stored.modules.length === added.modules.length) expect(stored.acknowledgedAt).not.toBeNull();
+    else ok(await post(w.learner, `/plans/${remade.id}/acknowledge`));
   });
 
   it("passes every assigned module that has content, through lessons, knowledge check and assessor", async () => {

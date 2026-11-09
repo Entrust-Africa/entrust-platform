@@ -88,6 +88,7 @@ async function applyModuleProgress(
     .select({
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -104,6 +105,10 @@ async function applyModuleProgress(
 
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
+  }
+
+  if (enrollment.status === "withdrawn") {
+    throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
   }
 
   // Check active plan and assignment for submission constraints:
