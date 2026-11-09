@@ -92,6 +92,7 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/register", label: "SME register", icon: ClipboardList, match: (path) => path.startsWith("/register") },
           { href: "/diagnostics", label: "Diagnostics", icon: ListChecks, match: (path) => path.startsWith("/diagnostics") },
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
+          { href: "/referrals", label: "Referrals", icon: Handshake, match: (path) => path.startsWith("/referrals") },
           { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
           practice,
           simulator,
