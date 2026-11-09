@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Field, StatusBadge } from "@entrust/ui";
+import { FileLink, FileUpload } from "@/components/files/file-upload";
 import { tradeFetch } from "@/lib/trade-client";
 
 interface TxEvent {
@@ -14,6 +15,7 @@ interface TxDocument {
   id: string;
   kind: string;
   name: string;
+  fileId: string | null;
   notes: string | null;
 }
 interface TxCost {
@@ -41,7 +43,7 @@ const BASES = [["quoted", "Quoted"], ["expected", "Expected"], ["actual", "Actua
  * What sits under a transaction: its timeline, its costs as quoted, expected and actual figures (a new figure is a revision, and the
  * newest counts) and its documents. It records what the business says; it doesn't approve a shipment or certify a cost.
  */
-export function TransactionRecords({ transactionId, readOnly }: { transactionId: string; readOnly: boolean }) {
+export function TransactionRecords({ transactionId, organizationId, readOnly }: { transactionId: string; organizationId: string; readOnly: boolean }) {
   const base = `/transactions/${transactionId}`;
   const [events, setEvents] = useState<TxEvent[]>([]);
   const [documents, setDocuments] = useState<TxDocument[]>([]);
@@ -149,7 +151,7 @@ export function TransactionRecords({ transactionId, readOnly }: { transactionId:
           <ul className="divide-y divide-line text-sm">
             {documents.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
-                <span className="text-ink">{d.name} <span className="text-ink-3">({words(d.kind)})</span></span>
+                <span className="text-ink">{d.fileId ? <FileLink fileId={d.fileId} name={d.name} /> : d.name} <span className="text-ink-3">({words(d.kind)})</span></span>
                 {!readOnly && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(() => tradeFetch("DELETE", `${base}/documents/${d.id}`))}>Remove</Button>}
               </li>
             ))}
@@ -165,8 +167,17 @@ export function TransactionRecords({ transactionId, readOnly }: { transactionId:
                 if (res.ok) setDoc({ ...doc, name: "" });
                 return res;
               })}>
-                Add document
+                Add without a file
               </Button>
+            </div>
+            <div className="sm:col-span-3">
+              <FileUpload organizationId={organizationId} label="Upload a document" onUploaded={async (file) => {
+                setError(null);
+                const res = await tradeFetch("POST", `${base}/documents`, { kind: doc.kind, name: doc.name.trim() || file.name, fileId: file.id });
+                if (!res.ok) return setError(res.error);
+                setDoc({ ...doc, name: "" });
+                await reload();
+              }} />
             </div>
           </div>
         )}
