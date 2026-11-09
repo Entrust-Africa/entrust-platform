@@ -81,6 +81,7 @@ jobs:
   deploy-railway:
     name: Deploy ${{ matrix.service }} (Railway)
     needs: deploy-api
+    timeout-minutes: 30
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     strategy:
@@ -96,12 +97,36 @@ jobs:
           node-version: 24
       - name: Install the Railway CLI
         run: npm install --global @railway/cli@5.71.0
-      - name: Upload and build ${{ matrix.service }}
+      # `railway up` is run detached and the deployment's status is read afterwards. Railway skips a deployment when none of
+      # the service's watched paths changed (a merge that only touches docs or workflows), and `railway up --ci`, which
+      # follows the build log, then waits forever and holds the deploy lock.
+      - name: Upload ${{ matrix.service }} and wait for Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ matrix.service }}
         run: |
           test -n "$RAILWAY_TOKEN" || { echo "::error::The RAILWAY_TOKEN secret is not set."; exit 1; }
-          railway up --service "${{ matrix.service }}" --environment production --ci
+          newest() {
+            railway deployment list --service "$SERVICE" --environment production --json |
+              python3 -c "import sys,json; l=json.load(sys.stdin); x=l[0] if l else {}; print(x.get('id',''), x.get('status',''))"
+          }
+          read -r before _ < <(newest)
+          railway up --service "$SERVICE" --environment production --detach
+          for _ in $(seq 1 120); do
+            read -r id status < <(newest)
+            if [ -n "$id" ] && [ "$id" != "$before" ]; then
+              echo "$SERVICE: $status"
+              case "$status" in
+                SUCCESS) exit 0 ;;
+                SKIPPED) echo "Nothing this service uses changed, so Railway skipped the build."; exit 0 ;;
+                REMOVED) echo "A newer deployment replaced this one."; exit 0 ;;
+                FAILED|CRASHED) echo "::error::$SERVICE deployment $status. See: railway logs --build --service $SERVICE"; exit 1 ;;
+              esac
+            fi
+            sleep 10
+          done
+          echo "::error::$SERVICE did not finish deploying within 20 minutes."
+          exit 1
 
   deploy-website:
     name: Deploy Website (OpenNext)
@@ -129,6 +154,7 @@ jobs:
   smoke-test:
     name: Post-Deployment Smoke Verification
     needs: [deploy-api, deploy-railway, deploy-website]
+    timeout-minutes: 30
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -164,7 +190,7 @@ jobs:
         run: |
           npm install --global @railway/cli@5.71.0
           for _ in $(seq 1 60); do
-            status=$(railway deployment list --service entrust-worker --environment production --json | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['status'])")
+            status=$(railway deployment list --service entrust-worker --environment production --json | python3 -c "import sys,json; print(next((x['status'] for x in json.load(sys.stdin) if x['status'] not in ('SKIPPED', 'REMOVED')), 'NONE'))")
             echo "entrust-worker: $status"
             case "$status" in
               SUCCESS) exit 0 ;;
