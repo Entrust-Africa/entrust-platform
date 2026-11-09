@@ -8,7 +8,11 @@ interface SubmittedOutput {
   values: Record<string, unknown>;
 }
 
-type Field = NonNullable<LearnerModuleData["worksheets"][number]["fields"]>[number];
+/** A choice field's stored answer is its value, so it needs its options to read back in words. */
+interface Field {
+  kind?: string;
+  options?: { value: string; label: string }[];
+}
 
 const blank = (value: unknown) => value === null || value === undefined || value === "";
 
