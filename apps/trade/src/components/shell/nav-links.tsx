@@ -94,7 +94,8 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
           { href: "/referrals", label: "Referrals", icon: Handshake, match: (path) => path.startsWith("/referrals") },
           { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
-          practice,
+          // Staff read the course content here. The pages are read-only for staff; changing a module means publishing a new version.
+          { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
           simulator,
         ],
       },
