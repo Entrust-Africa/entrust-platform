@@ -78,7 +78,7 @@ export function ReferralBoard({ initial, canWrite, forBusiness }: { initial: Ref
               <p className="text-sm font-semibold text-ink">
                 {r.organizationName} → {r.destinationName} <span className="font-normal text-ink-3">({DESTINATION_LABEL[r.destinationType]})</span>
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <StatusBadge tone={r.consentStatus === "granted" ? "ok" : r.consentStatus === "requested" ? "warn" : r.consentStatus === "not_requested" ? "idle" : "danger"}>{CONSENT_LABEL[r.consentStatus]}</StatusBadge>
                 <StatusBadge tone="info">{r.status.replaceAll("_", " ")}</StatusBadge>
               </div>
