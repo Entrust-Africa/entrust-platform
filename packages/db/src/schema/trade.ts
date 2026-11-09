@@ -1662,3 +1662,81 @@ export const integrationRecord = trade.table(
   },
   (t) => [index("trade_integration_record_org_idx").on(t.organizationId, t.provider)],
 );
+
+// ---- Business outputs, action evidence and learning resources (spec 7.5, 9.1, 9.2, 11.3) ----
+
+export const OUTPUT_REVIEW_STATUSES = ["pending", "under_review", "reviewed", "changes_requested"] as const;
+
+// How far staff have got with one submitted version of a business output. A version with no row here is `pending`.
+export const worksheetVersionReview = trade.table("worksheet_version_review", {
+  worksheetVersionId: uuid("worksheet_version_id")
+    .primaryKey()
+    .references(() => worksheetVersion.id, { onDelete: "cascade" }),
+  status: text("status", { enum: OUTPUT_REVIEW_STATUSES }).notNull().default("pending"),
+  reviewerUserId: text("reviewer_user_id").references(() => user.id, { onDelete: "set null" }),
+  comments: text("comments"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+});
+
+// A document a business attaches to a version of one of its outputs, such as a costing sheet or a signed plan. It is the
+// business's own file, and a version can take attachments only while it is a draft: a submitted version is what was reviewed.
+export const worksheetAttachment = trade.table(
+  "worksheet_attachment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    worksheetVersionId: uuid("worksheet_version_id")
+      .notNull()
+      .references(() => worksheetVersion.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    description: text("description"),
+    attachedByUserId: text("attached_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_worksheet_attachment_version_idx").on(t.worksheetVersionId), uniqueIndex("trade_worksheet_attachment_file_uidx").on(t.worksheetVersionId, t.fileId)],
+);
+
+// Evidence that an action item was done: a file and what it shows.
+export const actionEvidence = trade.table(
+  "action_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actionItemId: uuid("action_item_id")
+      .notNull()
+      .references(() => actionItem.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    description: text("description"),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_action_evidence_item_idx").on(t.actionItemId), uniqueIndex("trade_action_evidence_file_uidx").on(t.actionItemId, t.fileId)],
+);
+
+export const RESOURCE_TYPES = ["template", "guide", "worksheet", "checklist", "video", "other"] as const;
+export const RESOURCE_ACCESS_LEVELS = ["learner", "staff"] as const;
+
+// A downloadable resource for a module or one of its lessons, uploaded by Entrust staff. `staff` resources (facilitator packs,
+// answer keys) never reach a learner. The file belongs to the Entrust organisation, so a learner reaches it only through the
+// resource's own download, which checks that the learner can see the module.
+export const learningResource = trade.table(
+  "learning_resource",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    lessonId: text("lesson_id"),
+    name: text("name").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    resourceType: text("resource_type", { enum: RESOURCE_TYPES }).notNull().default("other"),
+    version: text("version").notNull().default("1.0.0"),
+    accessLevel: text("access_level", { enum: RESOURCE_ACCESS_LEVELS }).notNull().default("learner"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [index("trade_learning_resource_module_idx").on(t.moduleId)],
+);
