@@ -147,13 +147,18 @@ describe("TRADE Knowledge Checks API (#63)", () => {
   });
 
   it("grades a failing attempt (< 80%), records attempt #1, but does not mark theory completed", async () => {
-    // Only 2 of 5 correct (40%)
+    // Only 3 of 10 correct (30%)
     const answers = {
       q1: ["b"], // correct
-      q2: ["b"], // incorrect
+      q2: ["c"], // correct
       q3: ["a"], // correct
-      q4: ["b"], // incorrect
-      q5: ["b"], // incorrect
+      q4: ["a"], // incorrect
+      q5: ["a"], // incorrect
+      q6: ["b"], // incorrect
+      q7: ["a"], // incorrect
+      q8: ["a"], // incorrect
+      q9: ["a"], // incorrect
+      q10: ["b"], // incorrect
     };
 
     const res = await callV1(
@@ -167,23 +172,27 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.score).toBe(40);
+    expect(res.body.score).toBe(30);
     expect(res.body.passed).toBe(false);
     expect(res.body.attemptNumber).toBe(1);
-    expect(res.body.totalQuestions).toBe(5);
-    expect(res.body.correctCount).toBe(2);
+    expect(res.body.totalQuestions).toBe(10);
+    expect(res.body.correctCount).toBe(3);
     expect(res.body.theoryCompletedAt).toBeNull();
 
     // Results feedback check
-    expect(res.body.results).toHaveLength(5);
+    expect(res.body.results).toHaveLength(10);
     const q1Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q1");
     expect(q1Res.isCorrect).toBe(true);
     expect(q1Res.correctAnswers).toEqual(["b"]);
-    expect(q1Res.explanation).toBeTruthy();
+    // Entrust's M01 gives no explanations, so feedback shows the right answer and the lesson to read.
+    expect(q1Res.lessonId).toBe("introduction");
 
     const q2Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q2");
-    expect(q2Res.isCorrect).toBe(false);
-    expect(q2Res.correctAnswers).toEqual(["a", "c"]);
+    expect(q2Res.isCorrect).toBe(true);
+    expect(q2Res.correctAnswers).toEqual(["c"]);
+    const q4Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q4");
+    expect(q4Res.isCorrect).toBe(false);
+    expect(q4Res.correctAnswers).toEqual(["d"]);
 
     // Check module progress in DB
     const [progress] = await db
@@ -199,18 +208,12 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     expect(progress).toBeDefined();
     expect(progress!.status).toBe("in_progress");
     expect(progress!.theoryCompletedAt).toBeNull();
-    expect(Number(progress!.knowledgeCheckScore)).toBe(40);
+    expect(Number(progress!.knowledgeCheckScore)).toBe(30);
   });
 
   it("grades a passing retake (>= 80%), increments to attempt #2, sets theoryCompletedAt", async () => {
-    // 5 of 5 correct (100%)
-    const answers = {
-      q1: ["b"],
-      q2: ["a", "c"],
-      q3: ["a"],
-      q4: ["a"],
-      q5: ["a"],
-    };
+    // 10 of 10 correct (100%)
+    const answers = { q1: ["b"], q2: ["c"], q3: ["a"], q4: ["d"], q5: ["b"], q6: ["a"], q7: ["c"], q8: ["d"], q9: ["b"], q10: ["a"] };
 
     const res = await callV1(
       w.smeLearner,
@@ -226,7 +229,7 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     expect(res.body.score).toBe(100);
     expect(res.body.passed).toBe(true);
     expect(res.body.attemptNumber).toBe(2);
-    expect(res.body.correctCount).toBe(5);
+    expect(res.body.correctCount).toBe(10);
     expect(res.body.theoryCompletedAt).toBeTruthy();
 
     // Verify DB progress updated

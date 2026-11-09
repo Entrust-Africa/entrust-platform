@@ -55,6 +55,7 @@ export const WORKSHEET_DEFINITIONS: readonly WorksheetDefinition[] = [
   {
     id: "m01-export-opportunity-brief",
     module: "M01",
+    optional: true,
     title: "Export Opportunity Brief",
     description: "One page on the export opportunity you will work on: the product, the destination, the buyer, where you stand, what holds you back and what you will do in the next 30 days.",
     money: false,

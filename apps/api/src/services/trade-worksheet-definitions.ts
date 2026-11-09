@@ -2,8 +2,9 @@ import { findVersion, visibleVersions } from "@entrust/trade-content";
 import { WORKSHEET_DEFINITIONS, findWorksheet, type WorksheetDefinition } from "@entrust/trade-engine";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 
-// Every worksheet an SME can fill in. Worksheets with arithmetic are defined in @entrust/trade-engine. A module with none there
-// carries its own in its content package (M05, M08, M09, M10): forms with no calculators, one per required output.
+// Every worksheet an SME can fill in. Worksheets with arithmetic are defined in @entrust/trade-engine. A module's content package
+// carries the rest: forms with no calculators, one per required output (M05, M08, M09, M10), or, for M01, M03, M04 and M07, the
+// outputs the engine's forms don't cover.
 
 const LEARNING_PLAN = "individual_learning_plan";
 
@@ -41,9 +42,8 @@ export function prefillContentWorksheet(targetId: string, values: Readonly<Recor
   return buyers.length ? { buyers: buyers.map((b) => Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined && v !== null && v !== ""))) } : {};
 }
 
-/** The worksheets a module's newest content version carries, unless the engine already defines that module's worksheets. */
+/** The worksheets a module's newest content version carries. M01, M03, M04 and M07 add these to the forms the engine defines, for the outputs those forms don't cover. */
 function fromContent(moduleId: ModuleId): WorksheetDefinition[] {
-  if (WORKSHEET_DEFINITIONS.some((d) => d.module === moduleId)) return [];
   const content = visibleVersions(moduleId, "staff")[0];
   if (!content) return [];
   return content.worksheets.map((w) => ({

@@ -103,7 +103,7 @@ describe("an enrolment's worksheets", () => {
     const res = await get(w.owner, `/worksheets${q()}`);
     expect(res.status).toBe(200);
     expect(res.body.enrollmentId).toBe(w.enrollment);
-    expect(res.body.items).toHaveLength(75);
+    expect(res.body.items).toHaveLength(89);
     expect(res.body.items.every((i: Json) => i.latest === null && i.draft === null)).toBe(true);
     // The only enrolment, found from the caller's organisation.
     expect((await get(w.owner, "/worksheets")).body.enrollmentId).toBe(w.enrollment);

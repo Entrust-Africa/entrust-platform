@@ -148,6 +148,22 @@ beforeAll(async () => {
     })
     .returning();
   w.worksheetVersionId = ws!.id;
+
+  // M01's practical is the five outputs in Entrust's text, one submitted form each.
+  await db.insert(schema.worksheetVersion).values(
+    ["business-baseline", "capability-gap-register", "opportunity-register", "deal-qualification-scorecard", "deal-decision-record"].map((id) => ({
+      enrollmentId: w.enrollmentId,
+      worksheetId: `m01-${id}`,
+      moduleId: "M01" as const,
+      version: 1,
+      status: "submitted" as const,
+      values: {},
+      result: {},
+      confidence: "self_reported" as const,
+      submittedByUserId: smeLearner!.id,
+      submittedAt: new Date(),
+    })),
+  );
 });
 
 afterAll(async () => {
@@ -226,7 +242,13 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
     expect(res.body.version).toBe(1);
     expect(res.body.status).toBe("submitted");
     expect(res.body.worksheetSnapshot).toBeDefined();
-    expect(res.body.worksheetSnapshot.id).toBe(w.worksheetVersionId);
+    expect(res.body.worksheetSnapshot.worksheets.map((o: { worksheetId: string }) => o.worksheetId)).toEqual([
+      "m01-business-baseline",
+      "m01-capability-gap-register",
+      "m01-opportunity-register",
+      "m01-deal-qualification-scorecard",
+      "m01-deal-decision-record",
+    ]);
 
     // Verify module progress moved to submitted
     const [progress] = await db

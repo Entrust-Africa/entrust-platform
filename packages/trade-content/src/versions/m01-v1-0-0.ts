@@ -1,5 +1,5 @@
 import type { ModuleContent } from "../schema";
-import { SCORING_GUIDE, STANDARD_BANDS, question } from "./helpers";
+import { SCORING_GUIDE, STANDARD_BANDS, checkbox, choice, dateField, form, numberField, learningPlan, longText, register, shortText, question } from "./helpers";
 
 // Entrust's M01 package, version 1.0, as supplied on 9 Nov 2026. The lessons, worked example, outputs,
 // assessment and facilitator guide follow its text. Entrust gave the knowledge check as questions and
@@ -19,7 +19,8 @@ export const M01_V1_0_0: ModuleContent = {
     "Select a priority opportunity, or determine that further preparation is required.",
     "Develop a short list of practical actions.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: { by: "Minase Fikadu, TRADE platform team", at: "2026-11-09" },
   lessons: [
     {
       id: "introduction",
@@ -256,7 +257,70 @@ Opportunity B may be more suitable because the quantity, production capacity and
 
 The learner must record a decision and explain the evidence behind it.`,
   },
-  worksheets: [],
+  worksheets: [
+    form("business_baseline", "Business baseline", "Output 1: where the business stands today, from the evidence you have.", [
+      longText("overview", "Business overview", true),
+      longText("products_services", "Products and services", true),
+      longText("customer_segments", "Customer segments"),
+      longText("sales_channels", "Sales channels"),
+      longText("operating_history", "Operating history"),
+      longText("current_priorities", "Current priorities", true),
+    ]),
+    register(
+      "capability_gap_register",
+      "Capability gap register",
+      "Output 2: for each area, say whether the capability exists, exists without evidence, or does not yet exist. Record a gap rather than invent an answer.",
+      [
+        choice("area", "Area", [["financial_records", "Financial records"], ["production_capacity", "Production capacity"], ["quality_management", "Quality management"], ["working_capital", "Working capital"], ["digital_systems", "Digital systems"], ["export_requirements", "Export requirements"], ["risk_protection", "Risk protection"], ["other", "Other"]], true),
+        choice("position", "Current position", [["exists", "Exists, with evidence"], ["no_evidence", "Exists, but no evidence"], ["missing", "Does not yet exist"]], true),
+        longText("current_position", "Describe the current position"),
+        shortText("evidence", "Evidence available"),
+        longText("gap", "Gap"),
+        choice("priority", "Priority", [["high", "High"], ["medium", "Medium"], ["low", "Low"]], true),
+      ],
+      7,
+    ),
+    register(
+      "opportunity_register",
+      "Opportunity register",
+      "Output 3: up to three opportunities, each with the evidence behind it.",
+      [
+        shortText("buyer", "Buyer", true),
+        shortText("country", "Country"),
+        shortText("product", "Product", true),
+        shortText("quantity", "Estimated quantity"),
+        shortText("value", "Estimated value"),
+        longText("requirements", "Buyer requirements"),
+        longText("delivery", "Delivery expectations"),
+        longText("payment_terms", "Payment terms"),
+        longText("evidence", "Evidence available", true),
+        longText("questions", "Outstanding questions"),
+      ],
+      1,
+      3,
+    ),
+    form("deal_qualification_scorecard", "Deal qualification scorecard", "Output 4: score each dimension from 1 to 5. The score helps you prioritize; it does not approve a deal. A low score or an unresolved critical issue calls for further review whatever the total.", [
+      numberField("buyer_credibility", "Buyer credibility (1 to 5)", true),
+      numberField("product_fit", "Product fit (1 to 5)", true),
+      numberField("commercial_viability", "Commercial viability (1 to 5)", true),
+      numberField("fulfillment_capacity", "Fulfillment capacity (1 to 5)", true),
+      numberField("payment_finance", "Payment and finance feasibility (1 to 5)", true),
+      numberField("export_delivery", "Export and delivery feasibility (1 to 5)", true),
+      longText("scoring_notes", "Reasons for the scores", true),
+      checkbox("has_critical_issue", "An unresolved critical issue remains"),
+      longText("critical_issues", "Unresolved critical issues"),
+    ]),
+    form("deal_decision_record", "Deal decision record", "Output 5: the decision, the evidence for it, and what happens next.", [
+      shortText("selected_opportunity", "Selected opportunity", true),
+      choice("decision", "Decision", [["proceed", "Proceed"], ["hold", "Hold"], ["renegotiate", "Renegotiate"], ["no_go", "No-go"]], true),
+      longText("supporting_evidence", "Supporting evidence", true),
+      longText("outstanding_risks", "Outstanding risks", true),
+      longText("required_action", "Required action (at least one priority commercial action)", true),
+      shortText("responsible_person", "Responsible person", true),
+      dateField("target_date", "Target date", true),
+    ]),
+    learningPlan(),
+  ],
   knowledgeCheck: {
     passMark: 80,
     questions: [

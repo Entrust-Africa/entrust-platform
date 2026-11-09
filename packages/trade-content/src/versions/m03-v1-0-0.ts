@@ -1,5 +1,5 @@
 import type { ModuleContent } from "../schema";
-import { SCORING_GUIDE, STANDARD_BANDS, question } from "./helpers";
+import { SCORING_GUIDE, STANDARD_BANDS, choice, dateField, learningPlan, longText, register, shortText, question } from "./helpers";
 
 // Entrust's M03 package, version 1.0, as supplied on 9 Nov 2026. The knowledge check's wrong options are
 // the platform team's (see helpers.ts). The module's worksheets stay the ones the trade engine defines.
@@ -18,7 +18,8 @@ export const M03_V1_0_0: ModuleContent = {
     "Organize financial information for a bank or investor discussion.",
     "Identify financial weaknesses requiring corrective action.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: { by: "Minase Fikadu, TRADE platform team", at: "2026-11-09" },
   lessons: [
     {
       id: "introduction",
@@ -287,7 +288,22 @@ The SME must determine:
 
 The SME should not assume that the existence of an order guarantees financing approval.`,
   },
-  worksheets: [],
+  worksheets: [
+    register(
+      "financial_readiness_action_plan",
+      "Financial readiness action plan",
+      "Output 5: the missing records, reconciliations, accounting support and cash flow improvements, with at least three actions.",
+      [
+        choice("area", "Area", [["missing_records", "Missing records"], ["reconciliation", "Reconciliation"], ["accounting_support", "Accounting support"], ["cash_flow", "Cash flow improvement"], ["other", "Other"]], true),
+        longText("action", "Action", true),
+        shortText("owner", "Responsible person", true),
+        dateField("target_date", "Target date", true),
+        shortText("evidence", "Evidence of completion"),
+      ],
+      3,
+    ),
+    learningPlan(3),
+  ],
   knowledgeCheck: {
     passMark: 80,
     questions: [

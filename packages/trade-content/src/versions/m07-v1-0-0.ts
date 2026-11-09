@@ -1,5 +1,5 @@
 import type { ModuleContent } from "../schema";
-import { SCORING_GUIDE, STANDARD_BANDS, question } from "./helpers";
+import { SCORING_GUIDE, STANDARD_BANDS, dateField, form, learningPlan, longText, numberField, shortText, question } from "./helpers";
 
 // Entrust's M07 package, version 1.0, as supplied on 9 Nov 2026. The knowledge check's wrong options are
 // the platform team's (see helpers.ts). The module's worksheet stays the order fulfilment plan the trade
@@ -19,7 +19,8 @@ export const M07_V1_0_0: ModuleContent = {
     "Coordinate packaging, logistics and delivery responsibilities.",
     "Monitor fulfillment and document completion.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: { by: "Minase Fikadu, TRADE platform team", at: "2026-11-09" },
   lessons: [
     {
       id: "introduction",
@@ -308,7 +309,21 @@ The SME must determine:
 
 The SME prepares a milestone plan and identifies the risks that could delay fulfillment.`,
   },
-  worksheets: [],
+  worksheets: [
+    form("fulfillment_delivery_plan", "Fulfillment and delivery plan", "Output 6: how the order gets from production to proof of delivery.", [
+      numberField("order_quantity", "Order quantity", true),
+      longText("production_milestones", "Production milestones", true),
+      shortText("quality_approval", "Quality approval (who and when)", true),
+      dateField("packaging_completion", "Packaging completion"),
+      dateField("dispatch_date", "Dispatch date", true),
+      shortText("logistics_provider", "Logistics provider"),
+      longText("delivery_milestones", "Delivery milestones"),
+      longText("buyer_communication", "Buyer communication schedule"),
+      shortText("delivery_confirmation", "Delivery confirmation (proof of delivery)"),
+      longText("exception_escalation", "Exception escalation process", true),
+    ]),
+    learningPlan(3),
+  ],
   knowledgeCheck: {
     passMark: 80,
     questions: [

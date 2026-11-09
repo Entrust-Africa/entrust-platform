@@ -1,5 +1,5 @@
 import type { ModuleContent } from "../schema";
-import { SCORING_GUIDE, STANDARD_BANDS, question } from "./helpers";
+import { SCORING_GUIDE, STANDARD_BANDS, choice, dateField, form, learningPlan, longText, moneyField, register, shortText, question } from "./helpers";
 
 // Entrust's M04 package, version 1.0, as supplied on 9 Nov 2026. The knowledge check's wrong options are
 // the platform team's (see helpers.ts). The module's worksheet stays the transaction brief the trade
@@ -19,7 +19,8 @@ export const M04_V1_0_0: ModuleContent = {
     "Select appropriate questions and controls before accepting payment terms.",
     "Prepare a transaction finance and payment-risk brief.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: { by: "Minase Fikadu, TRADE platform team", at: "2026-11-09" },
   lessons: [
     {
       id: "introduction",
@@ -280,7 +281,46 @@ Possible negotiation:
 
 The SME should not accept the original terms without understanding the cash flow and payment exposure.`,
   },
-  worksheets: [],
+  worksheets: [
+    register(
+      "payment_method_comparison",
+      "Payment method comparison",
+      "Output 2: for each payment method, the main benefit, the main risk or limitation, and the questions to verify.",
+      [
+        choice("method", "Payment method", [["advance", "Advance payment"], ["open_account", "Open account"], ["documentary_collection_dp", "Documentary collection (D/P)"], ["documentary_collection_da", "Documentary collection (D/A)"], ["letter_of_credit", "Letter of credit"], ["staged", "Deposit and balance"]], true),
+        longText("benefit", "Main benefit", true),
+        longText("risk", "Main risk or limitation", true),
+        longText("verify", "Questions to verify", true),
+      ],
+      4,
+    ),
+    register(
+      "financing_options_assessment",
+      "Financing options assessment",
+      "Output 4: each financing option you have looked at. Financing depends on the lender, so record the status of every enquiry.",
+      [
+        shortText("institution", "Financing institution", true),
+        shortText("product", "Product", true),
+        moneyField("amount", "Amount potentially required"),
+        longText("eligibility", "Eligibility requirements"),
+        longText("security", "Security or collateral requirements"),
+        longText("cost", "Cost of finance"),
+        shortText("lead_time", "Application lead time"),
+        longText("repayment_source", "Repayment source", true),
+        choice("status", "Status of enquiry", [["not_started", "Not started"], ["enquired", "Enquired"], ["applied", "Applied"], ["approved", "Approved"], ["declined", "Declined"]], true),
+      ],
+    ),
+    form("payment_negotiation_plan", "Payment negotiation plan", "Output 5: what the buyer proposes, what you want, and the least you will accept. Your final decision is the payment-risk decision this module asks for.", [
+      longText("current_proposal", "Current buyer proposal", true),
+      longText("main_risks", "Main risks", true),
+      longText("preferred_terms", "Preferred payment terms", true),
+      longText("acceptable_alternative", "Acceptable alternative"),
+      longText("minimum_conditions", "Minimum conditions", true),
+      longText("negotiation_points", "Negotiation points"),
+      longText("final_decision", "Final decision on payment risk", true),
+    ]),
+    learningPlan(),
+  ],
   knowledgeCheck: {
     passMark: 80,
     questions: [
