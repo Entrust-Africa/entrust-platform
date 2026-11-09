@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema, REGISTRATION_STATUSES, BUSINESS_STATUSES } from "@entrust/db";
 import { auth, trustedOrigins } from "@entrust/auth";
-import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, SME_ROLES } from "@entrust/roles";
+import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, QUALITY_ROLE, SME_ROLES } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
 import { getUserOrganizations } from "../services/access";
@@ -12,7 +12,7 @@ import { checkSmeDuplicates } from "../services/sme-registry";
 
 const SmeRoles = z.enum(SME_ROLES);
 // "committee" is the Summit selection committee's role (#80). It grants nothing in CLEAR or TRADE.
-const EntrustRoles = z.enum([...ENTRUST_ROLES, "committee"]);
+const EntrustRoles = z.enum([...ENTRUST_ROLES, "committee", QUALITY_ROLE]);
 const Platform = z.enum(PLATFORMS);
 
 function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {

@@ -122,6 +122,11 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     return groups;
   }
 
+  // Quality reads the programme's reports and nothing else.
+  if (user?.quality) {
+    return [{ items: [{ href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") }, account] }];
+  }
+
   // A member of the selection committee is not staff: they get the committee's screens and nothing else of the Summit.
   if (user?.summitCommittee) return [{ heading: "Summit", items: committeeLinks() }, { items: [account] }];
 

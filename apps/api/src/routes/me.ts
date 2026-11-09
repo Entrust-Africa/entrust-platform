@@ -25,6 +25,8 @@ const Me = z
     staffRole: z.enum(["admin", "facilitator", "reviewer"]).nullable(),
     /** A member of the Summit's selection committee. Not a staff role: it opens nothing outside the Summit. */
     summitCommittee: z.boolean(),
+    /** A member of the Quality role: reads reports and the audit trail, changes nothing. Not a staff role. */
+    quality: z.boolean(),
     /** Two-step sign-in, for Entrust staff only: null for everyone else. */
     mfa: z.object({ required: z.boolean(), enrolled: z.boolean(), verified: z.boolean() }).nullable(),
     organizations: z.array(OrgSummary).optional(),
@@ -59,6 +61,7 @@ export const me = new OpenAPIHono<AppEnv>().openapi(route, async (c) => {
       activeOrganizationId: session.activeOrganizationId ?? null,
       staffRole: principal.staffRole ?? null,
       summitCommittee: principal.committee,
+      quality: principal.quality,
       mfa: principal.staffRole || principal.committee ? await mfaStatus(db, user.id, session.id) : null,
       organizations: userOrgs,
     },

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { schema, type Database } from "@entrust/db";
 import { ENTRUST_ROLES, SME_ROLES, ORGANIZATION_KINDS, type Actor, type EntrustRole, type SmeRole, type OrganizationKind } from "@entrust/gate-engine";
-import { SPONSOR_ROLES, type SponsorRole } from "@entrust/roles";
+import { QUALITY_ROLE, SPONSOR_ROLES, type SponsorRole } from "@entrust/roles";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 
@@ -17,6 +17,8 @@ export interface Principal {
    * role, so it grants nothing in CLEAR or TRADE and only the Summit's committee endpoints know it.
    */
   committee: boolean;
+  /** A member of the Quality role (spec section 17): reads programme reports and the audit trail across every cohort, and changes nothing. Not a staff role. */
+  quality: boolean;
   /** Roles in sponsor organisations (#70), by organisation id. A sponsor sees only the cohorts it sponsors and what an SME has agreed to share. */
   sponsorRoles: ReadonlyMap<string, SponsorRole>;
 }
@@ -59,6 +61,7 @@ export async function loadPrincipal(db: Executor, userId: string): Promise<Princ
 
   let staffRole: EntrustRole | null = null;
   let committee = false;
+  let quality = false;
   const smeRoles = new Map<string, SmeRole>();
   const sponsorRoles = new Map<string, SponsorRole>();
   const sponsorOrganizations = new Set<string>();
@@ -79,11 +82,12 @@ export async function loadPrincipal(db: Executor, userId: string): Promise<Princ
     if (entrustOrganizationId && organizationId === entrustOrganizationId) {
       if (isEntrustRole(role)) staffRole = role;
       else if (role === COMMITTEE_ROLE) committee = true;
+      else if (role === QUALITY_ROLE) quality = true;
     } else if (isSmeRole(role)) {
       smeRoles.set(organizationId, role);
     }
   }
-  return { userId, staffRole, smeRoles, committee, sponsorRoles };
+  return { userId, staffRole, smeRoles, committee, quality, sponsorRoles };
 }
 
 /** The kind stored in an organisation's metadata, or null. */

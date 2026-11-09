@@ -110,7 +110,7 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
 
   const db = getDb();
   const principal = await loadPrincipal(db, user.id);
-  if (!principal.staffRole) {
+  if (!principal.staffRole && !principal.quality) {
     throw new ServiceError("forbidden", "Only Entrust staff can view audit logs.");
   }
 
@@ -124,7 +124,10 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
   const conditions = [];
   // CLEAR's trail stays open to its staff. TRADE entries, and the organisation and registry entries that hold tax numbers,
   // stop at the businesses on a facilitator's or reviewer's cohorts.
-  if (limitedToAssignedCohorts(principal)) {
+  // The Quality role reads every cohort's trail, but not the entries that hold tax numbers.
+  if (principal.quality && !principal.staffRole) {
+    conditions.push(notInArray(schema.auditLog.entityType, ["sme_profile", "organization"]));
+  } else if (limitedToAssignedCohorts(principal)) {
     const organizations = await assignedOrganizationIds(db, principal.userId);
     const open = and(sql`${schema.auditLog.platform} is distinct from 'trade'`, notInArray(schema.auditLog.entityType, ["sme_profile", "organization"]));
     conditions.push(organizations.length ? or(open, inArray(schema.auditLog.organizationId, organizations))! : open!);
