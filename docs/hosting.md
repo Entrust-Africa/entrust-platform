@@ -48,13 +48,29 @@ Most emails are not sent by the API. The API puts the email on a queue (pg-boss,
 Neon project `entrust-clear` (Postgres 18, AWS us-east-2). The branch called `production` is the default and holds all the live data. Until 9 November 2026 the live data sat on a branch called `staging` while an empty branch was called `production`; the empty one is now `empty-unused` and can be deleted when nobody needs it. Connection strings did not change.
 
 - There is no hosted staging environment. To try something against real-shaped data, branch `production` in Neon and point a local copy at the branch, never at `production` itself.
-- Point-in-time restore reaches back seven days (the setting is `history_retention_seconds` on the Neon project; it was one day). Nothing older than that is backed up, so take a dump before any risky change to the data.
+- **Two layers of backup.** Neon keeps a point-in-time history for seven days (the setting is `history_retention_seconds` on the Neon project; it was one day), good for "undo what I did an hour ago". On top of that, `.github/workflows/db-backup.yml` runs every night at 01:17 UTC (04:17 in Addis Ababa): it dumps the database with a read-only login (`backup_reader`, secret `BACKUP_DATABASE_URL`), restores the dump into a throwaway Postgres 18 to prove it works, encrypts it, and stores it in the private R2 bucket `entrust-db-backups` as `daily/YYYY/MM/entrust-<timestamp>.pgdump.gpg`. A dump is about 14 MB of data, a few MB compressed, so the bucket stays inside R2's free tier.
+- **The bucket protects itself.** Dumps are deleted after 35 days, and for their first 14 days nothing can delete or overwrite them, not even the job's own credentials. The queue's tables (schema `pgboss`) are left out.
+- **Dumps are encrypted** with the public key in `docs/backup-public-key.asc` (fingerprint `1C6946F3C0CCD4553C4729BCF1C8105DDBB77152`). Only the private key can open them, so keep a copy of it outside GitHub and Cloudflare, such as a password manager. Without it the dumps are useless.
+- **Not in the dump:** uploaded files (the R2 bucket `entrust-platform-files-prod`) and anything in Cloudflare or Railway settings.
+
+### Restoring a backup
+
+1. In the Cloudflare dashboard (R2, then the bucket `entrust-db-backups`), download the dump you want, or create a read-only R2 API token for that bucket and fetch it with any S3 client (endpoint `https://<account id>.r2.cloudflarestorage.com`).
+2. Decrypt it with the private key: `gpg --decrypt entrust-<timestamp>.pgdump.gpg > dump.pgdump`.
+3. Never restore over `production`. Make a Neon branch (`neonctl branches create --name restore-check`), then `pg_restore --no-owner --no-acl --dbname "<branch connection string>" dump.pgdump` with a Postgres 18 client, and look at the data. To go back to it for real, switch the API's `DATABASE_URL` (Worker secret and Hyperdrive) and the worker's to that branch.
 
 ## Alerts
 
 - A failed deploy or smoke check fails the "Deploy to production" run, and GitHub emails the people who watch the repository.
 - `.github/workflows/queue-watch.yml` runs every 30 minutes and fails when an email has waited more than 15 minutes or has failed for good in the last day. That is how a stopped worker shows up.
+- The nightly backup fails its run when the dump is empty, does not restore, or cannot be stored, and GitHub emails the same people.
 - There is no error tracker, so an error inside a request is only in the Cloudflare Worker logs (the API) or the Railway logs (the apps) until someone looks.
+
+## Rate limiting
+
+One Cloudflare rate-limit rule on the `entrust-africa.com` zone (the Free plan allows one rule, counted per visitor address over a fixed ten seconds, at no charge): more than 300 requests in ten seconds from one address to the public diagnostic's start, autosave, submit or verify calls (`/v1/trade/public/diagnostic` and its `/responses`, `/submit` and `/verify-email`) are blocked with a 429 for the next ten seconds. 300 is deliberately generous: a room of people on one Wi-Fi network share an address.
+
+It covers only what browsers call directly. TRADE, CLEAR and the Summit page call the API from their Railway servers, so all their visitors arrive from the same few addresses, and a per-address limit on those paths would block real people together. The API also limits diagnostic starts by email (five an hour) and by address (twenty an hour). To change the rule, edit it under Security, WAF, Rate limiting rules in the Cloudflare dashboard.
 
 ## Settings
 
@@ -64,7 +80,7 @@ The values live in each service's own settings and can't be read back: Cloudflar
 - **Worker `entrust-worker` (Railway):** `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM` (`Entrust Africa <no-reply@entrust-africa.com>`), `EMAIL_MODE=send`, `NODE_ENV=production`, and the `RAILPACK_*` build variables. The Resend key is the same one the API uses (the domain `entrust-africa.com` is verified in that Resend account).
 - **TRADE and CLEAR (Railway):** `API_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SIMULATOR_URL`, `AFRICONNECT_SIGN_IN`, `AFRICONNECT_BUYERS_URL` (optional).
 - **Summit page (Railway):** `API_URL`, `SUMMIT_APP_URL`.
-- **GitHub Actions secrets:** `DATABASE_URL` (migrations and the queue check), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY` (the website's forms) and `RAILWAY_TOKEN` (a project token for the production environment, made in the Railway dashboard under the project's Settings, Tokens).
+- **GitHub Actions secrets:** `DATABASE_URL` (migrations and the queue check), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY` (the website's forms), `RAILWAY_TOKEN` (a project token for the production environment, made in the Railway dashboard under the project's Settings, Tokens), and for the nightly backup `BACKUP_DATABASE_URL` (a direct connection string for the read-only login `backup_reader`), `R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY` (an R2 token limited to the one backup bucket).
 
 ## DNS
 
