@@ -7,6 +7,8 @@ import { tradeGet } from "@/lib/trade-api";
 import { AssessmentResult, type ResultView } from "./assessment-result";
 import { AssessmentRunner } from "./assessment-runner";
 import { AssessmentStart } from "./assessment-start";
+import { NotApplicableReview, type PendingNotApplicable } from "./not-applicable-review";
+import { RetakeButton } from "./retake-button";
 import { KINDS, type AssessmentKind } from "./kinds";
 
 interface Summary {
@@ -21,6 +23,8 @@ interface Detail extends ResultView {
   answers: Record<string, unknown>;
   variables: Record<string, string>;
   documents: Record<string, boolean>;
+  notApplicableApproved: Record<string, boolean>;
+  organizationId?: string;
 }
 
 /** /diagnostic and /assessment: start the form, or go to the one in progress. */
@@ -77,5 +81,23 @@ export async function AssessmentDetailPage({ kind, id }: { kind: AssessmentKind;
       </div>
     );
   }
-  return <AssessmentResult view={view} />;
+  // Staff who can write approve the "does not apply" answers waiting for them; the business can take the assessment again.
+  const canReview = Boolean(me.staffRole) && me.staffRole !== "reviewer";
+  const waiting = Object.entries(view.answers)
+    .filter(([questionId, answer]) => (answer as { notApplicable?: boolean } | null)?.notApplicable === true && !view.notApplicableApproved[questionId])
+    .map(([questionId, answer]) => ({ questionId, reason: String((answer as { reason?: string }).reason ?? "") }));
+  let pending: PendingNotApplicable[] = [];
+  if (canReview && waiting.length > 0) {
+    const template = await tradeGet<{ form: FormDefinition }>(`/assessments/template?kind=${kind}&version=${encodeURIComponent(view.templateVersion)}`);
+    const text = new Map((template.data?.form.questions ?? []).map((q) => [q.id, q.text]));
+    pending = waiting.map((w) => ({ ...w, question: text.get(w.questionId) ?? w.questionId }));
+  }
+  const ownOrganization = !me.staffRole ? (me.activeOrganizationId ?? me.organizations?.[0]?.id) : undefined;
+  return (
+    <div className="space-y-6">
+      <AssessmentResult view={view} />
+      {pending.length > 0 && <NotApplicableReview assessmentId={view.id} pending={pending} />}
+      {ownOrganization && kind !== "exit" && view.status !== "superseded" && <RetakeButton kind={kind} organizationId={ownOrganization} />}
+    </div>
+  );
 }

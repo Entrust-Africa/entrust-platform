@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { BusinessRecord, type BusinessProfile, type BusinessRecordData, type ProfileChange, type Product, type Shipment } from "@/components/business/business-record";
+import { ReadinessProfiles, type ReadinessData } from "@/components/readiness/readiness-profiles";
 import { ReferralConsent } from "@/components/referrals/referral-consent";
 import type { Referral } from "@/components/referrals/referral-types";
 import { getMe } from "@/lib/api";
@@ -19,12 +20,13 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
   if (!activeOrg) redirect("/");
 
   const q = `organizationId=${encodeURIComponent(activeOrg.id)}`;
-  const [profile, products, shipments, history, referrals] = await Promise.all([
+  const [profile, products, shipments, history, referrals, readiness] = await Promise.all([
     tradeGet<BusinessProfile>(`/business-profile?${q}`),
     tradeGet<{ items: Product[] }>(`/products?${q}&includeArchived=true`),
     tradeGet<{ items: Shipment[] }>(`/export-history?${q}`),
     tradeGet<{ items: ProfileChange[] }>(`/business-profile/history?${q}`),
     tradeGet<{ items: Referral[] }>(`/referrals?${q}`),
+    tradeGet<ReadinessData>(`/readiness-profiles?${q}`),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
       </div>
       {profile.data ? (
         <>
+          {readiness.data && <ReadinessProfiles data={readiness.data} />}
           <ReferralConsent initial={referrals.data?.items ?? []} isOwner={activeOrg.role === "owner"} />
           <BusinessRecord
           initial={{ profile: profile.data, products: products.data?.items ?? [], shipments: shipments.data?.items ?? [], history: history.data?.items ?? [] } satisfies BusinessRecordData}
