@@ -19,6 +19,7 @@ const question = (id: string) => rules.template.questions.find((q) => q.id === i
 const PUBLISHED: Record<string, string> = {
   "0.1.0": "37630a728b9b9599a5e8e02b603e04b5d4a877fdf99b8a264913f31792c7ea36",
   "0.2.0": "6e65eecb07fa651732172de7e04cbc41603922c23c346ff951c41c02e0b3900c",
+  "0.3.0": "9b4c3cd8cfe0265b8980a57e819443f093e70149e92e362168a6e3de81a4ed28",
 };
 
 describe("TRADE rules", () => {
@@ -38,7 +39,7 @@ describe("TRADE rules", () => {
   it("finds a version, and the newest one", () => {
     expect(findTradeRules("0.1.0")).toBe(rules);
     expect(findTradeRules("9.9.9")).toBeUndefined();
-    expect(latestTradeRules().version).toBe("0.2.0");
+    expect(latestTradeRules().version).toBe("0.3.0");
     expect(compareVersions("0.10.0", "0.9.0")).toBeGreaterThan(0);
     expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
     expect(errorsFor(rules, { ...rules, version: "0.10.0" })).toEqual([]);
@@ -299,7 +300,7 @@ describe("reason codes", () => {
 });
 
 describe("pathway and plan rules", () => {
-  const v2 = latestTradeRules();
+  const v2 = findTradeRules("0.2.0") as TradeRules;
   const withPlan = (change: Partial<NonNullable<TradeRules["plan"]>>): TradeRules => ({ ...v2, plan: { ...v2.plan!, ...change } });
 
   it("are in 0.2.0 and not in 0.1.0", () => {
@@ -335,7 +336,7 @@ describe("pathway and plan rules", () => {
   });
 
   it("refuse a window that isn't whole months, one half without the other, and a missing pathway sentence", () => {
-    expect(errorsFor({ ...v2, pathway: { shipmentWindowMonths: 0 } })).toEqual(["0.2.0: the shipment window is a whole number of months, at least 1"]);
+    expect(errorsFor({ ...v2, pathway: { shipmentWindowMonths: 0 } })).toEqual(["0.2.0: the shipment window is a whole number of months, at least 1, or none"]);
     expect(errorsFor({ ...v2, plan: undefined })).toEqual(["0.2.0: pathway rules and plan rules come together"]);
     expect(errorsFor({ ...v2, reasonCodes: v2.reasonCodes.filter((r) => r.code !== "PATHWAY_ORDER_PRIORITY") })).toEqual([
       "0.2.0: pathway rules use reason code PATHWAY_ORDER_PRIORITY, which has no sentence",

@@ -184,8 +184,8 @@ function planErrors(rules: TradeRules): string[] {
   if (!pathway && !plan) return errors;
   if (!pathway || !plan) return ["pathway rules and plan rules come together"];
 
-  if (!Number.isInteger(pathway.shipmentWindowMonths) || pathway.shipmentWindowMonths < 1) {
-    errors.push("the shipment window is a whole number of months, at least 1");
+  if (pathway.shipmentWindowMonths !== null && (!Number.isInteger(pathway.shipmentWindowMonths) || pathway.shipmentWindowMonths < 1)) {
+    errors.push("the shipment window is a whole number of months, at least 1, or none");
   }
 
   const stages = optionValues(rules, "A2");

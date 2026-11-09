@@ -45,8 +45,8 @@ export function monthsBefore(date: string, months: number): string {
 }
 
 /**
- * Pathway B is a shipment within the rules' window before `asOf`, and Pathway A is everyone else, including
- * an SME whose only shipment is older. A shipment that staff haven't accepted yet gives a provisional B.
+ * Pathway B is a completed shipment, within the rules' window before `asOf` if they set one, and Pathway A is everyone
+ * else. A shipment that staff haven't accepted yet gives a provisional B, which is what "self-reported" means on screen.
  * A first-time exporter with a live order stays on A. The date is an argument, so the same input always
  * gives the same answer, and nothing here lets AI set a pathway.
  */
@@ -58,7 +58,8 @@ export function assignPathway(rules: TradeRules, input: PathwayInput): PathwayAs
     if (input.lastShipmentDate > input.asOf) throw new RangeError("lastShipmentDate can't be after asOf");
   }
 
-  const recent = input.lastShipmentDate !== undefined && input.lastShipmentDate >= monthsBefore(input.asOf, pathwayRules.shipmentWindowMonths);
+  const window = pathwayRules.shipmentWindowMonths;
+  const recent = input.lastShipmentDate !== undefined && (window === null || input.lastShipmentDate >= monthsBefore(input.asOf, window));
   const undated = input.lastShipmentDate === undefined && input.shipmentDateUnknown === true;
   const pathway: Pathway = recent || undated ? "B" : "A";
   const provisional = pathway === "B" && !input.shipmentVerified;

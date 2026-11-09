@@ -297,20 +297,16 @@ describe("submitting the diagnostic", () => {
     expect(done.pathway.reasons[0]).toContain("Pathway A");
   });
 
-  it("puts a recent exporter on a provisional Pathway B until staff accept a shipment record", async () => {
+  it("puts an exporter on a self-reported Pathway B until staff see a shipment record", async () => {
     const done = await submittedDiagnostic({ Q135: "yes", Q137: monthsBefore(today(), 3) });
     expect(done.pathway).toMatchObject({ pathway: "B", status: "provisional" });
-    expect(done.pathway.reasons.join(" ")).toContain("record of your shipment");
+    expect(done.pathway.reasons.join(" ")).toContain("record of it");
     expect((await get(w.owner, `/enrollments/${done.enrollmentId}/pathway`)).body.pathway.pathway).toBe("B");
   });
 
-  it("holds the line at 24 months: exactly on it is B, a day earlier is A", async () => {
-    const exactly = await submittedDiagnostic({ Q135: "yes", Q137: monthsBefore(today(), 24) });
-    expect(exactly.pathway.pathway).toBe("B");
-    const dayEarlier = new Date(`${monthsBefore(today(), 24)}T00:00:00Z`);
-    dayEarlier.setUTCDate(dayEarlier.getUTCDate() - 1);
-    const late = await submittedDiagnostic({ Q135: "yes", Q137: dayEarlier.toISOString().slice(0, 10) });
-    expect(late.pathway.pathway).toBe("A");
+  it("takes any completed shipment for Pathway B, however old", async () => {
+    const old = await submittedDiagnostic({ Q135: "yes", Q137: monthsBefore(today(), 120) });
+    expect(old.pathway).toMatchObject({ pathway: "B", status: "provisional" });
   });
 
   it("ignores an old shipment date once Q135 says no", async () => {
@@ -782,12 +778,11 @@ describe("a scored placement assessment", () => {
     expect(scores).toHaveLength(rules.domains.length + rules.triggerGroups.length);
   });
 
-  it("waits on a provisional avenue, and is ready once staff confirm it", async () => {
+  it("doesn't wait on a self-reported shipment, and shows it until staff see the record", async () => {
     const { id, enrollmentId, body } = await submittedPlacement(QUIET, { pathway: "B", provisional: true });
-    expect(body.status).toBe("review_required");
+    expect(body.status).toBe("scored");
     const plan = (await get(w.owner, `/assessments/${id}/report`)).body;
-    expect(plan.report.plan.requiresStaffReview).toBe(true);
-    expect(plan.report.plan.reviewNotes.join(" ")).toContain("shipment record");
+    expect(plan.report.plan.requiresStaffReview).toBe(false);
     expect(plan.report.pathway.provisional).toBe(true);
 
     expect((await post(w.admin, `/enrollments/${enrollmentId}/pathway`, { pathway: "B", reason: "The shipment record was accepted." })).status).toBe(200);
