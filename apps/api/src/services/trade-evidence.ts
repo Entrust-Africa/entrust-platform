@@ -264,7 +264,7 @@ export async function reviewEvidence(
     .from(schema.evidenceRecord)
     .where(eq(schema.evidenceRecord.id, evidenceId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Evidence record not found.");
   }
 
@@ -337,7 +337,7 @@ export async function requestEvidence(
     .from(schema.organization)
     .where(eq(schema.organization.id, input.organizationId));
 
-  if (!org) {
+  if (!org || !(await canReachOrganization(db, principal, org.id))) {
     throw new ServiceError("not_found", "Organization not found.");
   }
 

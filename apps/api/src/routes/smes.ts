@@ -47,8 +47,9 @@ export const smes = new Hono<AppEnv>()
     const user = requireUser(c);
     const db = getDb();
     const principal = await loadPrincipal(db, user.id);
-    if (!principal.staffRole) {
-      throw new ServiceError("forbidden", "Only Entrust staff can search the SME registry.");
+    // Finding a business to enrol is what it's for. A reviewer doesn't enrol, and the results carry tax numbers.
+    if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+      throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can search the SME registry.");
     }
 
     const q = c.req.query("q") ?? "";

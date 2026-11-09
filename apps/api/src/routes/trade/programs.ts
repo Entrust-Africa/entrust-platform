@@ -236,8 +236,8 @@ export const tradePrograms = new Hono<AppEnv>()
     const user = requireUser(c);
     const db = getDb();
     const principal = await loadPrincipal(db, user.id);
-    if (!principal.staffRole) {
-      throw new ServiceError("forbidden", "Only Entrust staff can see the businesses waiting to be enrolled.");
+    if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+      throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can see the businesses waiting to be enrolled.");
     }
     return c.json({ smes: await listWaitingSmes(db) });
   })
