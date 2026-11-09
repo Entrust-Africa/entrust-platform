@@ -18,7 +18,11 @@ export const M08_V1_0_0: ModuleContent = {
     "Monitor shipment progress and respond to delays or discrepancies.",
     "Complete post-shipment documentation and transaction reconciliation.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

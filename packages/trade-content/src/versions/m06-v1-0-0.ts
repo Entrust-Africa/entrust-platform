@@ -18,7 +18,11 @@ export const M06_V1_0_0: ModuleContent = {
     "Monitor actual transaction costs against the original quotation.",
     "Make a commercially informed proceed, renegotiate or decline decision.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

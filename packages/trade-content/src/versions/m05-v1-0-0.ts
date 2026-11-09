@@ -18,7 +18,11 @@ export const M05_V1_0_0: ModuleContent = {
     "Manage objections and negotiate commercial terms.",
     "Maintain a buyer pipeline and measure conversion progress.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

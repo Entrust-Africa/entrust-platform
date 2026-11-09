@@ -3,11 +3,15 @@ import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, type TestUser } from "./support";
 
-// M05, M08, M09 and M10 carry their worksheets in their content. M05 is treated as approved here, so a learner can reach it,
-// while M08 stays the draft it is. Everything runs through the routes, the way the screens call them.
+// Eight modules carry their worksheets in their content. M08 is treated as a draft here, to show what a draft module's
+// worksheets do. Everything runs through the routes, the way the screens call them.
 vi.mock("@entrust/trade-content", async (original) => {
   const actual = await original<typeof import("@entrust/trade-content")>();
-  const content = actual.MODULE_CONTENT.map((c) => (c.module === "M05" ? { ...c, status: "approved" as const, approval: { by: "Test", at: "2026-11-08" } } : c));
+  const content = actual.MODULE_CONTENT.map((c) => {
+    if (c.module !== "M08") return c;
+    const { approval: _approval, ...rest } = c;
+    return { ...rest, status: "draft" as const };
+  });
   return {
     ...actual,
     MODULE_CONTENT: content,

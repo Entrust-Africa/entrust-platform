@@ -16,7 +16,11 @@ export const M12_V1_0_0: ModuleContent = {
     "Establish milestones and performance indicators.",
     "Review progress at 30, 60 and 90 days and revise the plan when necessary.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

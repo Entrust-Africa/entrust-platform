@@ -16,7 +16,11 @@ export const M02_V1_0_0: ModuleContent = {
     "Understand basic data security and access-control principles.",
     "Prepare a digital business information file that can support financing and export activities.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

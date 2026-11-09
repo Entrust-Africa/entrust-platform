@@ -18,7 +18,11 @@ export const M10_V1_0_0: ModuleContent = {
     "Use digital tools to manage buyer relationships.",
     "Prepare an account development plan for priority buyers.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

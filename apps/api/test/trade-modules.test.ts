@@ -57,28 +57,21 @@ describe("module listing and content", () => {
       expect(body.items.find((m: { id: string }) => m.id === "M01").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M04").contentStatus).toBe("ready");
       expect(body.items.find((m: { id: string }) => m.id === "M07").contentStatus).toBe("ready");
-      expect(body.items.find((m: { id: string }) => m.id === "M11").contentStatus).toBe(user === w.admin ? "draft" : "in_production");
-      expect(body.items.find((m: { id: string }) => m.id === "M08").contentStatus).toBe(user === w.admin ? "draft" : "in_production");
+      expect(body.items.every((m: { contentStatus: string }) => m.contentStatus === "ready")).toBe(true);
       expect(body.items[3]).toMatchObject({ id: "M04", title: "Costing, Pricing and Trade Finance", deliverable: "Export transaction brief" });
     }
   });
 
-  it("shows a module with no content", async () => {
-    const { status, body } = await get(w.learner, "/modules/M11");
+  it("gives a learner a published module without the answers or the staff material", async () => {
+    const { status, body } = await get(w.learner, "/modules/M08");
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id: "M11", contentStatus: "in_production", content: null });
-  });
-
-  it("shows a draft to staff only", async () => {
-    const learner = await get(w.learner, "/modules/M08");
-    expect(learner.status).toBe(200);
-    expect(learner.body).toMatchObject({ id: "M08", contentStatus: "in_production", content: null });
-    expect((await get(w.learner, "/modules/M08?version=1.0.0")).status).toBe(404);
+    expect(body).toMatchObject({ id: "M08", contentStatus: "ready", title: "Export Execution and Requirements" });
+    expect(body.content.lessons).toHaveLength(9);
+    expect(JSON.stringify(body)).not.toContain('"correct"');
+    expect(JSON.stringify(body)).not.toContain("Case material notes");
 
     const staff = await get(w.admin, "/modules/M08");
-    expect(staff.status).toBe(200);
-    expect(staff.body).toMatchObject({ id: "M08", contentStatus: "draft", title: "Export Execution and Requirements" });
-    expect(staff.body.content.lessons).toHaveLength(9);
+    expect(JSON.stringify(staff.body)).toContain("Case material notes");
   });
 
   it("finds no module or version that isn't there", async () => {

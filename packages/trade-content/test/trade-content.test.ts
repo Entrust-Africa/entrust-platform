@@ -21,6 +21,14 @@ const PUBLISHED: Record<string, string> = {
   "M03@0.1.0": "d1aa13df57617e3b9a6e357650c93b806c6c2ec02b4a0cc470ea1c9c48cc0b35",
   "M04@0.1.0": "75541b37d6e52679fba4ca720a15b7f6e03f7684fd1fda8048ef28f2ba1e9f5e",
   "M07@0.1.0": "b54b6f5a5c1a0c8ea58f90dc49391d9db0fec5a1616a29f96763ee406fbc78da",
+  "M02@1.0.0": "67c655893fac8c58475cb52d7b4ac4f2ea77f943ee69affec849bddadf06139e",
+  "M05@1.0.0": "60869126540962ee28bc039e4231cbdf0138a8f73d39ba3b97e4516b68b53edb",
+  "M06@1.0.0": "ad25907607203e55becfa3a9327c654af1c76c23f000c6c22549c7d0a373bd66",
+  "M08@1.0.0": "57beed266b812892d3dff52301e65f638c6bf8a1d9c1b9513e9c98bff511c0e0",
+  "M09@1.0.0": "141077f06f3b726297f42bf416f48dc1ca4218091db51f0920b6fe41df857e21",
+  "M10@1.0.0": "161a134121f2fe07502fdf3222724b4add9d11aefa3f5e075820a991c6fa0c10",
+  "M11@1.0.0": "e48dcbbffcf21f724fc27657bf880090abf97434a4c531a6ff5656499a724ec5",
+  "M12@1.0.0": "1ca8057ddae49ee89017ada65a6874c7cfdba7b020ffeab715a28b74a17d4261",
 };
 
 const sha256 = async (text: string) =>
@@ -60,11 +68,10 @@ describe("module content", () => {
 describe("modules on Entrust's common assessment standard", () => {
   const onStandard = MODULE_CONTENT.filter((c) => ["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].includes(c.module));
 
-  it("loads the eight modules Entrust sent, as drafts until Entrust approves them", () => {
-    expect(onStandard.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].map((m) => `${m}@1.0.0 draft`));
-    expect(onStandard.every((c) => c.approval === undefined)).toBe(true);
-    expect(listModules("learner").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "in_production", versions: [] });
-    expect(listModules("staff").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "draft", versions: ["1.0.0"] });
+  it("publishes the eight modules on the standard, with a record of who approved them", () => {
+    expect(onStandard.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].map((m) => `${m}@1.0.0 approved`));
+    expect(onStandard.every((c) => c.approval?.by === "Minase Fikadu, TRADE platform team")).toBe(true);
+    expect(listModules("learner").find((m) => m.id === "M05")).toMatchObject({ contentStatus: "ready", versions: ["1.0.0"] });
   });
 
   it.each(onStandard.map((c) => [c.module, c] as const))("%s has ten questions with four options and one answer, passing at 80%%", (_, content) => {
@@ -234,7 +241,7 @@ describe("what each audience sees", () => {
     expect(loaded.find((m) => m.id === "M01")?.contentStatus).toBe("ready");
     expect(loaded.find((m) => m.id === "M03")?.contentStatus).toBe("ready");
     expect(loaded.find((m) => m.id === "M04")?.contentStatus).toBe("ready");
-    expect(loaded.find((m) => m.id === "M02")?.contentStatus).toBe("in_production");
+    expect(loaded.every((m) => m.contentStatus === "ready")).toBe(true);
   });
 
   it("shows an SME only approved versions, newest first by number", () => {

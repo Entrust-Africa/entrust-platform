@@ -16,7 +16,11 @@ export const M11_V1_0_0: ModuleContent = {
     "Build a practical transaction execution plan with responsibilities and decision points.",
     "Make and justify a proceed, hold, renegotiate or no-go recommendation.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",
