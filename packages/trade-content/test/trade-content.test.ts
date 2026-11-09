@@ -64,7 +64,7 @@ describe("module content", () => {
 });
 
 // Entrust's Curriculum and Platform Consistency Review, section 5, sets one assessment standard for all
-// twelve modules. M01, M03, M04 and M07 v0.1.0 predate it, so a version joins this list once it meets it.
+// twelve modules. M01, M03, M04 and M07 v0.1.0 predate it; their version 1.0 drafts meet it (below).
 describe("modules on Entrust's common assessment standard", () => {
   const onStandard = MODULE_CONTENT.filter((c) => ["M02", "M05", "M06", "M08", "M09", "M10", "M11", "M12"].includes(c.module));
 
@@ -148,6 +148,56 @@ describe("modules on Entrust's common assessment standard", () => {
 
   it("never gives a learner the answers or the staff material", () => {
     for (const content of onStandard) {
+      const view = JSON.stringify(toLearnerView(content));
+      expect(view).not.toContain('"correct"');
+      expect(view).not.toContain("Assessor scoring guide");
+    }
+  });
+});
+
+// Entrust's M01, M03, M04 and M07 packages (version 1.0) meet the same standard. They are drafts: staff can
+// review them, and a learner stays on 0.1.0 until one is approved.
+describe("the M01, M03, M04 and M07 version 1.0 drafts", () => {
+  const drafts = MODULE_CONTENT.filter((c) => ["M01", "M03", "M04", "M07"].includes(c.module) && c.version === "1.0.0");
+
+  it("are drafts that only staff can open, beside the approved 0.1.0", () => {
+    expect(drafts.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M01", "M03", "M04", "M07"].map((m) => `${m}@1.0.0 draft`));
+    for (const module of ["M01", "M03", "M04", "M07"] as const) {
+      expect(visibleVersions(module, "learner").map((c) => c.version)).toEqual(["0.1.0"]);
+      expect(visibleVersions(module, "staff").map((c) => c.version)).toEqual(["1.0.0", "0.1.0"]);
+    }
+  });
+
+  it.each(drafts.map((c) => [c.module, c] as const))("%s has ten questions with four options and one answer, passing at 80%%", (_, content) => {
+    expect(content.knowledgeCheck.passMark).toBe(80);
+    expect(content.knowledgeCheck.questions).toHaveLength(10);
+    for (const q of content.knowledgeCheck.questions) {
+      expect(q.options.map((o) => o.id)).toEqual(["a", "b", "c", "d"]);
+      expect(q.correct).toHaveLength(1);
+      expect(new Set(q.options.map((o) => o.text)).size).toBe(4);
+      expect(content.lessons.map((l) => l.id)).toContain(q.lessonId);
+    }
+  });
+
+  it.each(drafts.map((c) => [c.module, c] as const))("%s scores six criteria out of 36 and passes at exactly 24 with no critical failure", (_, content) => {
+    const { rubric } = content;
+    expect(rubric.criteria.map((c) => c.maxPoints)).toEqual([6, 6, 6, 6, 6, 6]);
+    expect(rubric.passMark).toBe(24);
+    expect(rubric.criteria.some((c) => c.mustHave)).toBe(false);
+    const scored = (total: number) => Object.fromEntries(rubric.criteria.map((c, i) => [c.id, { points: Math.floor(total / 6) + (i < total % 6 ? 1 : 0) }]));
+    expect(evaluateRubric(rubric, scored(24))).toMatchObject({ totalPoints: 24, maxPoints: 36, passed: true });
+    expect(evaluateRubric(rubric, scored(23))).toMatchObject({ passed: false });
+    expect(evaluateRubric(rubric, scored(36), [rubric.criticalFailures[0]!.id])).toMatchObject({ passed: false });
+  });
+
+  it("keeps the number of critical failures and practical outputs Entrust gave", () => {
+    expect(drafts.map((c) => [c.module, c.rubric.criticalFailures.length, c.lessons.length])).toEqual([["M01", 4, 8], ["M03", 4, 8], ["M04", 5, 8], ["M07", 4, 8]]);
+    const outputs = (module: string) => (drafts.find((c) => c.module === module)!.lessons.at(-1)!.body.match(/^## Output \d/gm) ?? []).length;
+    expect(["M01", "M03", "M04", "M07"].map(outputs)).toEqual([5, 5, 5, 6]);
+  });
+
+  it("never gives a learner the answers or the staff material", () => {
+    for (const content of drafts) {
       const view = JSON.stringify(toLearnerView(content));
       expect(view).not.toContain('"correct"');
       expect(view).not.toContain("Assessor scoring guide");

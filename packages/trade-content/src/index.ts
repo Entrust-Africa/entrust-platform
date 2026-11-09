@@ -4,12 +4,16 @@ import type { ModuleContent } from "./schema";
 import { validateModuleContent } from "./validate";
 
 import { M01_V0_1_0 } from "./versions/m01";
+import { M01_V1_0_0 } from "./versions/m01-v1-0-0";
 import { M02_V1_0_0 } from "./versions/m02-v1-0-0";
 import { M03_V0_1_0 } from "./versions/m03";
+import { M03_V1_0_0 } from "./versions/m03-v1-0-0";
 import { M04_V0_1_0 } from "./versions/m04";
+import { M04_V1_0_0 } from "./versions/m04-v1-0-0";
 import { M05_V1_0_0 } from "./versions/m05-v1-0-0";
 import { M06_V1_0_0 } from "./versions/m06-v1-0-0";
 import { M07_V0_1_0 } from "./versions/m07";
+import { M07_V1_0_0 } from "./versions/m07-v1-0-0";
 import { M08_V1_0_0 } from "./versions/m08-v1-0-0";
 import { M09_V1_0_0 } from "./versions/m09-v1-0-0";
 import { M10_V1_0_0 } from "./versions/m10-v1-0-0";
@@ -27,12 +31,16 @@ export { validateModuleContent } from "./validate";
 // fails if it changes, so a correction goes in a new version. A learner keeps the version they started.
 export const MODULE_CONTENT: readonly ModuleContent[] = [
   M01_V0_1_0,
+  M01_V1_0_0,
   M02_V1_0_0,
   M03_V0_1_0,
+  M03_V1_0_0,
   M04_V0_1_0,
+  M04_V1_0_0,
   M05_V1_0_0,
   M06_V1_0_0,
   M07_V0_1_0,
+  M07_V1_0_0,
   M08_V1_0_0,
   M09_V1_0_0,
   M10_V1_0_0,
