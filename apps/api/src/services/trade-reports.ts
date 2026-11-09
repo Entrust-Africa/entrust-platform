@@ -12,6 +12,7 @@ import {
 } from "@entrust/trade-engine";
 import { MODULE_IDS, latestTradeRules } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
+import { CONTENT_TYPES, render, type ExportFormat, type ExportTable } from "./export";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { recordTradeChange, assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "./trade-shared";
@@ -33,6 +34,16 @@ const SCORE_BUCKETS = [
 
 type CohortRow = typeof schema.cohort.$inferSelect;
 
+/** What a report can be narrowed to (acceptance tests REP-05 and REP-06). Filters combine: a business must match every one. */
+export interface ReportFilters {
+  /** Only businesses on this pathway. One with no pathway yet matches neither. */
+  pathway?: "A" | "B" | undefined;
+  /** Only this module's progress, knowledge checks and submissions. */
+  moduleId?: string | undefined;
+  /** For a programme report, only this cohort. */
+  cohortId?: string | undefined;
+}
+
 interface Scope {
   kind: "program" | "cohort";
   id: string;
@@ -40,6 +51,7 @@ interface Scope {
   program: string;
   cohorts: CohortRow[];
   sponsorIds: ReadonlySet<string> | null;
+  filters?: ReportFilters;
 }
 
 /** The sponsors the caller works for, or null for Entrust staff and the Quality role, who see every cohort. */
@@ -51,7 +63,7 @@ function sponsorScope(ctx: Ctx): ReadonlySet<string> | null {
   return ids;
 }
 
-async function programScope(ctx: Ctx, id: string): Promise<Scope> {
+async function programScope(ctx: Ctx, id: string, filters: ReportFilters = {}): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
   const [program] = await ctx.db.select().from(schema.program).where(eq(schema.program.id, id));
   if (!program) throw new ServiceError("not_found", "Report not found.");
@@ -64,10 +76,14 @@ async function programScope(ctx: Ctx, id: string): Promise<Scope> {
     if (cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
   }
   if (sponsorIds && cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
-  return { kind: "program", id, name: program.name, program: program.name, cohorts, sponsorIds };
+  if (filters.cohortId) {
+    cohorts = cohorts.filter((c) => c.id === filters.cohortId);
+    if (cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
+  }
+  return { kind: "program", id, name: program.name, program: program.name, cohorts, sponsorIds, filters };
 }
 
-async function cohortScope(ctx: Ctx, id: string): Promise<Scope> {
+async function cohortScope(ctx: Ctx, id: string, filters: ReportFilters = {}): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
   if (limitedToAssignedCohorts(ctx.principal) && !(await canReachCohort(ctx.db, ctx.principal, id))) throw new ServiceError("not_found", "Report not found.");
   const [found] = await ctx.db
@@ -79,12 +95,48 @@ async function cohortScope(ctx: Ctx, id: string): Promise<Scope> {
   if (!found || (sponsorIds && !(found.cohort.sponsorOrganizationId && sponsorIds.has(found.cohort.sponsorOrganizationId)))) {
     throw new ServiceError("not_found", "Report not found.");
   }
-  return { kind: "cohort", id, name: found.cohort.name, program: found.program, cohorts: [found.cohort], sponsorIds };
+  return { kind: "cohort", id, name: found.cohort.name, program: found.program, cohorts: [found.cohort], sponsorIds, filters };
 }
 
 const toNumber = (value: string | null | undefined): number => (value ? Number(value) : 0);
 const round = (value: number): number => Math.round(value * 100) / 100;
 const currencyOf = (value: string | null | undefined): string => value ?? "USD";
+
+/**
+ * Narrows what a report is worked out from to the filters asked for. A pathway keeps the businesses on it and everything that
+ * belongs to them; a module keeps that module's progress, knowledge checks and submissions. Nothing from outside the filter is
+ * left in, so a figure never counts a business the filter excluded.
+ */
+function narrow<T extends { enrollments: { id: string; organizationId: string }[]; pathways: { enrollmentId: string; pathway: string }[]; scores: { enrollmentId: string }[]; progress: { enrollmentId: string; moduleId: string }[]; attempts: { enrollmentId: string; moduleId: string }[]; submissions: { enrollmentId: string; moduleId: string }[]; opportunities: { organizationId: string }[]; outcomes: { organizationId: string }[]; briefs: { enrollmentId: string }[]; consents: { organizationId: string }[] }>(filters: ReportFilters, facts: T): T {
+  let result = facts;
+  if (filters.pathway) {
+    const keep = new Set(facts.pathways.filter((p) => p.pathway === filters.pathway).map((p) => p.enrollmentId));
+    const enrollments = facts.enrollments.filter((e) => keep.has(e.id));
+    const organizations = new Set(enrollments.map((e) => e.organizationId));
+    result = {
+      ...result,
+      enrollments,
+      pathways: facts.pathways.filter((p) => keep.has(p.enrollmentId)),
+      scores: facts.scores.filter((r) => keep.has(r.enrollmentId)),
+      progress: facts.progress.filter((r) => keep.has(r.enrollmentId)),
+      attempts: facts.attempts.filter((r) => keep.has(r.enrollmentId)),
+      submissions: facts.submissions.filter((r) => keep.has(r.enrollmentId)),
+      opportunities: facts.opportunities.filter((r) => organizations.has(r.organizationId)),
+      outcomes: facts.outcomes.filter((r) => organizations.has(r.organizationId)),
+      briefs: facts.briefs.filter((r) => keep.has(r.enrollmentId)),
+      consents: facts.consents.filter((r) => organizations.has(r.organizationId)),
+    };
+  }
+  if (filters.moduleId) {
+    result = {
+      ...result,
+      progress: result.progress.filter((r) => r.moduleId === filters.moduleId),
+      attempts: result.attempts.filter((r) => r.moduleId === filters.moduleId),
+      submissions: result.submissions.filter((r) => r.moduleId === filters.moduleId),
+    };
+  }
+  return result;
+}
 
 /** Everything a report is worked out from. */
 async function loadFacts(db: Executor, scope: Scope) {
@@ -137,7 +189,7 @@ async function loadFacts(db: Executor, scope: Scope) {
       .from(schema.knowledgeCheckAttempt)
       .where(inArray(schema.knowledgeCheckAttempt.enrollmentId, ids)),
     db
-      .select({ enrollmentId: schema.moduleSubmission.enrollmentId })
+      .select({ enrollmentId: schema.moduleSubmission.enrollmentId, moduleId: schema.moduleSubmission.moduleId })
       .from(schema.moduleSubmission)
       .where(and(inArray(schema.moduleSubmission.enrollmentId, ids), eq(schema.moduleSubmission.status, "submitted"))),
     db
@@ -169,10 +221,10 @@ async function loadFacts(db: Executor, scope: Scope) {
           )
       : Promise.resolve([] as { sponsorId: string; organizationId: string; kind: string }[]),
   ]);
-  return { enrollments, pathways, scores, progress, attempts, submissions, opportunities, outcomes, briefs, consents };
+  return narrow(scope.filters ?? {}, { enrollments, pathways, scores, progress, attempts, submissions, opportunities, outcomes, briefs, consents });
 }
 
-type Facts = Awaited<ReturnType<typeof loadFacts>>;
+type Facts = Omit<Awaited<ReturnType<typeof loadFacts>>, never>;
 
 interface Total {
   count: number;
@@ -230,13 +282,15 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
   const progressKind = "learning_progress" as const;
   const activeSince = now.getTime() - ACTIVE_WITHIN_DAYS * 24 * 60 * 60 * 1000;
   const active = smesOf(facts.progress.filter((p) => p.status !== "not_started" && p.updatedAt.getTime() >= activeSince));
-  const modules = MODULE_IDS.map((moduleId) => {
+  // A module filter shows that module and no other.
+  const shownModules = MODULE_IDS.filter((id) => !scope.filters?.moduleId || id === scope.filters.moduleId);
+  const modules = shownModules.map((moduleId) => {
     const rows = facts.progress.filter((p) => p.moduleId === moduleId);
     const started = smesOf(rows.filter((p) => p.status !== "not_started"));
     const passed = smesOf(rows.filter((p) => p.status === "passed" || p.status === "exempted"));
     return { moduleId, started: shown(started.size, started, progressKind), passed: shown(passed.size, passed, progressKind) };
   });
-  const knowledgeChecks = MODULE_IDS.flatMap((moduleId) => {
+  const knowledgeChecks = shownModules.flatMap((moduleId) => {
     const rows = facts.attempts.filter((a) => a.moduleId === moduleId);
     if (rows.length === 0) return [];
     const attempted = smesOf(rows);
@@ -425,6 +479,7 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
     finance: { byCurrency: financeRows, fundingGap },
     exportExecution: { byCurrency: exportRows, paymentMethods },
     smes,
+    filters: { pathway: scope.filters?.pathway ?? null, moduleId: scope.filters?.moduleId ?? null, cohortId: scope.filters?.cohortId ?? null },
   };
 }
 
@@ -450,12 +505,12 @@ async function reportFor(ctx: Ctx, scope: Scope) {
   return report;
 }
 
-export async function getProgramReport(ctx: Ctx, id: string) {
-  return reportFor(ctx, await programScope(ctx, id));
+export async function getProgramReport(ctx: Ctx, id: string, filters: ReportFilters = {}) {
+  return reportFor(ctx, await programScope(ctx, id, filters));
 }
 
-export async function getCohortReport(ctx: Ctx, id: string) {
-  return reportFor(ctx, await cohortScope(ctx, id));
+export async function getCohortReport(ctx: Ctx, id: string, filters: ReportFilters = {}) {
+  return reportFor(ctx, await cohortScope(ctx, id, filters));
 }
 
 // ---- CSV, for Entrust staff ----
@@ -481,7 +536,7 @@ function shipmentEvidence(row: { pathway: string; status: string } | undefined):
 }
 
 async function exportReport(ctx: Ctx, scope: Scope): Promise<{ csv: string; filename: string }> {
-  if (scope.sponsorIds !== null) throw new ServiceError("forbidden", "Only Entrust staff can export a programme report.");
+  if (scope.sponsorIds !== null || !ctx.principal.staffRole) throw new ServiceError("forbidden", "Only Entrust staff can export a programme report.");
   const report = buildReport(scope, await loadFacts(ctx.db, scope), ctx.now);
   const rows = report.smes.map((s) => [
     s.name, s.smeId, s.cohort, s.status, s.pathway, s.pathwayEvidence === "self_reported" ? "Self-reported" : s.pathwayEvidence === "verified" ? "Record seen" : "", s.placementAverage, s.exitAverage, s.modulesStarted, s.modulesPassed, s.submissionsWaiting,
@@ -491,10 +546,51 @@ async function exportReport(ctx: Ctx, scope: Scope): Promise<{ csv: string; file
   return { csv: `﻿${csv}\r\n`, filename: `trade-${scope.kind}-report-${ctx.now.toISOString().slice(0, 10)}.csv` };
 }
 
-export async function exportProgramReport(ctx: Ctx, id: string) {
-  return exportReport(ctx, await programScope(ctx, id));
+export async function exportProgramReport(ctx: Ctx, id: string, filters: ReportFilters = {}) {
+  return exportReport(ctx, await programScope(ctx, id, filters));
 }
 
-export async function exportCohortReport(ctx: Ctx, id: string) {
-  return exportReport(ctx, await cohortScope(ctx, id));
+export async function exportCohortReport(ctx: Ctx, id: string, filters: ReportFilters = {}) {
+  return exportReport(ctx, await cohortScope(ctx, id, filters));
+}
+
+// ---- Excel and PDF, for Entrust staff ----
+
+const NUMERIC_COLUMNS = new Set(["Placement average", "Exit average", "Modules started", "Modules passed", "Submissions waiting", "Leads", "Firm orders"]);
+
+const describeFilters = (filters: ReportFilters | undefined): string =>
+  [filters?.pathway ? `Pathway ${filters.pathway}` : null, filters?.moduleId ? `Module ${filters.moduleId}` : null, filters?.cohortId ? "One cohort" : null].filter(Boolean).join("; ") || "None";
+
+/** The report as a file in the format asked for: one row per enrolment, with what the specification's general export rules say every report carries. */
+async function exportAs(ctx: Ctx, scope: Scope, format: ExportFormat): Promise<{ body: Uint8Array; filename: string; contentType: string }> {
+  if (scope.sponsorIds !== null || !ctx.principal.staffRole) throw new ServiceError("forbidden", "Only Entrust staff can export a programme report.");
+  const report = buildReport(scope, await loadFacts(ctx.db, scope), ctx.now);
+  const rows = report.smes.map((s) => [
+    s.name, s.smeId, s.cohort, s.status, s.pathway, s.pathwayEvidence === "self_reported" ? "Self-reported" : s.pathwayEvidence === "verified" ? "Record seen" : "", s.placementAverage, s.exitAverage, s.modulesStarted, s.modulesPassed, s.submissionsWaiting,
+    s.leads, s.firmOrders, moneyCell(s.financingRequested), moneyCell(s.financingApproved), moneyCell(s.financingDisbursed), moneyCell(s.valueShipped), moneyCell(s.valuePaid),
+  ] as (string | number | null)[]);
+  const [user] = await ctx.db.select({ name: schema.user.name }).from(schema.user).where(eq(schema.user.id, ctx.principal.userId));
+  const table: ExportTable = {
+    summit: "Entrust TRADE",
+    title: `${scope.kind === "program" ? "Programme" : "Cohort"} report: ${scope.name}`,
+    purpose: "Reach, engagement, capability, pipeline, finance and export execution for each enrolled business.",
+    period: scope.program,
+    generatedAt: ctx.now,
+    generatedBy: user?.name ?? "Entrust staff",
+    filters: describeFilters(scope.filters),
+    records: rows.length,
+    classification: "Confidential: for Entrust staff only",
+    columns: CSV_COLUMNS.map((label) => ({ key: label.toLowerCase().replaceAll(" ", "_"), label, numeric: NUMERIC_COLUMNS.has(label) })),
+    rows,
+    titleCells: 1,
+  };
+  return { body: await render(table, format), filename: `trade-${scope.kind}-report-${ctx.now.toISOString().slice(0, 10)}.${format}`, contentType: CONTENT_TYPES[format] };
+}
+
+export async function exportProgramReportAs(ctx: Ctx, id: string, format: ExportFormat, filters: ReportFilters = {}) {
+  return exportAs(ctx, await programScope(ctx, id, filters), format);
+}
+
+export async function exportCohortReportAs(ctx: Ctx, id: string, format: ExportFormat, filters: ReportFilters = {}) {
+  return exportAs(ctx, await cohortScope(ctx, id, filters), format);
 }

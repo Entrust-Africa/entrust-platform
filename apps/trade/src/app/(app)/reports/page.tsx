@@ -31,15 +31,21 @@ async function loadChoices(isStaff: boolean): Promise<Choice[]> {
   return (sponsored.data?.items ?? []).map((c) => ({ kind: "cohort" as const, id: c.id, label: `${c.program}: ${c.name}` }));
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ program?: string; cohort?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ program?: string; cohort?: string; pathway?: string; moduleId?: string; cohortId?: string }> }) {
   const me = await getMe();
   if (!me) redirect("/sign-in");
-  const { program, cohort } = await searchParams;
+  const { program, cohort, pathway, moduleId, cohortId } = await searchParams;
   const isStaff = Boolean(me.staffRole);
   const choices = await loadChoices(isStaff);
   const asked = cohort ? choices.find((c) => c.kind === "cohort" && c.id === cohort) : program ? choices.find((c) => c.kind === "program" && c.id === program) : undefined;
   const selected = asked ?? choices[0];
-  const report = selected ? await tradeGet<ProgrammeReport>(pathFor(selected)) : null;
+  // Filters the page can narrow a report to. Anything else in the address is ignored.
+  const filters = new URLSearchParams();
+  if (pathway === "A" || pathway === "B") filters.set("pathway", pathway);
+  if (moduleId && /^M\d{2}$/.test(moduleId)) filters.set("moduleId", moduleId);
+  if (selected?.kind === "program" && cohortId && /^[0-9a-f-]{36}$/i.test(cohortId)) filters.set("cohortId", cohortId);
+  const report = selected ? await tradeGet<ProgrammeReport>(`${pathFor(selected)}${filters.size ? `?${filters}` : ""}`) : null;
+  const cohortsOfProgramme = selected?.kind === "program" ? choices.filter((c) => c.kind === "cohort") : [];
 
   return (
     <div className="space-y-6">
@@ -49,12 +55,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <p className="mt-1 text-sm text-ink-2">Who took part, what capabilities improved and what commercial results followed.</p>
         </div>
         {isStaff && selected && (
-          <a
-            href={`/reports/export?kind=${selected.kind}&id=${encodeURIComponent(selected.id)}`}
-            className="inline-flex h-10 items-center rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-brand-500"
-          >
-            Export (CSV)
-          </a>
+          <div className="flex flex-wrap gap-2">
+            {(["xlsx", "pdf", "csv"] as const).map((format) => (
+              <a
+                key={format}
+                href={`/reports/export?kind=${selected.kind}&id=${encodeURIComponent(selected.id)}&format=${format}${filters.size ? `&${filters}` : ""}`}
+                className="inline-flex h-10 items-center rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-brand-500"
+              >
+                Export ({format === "xlsx" ? "Excel" : format.toUpperCase()})
+              </a>
+            ))}
+          </div>
         )}
       </div>
 
@@ -80,6 +91,41 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               );
             })}
           </nav>
+          {selected && (
+            <form method="get" action="/reports" className="flex flex-wrap items-end gap-3 rounded-md border border-line bg-surface p-3" aria-label="Narrow the report">
+              <input type="hidden" name={selected.kind} value={selected.id} />
+              <label className="text-xs font-semibold text-ink-3">
+                Pathway
+                <select name="pathway" defaultValue={filters.get("pathway") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                  <option value="">Both</option>
+                  <option value="A">Pathway A</option>
+                  <option value="B">Pathway B</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-ink-3">
+                Module
+                <select name="moduleId" defaultValue={filters.get("moduleId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                  <option value="">All modules</option>
+                  {Array.from({ length: 12 }, (_, i) => `M${String(i + 1).padStart(2, "0")}`).map((id) => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+              </label>
+              {cohortsOfProgramme.length > 0 && (
+                <label className="text-xs font-semibold text-ink-3">
+                  Cohort
+                  <select name="cohortId" defaultValue={filters.get("cohortId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                    <option value="">All cohorts</option>
+                    {cohortsOfProgramme.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <button type="submit" className="inline-flex h-9 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500">Apply</button>
+              {filters.size > 0 && <Link href={`/reports?${selected.kind}=${encodeURIComponent(selected.id)}`} className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline">Clear filters</Link>}
+            </form>
+          )}
           {report?.data ? (
             <ReportView report={report.data} />
           ) : (

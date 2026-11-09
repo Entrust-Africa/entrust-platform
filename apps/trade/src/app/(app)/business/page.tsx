@@ -32,6 +32,14 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
       <div>
         <h1 className="font-display text-2xl font-bold text-ink">My business</h1>
         <p className="mt-1 max-w-2xl text-sm text-ink-2">Your business's details, what it sells and the shipments it has completed. Correct anything that is wrong; every change is kept in the history.</p>
+        <div className="mt-3 flex flex-wrap gap-2 text-sm">
+          <span className="text-ink-3">Download your business report:</span>
+          {(["pdf", "xlsx", "csv"] as const).map((format) => (
+            <a key={format} href={`/business/report?organizationId=${encodeURIComponent(activeOrg.id)}&format=${format}`} className="font-semibold text-brand-600 underline-offset-4 hover:underline">
+              {format === "xlsx" ? "Excel" : format.toUpperCase()}
+            </a>
+          ))}
+        </div>
       </div>
       {profile.data ? (
         <>
