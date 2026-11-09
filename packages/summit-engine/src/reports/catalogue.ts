@@ -525,7 +525,6 @@ const INVESTMENT = perApplication(
     text("Proposed implementation period", (a) => a.answers.text("investmentPeriod")),
     text("Expected business outcomes", (a) => a.answers.text("investmentOutcomes")),
     text("Revenue range", (a) => a.answers.text("revenue")),
-    text("Financial statements available", (a) => available(a, "financial_statements", a.answers.yesNo("financialStatements"))),
     text("Business plan available", (a) => available(a, "business_plan", a.answers.yesNo("businessPlan"))),
     figure("Investment readiness score", (a) => categoryPoints(a, "D")),
     figure("Overall normalized score", (a) => a.score?.total ?? null),

@@ -9,6 +9,14 @@ export const HOST = {
   url: "https://panafricanchamber.com",
 } as const;
 
+/** The Institutional SME Recruitment and Country Partnership Pack that PACC sends to institutions. The file is in public/. */
+export const PARTNERSHIP_PACK = {
+  href: "/ADTIS_2027_Institutional_Partnership_Pack.pdf",
+  title: "Institutional SME Recruitment and Country Partnership Pack",
+  /** For the link's label: a reader sees how big a download is before they tap it. */
+  size: "PDF, 2.4 MB",
+} as const;
+
 /**
  * The line above the headline. January 2027 is the planning period and the exact days are not announced: do not publish any
  * other date.

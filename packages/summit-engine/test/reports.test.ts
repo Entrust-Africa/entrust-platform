@@ -81,7 +81,7 @@ describe("the catalogue", () => {
   it("holds the twelve reports of section 11, in order, with the columns it lists", () => {
     expect(REPORTS.map((r) => r.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(new Set(REPORTS.map((r) => r.id)).size).toBe(12);
-    expect(REPORTS.map((r) => r.columns.length)).toEqual([19, 15, 17, 15, 20, 13, 21, 20, 21, 16, 19, 24]);
+    expect(REPORTS.map((r) => r.columns.length)).toEqual([19, 15, 17, 15, 20, 13, 20, 20, 21, 16, 19, 24]);
     expect(REPORTS.map((r) => r.title)).toEqual([
       "Application Register",
       "Eligibility Screening Report",
@@ -340,7 +340,7 @@ describe("the verification report", () => {
     expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({
       "Claim or information being verified": "Annual revenue",
-      "Evidence type": "Financial statements or management accounts",
+      "Evidence type": "The figure the applicant states, and any check the officer makes outside the application",
       "Evidence classification": "Document-supported",
       "Verification outcome": "Supported by documents",
       "Verification comments": "Called the bank.",
@@ -385,13 +385,14 @@ describe("the investment and trade reports", () => {
       "Expected business outcomes": "Twice the output",
       "Revenue range": "ETB 90,000",
       "Business plan available": "Yes (uploaded)",
-      "Financial statements available": null,
       "Investment readiness score": 13,
       "Overall normalized score": 75,
       "Verification status": "Not yet classified",
       "Selection status": "Not yet with the committee",
     });
-    expect(rows[1]).toMatchObject({ "Financial statements available": "Yes (not uploaded)", "Business plan available": "No" });
+    expect(rows[1]).toMatchObject({ "Business plan available": "No" });
+    // Financial statements are not asked for, so the report has no column for them.
+    expect(rows[0]).not.toHaveProperty("Financial statements available");
     // Questions the form doesn't ask.
     expect(rows[0]!["Existing investment secured"]).toBeNull();
   });

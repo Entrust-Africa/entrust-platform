@@ -43,9 +43,16 @@ async function eligibleApplication(owner: TestUser, organizationId: string, over
   const saved = await call(owner, "PATCH", `/applications/${id}/answers`, { answers: completeAnswers(form, { ...created.body.answers, ...overrides } as never) });
   expect(saved.status, JSON.stringify(saved.body)).toBe(200);
   if (!submit) return id;
-  for (const [name, kind] of [["certificate.pdf", "registration_certificate"], ["catalogue.pdf", "product_information"], ["accounts.pdf", "financial_statements"]] as const) {
+  for (const [name, kind] of [["certificate.pdf", "registration_certificate"], ["catalogue.pdf", "product_information"]] as const) {
     expect((await call(owner, "POST", `/applications/${id}/documents`, { fileId: await makeFile(organizationId, owner.id, name), kind })).status).toBe(201);
   }
+  // A financial statement can no longer be uploaded; these tests still need one on file, as an applicant could have added before.
+  await db.insert(schema.applicationDocument).values({
+    applicationId: id,
+    fileId: await makeFile(organizationId, owner.id, "accounts.pdf"),
+    kind: "financial_statements",
+    addedBy: owner.id,
+  });
   expect((await call(owner, "POST", `/applications/${id}/submit`)).status).toBe(200);
   expect((await call(w.facilitator, "PUT", `/applications/${id}/officer`, { officerUserId: w.reviewer.id })).status).toBe(200);
   return id;
@@ -527,7 +534,6 @@ describe("the other reports", () => {
     expect(investors.find((r) => r["Business name"] === "org-a")).toMatchObject({
       "Investment amount requested": 250000,
       Currency: "USD",
-      "Financial statements available": "Yes (uploaded)",
       "Verification status": "1 document-supported",
       "Selection status": "Selected",
       "Investment readiness score": expect.any(Number),

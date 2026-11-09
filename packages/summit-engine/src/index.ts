@@ -1,9 +1,11 @@
 import { compareVersions } from "@entrust/forms";
 import { APPLICATION_0_1_0 } from "./application/v1";
+import { APPLICATION_0_2_0 } from "./application/v2";
 import { validateApplicationTemplates } from "./application/validate";
 import { validateSummitRules } from "./validate";
 import { SUMMIT_RULES_0_1_0 } from "./versions/v0-1-0";
 import { SUMMIT_RULES_1_0_0 } from "./versions/v1-0-0";
+import { SUMMIT_RULES_1_1_0 } from "./versions/v1-1-0";
 import type { ApplicationTemplate } from "./application/types";
 import type { SummitRules } from "./types";
 
@@ -29,8 +31,8 @@ export type { VerificationRecord } from "./verification";
 // it used, so an approved or published version stays here after a newer one is added, and
 // test/summit-engine.test.ts fails if one is edited. A draft can change, because nothing is scored or
 // answered against it. Put a correction to an approved version in a new one.
-export const SUMMIT_RULES: readonly SummitRules[] = [SUMMIT_RULES_0_1_0, SUMMIT_RULES_1_0_0];
-export const APPLICATION_TEMPLATES: readonly ApplicationTemplate[] = [APPLICATION_0_1_0];
+export const SUMMIT_RULES: readonly SummitRules[] = [SUMMIT_RULES_0_1_0, SUMMIT_RULES_1_0_0, SUMMIT_RULES_1_1_0];
+export const APPLICATION_TEMPLATES: readonly ApplicationTemplate[] = [APPLICATION_0_1_0, APPLICATION_0_2_0];
 
 // Rules that don't validate never reach a score: loading the package fails instead.
 const errors = [...validateSummitRules(SUMMIT_RULES), ...validateApplicationTemplates(APPLICATION_TEMPLATES)];

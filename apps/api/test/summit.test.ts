@@ -98,7 +98,7 @@ describe("application periods", () => {
     }
     const created = await call(w.admin, "POST", "/periods", body);
     expect(created.status, JSON.stringify(created.body)).toBe(201);
-    expect(created.body).toMatchObject({ name: `${PREFIX}summit`, countries: [COUNTRY, "KE"], templateVersion: "0.1.0", rulesVersion: "1.0.0", state: "open" });
+    expect(created.body).toMatchObject({ name: `${PREFIX}summit`, countries: [COUNTRY, "KE"], templateVersion: "0.1.0", rulesVersion: "1.1.0", state: "open" });
     w.periodId = created.body.id;
 
     // Periods don't overlap, close after they open, and name countries by their two-letter codes.
@@ -298,9 +298,15 @@ describe("submitting", () => {
     expect(added.body.documents).toMatchObject([{ fileId: certificate, kind: "registration_certificate", restricted: false, fileName: "certificate.pdf" }]);
     expect((await attach(w.ownerA, w.appA, certificate, "registration_certificate")).status).toBe(409);
 
+    // Financial records are not asked for: an upload of that kind is refused, and nothing is attached.
     const financials = await makeFile(w.orgA, w.ownerA.id, "accounts.pdf");
-    const withFinancials = await attach(w.ownerA, w.appA, financials, "financial_statements");
-    expect(withFinancials.body.documents.find((d: Json) => d.kind === "financial_statements").restricted).toBe(true);
+    const refused = await attach(w.ownerA, w.appA, financials, "financial_statements");
+    expect(refused.status).toBe(422);
+    expect(refused.body.error).toContain("Financial records are not needed");
+    expect((await detail(w.ownerA, w.appA)).body.documents.map((d: Json) => d.kind)).toEqual(["registration_certificate"]);
+    // A file attached before that rule is still shown, and still restricted.
+    await db.insert(schema.applicationDocument).values({ applicationId: w.appA, fileId: financials, kind: "financial_statements", addedBy: w.ownerA.id });
+    expect((await detail(w.ownerA, w.appA)).body.documents.find((d: Json) => d.kind === "financial_statements").restricted).toBe(true);
     // Not enough yet: the product information is still missing.
     expect((await call(w.ownerA, "POST", `/applications/${w.appA}/submit`)).body.eligibility.missingDocuments).toEqual(["product_information"]);
 
@@ -319,7 +325,7 @@ describe("submitting", () => {
       .where(eq(schema.eligibilityResult.applicationId, w.appA))
       .orderBy(asc(schema.eligibilityResult.screenedAt));
     expect(results.map((r) => r.outcome)).toEqual(["pending_clarification", "pending_clarification", "eligible"]);
-    expect(results.every((r) => r.rulesVersion === "1.0.0" && r.screenedBy === null)).toBe(true);
+    expect(results.every((r) => r.rulesVersion === "1.1.0" && r.screenedBy === null)).toBe(true);
 
     const staffView = await detail(w.facilitator, w.appA);
     expect(staffView.body.staff.history.map((h: Json) => [h.from, h.to])).toEqual([

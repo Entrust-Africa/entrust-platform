@@ -217,6 +217,10 @@ export function DocumentsPanel({ application, onChange, heading = true }: Docume
         <p className="text-base text-ink-2">Add each file as a PDF, JPG or PNG, up to 20 MB. You can take a photo with your phone.</p>
       )}
 
+      <p className="rounded-lg border border-line bg-surface-2 p-4 text-base text-ink-2">
+        You do not need to upload financial records. Where we need figures, you type them into the application.
+      </p>
+
       {required.length > 0 ? (
         <div
           className={cn("rounded-lg border p-4 text-base", missing.length === 0 ? "border-ok/30 bg-ok-50 text-ink" : "border-warn/30 bg-warn-50 text-ink")}

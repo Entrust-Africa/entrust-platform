@@ -28,14 +28,15 @@ export const DOCUMENT_LABELS: Record<SummitDocumentKind, string> = {
   registration_certificate: "Registration certificate",
   financial_statements: "Financial statements or management accounts",
   product_information: "Product information or catalogue",
-  business_plan: "Business plan or financial model",
+  business_plan: "Business plan",
   export_records: "Export declarations, shipping records or invoices",
   buyer_contracts: "Buyer contracts, purchase orders or correspondence",
   certifications: "Certifications or test reports",
   use_of_funds_schedule: "Use-of-funds schedule",
 };
 
-export const DOCUMENT_KIND_ORDER = Object.keys(DOCUMENT_LABELS) as SummitDocumentKind[];
+/** The kinds an applicant can add. Financial statements keep a label so a file attached earlier still has a name, but are not asked for. */
+export const DOCUMENT_KIND_ORDER = (Object.keys(DOCUMENT_LABELS) as SummitDocumentKind[]).filter((kind) => kind !== "financial_statements");
 
 export const PATHWAY_LABELS: Record<string, string> = {
   trade_and_market_access: "Trade and market access",

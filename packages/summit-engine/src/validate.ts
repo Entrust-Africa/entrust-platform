@@ -36,6 +36,8 @@ function rulesErrors(rules: SummitRules): string[] {
     else {
       for (const kind of duplicates(kinds)) errors.push(`eligibility: ${pathway} requires ${kind} twice`);
       for (const kind of kinds) if (!(DOCUMENT_KINDS as readonly string[]).includes(kind)) errors.push(`eligibility: ${pathway} requires unknown document ${kind}`);
+      // Applicants state their financial figures; no financial document may be required, or a missing one would block eligibility.
+      if (kinds.includes("financial_statements")) errors.push(`eligibility: ${pathway} can't require financial statements`);
     }
   }
   for (const key of Object.keys(requiredDocuments)) {

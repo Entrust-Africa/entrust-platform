@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HOST, SUPPORT_EMAIL } from "@/lib/content";
+import { HOST, PARTNERSHIP_PACK, SUPPORT_EMAIL } from "@/lib/content";
 import { Page, SectionLabel, amberButton } from "@/components/site";
 import { PARTNERS, PARTNERSHIP_KINDS, PARTNERSHIP_LIMITS, STRATEGIC_PARTNER_PROFILES } from "@/lib/info";
 
@@ -36,6 +36,19 @@ export default function PartnersPage() {
           <Link href="/sponsor" className={amberButton}>
             Become a Sponsor or Institutional Partner
           </Link>
+        </div>
+      </section>
+
+      <section className="bg-ink px-6 py-20 text-white lg:px-16 lg:py-28">
+        <div className="mx-auto max-w-[82rem]">
+          <SectionLabel onDark>Country Recruitment Partners</SectionLabel>
+          <h2 className="mt-6 max-w-3xl font-display text-[clamp(2rem,4vw,3rem)] leading-[1.05] uppercase">Help recruit businesses from your country</h2>
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/75">
+            The Pan-African Chamber of Commerce invites national institutions to nominate SMEs and share the registration link. The pack has the invitation, the recruitment brief, the selection framework, the partner&apos;s role and the indicative sponsorship cost.
+          </p>
+          <a href={PARTNERSHIP_PACK.href} target="_blank" rel="noopener" className={`${amberButton} mt-10`}>
+            Download the Institutional Partnership Pack ({PARTNERSHIP_PACK.size})
+          </a>
         </div>
       </section>
 

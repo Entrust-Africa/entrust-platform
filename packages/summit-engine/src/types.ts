@@ -51,7 +51,7 @@ export const ELIGIBILITY_CRITERIA = [
 ] as const;
 export type EligibilityCriterionId = (typeof ELIGIBILITY_CRITERIA)[number]["id"];
 
-/** The kinds of supporting document (sections 4 and 7). Financial documents are restricted. */
+/** The kinds of supporting document (sections 4 and 7). Financial documents are restricted, and no longer requested. */
 export const DOCUMENT_KINDS = [
   "registration_certificate",
   "financial_statements",
@@ -63,6 +63,12 @@ export const DOCUMENT_KINDS = [
   "use_of_funds_schedule",
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+/**
+ * The kinds an applicant can upload. Financial statements are no longer asked for (the partner pack says financial records
+ * do not need to be submitted): the kind stays in DOCUMENT_KINDS only so a file attached before that can still be shown.
+ */
+export const UPLOADABLE_DOCUMENT_KINDS: readonly DocumentKind[] = DOCUMENT_KINDS.filter((kind) => kind !== "financial_statements");
 
 /** Kinds that only the assigned officer and Entrust's administrators may open (section 4: financial documents are restricted). */
 export const RESTRICTED_DOCUMENT_KINDS: readonly DocumentKind[] = ["financial_statements"];
@@ -185,7 +191,7 @@ export interface VerifiableClaim {
 /** The claims section 7 gives as examples. An officer classifies these and any other important claim. */
 export const VERIFIABLE_CLAIMS: readonly VerifiableClaim[] = [
   { id: "business_registration", label: "Business registration", evidence: "Registration certificate" },
-  { id: "annual_revenue", label: "Annual revenue", evidence: "Financial statements or management accounts" },
+  { id: "annual_revenue", label: "Annual revenue", evidence: "The figure the applicant states, and any check the officer makes outside the application" },
   { id: "export_history", label: "Export history", evidence: "Export declarations, shipping records, invoices" },
   { id: "buyer_relationship", label: "Buyer relationship", evidence: "Contract, purchase order, correspondence" },
   { id: "production_capacity", label: "Production capacity", evidence: "Production records, facility evidence" },

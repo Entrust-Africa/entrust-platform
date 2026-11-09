@@ -15,9 +15,11 @@ const withCategory = (id: string, change: Partial<Category>, base: SummitRules =
 // version instead. Add a line here when a version is approved or published. Drafts can change.
 const PUBLISHED_RULES: Record<string, string> = {
   "1.0.0": "9b1c84dbc04fe340320ef047f506b3228b6c5618297828a5a02ff904ed7d599e",
+  "1.1.0": "224e41b33c93e01504862a0f9e4c5e72a948b64f697a9c4dfb283c4c0ba3622b",
 };
 const PUBLISHED_TEMPLATES: Record<string, string> = {
   "0.1.0": "065baaded01d704f7f5547cb92ed7498ad23bba01f358870f97194a2308429e1",
+  "0.2.0": "2aafbb63b0955a78e9b781d32c2c5f463236e3140728004b6a2ff4867537710e",
 };
 
 const sha256 = async (value: unknown) =>
@@ -43,9 +45,9 @@ describe("the Summit rules", () => {
     expect(draftRules.status).toBe("draft");
     expect(canAssess(draftRules)).toBe(false);
     expect(canAssess(approvedRules)).toBe(true);
-    expect(latestApprovedRules()?.version).toBe("1.0.0");
+    expect(latestApprovedRules()?.version).toBe("1.1.0");
     expect(canAssess(latestApprovedRules() as SummitRules)).toBe(true);
-    expect(latestPublishedTemplate()?.version).toBe("0.1.0");
+    expect(latestPublishedTemplate()?.version).toBe("0.2.0");
   });
 
   it("finds a version", () => {
