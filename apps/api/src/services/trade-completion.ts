@@ -97,18 +97,14 @@ export async function evaluateAndSyncModuleCompletion(
   }
 
   // Check practical deliverable passed
-  const [passedSub] = await tx
-    .select()
+  // The newest submission decides. An earlier pass doesn't stand once newer work has failed or is still being assessed.
+  const [latestSub] = await tx
+    .select({ status: schema.moduleSubmission.status })
     .from(schema.moduleSubmission)
-    .where(
-      and(
-        eq(schema.moduleSubmission.enrollmentId, enrollmentId),
-        eq(schema.moduleSubmission.moduleId, moduleId),
-        eq(schema.moduleSubmission.status, "passed")
-      )
-    )
+    .where(and(eq(schema.moduleSubmission.enrollmentId, enrollmentId), eq(schema.moduleSubmission.moduleId, moduleId)))
+    .orderBy(desc(schema.moduleSubmission.version))
     .limit(1);
-  const practicalDeliverablePassed = !!passedSub;
+  const practicalDeliverablePassed = latestSub?.status === "passed";
 
   // Check plan acknowledgement (if M01)
   const [activePlan] = await tx
@@ -117,7 +113,8 @@ export async function evaluateAndSyncModuleCompletion(
     .where(
       and(
         eq(schema.learningPlan.enrollmentId, enrollmentId),
-        inArray(schema.learningPlan.status, ["approved", "active", "completed"])
+        // A generated plan needs no human review, so the learner works from it as it is.
+        inArray(schema.learningPlan.status, ["generated", "approved", "active", "completed"])
       )
     )
     .orderBy(desc(schema.learningPlan.createdAt))
@@ -182,11 +179,12 @@ export async function evaluateAndSyncModuleCompletion(
 
   if (activePlan) {
     const assigned = await tx
-      .select({ moduleId: schema.moduleAssignment.moduleId })
+      .select({ moduleId: schema.moduleAssignment.moduleId, status: schema.moduleAssignment.status })
       .from(schema.moduleAssignment)
       .where(eq(schema.moduleAssignment.planId, activePlan.id));
 
-    const assignedModuleIds = assigned.map((a) => a.moduleId);
+    // A module offered as an optional test-out doesn't hold the programme back.
+    const assignedModuleIds = assigned.filter((a) => a.status !== "optional").map((a) => a.moduleId);
 
     // Get all passed or exempted modules for this enrollment
     const allProgress = await tx
@@ -252,7 +250,8 @@ export async function evaluateAndSyncModuleCompletion(
       const [existingCert] = await tx
         .select()
         .from(schema.certificate)
-        .where(eq(schema.certificate.enrollmentId, enrollmentId))
+        // A revoked certificate doesn't count: passing again earns a new one.
+        .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
         .limit(1);
 
       if (!existingCert) {

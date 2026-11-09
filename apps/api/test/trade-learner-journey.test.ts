@@ -27,7 +27,7 @@ async function submitWorksheet(id: string): Promise<void> {
   const definition = ok(await get(w.learner, `/worksheets/definitions/${id}`));
   const draft = ok(await post(w.learner, `/worksheets/${id}/draft`, { enrollmentId: w.enrollment }));
   const values: Record<string, unknown> = {};
-  for (const field of definition.fields) values[field.id] = sampleAnswer(field);
+  for (const field of definition.fields) if (!field.showWhen) values[field.id] = sampleAnswer(field);
   for (const table of definition.tables) {
     const row = Object.fromEntries(table.columns.map((c: Json) => [c.id, sampleAnswer(c)]));
     values[table.id] = Array.from({ length: table.minRows ?? 1 }, () => row);
@@ -35,11 +35,11 @@ async function submitWorksheet(id: string): Promise<void> {
   ok(await put(w.learner, `/worksheet-versions/${draft.id}/values`, { values }));
   ok(await post(w.learner, `/worksheet-versions/${draft.id}/submit`));
 }
-/** The module's worksheets that come from its content: the older modules' worksheets aren't required to submit. */
-const contentWorksheets = async (moduleId: string): Promise<string[]> =>
-  ["M01", "M03", "M04", "M07"].includes(moduleId)
-    ? []
-    : ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
+/** The worksheets a learner submits for a module. The four older modules are assessed on their first one here. */
+const contentWorksheets = async (moduleId: string): Promise<string[]> => {
+  const ids = ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
+  return ["M01", "M03", "M04", "M07"].includes(moduleId) ? ids.slice(0, 1) : ids;
+};
 const ok = (res: { status: number; body: Json }) => {
   expect(res.status, JSON.stringify(res.body).slice(0, 600)).toBeLessThan(300);
   return res.body;

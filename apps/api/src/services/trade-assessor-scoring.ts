@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { evaluateRubric } from "@entrust/trade-engine";
+import { evaluateRubric, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
 import { findVersion } from "@entrust/trade-content";
 import { type ModuleId } from "@entrust/trade-rules";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
@@ -190,6 +190,9 @@ export async function createModuleSubmission(
         confidence: latestWs.confidence,
         submittedAt: latestWs.submittedAt?.toISOString() ?? null,
       };
+    } else if (WORKSHEET_DEFINITIONS.some((d) => d.module === input.moduleId)) {
+      // Nothing to assess otherwise: a module with a worksheet is assessed on it.
+      throw new ServiceError("precondition_failed", "Submit this module's worksheet first.");
     }
   }
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import {
   WORKSHEET_DEFINITIONS,
@@ -93,14 +93,16 @@ async function enrollmentFor(db: Executor, ctx: Ctx, input: { enrollmentId?: str
   if (!organizationId) throw new ServiceError("invalid", "Say which organisation (`organizationId`) or enrolment (`enrollmentId`) this is for.");
   const access = await accessTo(db, principal, organizationId);
   if (!access) throw new ServiceError("not_found", "Organisation not found.");
+  // An SME keeps its outputs after a programme, and can update them (review section 6). The live enrolment comes first, then
+  // the newest one that isn't withdrawn.
   const enrollments = await db
     .select()
     .from(schema.enrollment)
-    .where(and(eq(schema.enrollment.organizationId, organizationId), inArray(schema.enrollment.status, [...LIVE_ENROLLMENT])))
+    .where(and(eq(schema.enrollment.organizationId, organizationId), ne(schema.enrollment.status, "withdrawn")))
     .orderBy(desc(schema.enrollment.enrolledAt));
-  if (enrollments.length === 0) throw new ServiceError("precondition_failed", "This organisation isn't enrolled in a TRADE cohort yet.");
-  if (enrollments.length > 1) throw new ServiceError("invalid", "This organisation has more than one enrolment. Say which one (`enrollmentId`).");
-  return { enrollment: enrollments[0]!, access };
+  const chosen = enrollments.find((e) => (LIVE_ENROLLMENT as readonly string[]).includes(e.status)) ?? enrollments[0];
+  if (!chosen) throw new ServiceError("precondition_failed", "This organisation isn't enrolled in a TRADE cohort yet.");
+  return { enrollment: chosen, access };
 }
 
 /** The enrolment's avenue and live-order flag, which the M04 brief's checks read. */
