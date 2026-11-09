@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { notify, organizationMemberIds, staffForEnrollment } from "./trade-notifications";
 import { schema } from "@entrust/db";
 import { NOT_KNOWN, canSubmit, checkAnswers, isNotKnown, type FormDefinition } from "@entrust/forms";
 import {
@@ -621,7 +622,8 @@ export async function saveResponses(ctx: Ctx, id: string, input: SaveInput): Pro
  * diagnostic assigns the avenue (A or B) with the rules, and records the declaration's consents.
  */
 export async function submitAssessment(ctx: Ctx, id: string): Promise<AssessmentView> {
-  return ctx.db.transaction(async (tx) => {
+  const told: { kind: string; status: string; organizationId: string; enrollmentId: string }[] = [];
+  const view = await ctx.db.transaction(async (tx) => {
     const found = await findAssessment(tx, ctx.principal, id, { lock: true });
     requireWrite(found.access, "submit this assessment");
     const { row, enrollment } = found;
@@ -653,8 +655,23 @@ export async function submitAssessment(ctx: Ctx, id: string): Promise<Assessment
       entityId: id,
       after: { kind: row.kind, status: saved.status, templateVersion: row.templateVersion, byStaff: found.access.staff },
     });
+    told.push({ kind: row.kind, status: saved.status, organizationId: enrollment.organizationId, enrollmentId: enrollment.id });
     return buildView(tx, { ...found, row: saved }, ctx.now);
   });
+  // Said after the work commits, so nobody is told about something that rolled back.
+  for (const t of told) {
+    const members = await organizationMemberIds(ctx.db, t.organizationId);
+    if (t.kind === "diagnostic") {
+      await notify(ctx.db, { userIds: members, kind: "diagnostic_completed", title: "Your diagnostic is complete", body: "Thank you. Your answers are saved and your pathway has been set. Your placement assessment is next.", path: "/", organizationId: t.organizationId });
+    } else if (t.kind === "placement") {
+      if (t.status === "review_required") {
+        await notify(ctx.db, { userIds: await staffForEnrollment(ctx.db, t.enrollmentId), kind: "admin_alert", title: "A learning plan needs review", body: "A business finished its placement assessment and its plan needs a staff look before it starts.", path: "/cohorts", organizationId: t.organizationId });
+      } else {
+        await notify(ctx.db, { userIds: members, kind: "module_assigned", title: "Your learning plan is ready", body: "Your placement assessment is scored and your modules are assigned. Open your plan to see where to start.", path: "/", organizationId: t.organizationId });
+      }
+    }
+  }
+  return view;
 }
 
 async function assignDiagnosticPathway(tx: Executor, ctx: Ctx, found: Found, rows: readonly ResponseRow[]): Promise<void> {

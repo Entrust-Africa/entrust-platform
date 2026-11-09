@@ -670,9 +670,19 @@ const ReportScoreDistribution = z.object({
 });
 const ReportCurrencyAmount = z.array(z.object({ currency: z.string(), amount: z.number() })).nullable();
 
+export const ReportFilterQuery = z
+  .object({
+    pathway: z.enum(["A", "B"]).optional().openapi({ description: "Only businesses on this pathway." }),
+    moduleId: z.enum(MODULE_IDS).optional().openapi({ description: "Only this module's progress, knowledge checks and submissions." }),
+    cohortId: z.uuid().optional().openapi({ description: "For a programme report, only this cohort." }),
+  })
+  .openapi("TradeReportFilters");
+
 export const ProgrammeReportParam = z.object({ id: z.uuid() });
 export const ProgrammeReport = z
   .object({
+    /** What the report was narrowed to. All null when it covers everything. */
+    filters: z.object({ pathway: z.enum(["A", "B"]).nullable(), moduleId: z.string().nullable(), cohortId: z.string().nullable() }),
     scope: z.object({
       kind: z.enum(["program", "cohort"]),
       id: z.uuid(),

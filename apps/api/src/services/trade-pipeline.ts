@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { ensureBuyer, raiseBuyerStatus } from "./trade-buyers";
 import { schema } from "@entrust/db";
 import {
   evaluateQualificationScorecard,
@@ -143,10 +144,14 @@ export async function createOpportunity(
   const { organizationId, access } = await resolveOrganization(db, ctx, input);
   if (!access.write) throw new ServiceError("forbidden", "Write access required.");
 
+  // The opportunity points at the business's one record of this buyer, made if it isn't there yet.
+  const buyer = await ensureBuyer(db, organizationId, { name: input.companyName, country: input.country, website: input.website, verificationStatus: input.verificationStatus });
+
   const [created] = await db
     .insert(schema.commercialOpportunity)
     .values({
       organizationId,
+      buyerId: buyer?.id ?? null,
       enrollmentId: input.enrollmentId ?? null,
       title: input.title,
       companyName: input.companyName,
@@ -291,6 +296,7 @@ export async function recordOpportunityActivity(
       updatedAt: new Date(),
     })
     .where(eq(schema.commercialOpportunity.id, opportunityId));
+  await raiseBuyerStatus(db, opp.buyerId, nextVerification);
 
   await recordTradeChange(db, principal.userId, {
     action: "trade.opportunity.activity_recorded",

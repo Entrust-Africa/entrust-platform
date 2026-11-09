@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
   primaryKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   ASSESSMENT_STATUSES,
@@ -644,6 +645,8 @@ export const commercialOpportunity = trade.table(
     title: text("title").notNull(),
     companyName: text("company_name").notNull().default(""),
     buyerName: text("buyer_name"),
+    /** The business's one record of this buyer (spec 10.2), shared with its other opportunities and its transactions. */
+    buyerId: uuid("buyer_id").references((): AnyPgColumn => smeBuyer.id, { onDelete: "set null" }),
     country: text("country").notNull().default(""),
     website: text("website"),
     sourceLinks: jsonb("source_links").$type<string[]>().default([]),
@@ -1267,6 +1270,7 @@ export const exportTransaction = trade.table(
     destination: text("destination"),
     quantity: text("quantity"),
     buyerName: text("buyer_name"),
+    buyerId: uuid("buyer_id").references((): AnyPgColumn => smeBuyer.id, { onDelete: "set null" }),
     buyerStatus: text("buyer_status"),
     orderDocument: text("order_document"),
     agreedPrice: text("agreed_price"),
@@ -1324,3 +1328,415 @@ export const staffMfaSession = trade.table("staff_mfa_session", {
     .references(() => user.id, { onDelete: "cascade" }),
   verifiedAt: timestamp("verified_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ---- The SME record (architecture spec sections 5 and 6.7) ----
+
+export const EXPORT_EVIDENCE_STATUSES = ["self_reported", "document_supported", "independently_verified"] as const;
+export type ExportEvidenceStatus = (typeof EXPORT_EVIDENCE_STATUSES)[number];
+
+// The single record of a business's completed shipments (spec 5.5). A row is written when a real transaction is closed out
+// (never for a confirmed order, and never for a practice transaction), or when staff or the business add an earlier shipment.
+// The evidence status says how far the shipment has been checked; only staff move it up from `self_reported`.
+export const smeExportHistory = trade.table(
+  "sme_export_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** The transaction that was closed out, if this row came from one. One row per transaction. */
+    transactionId: uuid("transaction_id")
+      .unique()
+      .references(() => exportTransaction.id, { onDelete: "set null" }),
+    product: text("product").notNull(),
+    destination: text("destination"),
+    buyerName: text("buyer_name"),
+    /** The day the shipment left, as the business or staff gave it. */
+    shipmentDate: date("shipment_date"),
+    evidenceStatus: text("evidence_status", { enum: EXPORT_EVIDENCE_STATUSES }).notNull().default("self_reported"),
+    evidenceNote: text("evidence_note"),
+    recordedByUserId: text("recorded_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    statusChangedByUserId: text("status_changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_export_history_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+export const PATHWAY_REVIEW_STATUSES = ["open", "resolved"] as const;
+
+// Raised when a business records its first completed shipment (spec 6.7). It asks staff to look at the enrolment's pathway.
+// Nothing changes the pathway on its own: staff confirm or change it as they do today, and resolve the review.
+export const pathwayReview = trade.table(
+  "pathway_review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    exportHistoryId: uuid("export_history_id").references(() => smeExportHistory.id, { onDelete: "set null" }),
+    status: text("status", { enum: PATHWAY_REVIEW_STATUSES }).notNull().default("open"),
+    resolvedByUserId: text("resolved_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolution: text("resolution"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_pathway_review_enrollment_idx").on(t.enrollmentId),
+    // One open review per enrolment at a time.
+    uniqueIndex("trade_pathway_review_open_uidx").on(t.enrollmentId).where(sql`${t.status} = 'open'`),
+  ],
+);
+
+// What a business sells (spec 5.3). One business can hold several.
+export const smeProduct = trade.table(
+  "sme_product",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category"),
+    hsCode: text("hs_code"),
+    /** Kept, not deleted, once a business stops selling it, so the history still makes sense. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_sme_product_org_idx").on(t.organizationId)],
+);
+
+// The history of changes to a business's profile (spec 5.4): who changed which detail, from what, to what. A change to
+// the legal name, registration number, tax number, sector or country is material and flagged so staff can see it.
+export const smeProfileChange = trade.table(
+  "sme_profile_change",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    changedByUserId: text("changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    material: boolean("material").notNull().default(false),
+    changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_sme_profile_change_org_idx").on(t.organizationId, t.changedAt)],
+);
+
+// ---- Buyers and transactions (spec sections 10.2 to 10.5) ----
+
+// A business's one record of each buyer, so M05's pipeline, M10's relationship register and a transaction all point at the same
+// buyer and the same evidence status. It is found or made from the company name and country, so typing a buyer twice doesn't
+// make two. The evidence status uses the verification ladder; only staff set it down or up by hand.
+export const smeBuyer = trade.table(
+  "sme_buyer",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Lower-case name and country with the spaces squeezed, which is what two spellings of the same buyer share. */
+    nameKey: text("name_key").notNull(),
+    country: text("country").notNull().default(""),
+    website: text("website"),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    verificationStatus: text("verification_status", { enum: VERIFICATION_LADDER_STATUSES }).notNull().default("unverified"),
+    evidenceNote: text("evidence_note"),
+    statusChangedByUserId: text("status_changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [uniqueIndex("trade_sme_buyer_key_uidx").on(t.organizationId, t.nameKey, t.country)],
+);
+
+export const TRANSACTION_EVENT_TYPES = ["stage_change", "note", "exception", "payment", "document", "cost"] as const;
+
+// What happened on a transaction, in order. Stage changes are written by the platform; a business adds notes, exceptions and payments.
+export const transactionEvent = trade.table(
+  "transaction_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type", { enum: TRANSACTION_EVENT_TYPES }).notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (t) => [index("trade_transaction_event_tx_idx").on(t.transactionId, t.occurredAt)],
+);
+
+export const TRANSACTION_DOCUMENT_KINDS = ["purchase_order", "proforma_invoice", "commercial_invoice", "packing_list", "transport_document", "insurance", "certificate", "payment_proof", "other"] as const;
+
+// A document on a transaction: its kind and name, and the uploaded file when there is one.
+export const transactionDocument = trade.table(
+  "transaction_document",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: TRANSACTION_DOCUMENT_KINDS }).notNull(),
+    name: text("name").notNull(),
+    fileId: uuid("file_id").references(() => file.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_transaction_document_tx_idx").on(t.transactionId)],
+);
+
+export const TRANSACTION_COST_BASES = ["quoted", "expected", "actual"] as const;
+export const TRANSACTION_COST_CATEGORIES = ["production", "materials", "packaging", "inspection", "inland_transport", "freight", "insurance", "customs", "finance", "other"] as const;
+
+// A cost figure for a transaction. Nothing is overwritten: a new figure for the same category and basis is a revision, and the
+// newest one counts. Quoted is what was offered, expected is the business's own estimate, actual is what was paid.
+export const transactionCost = trade.table(
+  "transaction_cost",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    category: text("category", { enum: TRANSACTION_COST_CATEGORIES }).notNull(),
+    basis: text("basis", { enum: TRANSACTION_COST_BASES }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    note: text("note"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_transaction_cost_tx_idx").on(t.transactionId, t.createdAt)],
+);
+
+// ---- Notifications (FRD section 8) ----
+
+export const NOTIFICATION_KINDS = [
+  "diagnostic_completed",
+  "module_assigned",
+  "learning_incomplete",
+  "assessment_result",
+  "session_reminder",
+  "output_review",
+  "overdue_action",
+  "referral_status",
+  "admin_alert",
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+// One message to one person, shown in the platform and, unless they turned it off, emailed. `dedupeKey` keeps a reminder that
+// repeats from being sent twice for the same thing.
+export const notification = trade.table(
+  "notification",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: NOTIFICATION_KINDS }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    /** Where in the TRADE app the message leads, such as /modules/M04. */
+    path: text("path"),
+    dedupeKey: text("dedupe_key"),
+    /** queued: handed to the email queue. skipped: the person turned email off for this kind. failed: the queue refused it. */
+    emailStatus: text("email_status", { enum: ["queued", "skipped", "failed"] }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_notification_user_idx").on(t.userId, t.createdAt),
+    uniqueIndex("trade_notification_dedupe_uidx").on(t.userId, t.dedupeKey).where(sql`${t.dedupeKey} is not null`),
+  ],
+);
+
+// What a person wants for each kind of notification. No row means both on.
+export const notificationPreference = trade.table(
+  "notification_preference",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: NOTIFICATION_KINDS }).notNull(),
+    email: boolean("email").notNull().default(true),
+    inApp: boolean("in_app").notNull().default(true),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind] })],
+);
+
+// ---- Partner referrals (FRD FR-13, spec 13 and 16) ----
+
+export const REFERRAL_DESTINATION_TYPES = ["bank", "insurer", "service_provider"] as const;
+export const REFERRAL_DATA_KINDS = ["profile", "products", "export_history", "financial_worksheets"] as const;
+export const REFERRAL_CONSENT_STATUSES = ["not_requested", "requested", "granted", "declined", "withdrawn"] as const;
+export const REFERRAL_STATUSES = ["draft", "awaiting_consent", "ready", "shared", "accepted", "declined", "completed", "closed"] as const;
+
+// Staff refer a business to a bank, an insurer or a service provider. Nothing about the business goes to the partner until the
+// business has agreed to that recipient, for that purpose and for those kinds of information; agreeing to TRADE's terms is not
+// enough. The business can withdraw at any time, and a withdrawn consent closes the door again.
+export const partnerReferral = trade.table(
+  "partner_referral",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    destinationName: text("destination_name").notNull(),
+    destinationType: text("destination_type", { enum: REFERRAL_DESTINATION_TYPES }).notNull(),
+    reason: text("reason").notNull(),
+    /** What the business is asked to let the partner have. Only these kinds are ever in the package. */
+    sharedDataKinds: jsonb("shared_data_kinds").$type<string[]>().notNull().default([]),
+    consentStatus: text("consent_status", { enum: REFERRAL_CONSENT_STATUSES }).notNull().default("not_requested"),
+    consentAt: timestamp("consent_at", { withTimezone: true }),
+    consentByUserId: text("consent_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    status: text("status", { enum: REFERRAL_STATUSES }).notNull().default("draft"),
+    referralDate: date("referral_date", { mode: "string" }),
+    responsibleUserId: text("responsible_user_id").references(() => user.id, { onDelete: "set null" }),
+    outcome: text("outcome"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_partner_referral_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+// The history of a referral: who asked, who agreed, what was shared and when (acceptance test INT-07).
+export const partnerReferralEvent = trade.table(
+  "partner_referral_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referralId: uuid("referral_id")
+      .notNull()
+      .references(() => partnerReferral.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    note: text("note"),
+    /** For a share, the kinds that were in the package. */
+    detail: jsonb("detail").$type<Record<string, unknown>>(),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_partner_referral_event_idx").on(t.referralId, t.createdAt)],
+);
+
+// ---- Integration records (spec 12.4) ----
+
+export const INTEGRATION_PROVIDERS = ["mizan", "clear", "africonnect"] as const;
+export const INTEGRATION_SYNC_STATUSES = ["pending", "synced", "failed", "disabled"] as const;
+
+// One row for each thing TRADE holds that lives in another system, with how its last sync went. A failure is recorded here and
+// never stops learning or the business profile.
+export const integrationRecord = trade.table(
+  "integration_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: INTEGRATION_PROVIDERS }).notNull(),
+    externalReference: text("external_reference"),
+    recordType: text("record_type").notNull(),
+    syncStatus: text("sync_status", { enum: INTEGRATION_SYNC_STATUSES }).notNull().default("pending"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    errorDescription: text("error_description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_integration_record_org_idx").on(t.organizationId, t.provider)],
+);
+
+// ---- Business outputs, action evidence and learning resources (spec 7.5, 9.1, 9.2, 11.3) ----
+
+export const OUTPUT_REVIEW_STATUSES = ["pending", "under_review", "reviewed", "changes_requested"] as const;
+
+// How far staff have got with one submitted version of a business output. A version with no row here is `pending`.
+export const worksheetVersionReview = trade.table("worksheet_version_review", {
+  worksheetVersionId: uuid("worksheet_version_id")
+    .primaryKey()
+    .references(() => worksheetVersion.id, { onDelete: "cascade" }),
+  status: text("status", { enum: OUTPUT_REVIEW_STATUSES }).notNull().default("pending"),
+  reviewerUserId: text("reviewer_user_id").references(() => user.id, { onDelete: "set null" }),
+  comments: text("comments"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+});
+
+// A document a business attaches to a version of one of its outputs, such as a costing sheet or a signed plan. It is the
+// business's own file, and a version can take attachments only while it is a draft: a submitted version is what was reviewed.
+export const worksheetAttachment = trade.table(
+  "worksheet_attachment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    worksheetVersionId: uuid("worksheet_version_id")
+      .notNull()
+      .references(() => worksheetVersion.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    description: text("description"),
+    attachedByUserId: text("attached_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_worksheet_attachment_version_idx").on(t.worksheetVersionId), uniqueIndex("trade_worksheet_attachment_file_uidx").on(t.worksheetVersionId, t.fileId)],
+);
+
+// Evidence that an action item was done: a file and what it shows.
+export const actionEvidence = trade.table(
+  "action_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actionItemId: uuid("action_item_id")
+      .notNull()
+      .references(() => actionItem.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    description: text("description"),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_action_evidence_item_idx").on(t.actionItemId), uniqueIndex("trade_action_evidence_file_uidx").on(t.actionItemId, t.fileId)],
+);
+
+export const RESOURCE_TYPES = ["template", "guide", "worksheet", "checklist", "video", "other"] as const;
+export const RESOURCE_ACCESS_LEVELS = ["learner", "staff"] as const;
+
+// A downloadable resource for a module or one of its lessons, uploaded by Entrust staff. `staff` resources (facilitator packs,
+// answer keys) never reach a learner. The file belongs to the Entrust organisation, so a learner reaches it only through the
+// resource's own download, which checks that the learner can see the module.
+export const learningResource = trade.table(
+  "learning_resource",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    lessonId: text("lesson_id"),
+    name: text("name").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => file.id, { onDelete: "cascade" }),
+    resourceType: text("resource_type", { enum: RESOURCE_TYPES }).notNull().default("other"),
+    version: text("version").notNull().default("1.0.0"),
+    accessLevel: text("access_level", { enum: RESOURCE_ACCESS_LEVELS }).notNull().default("learner"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [index("trade_learning_resource_module_idx").on(t.moduleId)],
+);

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { notify, organizationMemberIds } from "./trade-notifications";
 import { alias } from "drizzle-orm/pg-core";
 import { schema } from "@entrust/db";
 import type {
@@ -225,6 +226,15 @@ export async function approvePlan(
     before: { status: existing.status },
     after: { status: "approved", notes: input.notes?.trim() || null },
     reason: input.notes?.trim() || null,
+  });
+
+  await notify(db, {
+    userIds: await organizationMemberIds(db, existing.organizationId),
+    kind: "module_assigned",
+    title: "Your learning plan was approved",
+    body: "Entrust has approved your learning plan. Open it to see the modules assigned to you.",
+    path: "/",
+    organizationId: existing.organizationId,
   });
 
   return getPlan(ctx, planId);

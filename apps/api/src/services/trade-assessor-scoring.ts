@@ -3,10 +3,10 @@ import { schema } from "@entrust/db";
 import { evaluateRubric, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
 import { findVersion } from "@entrust/trade-content";
 import { type ModuleId } from "@entrust/trade-rules";
-import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { clearCompletionAfterCriticalFailure, evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { notify, organizationMemberIds, staffForEnrollment } from "./trade-notifications";
 import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
@@ -258,6 +258,16 @@ export async function createModuleSubmission(
       version: nextVersion,
       worksheetVersionId,
     },
+  });
+
+  // The cohort's assessors are told there is something to review.
+  await notify(db, {
+    userIds: (await staffForEnrollment(db, input.enrollmentId)).filter((id) => id !== principal.userId),
+    kind: "output_review",
+    title: `A ${input.moduleId} practical is ready for review`,
+    body: `A business has submitted its ${input.moduleId} practical, version ${nextVersion}. Open the review queue to score it.`,
+    path: "/review-queue",
+    organizationId: enrollment.organizationId,
   });
 
   return {
@@ -634,31 +644,16 @@ async function applyScore(
       await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
     }
 
-    // Queued after the score commits: the learner isn't told about a score that rolled back, and a queue problem can't undo one.
+    // Sent after the score commits: the learner isn't told about a score that rolled back, and a problem with the message can't undo one.
     after.push(async (db) => {
-      try {
-        const [ownerUser] = await db
-          .select({ email: schema.user.email })
-          .from(schema.member)
-          .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-          .where(
-            and(
-              eq(schema.member.organizationId, row.enrollment.organizationId),
-              eq(schema.member.role, "owner")
-            )
-          )
-          .limit(1);
-
-        if (ownerUser?.email) {
-          await enqueue(JOB_NAMES.SEND_EMAIL, {
-            to: ownerUser.email,
-            subject: `TRADE Feedback: Module ${sub.moduleId} submission has been scored`,
-            text: `Your practical deliverable for Module ${sub.moduleId} has been evaluated.\nOutcome: ${evaluation.outcome}\nScore: ${evaluation.totalPoints}/${evaluation.maxPoints} (${evaluation.band})\n\nLog in to the TRADE platform to review your assessor feedback.`,
-          });
-        }
-      } catch (err) {
-        console.warn("[trade:scoring] Could not queue notification email:", err);
-      }
+      await notify(db, {
+        userIds: await organizationMemberIds(db, row.enrollment.organizationId),
+        kind: "assessment_result",
+        title: `Your ${sub.moduleId} practical has been scored`,
+        body: `Outcome: ${evaluation.outcome}. Score: ${evaluation.totalPoints} of ${evaluation.maxPoints} (${evaluation.band}). Open the module to read your assessor's feedback.`,
+        path: `/modules/${sub.moduleId}`,
+        organizationId: row.enrollment.organizationId,
+      });
     });
   }
 

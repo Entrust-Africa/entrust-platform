@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeFetch } from "@/lib/trade-client";
+import { ActionEvidence } from "./action-evidence";
 
 interface ActionItem {
   id: string;
@@ -174,6 +175,7 @@ export function ActionPlanBoard({ initial, organizationId, readOnly }: { initial
                     }}
                   />
                 </label>
+                <ActionEvidence itemId={item.id} organizationId={organizationId} readOnly={readOnly} />
               </Card>
             ))}
           </section>

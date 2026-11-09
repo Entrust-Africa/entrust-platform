@@ -39,6 +39,11 @@ import { tradeAi } from "./routes/trade/ai";
 import { tradeRegister } from "./routes/trade/register";
 import { tradeSessions } from "./routes/trade/sessions";
 import { tradeSponsors } from "./routes/trade/sponsors";
+import { tradeSmeRecord } from "./routes/trade/sme-record";
+import { tradeBuyers } from "./routes/trade/buyers";
+import { tradeNotifications } from "./routes/trade/notifications";
+import { tradeReferrals } from "./routes/trade/referrals";
+import { tradeOutputs } from "./routes/trade/outputs";
 import { summit, summitPublic } from "./routes/summit";
 import { summitCommerce, summitCommercePublic } from "./routes/summit-commerce";
 
@@ -53,7 +58,7 @@ base.use(
   "*",
   cors({
     origin: trustedOrigins,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "x-amz-checksum-sha256"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   }),
@@ -119,6 +124,11 @@ export const app = base
   .route("/v1/trade", tradeSessions)
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)
+  .route("/v1/trade", tradeSmeRecord)
+  .route("/v1/trade", tradeBuyers)
+  .route("/v1/trade", tradeNotifications)
+  .route("/v1/trade", tradeReferrals)
+  .route("/v1/trade", tradeOutputs)
   .route("/v1/summit", summitPublic)
   .route("/v1/summit/commerce", summitCommercePublic)
   .route("/v1/summit", summit)

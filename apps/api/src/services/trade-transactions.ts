@@ -5,6 +5,9 @@ import type { CreateTransactionInput, UpdateTransactionInput } from "../schemas/
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { accessTo, recordTradeChange } from "./trade-shared";
+import { recordClosedTransaction } from "./trade-sme-record";
+import { ensureBuyer } from "./trade-buyers";
+import { recordStageChange } from "./trade-transaction-records";
 
 // The Export Transaction Workspace (FR-10, M08): one record per active or planned export, with a reference CLEAR shares when the
 // business runs the transaction there. It records what the business says and has done. It doesn't certify compliance or approve a
@@ -91,7 +94,14 @@ export async function updateTransaction(ctx: Ctx, id: string, input: UpdateTrans
   const cases = await realCases(ctx, existing.organizationId);
   if (input.clearCaseId && !cases.some((c) => c.id === input.clearCaseId)) throw new ServiceError("not_found", "CLEAR case not found.");
 
-  const [row] = await ctx.db.update(schema.exportTransaction).set({ ...input, updatedAt: ctx.now }).where(eq(schema.exportTransaction.id, id)).returning();
+  // A buyer named on the transaction points at the business's one record of that buyer.
+  const buyer = input.buyerName && input.buyerName !== existing.buyerName ? await ensureBuyer(ctx.db, existing.organizationId, { name: input.buyerName }) : null;
+  const [row] = await ctx.db
+    .update(schema.exportTransaction)
+    .set({ ...input, ...(buyer ? { buyerId: buyer.id } : input.buyerName === null ? { buyerId: null } : {}), updatedAt: ctx.now })
+    .where(eq(schema.exportTransaction.id, id))
+    .returning();
+  if (row!.stage !== existing.stage) await recordStageChange(ctx.db, row!, existing.stage, row!.stage, ctx.principal.userId, ctx.now);
   await recordTradeChange(ctx.db, ctx.principal.userId, {
     action: "trade.transaction.updated",
     organizationId: existing.organizationId,
@@ -100,5 +110,7 @@ export async function updateTransaction(ctx: Ctx, id: string, input: UpdateTrans
     before: { stage: existing.stage, clearCaseId: existing.clearCaseId },
     after: { stage: row!.stage, clearCaseId: row!.clearCaseId, changed: Object.keys(input) },
   });
+  // Closing out a real transaction is what records a completed shipment on the business's record.
+  if (existing.stage !== "closed") await recordClosedTransaction(ctx, row!);
   return view(row!, cases.find((c) => c.id === row!.clearCaseId));
 }

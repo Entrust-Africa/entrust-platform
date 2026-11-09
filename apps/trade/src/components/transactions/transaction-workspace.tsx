@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeFetch } from "@/lib/trade-client";
+import { TransactionRecords } from "./transaction-records";
 
 type Text = string | null;
 
@@ -159,6 +160,7 @@ export function TransactionWorkspace({ initial, organizationId, readOnly }: { in
                   })}
                 </fieldset>
               ))}
+              <TransactionRecords transactionId={item.id} organizationId={organizationId} readOnly={readOnly} />
             </div>
           )}
         </Card>

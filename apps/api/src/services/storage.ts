@@ -211,10 +211,13 @@ class R2StorageProvider implements StorageProvider {
       ContentLength: sizeBytes,
       ChecksumSHA256: base64Sha,
     });
-    // Explicitly add content-type and x-amz-checksum-sha256 to signableHeaders
+    // The checksum must stay a signed header. Left alone, the presigner moves it into the URL's query string, and R2 then
+    // refuses the browser's PUT (which also sends it as a header) with SignatureDoesNotMatch. As a header it is checked against
+    // the file's contents: a file that differs from the one described is refused with BadDigest.
     const uploadUrl = await getSignedUrl(this.s3, command, {
       expiresIn: 3600,
       signableHeaders: new Set(["content-type", "x-amz-checksum-sha256"]),
+      unhoistableHeaders: new Set(["x-amz-checksum-sha256"]),
     });
     return {
       uploadUrl,

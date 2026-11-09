@@ -70,6 +70,7 @@ export async function handleSendEmail(jobData: SendEmailJobData) {
     case "summit-registration":
       reactElement = <SummitRegistrationEmail fullName={data.props.fullName} passName={data.props.passName} number={data.props.number} />;
       break;
+    case "trade-notice":
     case "summit-notice":
       reactElement = (
         <SummitNoticeEmail

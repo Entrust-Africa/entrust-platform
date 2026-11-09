@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { ModuleResources } from "@/components/modules/module-resources";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, BookOpen, Clock } from "lucide-react";
 import { afriConnectBuyersUrl } from "@entrust/auth/africonnect";
@@ -207,6 +208,13 @@ export default async function ModuleDetailPage({
           initialLessonId={lesson}
           aiAssistantEnabled={moduleDetail.aiAssistantEnabled}
           organizationId={activeOrg?.id}
+        />
+      )}
+      {moduleDetail.content && (
+        <ModuleResources
+          moduleId={id}
+          canManage={me.staffRole === "admin" || me.staffRole === "facilitator"}
+          entrustOrganizationId={me.organizations?.find((o) => o.kind === "entrust")?.id ?? null}
         />
       )}
     </div>
