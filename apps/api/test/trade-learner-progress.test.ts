@@ -213,6 +213,16 @@ describe("TRADE learner module progress & save-and-resume", () => {
     expect(item.lessonProgress.completedLessons).toEqual(["lesson-1", "lesson-2"]);
   });
 
+  it("takes saves that arrive together, on a first save, without losing any", async () => {
+    const saves = await Promise.all(
+      ["a", "b", "c", "d"].map((lessonId) => callV1(w.smeLearner, "POST", "/trade/module-progress", { enrollmentId: w.enrollmentId, moduleId: "M04", lessonId, completed: true })),
+    );
+    expect(saves.map((s) => s.status)).toEqual([200, 200, 200, 200]);
+    const after = await callV1(w.smeLearner, "GET", `/trade/module-progress?enrollmentId=${w.enrollmentId}&moduleId=M04`);
+    expect(after.body.items).toHaveLength(1);
+    expect([...after.body.items[0].lessonProgress.completedLessons].sort()).toEqual(["a", "b", "c", "d"]);
+  });
+
   it("won't let a learner give a module a result", async () => {
     for (const status of ["passed", "exempted", "needs_revision"]) {
       const res = await callV1(w.smeLearner, "POST", "/trade/module-progress", { enrollmentId: w.enrollmentId, moduleId: "M01", status });

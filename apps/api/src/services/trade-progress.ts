@@ -67,7 +67,15 @@ export async function listEnrollmentProgress(
 const LEARNER_SET_STATUSES: readonly ModuleProgressStatus[] = ["not_started", "in_progress", "submitted"];
 const RESULT_STATUSES: readonly ModuleProgressStatus[] = ["passed", "exempted"];
 
-export async function recordModuleProgress(
+/** Saves for one enrolment run one at a time. Two at once could collide on a first save, or lose a completed lesson. */
+export async function recordModuleProgress(ctx: Ctx, input: RecordModuleProgressInput): Promise<ModuleProgressView> {
+  return ctx.db.transaction(async (tx) => {
+    await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, input.enrollmentId)).for("update");
+    return applyModuleProgress({ ...ctx, db: tx }, input);
+  });
+}
+
+async function applyModuleProgress(
   ctx: Ctx,
   input: RecordModuleProgressInput
 ): Promise<ModuleProgressView> {

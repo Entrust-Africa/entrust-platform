@@ -743,10 +743,10 @@ export function ModuleViewer({
                       {nextLesson ? (
                         <Button
                           variant="secondary"
-                          className="h-auto min-h-11 w-full whitespace-normal py-2 text-left sm:w-auto"
-                          onClick={() => {
+                          className="h-auto min-h-11 w-full whitespace-normal! py-2 text-left sm:w-auto"
+                          onClick={async () => {
                             if (!completedLessons.includes(activeLesson.id)) {
-                              void handleToggleLessonComplete(activeLesson.id);
+                              await handleToggleLessonComplete(activeLesson.id);
                             }
                             handleSelectLesson(nextLesson.id);
                           }}

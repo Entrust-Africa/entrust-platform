@@ -225,11 +225,11 @@ export function Markdown({ source, dropLeadingTitle, className = "" }: { source:
           case "table":
             return (
               <div key={key} className="overflow-x-auto rounded-md border border-line">
-                <table className="w-full min-w-max text-left text-sm">
+                <table className="w-full text-left text-sm">
                   <thead className="bg-surface-2 text-xs font-semibold text-ink-2">
                     <tr>
                       {block.head.map((c, n) => (
-                        <th key={n} className="px-3 py-2">
+                        <th key={n} className="min-w-28 px-3 py-2">
                           {inline(c, `${key}-h${n}`)}
                         </th>
                       ))}
@@ -239,7 +239,7 @@ export function Markdown({ source, dropLeadingTitle, className = "" }: { source:
                     {block.rows.map((row, r) => (
                       <tr key={r}>
                         {row.map((c, n) => (
-                          <td key={n} className="px-3 py-2 align-top">
+                          <td key={n} className="min-w-28 px-3 py-2 align-top">
                             {inline(c, `${key}-${r}-${n}`)}
                           </td>
                         ))}
