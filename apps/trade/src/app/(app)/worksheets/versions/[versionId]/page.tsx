@@ -4,6 +4,7 @@ import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type { WorksheetDefinition, WorksheetVersion } from "@/lib/worksheets";
 import { WorksheetRunner } from "@/components/worksheets/worksheet-runner";
+import { OutputReview, type OutputDetails } from "@/components/outputs/output-review";
 import { WorksheetSummary } from "@/components/worksheets/worksheet-summary";
 
 export const metadata = { title: "Worksheet" };
@@ -31,9 +32,11 @@ export default async function WorksheetVersionPage({ params }: { params: Promise
       </div>
     );
   }
+  const details = version.data.status === "submitted" ? await tradeGet<OutputDetails>(`/worksheet-versions/${encodeURIComponent(versionId)}/details`) : null;
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl space-y-4">
       {back}
+      {details?.data && <OutputReview details={details.data} canReview={Boolean(me.staffRole)} />}
       <WorksheetSummary definition={definition.data} version={version.data} canStartNext={version.data.status === "submitted" && !me.staffRole} />
     </div>
   );
