@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { stream } from "hono/streaming";
-import { and, count, desc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@entrust/db";
 import type { AppEnv } from "../app";
 import { AuditLogList, AuditQuery } from "../schemas/audit";
@@ -122,11 +122,11 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
   }
 
   const conditions = [];
-  // CLEAR's trail stays open to its staff. TRADE entries and SME registry changes, which hold tax numbers, stop at the
-  // businesses on a facilitator's or reviewer's cohorts.
+  // CLEAR's trail stays open to its staff. TRADE entries, and the organisation and registry entries that hold tax numbers,
+  // stop at the businesses on a facilitator's or reviewer's cohorts.
   if (limitedToAssignedCohorts(principal)) {
     const organizations = await assignedOrganizationIds(db, principal.userId);
-    const open = and(sql`${schema.auditLog.platform} is distinct from 'trade'`, ne(schema.auditLog.entityType, "sme_profile"));
+    const open = and(sql`${schema.auditLog.platform} is distinct from 'trade'`, notInArray(schema.auditLog.entityType, ["sme_profile", "organization"]));
     conditions.push(organizations.length ? or(open, inArray(schema.auditLog.organizationId, organizations))! : open!);
   }
   if (query.organizationId) conditions.push(eq(schema.auditLog.organizationId, query.organizationId));
