@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
   primaryKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   ASSESSMENT_STATUSES,
@@ -644,6 +645,8 @@ export const commercialOpportunity = trade.table(
     title: text("title").notNull(),
     companyName: text("company_name").notNull().default(""),
     buyerName: text("buyer_name"),
+    /** The business's one record of this buyer (spec 10.2), shared with its other opportunities and its transactions. */
+    buyerId: uuid("buyer_id").references((): AnyPgColumn => smeBuyer.id, { onDelete: "set null" }),
     country: text("country").notNull().default(""),
     website: text("website"),
     sourceLinks: jsonb("source_links").$type<string[]>().default([]),
@@ -1267,6 +1270,7 @@ export const exportTransaction = trade.table(
     destination: text("destination"),
     quantity: text("quantity"),
     buyerName: text("buyer_name"),
+    buyerId: uuid("buyer_id").references((): AnyPgColumn => smeBuyer.id, { onDelete: "set null" }),
     buyerStatus: text("buyer_status"),
     orderDocument: text("order_document"),
     agreedPrice: text("agreed_price"),
@@ -1422,4 +1426,102 @@ export const smeProfileChange = trade.table(
     changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("trade_sme_profile_change_org_idx").on(t.organizationId, t.changedAt)],
+);
+
+// ---- Buyers and transactions (spec sections 10.2 to 10.5) ----
+
+// A business's one record of each buyer, so M05's pipeline, M10's relationship register and a transaction all point at the same
+// buyer and the same evidence status. It is found or made from the company name and country, so typing a buyer twice doesn't
+// make two. The evidence status uses the verification ladder; only staff set it down or up by hand.
+export const smeBuyer = trade.table(
+  "sme_buyer",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Lower-case name and country with the spaces squeezed, which is what two spellings of the same buyer share. */
+    nameKey: text("name_key").notNull(),
+    country: text("country").notNull().default(""),
+    website: text("website"),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    verificationStatus: text("verification_status", { enum: VERIFICATION_LADDER_STATUSES }).notNull().default("unverified"),
+    evidenceNote: text("evidence_note"),
+    statusChangedByUserId: text("status_changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [uniqueIndex("trade_sme_buyer_key_uidx").on(t.organizationId, t.nameKey, t.country)],
+);
+
+export const TRANSACTION_EVENT_TYPES = ["stage_change", "note", "exception", "payment", "document", "cost"] as const;
+
+// What happened on a transaction, in order. Stage changes are written by the platform; a business adds notes, exceptions and payments.
+export const transactionEvent = trade.table(
+  "transaction_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type", { enum: TRANSACTION_EVENT_TYPES }).notNull(),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (t) => [index("trade_transaction_event_tx_idx").on(t.transactionId, t.occurredAt)],
+);
+
+export const TRANSACTION_DOCUMENT_KINDS = ["purchase_order", "proforma_invoice", "commercial_invoice", "packing_list", "transport_document", "insurance", "certificate", "payment_proof", "other"] as const;
+
+// A document on a transaction: its kind and name, and the uploaded file when there is one.
+export const transactionDocument = trade.table(
+  "transaction_document",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: TRANSACTION_DOCUMENT_KINDS }).notNull(),
+    name: text("name").notNull(),
+    fileId: uuid("file_id").references(() => file.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_transaction_document_tx_idx").on(t.transactionId)],
+);
+
+export const TRANSACTION_COST_BASES = ["quoted", "expected", "actual"] as const;
+export const TRANSACTION_COST_CATEGORIES = ["production", "materials", "packaging", "inspection", "inland_transport", "freight", "insurance", "customs", "finance", "other"] as const;
+
+// A cost figure for a transaction. Nothing is overwritten: a new figure for the same category and basis is a revision, and the
+// newest one counts. Quoted is what was offered, expected is the business's own estimate, actual is what was paid.
+export const transactionCost = trade.table(
+  "transaction_cost",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => exportTransaction.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    category: text("category", { enum: TRANSACTION_COST_CATEGORIES }).notNull(),
+    basis: text("basis", { enum: TRANSACTION_COST_BASES }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    note: text("note"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_transaction_cost_tx_idx").on(t.transactionId, t.createdAt)],
 );
