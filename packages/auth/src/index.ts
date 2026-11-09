@@ -90,6 +90,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    // A password reset ends every other session, in case the reset is because someone else got in.
+    revokeSessionsOnPasswordReset: true,
     // With AfriConnect on, new accounts are made there (or by the provisioning below), never with an Entrust
     // password. Existing passwords keep working until they are retired.
     disableSignUp: Boolean(afriConnect),

@@ -15,6 +15,7 @@ const w = {} as {
   admin: TestUser;
   reviewer1: TestUser;
   reviewer2: TestUser;
+  reviewer3: TestUser;
   smeLearner: TestUser;
   otherSme: TestUser;
   outsider: TestUser;
@@ -30,15 +31,16 @@ const w = {} as {
 
 beforeAll(async () => {
   await cleanup();
-  const [admin, reviewer1, reviewer2, smeLearner, otherSme, outsider] = await Promise.all([
+  const [admin, reviewer1, reviewer2, reviewer3, smeLearner, otherSme, outsider] = await Promise.all([
     signUp("tr-score-admin"),
     signUp("tr-score-rev1"),
     signUp("tr-score-rev2"),
+    signUp("tr-score-rev3"),
     signUp("tr-score-learner"),
     signUp("tr-score-othersme"),
     signUp("tr-score-outsider"),
   ]);
-  Object.assign(w, { admin, reviewer1, reviewer2, smeLearner, otherSme, outsider });
+  Object.assign(w, { admin, reviewer1, reviewer2, reviewer3, smeLearner, otherSme, outsider });
 
   // 1. Entrust org with admin and reviewers
   w.entrustOrgId = await createOrganization(
@@ -47,6 +49,7 @@ beforeAll(async () => {
       [admin!, "admin"],
       [reviewer1!, "reviewer"],
       [reviewer2!, "reviewer"],
+      [reviewer3!, "reviewer"],
     ],
     { smeProfile: false },
   );
@@ -83,6 +86,7 @@ beforeAll(async () => {
     })
     .returning();
   w.cohortId = cohort!.id;
+  await db.insert(schema.cohortStaff).values([reviewer1!, reviewer2!].map((staff) => ({ cohortId: cohort!.id, userId: staff.id })));
 
   // 4. Enrollments
   const [enr1] = await db
@@ -175,6 +179,20 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
 
     expect(res.status).toBe(422);
     expect(res.body.error).toContain("knowledge check must be passed");
+  });
+
+  it("refuses evidence that isn't this business's own on a submission", async () => {
+    await db
+      .update(schema.moduleProgress)
+      .set({ theoryCompletedAt: new Date() })
+      .where(and(eq(schema.moduleProgress.enrollmentId, w.enrollmentId), eq(schema.moduleProgress.moduleId, "M01")));
+    const res = await callV1(w.smeLearner, "POST", "/trade/module-submissions", {
+      enrollmentId: w.enrollmentId,
+      moduleId: "M01",
+      evidenceRecordIds: [randomUUID()],
+    });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toContain("Evidence");
   });
 
   it("submits practical deliverable once theory is completed", async () => {
@@ -428,5 +446,31 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
     expect(log!.before).toHaveProperty("confirmedCriticalFailures");
     expect(log!.before).toHaveProperty("scores");
     expect(log!.after).toHaveProperty("confirmedCriticalFailures");
+  });
+
+  it("keeps a reviewer who isn't on the cohort out, until an administrator adds them", async () => {
+    const [sub] = await db.select().from(schema.moduleSubmission).where(eq(schema.moduleSubmission.enrollmentId, w.enrollmentId)).limit(1);
+    const scores = { any: { points: 1 } };
+    const queue = () => callV1(w.reviewer3, "GET", `/trade/module-submissions?enrollmentId=${w.enrollmentId}`);
+
+    expect((await queue()).body.items).toEqual([]);
+    expect((await callV1(w.reviewer3, "GET", `/trade/module-submissions/${sub!.id}`)).status).toBe(404);
+    expect((await callV1(w.reviewer3, "POST", `/trade/module-submissions/${sub!.id}/score`, { scores, feedback: "x" })).status).toBe(404);
+    expect((await callV1(w.reviewer3, "GET", `/trade/reports/cohorts/${w.cohortId}`)).status).toBe(404);
+    expect((await callV1(w.reviewer3, "GET", `/trade/worksheets?enrollmentId=${w.enrollmentId}`)).status).toBe(404);
+    expect((await callV1(w.reviewer3, "GET", "/trade/assessments")).body.items).toEqual([]);
+
+    expect((await callV1(w.admin, "POST", `/trade/cohorts/${w.cohortId}/staff`, { userId: w.reviewer3.id })).status).toBe(201);
+    expect((await queue()).body.items.map((i: { id: string }) => i.id)).toContain(sub!.id);
+    expect((await callV1(w.reviewer3, "GET", `/trade/module-submissions/${sub!.id}`)).status).toBe(200);
+    expect((await callV1(w.reviewer3, "GET", `/trade/worksheets?enrollmentId=${w.enrollmentId}`)).status).toBe(200);
+
+    // The change is on the record, and an administrator still reaches everything.
+    const [log] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.action, "trade.cohort_staff.assigned"), eq(schema.auditLog.entityId, w.cohortId)));
+    expect(log?.actorUserId).toBe(w.admin.id);
+
+    expect((await callV1(w.admin, "DELETE", `/trade/cohorts/${w.cohortId}/staff/${w.reviewer3.id}`)).status).toBe(200);
+    expect((await queue()).body.items).toEqual([]);
+    expect((await callV1(w.admin, "GET", `/trade/module-submissions/${sub!.id}`)).status).toBe(200);
   });
 });

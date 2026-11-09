@@ -6,6 +6,8 @@ export interface PathwayInput {
   asOf: string;
   /** The date of the latest completed shipment, as YYYY-MM-DD. Leave it out if the SME has never shipped. */
   lastShipmentDate?: string | undefined;
+  /** The SME says it has exported but doesn't know the date. It goes to staff rather than being told it hasn't shipped. */
+  shipmentDateUnknown?: boolean | undefined;
   /** Staff have accepted a shipment record as evidence. */
   shipmentVerified: boolean;
   /** A confirmed order, or a shipment underway or awaiting payment. */
@@ -43,8 +45,8 @@ export function monthsBefore(date: string, months: number): string {
 }
 
 /**
- * Pathway B is a shipment within the rules' window before `asOf`, and Pathway A is everyone else, including
- * an SME whose only shipment is older. A shipment that staff haven't accepted yet gives a provisional B.
+ * Pathway B is a completed shipment, within the rules' window before `asOf` if they set one, and Pathway A is everyone
+ * else. A shipment that staff haven't accepted yet gives a provisional B, which is what "self-reported" means on screen.
  * A first-time exporter with a live order stays on A. The date is an argument, so the same input always
  * gives the same answer, and nothing here lets AI set a pathway.
  */
@@ -56,10 +58,12 @@ export function assignPathway(rules: TradeRules, input: PathwayInput): PathwayAs
     if (input.lastShipmentDate > input.asOf) throw new RangeError("lastShipmentDate can't be after asOf");
   }
 
-  const recent = input.lastShipmentDate !== undefined && input.lastShipmentDate >= monthsBefore(input.asOf, pathwayRules.shipmentWindowMonths);
-  const pathway: Pathway = recent ? "B" : "A";
-  const provisional = recent && !input.shipmentVerified;
-  const reasonCodes: ReasonCode[] = recent ? ["PATHWAY_RECENT_SHIPMENT"] : ["PATHWAY_NO_RECENT_SHIPMENT"];
+  const window = pathwayRules.shipmentWindowMonths;
+  const recent = input.lastShipmentDate !== undefined && (window === null || input.lastShipmentDate >= monthsBefore(input.asOf, window));
+  const undated = input.lastShipmentDate === undefined && input.shipmentDateUnknown === true;
+  const pathway: Pathway = recent || undated ? "B" : "A";
+  const provisional = pathway === "B" && !input.shipmentVerified;
+  const reasonCodes: ReasonCode[] = recent ? ["PATHWAY_RECENT_SHIPMENT"] : undated ? [] : ["PATHWAY_NO_RECENT_SHIPMENT"];
   if (provisional) reasonCodes.push("PATHWAY_SHIPMENT_UNVERIFIED");
   if (input.liveOrder && pathway === "A") reasonCodes.push("PATHWAY_ORDER_PRIORITY");
   return { rulesVersion: rules.version, pathway, provisional, liveOrder: input.liveOrder, reasonCodes };

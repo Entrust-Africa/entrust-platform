@@ -239,7 +239,7 @@ describe("Registry search (GET /v1/smes/search?q=)", () => {
   it("refuses search for non-staff callers with 403", async () => {
     const res = await callV1(w.smeOwner, "GET", `/smes/search?q=${searchTag}`);
     expect(res.status).toBe(403);
-    expect(res.body.error).toContain("Only Entrust staff can search the SME registry");
+    expect(res.body.error).toContain("Only Entrust administrators and facilitators can search the SME registry");
   });
 
   it("finds SME by SME ID for Entrust staff", async () => {

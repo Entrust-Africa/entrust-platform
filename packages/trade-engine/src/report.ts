@@ -31,7 +31,7 @@ export const MODULE_STATUS_LABELS: Readonly<Record<ModuleStatus, string>> = {
 
 /** Why staff will look at a plan, in words the SME can read. */
 export const REVIEW_NOTES: Readonly<Record<ReviewReason, string>> = {
-  provisional_pathway: "Your pathway rests on your own word that you shipped recently. Staff will confirm it against a shipment record.",
+  provisional_pathway: "Your pathway rests on your own word that you've shipped. Staff will confirm it against a shipment record.",
   not_applicable_pending: "Some of your \"not applicable\" answers are waiting for staff to approve them.",
   shipment_evidence_contradicts_history: "You said you hadn't completed an export, but offered a shipment record. Staff will check which is right.",
   order_without_evidence: "You reported a confirmed order or a shipment, but said no evidence is available. Staff will check.",

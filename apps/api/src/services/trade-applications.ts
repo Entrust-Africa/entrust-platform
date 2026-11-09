@@ -17,7 +17,7 @@ const stable = (value: Record<string, string>): string => JSON.stringify(Object.
 
 /** The responses from Ethiopia, newest first, and how many others are kept without being shown. */
 export async function listApplications(ctx: Ctx): Promise<ApplicationListView> {
-  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see applications");
+  requireStaff(ctx.principal, ["admin", "facilitator"], "see applications");
   const [rows, [others]] = await Promise.all([
     ctx.db.select().from(schema.programApplication).where(eq(schema.programApplication.country, SHOWN)).orderBy(desc(schema.programApplication.submittedAt), desc(schema.programApplication.id)),
     ctx.db
@@ -57,7 +57,7 @@ const toItem = (row: typeof schema.programApplication.$inferSelect, times: numbe
  * is asked for by country like the list is, so it is not found: the same 404 as an id that doesn't exist.
  */
 export async function getApplication(ctx: Ctx, id: string): Promise<ApplicationDetailView> {
-  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see applications");
+  requireStaff(ctx.principal, ["admin", "facilitator"], "see applications");
   const [row] = await ctx.db
     .select()
     .from(schema.programApplication)

@@ -157,3 +157,25 @@ export async function enrolManyAction(cohortId: string, organizationIds: string[
   revalidatePath("/cohorts");
   return result;
 }
+
+export async function assignCohortStaffAction(cohortId: string, userId: string): Promise<ActionState> {
+  const api = await serverApi();
+  const res = await api.v1.trade.cohorts[":id"].staff.$post({ param: { id: cohortId }, json: { userId } });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null;
+    return { error: data?.error ?? `Failed to add them (${res.status}).` };
+  }
+  revalidatePath(`/cohorts/${cohortId}`);
+  return { error: null, success: true };
+}
+
+export async function removeCohortStaffAction(cohortId: string, userId: string): Promise<ActionState> {
+  const api = await serverApi();
+  const res = await api.v1.trade.cohorts[":id"].staff[":userId"].$delete({ param: { id: cohortId, userId } });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null;
+    return { error: data?.error ?? `Failed to remove them (${res.status}).` };
+  }
+  revalidatePath(`/cohorts/${cohortId}`);
+  return { error: null, success: true };
+}

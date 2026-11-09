@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   schema,
   DELIVERY_MODES,
@@ -9,6 +9,7 @@ import {
 import { organizationKind } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { recordTradeChange } from "./trade-shared";
 
 // ---- Program Services ----
 
@@ -165,9 +166,28 @@ export async function getCohort(db: Executor, id: string) {
     .where(eq(schema.enrollment.cohortId, id))
     .orderBy(desc(schema.enrollment.enrolledAt));
 
+  // Where each business's plan and pathway stand, so staff can act on what's waiting for them.
+  const enrollmentIds = enrolledSmes.map((e) => e.enrollmentId);
+  const plans = enrollmentIds.length
+    ? await db
+        .select({ id: schema.learningPlan.id, enrollmentId: schema.learningPlan.enrollmentId, status: schema.learningPlan.status })
+        .from(schema.learningPlan)
+        .where(and(inArray(schema.learningPlan.enrollmentId, enrollmentIds), ne(schema.learningPlan.status, "superseded")))
+    : [];
+  const pathways = enrollmentIds.length
+    ? await db
+        .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway, status: schema.pathwayAssignment.status })
+        .from(schema.pathwayAssignment)
+        .where(and(inArray(schema.pathwayAssignment.enrollmentId, enrollmentIds), inArray(schema.pathwayAssignment.status, ["provisional", "confirmed"])))
+    : [];
+
   return {
     ...cohortRow,
-    enrolments: enrolledSmes,
+    enrolments: enrolledSmes.map((e) => ({
+      ...e,
+      plan: plans.find((p) => p.enrollmentId === e.enrollmentId) ?? null,
+      pathway: pathways.find((p) => p.enrollmentId === e.enrollmentId) ?? null,
+    })),
   };
 }
 
@@ -205,6 +225,8 @@ export async function enrolSme(
   if (!org) throw new ServiceError("not_found", "Organisation not found.");
   const kind = organizationKind(org.metadata);
   if (kind && kind !== "sme") throw new ServiceError("invalid", "Only an SME can be enrolled in a cohort.");
+  // Every SME record has one SME ID. An organisation made outside the registration form has none yet.
+  if (!org.smeId) throw new ServiceError("invalid", "This organisation has no SME ID. Register it as an SME first.");
 
   // 3. Check for existing enrolment in this cohort
   const [existing] = await db
@@ -390,6 +412,12 @@ export async function updateEnrollmentStatus(
     throw new ServiceError("invalid", `Invalid enrolment status: ${newStatus}`);
   }
 
+  // A programme completes when its modules do, which is what earns the certificate. Saying so by hand would count an SME as a
+  // graduate with nothing behind it.
+  if (newStatus === "completed") {
+    throw new ServiceError("invalid", "An enrolment completes by itself when every assigned module is passed.");
+  }
+
   // Reason is required for pausing and withdrawing
   if ((newStatus === "paused" || newStatus === "withdrawn") && (!reason || !reason.trim())) {
     throw new ServiceError("invalid", `A reason is required to mark an enrolment as ${newStatus}.`);
@@ -405,7 +433,6 @@ export async function updateEnrollmentStatus(
   const updateData: Record<string, any> = {
     status: newStatus,
     updatedAt: now,
-    ...(newStatus === "completed" ? { completedAt: now } : {}),
     ...(newStatus === "withdrawn" ? { withdrawnAt: now } : {}),
   };
 
@@ -427,4 +454,44 @@ export async function updateEnrollmentStatus(
   });
 
   return { ok: true, id: enrollmentId, status: newStatus };
+}
+
+
+// ---- Staff assigned to a cohort ----
+
+/** The facilitators and reviewers on a cohort, and the Entrust staff who could be added. */
+export async function listCohortStaff(db: Executor, cohortId: string) {
+  const assigned = await db
+    .select({ userId: schema.cohortStaff.userId, name: schema.user.name, email: schema.user.email, assignedAt: schema.cohortStaff.createdAt })
+    .from(schema.cohortStaff)
+    .innerJoin(schema.user, eq(schema.user.id, schema.cohortStaff.userId))
+    .where(eq(schema.cohortStaff.cohortId, cohortId));
+  const entrustOrg = process.env.ENTRUST_ORG_ID;
+  const staff = entrustOrg
+    ? await db
+        .select({ userId: schema.user.id, name: schema.user.name, email: schema.user.email, role: schema.member.role })
+        .from(schema.member)
+        .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+        .where(and(eq(schema.member.organizationId, entrustOrg), inArray(schema.member.role, ["facilitator", "reviewer"])))
+    : [];
+  const taken = new Set(assigned.map((a) => a.userId));
+  return { assigned, available: staff.filter((s) => !taken.has(s.userId)) };
+}
+
+export async function assignCohortStaff(db: Executor, actorUserId: string, cohortId: string, userId: string) {
+  const [cohort] = await db.select({ id: schema.cohort.id }).from(schema.cohort).where(eq(schema.cohort.id, cohortId));
+  if (!cohort) throw new ServiceError("not_found", "Cohort not found.");
+  const { available } = await listCohortStaff(db, cohortId);
+  if (!available.some((s) => s.userId === userId)) throw new ServiceError("invalid", "Choose a facilitator or reviewer who isn't on this cohort yet.");
+  await db.insert(schema.cohortStaff).values({ cohortId, userId, assignedByUserId: actorUserId }).onConflictDoNothing();
+  await recordTradeChange(db, actorUserId, { action: "trade.cohort_staff.assigned", organizationId: null, entityType: "cohort", entityId: cohortId, after: { userId } });
+}
+
+export async function removeCohortStaff(db: Executor, actorUserId: string, cohortId: string, userId: string) {
+  const removed = await db
+    .delete(schema.cohortStaff)
+    .where(and(eq(schema.cohortStaff.cohortId, cohortId), eq(schema.cohortStaff.userId, userId)))
+    .returning();
+  if (removed.length === 0) throw new ServiceError("not_found", "That person isn't on this cohort.");
+  await recordTradeChange(db, actorUserId, { action: "trade.cohort_staff.removed", organizationId: null, entityType: "cohort", entityId: cohortId, before: { userId } });
 }

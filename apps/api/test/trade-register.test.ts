@@ -69,8 +69,9 @@ describe("who can use the register", () => {
     expect((await get(w.owner)).body.items).toBeUndefined();
   });
 
-  it("lets admins, facilitators and reviewers read it, and only admins and facilitators load it", async () => {
-    for (const user of [w.admin, w.facilitator, w.reviewer]) expect((await get(user)).status).toBe(200);
+  it("lets admins and facilitators read it and load it, and keeps it from a reviewer", async () => {
+    for (const user of [w.admin, w.facilitator]) expect((await get(user)).status).toBe(200);
+    expect((await get(w.reviewer)).status).toBe(403);
     expect(await load(w.reviewer, workbook(master(business("X"))))).toMatchObject({ status: 403, body: { code: "forbidden" } });
     expect(mine((await get(w.admin)).body.items)).toEqual([]);
   });
@@ -108,7 +109,7 @@ describe("loading the workbook", () => {
     expect(res.body).toMatchObject({ total: 3, created: 3, updated: 0, unchanged: 0 });
     expect(res.body.warnings).toEqual([`${code("B")}: the workbook's total capital gap is 9,999,999, but its three gaps add up to 3,500,000. The register uses 3,500,000.`]);
 
-    const items = mine((await get(w.reviewer)).body.items);
+    const items = mine((await get(w.facilitator)).body.items);
     expect(items.map((i: Json) => i.code)).toEqual([code("A"), code("B"), code("C")]);
     expect(items[0]).toMatchObject({
       companyName: "Test Leather A & Sons",

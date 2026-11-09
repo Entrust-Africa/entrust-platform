@@ -10,7 +10,6 @@ const STATUS_OPTIONS: { value: EnrollmentStatus; label: string }[] = [
   { value: "registered", label: "Registered" },
   { value: "active", label: "Active" },
   { value: "paused", label: "Paused" },
-  { value: "completed", label: "Completed" },
   { value: "withdrawn", label: "Withdrawn" },
 ];
 

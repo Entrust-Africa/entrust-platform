@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { getDb, DELIVERY_MODES, ENROLLMENT_STATUSES } from "@entrust/db";
+import { getDb, schema, DELIVERY_MODES, ENROLLMENT_STATUSES } from "@entrust/db";
 import type { AppEnv } from "../../app";
 import { ServiceError } from "../../services/errors";
 import { loadPrincipal } from "../../services/access";
 import {
+  assignCohortStaff,
   createCohort,
   createProgram,
   enrolSme,
@@ -13,11 +14,14 @@ import {
   getEnrollment,
   getProgram,
   listCohorts,
+  listCohortStaff,
   listEnrollments,
   listPrograms,
   listWaitingSmes,
+  removeCohortStaff,
   updateEnrollmentStatus,
 } from "../../services/trade-cohorts";
+import { assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "../../services/trade-shared";
 
 function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
   const user = c.get("user");
@@ -135,6 +139,8 @@ export const tradePrograms = new Hono<AppEnv>()
 
       const body = c.req.valid("json");
       const cohort = await createCohort(db, body);
+      // A facilitator who creates a cohort is on it, or they couldn't reach it.
+      if (limitedToAssignedCohorts(principal)) await db.insert(schema.cohortStaff).values({ cohortId: cohort.id, userId: user.id, assignedByUserId: user.id });
       return c.json(cohort, 201);
     },
   )
@@ -148,6 +154,10 @@ export const tradePrograms = new Hono<AppEnv>()
 
     const programId = c.req.query("programId");
     const rows = await listCohorts(db, { programId });
+    if (limitedToAssignedCohorts(principal)) {
+      const assigned = await assignedCohortIds(db, user.id);
+      return c.json({ cohorts: rows.filter((row) => assigned.includes(row.id)) });
+    }
     return c.json({ cohorts: rows });
   })
   .get("/cohorts/:id", async (c) => {
@@ -159,8 +169,42 @@ export const tradePrograms = new Hono<AppEnv>()
     }
 
     const id = c.req.param("id");
+    if (!(await canReachCohort(db, principal, id))) throw new ServiceError("not_found", "Cohort not found.");
     const cohort = await getCohort(db, id);
     return c.json(cohort);
+  })
+
+  // The facilitators and reviewers on a cohort. An administrator assigns them.
+  .get("/cohorts/:id/staff", async (c) => {
+    const user = requireUser(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (principal.staffRole !== "admin") throw new ServiceError("forbidden", "Only Entrust administrators assign staff to a cohort.");
+    return c.json(await listCohortStaff(db, c.req.param("id")));
+  })
+  .post(
+    "/cohorts/:id/staff",
+    zValidator("json", z.object({ userId: z.string().trim().min(1) }), (result, c) => {
+      if (!result.success) return c.json({ error: "userId: Say who to assign.", code: "invalid" }, 400);
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin") throw new ServiceError("forbidden", "Only Entrust administrators assign staff to a cohort.");
+      await assignCohortStaff(db, user.id, c.req.param("id"), c.req.valid("json").userId);
+      return c.json(await listCohortStaff(db, c.req.param("id")), 201);
+    },
+  )
+  .delete("/cohorts/:id/staff/:userId", async (c) => {
+    const user = requireUser(c);
+    requireTrustedOrigin(c);
+    const db = getDb();
+    const principal = await loadPrincipal(db, user.id);
+    if (principal.staffRole !== "admin") throw new ServiceError("forbidden", "Only Entrust administrators assign staff to a cohort.");
+    await removeCohortStaff(db, user.id, c.req.param("id"), c.req.param("userId"));
+    return c.json(await listCohortStaff(db, c.req.param("id")));
   })
 
   // Enrolments
@@ -183,6 +227,7 @@ export const tradePrograms = new Hono<AppEnv>()
       }
 
       const body = c.req.valid("json");
+      if (!(await canReachCohort(db, principal, body.cohortId))) throw new ServiceError("not_found", "Cohort not found.");
       const enr = await db.transaction((tx) => enrolSme(tx, user.id, body));
       return c.json(enr, 201);
     },
@@ -191,8 +236,8 @@ export const tradePrograms = new Hono<AppEnv>()
     const user = requireUser(c);
     const db = getDb();
     const principal = await loadPrincipal(db, user.id);
-    if (!principal.staffRole) {
-      throw new ServiceError("forbidden", "Only Entrust staff can see the businesses waiting to be enrolled.");
+    if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+      throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can see the businesses waiting to be enrolled.");
     }
     return c.json({ smes: await listWaitingSmes(db) });
   })
@@ -212,6 +257,10 @@ export const tradePrograms = new Hono<AppEnv>()
     }
 
     const rows = await listEnrollments(db, { cohortId, organizationId });
+    if (limitedToAssignedCohorts(principal)) {
+      const assigned = await assignedCohortIds(db, user.id);
+      return c.json({ enrollments: rows.filter((row) => assigned.includes(row.cohortId)) });
+    }
     return c.json({ enrollments: rows });
   })
   .get("/enrollments/:id", async (c) => {
@@ -221,6 +270,7 @@ export const tradePrograms = new Hono<AppEnv>()
 
     const id = c.req.param("id");
     const enr = await getEnrollment(db, id);
+    if (principal.staffRole && !(await canReachCohort(db, principal, enr.cohortId))) throw new ServiceError("not_found", "Enrolment not found.");
 
     // If not staff, ensure user is a member of the enrolled organisation
     if (!principal.staffRole && !principal.smeRoles.has(enr.organizationId)) {
@@ -250,6 +300,8 @@ export const tradePrograms = new Hono<AppEnv>()
       const id = c.req.param("id");
       const body = c.req.valid("json");
 
+      const current = await getEnrollment(db, id);
+      if (!(await canReachCohort(db, principal, current.cohortId))) throw new ServiceError("not_found", "Enrolment not found.");
       const result = await updateEnrollmentStatus(db, user.id, id, body.status, body.reason);
       return c.json(result);
     },

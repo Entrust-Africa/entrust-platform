@@ -3,11 +3,15 @@ import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, type TestUser } from "./support";
 
-// M05, M08, M09 and M10 carry their worksheets in their content. M05 is treated as approved here, so a learner can reach it,
-// while M08 stays the draft it is. Everything runs through the routes, the way the screens call them.
+// Eight modules carry their worksheets in their content. M08 is treated as a draft here, to show what a draft module's
+// worksheets do. Everything runs through the routes, the way the screens call them.
 vi.mock("@entrust/trade-content", async (original) => {
   const actual = await original<typeof import("@entrust/trade-content")>();
-  const content = actual.MODULE_CONTENT.map((c) => (c.module === "M05" ? { ...c, status: "approved" as const, approval: { by: "Test", at: "2026-11-08" } } : c));
+  const content = actual.MODULE_CONTENT.map((c) => {
+    if (c.module !== "M08") return c;
+    const { approval: _approval, ...rest } = c;
+    return { ...rest, status: "draft" as const };
+  });
   return {
     ...actual,
     MODULE_CONTENT: content,
@@ -60,6 +64,7 @@ beforeAll(async () => {
   w.org = await createOrganization("mw-org", [[learner!, "owner"]], { platform: null });
   const program = ok(await post(w.admin, "/programs", { name: `${PREFIX}mw-program` }));
   const cohort = ok(await post(w.admin, "/cohorts", { programId: program.id, name: `${PREFIX}mw-cohort`, country: "ET" }));
+  ok(await post(w.admin, `/cohorts/${cohort.id}/staff`, { userId: w.reviewer.id }));
   w.enrollment = ok(await post(w.admin, "/enrollments", { cohortId: cohort.id, organizationId: w.org })).id;
 });
 
@@ -98,6 +103,26 @@ describe("worksheets carried by a module's content", () => {
     const next = await submitWorksheet(OUTPUTS[1]!);
     expect(next.version).toBe(2);
     expect(ok(await get(w.learner, `/worksheets/${OUTPUTS[1]}/versions?enrollmentId=${w.enrollment}`)).items.map((v: Json) => v.version)).toEqual([2, 1]);
+  });
+
+  it("starts M10's register with M05's buyers, so nobody types them twice", async () => {
+    const pipeline = ok(await post(w.learner, "/worksheets/m05-qualified-buyer-pipeline/draft", { enrollmentId: w.enrollment }));
+    const rows = [1, 2, 3, 4, 5].map((n) => ({ buyer_id: `B${n}`, company_name: `Buyer ${n}`, country: "KE", contact_person: "Asha", product: "Suits", stage: n === 1 ? "closed_won" : "engaged", next_action: "Call", responsible: "Sara", next_follow_up: "2027-01-01" }));
+    ok(await callV1(w.learner, "PUT", `/trade/worksheet-versions/${pipeline.id}/values`, { values: { pipeline: rows } }));
+    ok(await post(w.learner, `/worksheet-versions/${pipeline.id}/submit`));
+
+    const register = ok(await post(w.learner, "/worksheets/m10-relationship-register/draft", { enrollmentId: w.enrollment }));
+    expect(register.prefilledFrom).toMatchObject({ worksheetId: "m05-qualified-buyer-pipeline", title: "Qualified Buyer Pipeline and Follow-up Register" });
+    expect(register.values.buyers).toHaveLength(5);
+    expect(register.values.buyers[0]).toEqual({ legal_name: "Buyer 1", location: "KE", contacts: "Asha", products: "Suits", stage: "transaction_completed", follow_up: "2027-01-01" });
+    expect(register.values.buyers[1].stage).toBe("responded");
+    // Every stage it sets is one the register offers.
+    const definition = ok(await get(w.learner, "/worksheets/definitions/m10-relationship-register"));
+    const offered = definition.tables[0].columns.find((c: Json) => c.id === "stage").options.map((o: Json) => o.value);
+    for (const buyer of register.values.buyers) expect(offered).toContain(buyer.stage);
+    // M05's submitted version in the assessment tests below stays the learner's, whichever draft is open.
+    await db.delete(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, register.id));
+    await db.delete(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, pipeline.id));
   });
 
   it("won't take the practical until every required output is submitted", async () => {

@@ -396,5 +396,7 @@ export function prefillFrom(targetId: string, source: { id: string; values: Work
     if (!isBlank(source.values.payment_method)) out.financing_source = source.values.payment_method;
     if (!isBlank(source.values.repayment_date)) out.m04_cash_milestone_date = source.values.repayment_date;
   }
-  return out;
+  // Only what the target has. A field it doesn't have would stop the learner ever submitting it.
+  const known = new Set<string>([...target.fields.map((f) => f.id), ...target.tables.map((t) => t.id)]);
+  return Object.fromEntries(Object.entries(out).filter(([id]) => known.has(id)));
 }

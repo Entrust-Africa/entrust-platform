@@ -45,6 +45,7 @@ export interface ProgrammeReport {
     cohortId: string;
     status: string;
     pathway: string | null;
+    pathwayEvidence: "self_reported" | "verified" | null;
     placementAverage: number | null;
     exitAverage: number | null;
     modulesStarted: Count;
@@ -252,7 +253,7 @@ export function ReportView({ report }: { report: ProgrammeReport }) {
                     </td>
                     <td className="py-2 pr-4 text-ink-2">{s.cohort}</td>
                     <td className="py-2 pr-4 text-ink-2">{humanise(s.status)}</td>
-                    {[s.pathway, s.placementAverage, s.exitAverage, s.modulesPassed, s.leads, s.firmOrders].map((v, i) => (
+                    {[s.pathwayEvidence === "self_reported" ? `${s.pathway} (self-reported)` : s.pathway, s.placementAverage, s.exitAverage, s.modulesPassed, s.leads, s.firmOrders].map((v, i) => (
                       <td key={i} className="py-2 pr-4 text-ink-2">
                         {v ?? "–"}
                       </td>

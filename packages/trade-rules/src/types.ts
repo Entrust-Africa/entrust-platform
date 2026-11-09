@@ -227,7 +227,9 @@ export interface ModuleDefinition {
 /** How the pathway is assigned. Added in 0.2.0. */
 export interface PathwayRules {
   /** A shipment on or after this many months before the assessment date counts as recent experience. */
-  shipmentWindowMonths: number;
+  shipmentWindowMonths: number | null;
+  /** A self-reported shipment is enough to start on Pathway B, so the plan doesn't wait for staff. Its evidence status still shows in reports. */
+  selfReportedAccepted?: boolean;
 }
 
 /**

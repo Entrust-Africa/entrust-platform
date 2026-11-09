@@ -38,9 +38,9 @@ describe("the pathway from the onboarding diagnostic", () => {
     expect(assign({ Q135: NOT_KNOWN })).toMatchObject({ pathway: "A" });
   });
 
-  it("puts an exporter who doesn't know the date on Pathway A", () => {
-    expect(assign({ Q135: "yes", Q137: NOT_KNOWN })).toMatchObject({ pathway: "A" });
-    expect(assign({ Q135: "yes" })).toMatchObject({ pathway: "A" });
+  it("sends an exporter who doesn't know the date to staff, on a provisional Pathway B", () => {
+    expect(assign({ Q135: "yes", Q137: NOT_KNOWN })).toMatchObject({ pathway: "B", provisional: true });
+    expect(assign({ Q135: "yes" })).toMatchObject({ pathway: "B", provisional: true });
   });
 
   it("ignores a date left behind after Q135 changed to no", () => {
@@ -77,6 +77,7 @@ describe("the pathway from the onboarding diagnostic", () => {
     expect(pathwayInputFromDiagnostic(template, diagnostic({ Q135: "yes", Q137: "2025-06-01", Q139: "yes" }), { asOf })).toEqual({
       asOf,
       lastShipmentDate: "2025-06-01",
+      shipmentDateUnknown: false,
       shipmentVerified: false,
       liveOrder: true,
     });

@@ -9,12 +9,37 @@ import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type Json, typ
 
 // One learner's whole journey through the API, the way the screens call it: enrolled by Entrust, onboarding diagnostic,
 // placement assessment, learning plan, modules, exit assessment and certificate. Nothing is written to the database
-// directly, so a step no route offers fails here. Modules with no content yet are overridden by an administrator.
+// directly, so a step no route offers fails here. Every module has content, so nothing needs an administrator's override.
 
 const w = {} as { learner: TestUser; admin: TestUser; reviewer: TestUser; org: string; enrollment: string; planId: string; modules: string[]; submissions: Record<string, string> };
 const get = (user: TestUser | null, path: string) => callV1(user, "GET", `/trade${path}`);
 const post = (user: TestUser | null, path: string, body?: unknown) => callV1(user, "POST", `/trade${path}`, body);
 const put = (user: TestUser | null, path: string, body?: unknown) => callV1(user, "PUT", `/trade${path}`, body);
+const sampleAnswer = (field: Json): unknown => {
+  if (field.kind === "number" || field.kind === "money" || field.kind === "percent") return 5;
+  if (field.kind === "date") return "2026-11-01";
+  if (field.kind === "choice") return field.options[0].value;
+  if (field.kind === "checkbox") return true;
+  return "Some words";
+};
+/** Fills in and submits one worksheet from its definition, as a learner would. */
+async function submitWorksheet(id: string): Promise<void> {
+  const definition = ok(await get(w.learner, `/worksheets/definitions/${id}`));
+  const draft = ok(await post(w.learner, `/worksheets/${id}/draft`, { enrollmentId: w.enrollment }));
+  const values: Record<string, unknown> = {};
+  for (const field of definition.fields) if (!field.showWhen) values[field.id] = sampleAnswer(field);
+  for (const table of definition.tables) {
+    const row = Object.fromEntries(table.columns.map((c: Json) => [c.id, sampleAnswer(c)]));
+    values[table.id] = Array.from({ length: table.minRows ?? 1 }, () => row);
+  }
+  ok(await put(w.learner, `/worksheet-versions/${draft.id}/values`, { values }));
+  ok(await post(w.learner, `/worksheet-versions/${draft.id}/submit`));
+}
+/** The worksheets a learner submits for a module: all of them, except that M01, M04 and M07 are assessed on their first. */
+const contentWorksheets = async (moduleId: string): Promise<string[]> => {
+  const ids = ok(await get(w.learner, `/worksheets?enrollmentId=${w.enrollment}`)).items.filter((i: Json) => i.module === moduleId).map((i: Json) => i.id);
+  return ["M01", "M04", "M07"].includes(moduleId) ? ids.slice(0, 1) : ids;
+};
 const ok = (res: { status: number; body: Json }) => {
   expect(res.status, JSON.stringify(res.body).slice(0, 600)).toBeLessThan(300);
   return res.body;
@@ -66,6 +91,7 @@ describe("a learner's journey from enrolment to certificate", () => {
   it("is enrolled by Entrust, which opens TRADE for the business", async () => {
     const program = ok(await post(w.admin, "/programs", { name: `${PREFIX}lj-program` }));
     const cohort = ok(await post(w.admin, "/cohorts", { programId: program.id, name: `${PREFIX}lj-cohort`, country: "ET" }));
+    ok(await post(w.admin, `/cohorts/${cohort.id}/staff`, { userId: w.reviewer.id }));
     const enrollment = ok(await post(w.admin, "/enrollments", { cohortId: cohort.id, organizationId: w.org }));
     w.enrollment = enrollment.id;
     ok(await get(w.learner, "/modules"));
@@ -98,6 +124,25 @@ describe("a learner's journey from enrolment to certificate", () => {
     expect(ok(await post(w.learner, `/plans/${w.planId}/acknowledge`)).acknowledgedAt).toBe(res.acknowledgedAt);
   });
 
+  it("keeps staff's changes and the acknowledgement when confirming a pathway makes the plan again", async () => {
+    ok(await post(w.admin, `/plans/${w.planId}/override`, { reason: "Needs this for an order", additions: [{ moduleId: "M10", status: "required" }] }));
+    const added = ok(await get(w.learner, `/plans?enrollmentId=${w.enrollment}`)).items.find((p: Json) => p.status !== "superseded");
+    ok(await post(w.learner, `/plans/${added.id}/acknowledge`));
+    ok(await post(w.admin, `/enrollments/${w.enrollment}/pathway`, { pathway: "A", reason: "Checked with the business" }));
+    const remade = ok(await get(w.learner, `/plans?enrollmentId=${w.enrollment}`)).items.find((p: Json) => p.status !== "superseded");
+    expect(remade.id).not.toBe(added.id);
+    expect(remade.modules.find((m: Json) => m.moduleId === "M10")).toMatchObject({ status: "required", source: "staff_override" });
+    // The report reads every reason code, so a staff change has to be one it knows.
+    const placement = ok(await get(w.admin, `/assessments?kind=placement&enrollmentId=${w.enrollment}`)).items[0];
+    ok(await get(w.learner, `/assessments/${placement.id}/report`));
+    if (remade.status !== "approved" && remade.status !== "active") ok(await post(w.admin, `/plans/${remade.id}/approve`, {}));
+    w.planId = remade.id;
+    w.modules = remade.modules.map((m: Json) => m.moduleId);
+    const stored = ok(await get(w.learner, `/plans/${remade.id}`));
+    if (stored.modules.length === added.modules.length) expect(stored.acknowledgedAt).not.toBeNull();
+    else ok(await post(w.learner, `/plans/${remade.id}/acknowledge`));
+  });
+
   it("passes every assigned module that has content, through lessons, knowledge check and assessor", async () => {
     for (const moduleId of w.modules) {
       const content = findVersion(moduleId as ModuleId, "learner");
@@ -111,6 +156,9 @@ describe("a learner's journey from enrolment to certificate", () => {
       const answers = Object.fromEntries(content.knowledgeCheck!.questions.map((q) => [q.id, q.correct.length > 1 ? q.correct : q.correct[0]!]));
       const attempt = ok(await post(w.learner, `/modules/${moduleId}/knowledge-check/attempts`, { enrollmentId: w.enrollment, answers }));
       expect(attempt.passed).toBe(true);
+      const worksheets = await contentWorksheets(moduleId);
+      const learningPlan = worksheets.find((id) => id.endsWith("individual-learning-plan"));
+      for (const id of worksheets) if (id !== learningPlan) await submitWorksheet(id);
       const submission = ok(await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId }));
       const scores = Object.fromEntries(content.rubric!.criteria.map((c) => [c.id, { points: c.maxPoints }]));
       const score = ok(await post(w.reviewer, `/module-submissions/${submission.id}/score`, { scores, feedback: "Good." }));
@@ -118,6 +166,9 @@ describe("a learner's journey from enrolment to certificate", () => {
       w.submissions[moduleId] = submission.id;
       const scored = ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`));
       expect(scored.items[0].status, `${moduleId} with a lesson left`).toBe("in_progress");
+      if (learningPlan) await submitWorksheet(learningPlan);
+      // Nothing is certified while any assigned module is unfinished.
+      if (moduleId === w.modules.at(-1)) expect((await get(w.learner, `/enrollments/${w.enrollment}/certificate`)).status).toBe(404);
       const finished = ok(await post(w.learner, "/module-progress", { enrollmentId: w.enrollment, moduleId, lessonId: lastLesson.id, completed: true, contentVersion: content.version }));
       expect(finished.status, moduleId).toBe("passed");
       const progress = ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`));
@@ -125,17 +176,8 @@ describe("a learner's journey from enrolment to certificate", () => {
     }
   });
 
-  it("has no certificate while modules with no content are left, and can't open them", async () => {
-    const left = w.modules.filter((m) => !findVersion(m as ModuleId, "learner"));
-    expect(left).toEqual(expect.arrayContaining(["M11", "M12"]));
-    expect((await get(w.learner, "/modules/M11")).body.content).toBeNull();
-    expect((await get(w.learner, `/enrollments/${w.enrollment}/certificate`)).status).toBe(404);
-  });
-
-  it("finishes the programme and gets a certificate anyone can check, once the rest are overridden", async () => {
-    for (const moduleId of w.modules.filter((m) => !findVersion(m as ModuleId, "learner"))) {
-      ok(await post(w.admin, "/admin/override-module-completion", { enrollmentId: w.enrollment, moduleId, reason: "No content yet" }));
-    }
+  it("finishes the programme and gets a certificate anyone can check", async () => {
+    expect(w.modules).toEqual(expect.arrayContaining(["M11", "M12"]));
     const certificate = ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`));
     expect(certificate.isValid).toBe(true);
     expect(ok(await get(null, `/certificates/${certificate.code}/public`)).isValid).toBe(true);

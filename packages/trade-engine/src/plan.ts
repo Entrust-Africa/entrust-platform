@@ -135,7 +135,7 @@ export function buildLearningPlan(rules: TradeRules, input: PlanInput): Learning
 
   const conflicts = validateResponses(rules, input.answers, { submit: false }).conflicts.map((c) => c.code);
   const reviewReasons: ReviewReason[] = [
-    ...(input.pathway.provisional ? (["provisional_pathway"] as const) : []),
+    ...(input.pathway.provisional && !planningRules(rules).pathway.selfReportedAccepted ? (["provisional_pathway"] as const) : []),
     ...(input.scores.domains.some((d) => d.pendingNotApplicable.length) || input.scores.groups.some((g) => g.pendingNotApplicable.length)
       ? (["not_applicable_pending"] as const)
       : []),

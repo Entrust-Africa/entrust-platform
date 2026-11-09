@@ -14,7 +14,7 @@ import { MODULE_IDS, latestTradeRules } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
-import { recordTradeChange } from "./trade-shared";
+import { recordTradeChange, assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "./trade-shared";
 
 // Programme reports (#72): who took part, what capabilities improved and what commercial results followed. Entrust staff
 // see everything. A sponsor sees its own cohorts, with no names, and only figures that cover at least five SMEs or SMEs
@@ -56,13 +56,20 @@ async function programScope(ctx: Ctx, id: string): Promise<Scope> {
   const [program] = await ctx.db.select().from(schema.program).where(eq(schema.program.id, id));
   if (!program) throw new ServiceError("not_found", "Report not found.");
   const all = await ctx.db.select().from(schema.cohort).where(eq(schema.cohort.programId, id)).orderBy(asc(schema.cohort.startDate), asc(schema.cohort.name));
-  const cohorts = sponsorIds ? all.filter((c) => c.sponsorOrganizationId && sponsorIds.has(c.sponsorOrganizationId)) : all;
+  let cohorts = sponsorIds ? all.filter((c) => c.sponsorOrganizationId && sponsorIds.has(c.sponsorOrganizationId)) : all;
+  // A facilitator or reviewer gets the part of the programme they work on.
+  if (limitedToAssignedCohorts(ctx.principal)) {
+    const assigned = await assignedCohortIds(ctx.db, ctx.principal.userId);
+    cohorts = cohorts.filter((c) => assigned.includes(c.id));
+    if (cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
+  }
   if (sponsorIds && cohorts.length === 0) throw new ServiceError("not_found", "Report not found.");
   return { kind: "program", id, name: program.name, program: program.name, cohorts, sponsorIds };
 }
 
 async function cohortScope(ctx: Ctx, id: string): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
+  if (limitedToAssignedCohorts(ctx.principal) && !(await canReachCohort(ctx.db, ctx.principal, id))) throw new ServiceError("not_found", "Report not found.");
   const [found] = await ctx.db
     .select({ cohort: schema.cohort, program: schema.program.name })
     .from(schema.cohort)
@@ -105,7 +112,7 @@ async function loadFacts(db: Executor, scope: Scope) {
   }
   const [pathways, scores, progress, attempts, submissions, opportunities, outcomes, briefs, consents] = await Promise.all([
     db
-      .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway })
+      .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway, status: schema.pathwayAssignment.status })
       .from(schema.pathwayAssignment)
       .where(and(inArray(schema.pathwayAssignment.enrollmentId, ids), ne(schema.pathwayAssignment.status, "superseded"))),
     db
@@ -382,6 +389,8 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
         status: e.status,
         sharedKinds: kinds,
         pathway: showsPlacement ? (facts.pathways.find((p) => p.enrollmentId === e.id)?.pathway ?? null) : null,
+        // Reports say whether Pathway B rests on the business's own word or a record staff have seen.
+        pathwayEvidence: showsPlacement ? shipmentEvidence(facts.pathways.find((p) => p.enrollmentId === e.id)) : null,
         placementAverage: showsPlacement ? averageOf("placement") : null,
         exitAverage: showsPlacement ? averageOf("exit") : null,
         modulesStarted: showsProgress ? progress.filter((p) => p.status !== "not_started").length : null,
@@ -462,15 +471,20 @@ function csvText(cell: string | number | null): string {
 }
 
 const CSV_COLUMNS = [
-  "Business", "SME ID", "Cohort", "Status", "Pathway", "Placement average", "Exit average", "Modules started", "Modules passed", "Submissions waiting",
+  "Business", "SME ID", "Cohort", "Status", "Pathway", "Shipment evidence", "Placement average", "Exit average", "Modules started", "Modules passed", "Submissions waiting",
   "Leads", "Firm orders", "Financing requested", "Financing approved", "Financing disbursed", "Value shipped", "Value paid",
 ];
+
+function shipmentEvidence(row: { pathway: string; status: string } | undefined): "self_reported" | "verified" | null {
+  if (row?.pathway !== "B") return null;
+  return row.status === "provisional" ? "self_reported" : "verified";
+}
 
 async function exportReport(ctx: Ctx, scope: Scope): Promise<{ csv: string; filename: string }> {
   if (scope.sponsorIds !== null) throw new ServiceError("forbidden", "Only Entrust staff can export a programme report.");
   const report = buildReport(scope, await loadFacts(ctx.db, scope), ctx.now);
   const rows = report.smes.map((s) => [
-    s.name, s.smeId, s.cohort, s.status, s.pathway, s.placementAverage, s.exitAverage, s.modulesStarted, s.modulesPassed, s.submissionsWaiting,
+    s.name, s.smeId, s.cohort, s.status, s.pathway, s.pathwayEvidence === "self_reported" ? "Self-reported" : s.pathwayEvidence === "verified" ? "Record seen" : "", s.placementAverage, s.exitAverage, s.modulesStarted, s.modulesPassed, s.submissionsWaiting,
     s.leads, s.firmOrders, moneyCell(s.financingRequested), moneyCell(s.financingApproved), moneyCell(s.financingDisbursed), moneyCell(s.valueShipped), moneyCell(s.valuePaid),
   ]);
   const csv = [CSV_COLUMNS, ...rows].map((row) => row.map(csvText).join(",")).join("\r\n");

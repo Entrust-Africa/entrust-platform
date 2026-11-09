@@ -58,7 +58,7 @@ export default async function DiagnosticDetailPage({ params }: { params: Promise
             <h2 className="font-display text-lg font-bold text-ink">
               Pathway {d.pathway.pathway}: {d.pathway.name}
             </h2>
-            {d.pathway.status === "provisional" && <StatusBadge tone="warn">Provisional</StatusBadge>}
+            {d.pathway.status === "provisional" && <StatusBadge tone="warn">Self-reported</StatusBadge>}
             {d.pathway.liveOrder && <StatusBadge tone="warn">Live order</StatusBadge>}
           </div>
           <ul className="list-disc space-y-1 pl-5 text-sm text-ink-2">

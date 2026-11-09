@@ -197,3 +197,14 @@ export function afriConnectBuyersUrl(env: Record<string, string | undefined> = p
   const site = web(env.AFRICONNECT_ISSUER) ?? new URL(DEFAULT_ISSUER);
   return `${site.origin}/marketplace`;
 }
+
+/** AfriConnect's Market Intelligence, with Ethiopia chosen as the exporter. It's a trade analysis: the businesses are on the Marketplace. */
+export function afriConnectMarketIntelligenceUrl(env: Record<string, string | undefined> = process.env): string {
+  let site: URL;
+  try {
+    site = new URL(env.AFRICONNECT_ISSUER?.trim() ?? "");
+  } catch {
+    site = new URL(DEFAULT_ISSUER);
+  }
+  return `${site.origin}/export-potential?exporter=ETH`;
+}

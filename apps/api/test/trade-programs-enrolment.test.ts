@@ -133,9 +133,27 @@ describe("TRADE Cohorts API", () => {
   });
 
   it("allows Entrust staff to list cohorts and view cohort details", async () => {
+    // A reviewer sees the cohorts they're on, and the facilitator who created this one is on it.
+    const before = await callV1(w.reviewer, "GET", `/trade/cohorts?programId=${programId}`);
+    expect(before.status).toBe(200);
+    expect(before.body.cohorts).toEqual([]);
+    expect((await callV1(w.reviewer, "GET", `/trade/cohorts/${cohortId}`)).status).toBe(404);
+    expect((await callV1(w.facilitator, "GET", `/trade/cohorts/${cohortId}`)).status).toBe(200);
+
+    // Only an administrator assigns.
+    expect((await callV1(w.facilitator, "POST", `/trade/cohorts/${cohortId}/staff`, { userId: w.reviewer.id })).status).toBe(403);
+    const assigned = await callV1(w.admin, "POST", `/trade/cohorts/${cohortId}/staff`, { userId: w.reviewer.id });
+    expect(assigned.status).toBe(201);
+    expect(assigned.body.assigned.map((a: { userId: string }) => a.userId)).toEqual(expect.arrayContaining([w.reviewer.id, w.facilitator.id]));
+    expect((await callV1(w.admin, "POST", `/trade/cohorts/${cohortId}/staff`, { userId: w.smeOwner.id })).status).toBe(422);
+
     const listRes = await callV1(w.reviewer, "GET", `/trade/cohorts?programId=${programId}`);
-    expect(listRes.status).toBe(200);
     expect(listRes.body.cohorts.length).toBeGreaterThanOrEqual(1);
+    expect((await callV1(w.reviewer, "GET", `/trade/cohorts/${cohortId}`)).status).toBe(200);
+
+    const removed = await callV1(w.admin, "DELETE", `/trade/cohorts/${cohortId}/staff/${w.reviewer.id}`);
+    expect(removed.status).toBe(200);
+    expect((await callV1(w.reviewer, "GET", `/trade/cohorts/${cohortId}`)).status).toBe(404);
 
     const getRes = await callV1(w.admin, "GET", `/trade/cohorts/${cohortId}`);
     expect(getRes.status).toBe(200);
@@ -169,6 +187,9 @@ describe("TRADE Enrolment API", () => {
       deliveryMode: "live",
     });
     cohort2Id = c2.body.id;
+    for (const id of [cohort1Id, cohort2Id]) {
+      await callV1(w.admin, "POST", `/trade/cohorts/${id}/staff`, { userId: w.facilitator.id });
+    }
   });
 
   it("enrolling an SME that already uses CLEAR keeps organisation and SME ID, and grants trade access", async () => {
@@ -282,18 +303,14 @@ describe("TRADE Enrolment API", () => {
     expect(noReasonRes.body.error).toContain("A reason is required");
   });
 
-  it("allows staff to complete an enrolment", async () => {
+  it("won't let staff mark an enrolment completed by hand", async () => {
     const completeRes = await callV1(w.admin, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, {
       status: "completed",
     });
-    expect(completeRes.status).toBe(200);
-    expect(completeRes.body.status).toBe("completed");
-
-    const [enrRow] = await db
-      .select()
-      .from(schema.enrollment)
-      .where(eq(schema.enrollment.id, enrollment1Id));
-    expect(enrRow?.completedAt).toBeDefined();
+    expect(completeRes.status).toBe(422);
+    expect(completeRes.body.error).toContain("completes by itself");
+    const [enrRow] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollment1Id));
+    expect(enrRow?.status).not.toBe("completed");
   });
 });
 

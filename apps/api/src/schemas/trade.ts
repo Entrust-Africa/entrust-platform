@@ -18,6 +18,8 @@ import {
   MODULE_PROGRESS_STATUSES,
   MODULE_STATUSES,
   OUTCOME_EVIDENCE_TIERS,
+  ACTION_PRIORITIES,
+  ACTION_STATUSES,
   PIPELINE_STAGES,
   QUALIFICATION_BANDS,
   SPONSOR_DATA_KINDS,
@@ -715,6 +717,7 @@ export const ProgrammeReport = z
         status: z.string(),
         sharedKinds: z.array(DataKind),
         pathway: z.string().nullable(),
+        pathwayEvidence: z.enum(["self_reported", "verified"]).nullable(),
         placementAverage: z.number().nullable(),
         exitAverage: z.number().nullable(),
         modulesStarted: ReportCount,
@@ -1886,6 +1889,172 @@ export type UpdateExportStatusInput = z.infer<typeof UpdateExportStatusBody>;
 export type OutcomeEventView = z.infer<typeof OutcomeEventView>;
 export type OutcomeView = z.infer<typeof OutcomeView>;
 
+// ---- The 90-day action plan (FR-11, M12) ----
 
+const isoDay = z.iso.date();
+const ActionFields = {
+  description: z.string().trim().min(1, "Say what the action is"),
+  priority: z.enum(ACTION_PRIORITIES).nullable().optional(),
+  responsible: z.string().trim().min(1, "Name the person responsible"),
+  startDate: isoDay.nullable().optional(),
+  resources: z.string().trim().nullable().optional(),
+  expectedResult: z.string().trim().nullable().optional(),
+  performanceIndicator: z.string().trim().nullable().optional(),
+};
 
+export const ActionPlanQuery = z.object({ organizationId: z.string().optional() }).openapi("TradeActionPlanQuery");
+export const ActionItemParam = z.object({ id: z.uuid() }).openapi("TradeActionItemParam");
+
+export const CreateActionItemBody = z
+  .object({ organizationId: z.string().optional(), ...ActionFields, dueDate: isoDay, milestone: z.union([z.literal(30), z.literal(60), z.literal(90)]).optional() })
+  .openapi("CreateTradeActionItemBody");
+
+export const UpdateActionItemBody = z
+  .object({
+    ...ActionFields,
+    description: ActionFields.description.optional(),
+    responsible: ActionFields.responsible.optional(),
+    dueDate: isoDay.optional(),
+    status: z.enum(ACTION_STATUSES).optional(),
+    evidence: z.string().trim().nullable().optional(),
+    reviewComments: z.string().trim().nullable().optional(),
+    milestone: z.union([z.literal(30), z.literal(60), z.literal(90)]).optional(),
+  })
+  .openapi("UpdateTradeActionItemBody");
+
+export const ActionItemView = z
+  .object({
+    id: z.string(),
+    organizationId: z.string(),
+    description: z.string(),
+    priority: z.string().nullable(),
+    responsible: z.string(),
+    startDate: z.string().nullable(),
+    dueDate: z.string().nullable(),
+    resources: z.string().nullable(),
+    expectedResult: z.string().nullable(),
+    performanceIndicator: z.string().nullable(),
+    status: z.enum(ACTION_STATUSES),
+    evidence: z.string().nullable(),
+    reviewComments: z.string().nullable(),
+    milestone: z.number(),
+    fromRegister: z.boolean(),
+    overdue: z.boolean(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeActionItem");
+
+export const ActionReviewView = z
+  .object({ id: z.string(), day: z.number(), answers: z.record(z.string(), z.string()), createdAt: z.string() })
+  .openapi("TradeActionReview");
+
+export const ActionPlanView = z
+  .object({
+    organizationId: z.string(),
+    items: z.array(ActionItemView),
+    milestones: z.array(z.object({ day: z.number(), total: z.number(), completed: z.number(), overdue: z.number() })),
+    questions: z.record(z.string(), z.array(z.object({ id: z.string(), text: z.string() }))),
+    reviews: z.array(ActionReviewView),
+  })
+  .openapi("TradeActionPlan");
+
+export const ImportActionRegisterBody = z.object({ organizationId: z.string().optional() }).openapi("ImportTradeActionRegisterBody");
+export const ImportActionRegisterView = z.object({ imported: z.number() }).openapi("ImportTradeActionRegisterResult");
+
+export const RecordActionReviewBody = z
+  .object({ organizationId: z.string().optional(), day: z.union([z.literal(30), z.literal(60), z.literal(90)]), answers: z.record(z.string(), z.string().trim()) })
+  .openapi("RecordTradeActionReviewBody");
+
+export type CreateActionItemInput = z.infer<typeof CreateActionItemBody>;
+export type UpdateActionItemInput = z.infer<typeof UpdateActionItemBody>;
+export type RecordActionReviewInput = z.infer<typeof RecordActionReviewBody>;
+
+export const AiPromptList = z
+  .object({ items: z.array(z.object({ module: z.string(), moduleTitle: z.string(), id: z.string(), title: z.string(), prompt: z.string(), verification: z.array(z.string()) })) })
+  .openapi("TradeAiPromptList");
+
+// ---- The Export Transaction Workspace (FR-10) ----
+
+export const TRANSACTION_STAGES = ["enquiry", "quoted", "order_confirmed", "in_production", "shipped", "delivered", "closed", "cancelled"] as const;
+
+export const TransactionQuery = z.object({ organizationId: z.string().optional() }).openapi("TradeTransactionQuery");
+export const TransactionParam = z.object({ id: z.uuid() }).openapi("TradeTransactionParam");
+
+export const CreateTransactionBody = z
+  .object({ organizationId: z.string().optional(), product: z.string().trim().min(1, "Say what the product is"), destination: z.string().trim().optional(), isPractice: z.boolean().optional() })
+  .openapi("CreateTradeTransactionBody");
+
+export const UpdateTransactionBody = z
+  .object({
+    stage: z.enum(TRANSACTION_STAGES).optional(),
+    product: z.string().trim().min(1).optional(),
+    destination: z.string().trim().nullable().optional(),
+    quantity: z.string().trim().max(5000).nullable().optional(),
+    buyerName: z.string().trim().max(5000).nullable().optional(),
+    buyerStatus: z.string().trim().max(5000).nullable().optional(),
+    orderDocument: z.string().trim().max(5000).nullable().optional(),
+    agreedPrice: z.string().trim().max(5000).nullable().optional(),
+    currency: z.string().trim().max(5000).nullable().optional(),
+    incoterm: z.string().trim().max(5000).nullable().optional(),
+    namedPlace: z.string().trim().max(5000).nullable().optional(),
+    costingAndMargin: z.string().trim().max(5000).nullable().optional(),
+    paymentTerms: z.string().trim().max(5000).nullable().optional(),
+    paymentRisk: z.string().trim().max(5000).nullable().optional(),
+    productionStatus: z.string().trim().max(5000).nullable().optional(),
+    documentChecklist: z.string().trim().max(5000).nullable().optional(),
+    logistics: z.string().trim().max(5000).nullable().optional(),
+    customsStatus: z.string().trim().max(5000).nullable().optional(),
+    insuranceStatus: z.string().trim().max(5000).nullable().optional(),
+    exceptions: z.string().trim().max(5000).nullable().optional(),
+    outstandingActions: z.string().trim().max(5000).nullable().optional(),
+    responsible: z.string().trim().max(5000).nullable().optional(),
+    paymentStatus: z.string().trim().max(5000).nullable().optional(),
+    actualCosts: z.string().trim().max(5000).nullable().optional(),
+    closeout: z.string().trim().max(5000).nullable().optional(),
+    clearCaseId: z.uuid().nullable().optional(),
+  })
+  .openapi("UpdateTradeTransactionBody");
+
+export const TransactionView = z
+  .object({
+    id: z.string(),
+    organizationId: z.string(),
+    reference: z.string(),
+    isPractice: z.boolean(),
+    stage: z.string(),
+    product: z.string(),
+    destination: z.string().nullable(),
+    quantity: z.string().nullable(),
+    buyerName: z.string().nullable(),
+    buyerStatus: z.string().nullable(),
+    orderDocument: z.string().nullable(),
+    agreedPrice: z.string().nullable(),
+    currency: z.string().nullable(),
+    incoterm: z.string().nullable(),
+    namedPlace: z.string().nullable(),
+    costingAndMargin: z.string().nullable(),
+    paymentTerms: z.string().nullable(),
+    paymentRisk: z.string().nullable(),
+    productionStatus: z.string().nullable(),
+    documentChecklist: z.string().nullable(),
+    logistics: z.string().nullable(),
+    customsStatus: z.string().nullable(),
+    insuranceStatus: z.string().nullable(),
+    exceptions: z.string().nullable(),
+    outstandingActions: z.string().nullable(),
+    responsible: z.string().nullable(),
+    paymentStatus: z.string().nullable(),
+    actualCosts: z.string().nullable(),
+    closeout: z.string().nullable(),
+    clearCase: z.object({ id: z.string(), reference: z.string(), status: z.string() }).nullable(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeTransaction");
+
+export const TransactionList = z
+  .object({ organizationId: z.string(), items: z.array(TransactionView), clearCases: z.array(z.object({ id: z.string(), reference: z.string(), status: z.string() })) })
+  .openapi("TradeTransactionList");
+
+export type CreateTransactionInput = z.infer<typeof CreateTransactionBody>;
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionBody>;
 

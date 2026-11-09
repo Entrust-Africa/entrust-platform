@@ -273,7 +273,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
           )}
           {pathway && (
             <StatusBadge tone="info">
-              {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+              {`Pathway ${pathway}: ${PATHWAY_NAMES[pathway]}${diagnostic?.pathwayStatus === "provisional" ? " (self-reported)" : ""}`}
             </StatusBadge>
           )}
         </div>

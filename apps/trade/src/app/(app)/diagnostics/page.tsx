@@ -65,7 +65,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Figure label="Submitted" value={counts.submitted} hint="People with a submitted form" />
                 <Figure label="In progress" value={counts.draft} hint="Started, nothing submitted yet" />
-                <Figure label="Pathway B, provisional" value={counts.provisional} hint="Need a shipment record checked" />
+                <Figure label="Pathway B, self-reported" value={counts.provisional} hint="No shipment record seen yet" />
                 <Figure label="Live order" value={counts.liveOrder} hint="A confirmed order, so M04, M06 and M08 move forward" />
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
@@ -115,7 +115,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
             />
           ) : (
             <Card className="overflow-hidden p-0">
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <PeopleTable people={items} />
               </div>
             </Card>

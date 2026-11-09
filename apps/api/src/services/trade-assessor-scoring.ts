@@ -1,12 +1,13 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { evaluateRubric } from "@entrust/trade-engine";
+import { evaluateRubric, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
 import { findVersion } from "@entrust/trade-content";
 import { type ModuleId } from "@entrust/trade-rules";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { clearCompletionAfterCriticalFailure, evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
   CreateModuleSubmissionInput,
@@ -29,6 +30,7 @@ export async function createModuleSubmission(
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
       cohortId: schema.enrollment.cohortId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -46,6 +48,7 @@ export async function createModuleSubmission(
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  refuseNewWork(enrollment.status);
 
   // 1. Verify module assignment in active plan
   const [activePlan] = await db
@@ -95,13 +98,24 @@ export async function createModuleSubmission(
     );
   }
 
+  // Evidence attached to a submission has to be this business's own.
+  if (input.evidenceRecordIds?.length) {
+    const own = await db
+      .select({ id: schema.evidenceRecord.id })
+      .from(schema.evidenceRecord)
+      .where(and(inArray(schema.evidenceRecord.id, input.evidenceRecordIds), eq(schema.evidenceRecord.organizationId, enrollment.organizationId)));
+    if (own.length !== new Set(input.evidenceRecordIds).size) throw new ServiceError("not_found", "Evidence record not found.");
+  }
+
   // 3. Resolve worksheet version and snapshot
   let worksheetVersionId: string | null = input.worksheetVersionId ?? null;
   let worksheetSnapshot: Record<string, unknown> = {};
 
   // A module whose content carries its worksheets is assessed on every required output, so the assessor sees them all.
   // The individual learning plan isn't one: it follows the assessor's review.
-  const requiredOutputs = moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
+  // M03's financial pack is four worksheets, and it's assessed on all four in the same way.
+  const engineOutputs = WORKSHEET_DEFINITIONS.filter((d) => d.module === input.moduleId);
+  const requiredOutputs = engineOutputs.length > 1 ? engineOutputs : moduleContentWorksheets(input.moduleId as ModuleId).filter((d) => !isLearningPlan(d));
   if (requiredOutputs.length) {
     const submitted = await db
       .select()
@@ -127,6 +141,7 @@ export async function createModuleSubmission(
         title: def.title,
         version: version!.version,
         values: version!.values,
+        result: version!.result,
         submittedAt: version!.submittedAt?.toISOString() ?? null,
       })),
     };
@@ -180,6 +195,9 @@ export async function createModuleSubmission(
         confidence: latestWs.confidence,
         submittedAt: latestWs.submittedAt?.toISOString() ?? null,
       };
+    } else if (WORKSHEET_DEFINITIONS.some((d) => d.module === input.moduleId)) {
+      // Nothing to assess otherwise: a module with a worksheet is assessed on it.
+      throw new ServiceError("precondition_failed", "Submit this module's worksheet first.");
     }
   }
 
@@ -288,6 +306,13 @@ export async function listModuleSubmissions(
     const userOrgIds = Array.from(principal.smeRoles.keys());
     if (userOrgIds.length === 0) return [];
     conditions.push(inArray(schema.enrollment.organizationId, userOrgIds));
+  }
+
+  // A facilitator or reviewer sees the queue of their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const cohorts = await assignedCohortIds(db, principal.userId);
+    if (cohorts.length === 0) return [];
+    conditions.push(inArray(schema.enrollment.cohortId, cohorts));
   }
 
   // Queue ordering:
@@ -409,6 +434,9 @@ export async function getModuleSubmission(
   if (!principal.staffRole && !principal.smeRoles.has(row.enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  if (principal.staffRole && !(await canReachCohort(db, principal, row.enrollment.cohortId))) {
+    throw new ServiceError("not_found", "Submission not found.");
+  }
 
   const [score] = await db
     .select()
@@ -472,10 +500,26 @@ export async function getModuleSubmission(
   };
 }
 
-export async function scoreModuleSubmission(
+/** One score at a time per submission, so two assessors at once can't both be the official first score. */
+export async function scoreModuleSubmission(ctx: Ctx, submissionId: string, input: ScoreSubmissionInput): Promise<RubricAssessmentView> {
+  const after: AfterCommit[] = [];
+  const view = await ctx.db.transaction(async (tx) => {
+    const [locked] = await tx.select({ enrollmentId: schema.moduleSubmission.enrollmentId }).from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, submissionId)).for("update");
+    // The enrolment before the module's progress, the order a lesson save takes them in, so the two can't deadlock.
+    if (locked) await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, locked.enrollmentId)).for("update");
+    return applyScore({ ...ctx, db: tx }, submissionId, input, after);
+  });
+  for (const run of after) await run(ctx.db);
+  return view;
+}
+
+type AfterCommit = (db: Ctx["db"]) => Promise<void>;
+
+async function applyScore(
   ctx: Ctx,
   submissionId: string,
-  input: ScoreSubmissionInput
+  input: ScoreSubmissionInput,
+  after: AfterCommit[]
 ): Promise<RubricAssessmentView> {
   const { principal, db } = ctx;
 
@@ -494,7 +538,8 @@ export async function scoreModuleSubmission(
     .where(eq(schema.moduleSubmission.id, submissionId))
     .limit(1);
 
-  if (!row) {
+  // An assessor scores only the cohorts they're assigned to. To anyone else the submission isn't there.
+  if (!row || !(await canReachCohort(db, principal, row.enrollment.cohortId))) {
     throw new ServiceError("not_found", "Submission not found.");
   }
 
@@ -519,6 +564,8 @@ export async function scoreModuleSubmission(
   }
 
   const isFirstScore = existingScores.length === 0;
+  // A second assessor's reading is a check on the first, and changes nothing, so it can still come in afterwards.
+  if (isFirstScore) refuseNewWork(row.enrollment.status);
 
   // Evaluate scores against rubric
   const evaluation = evaluateRubric(
@@ -550,6 +597,11 @@ export async function scoreModuleSubmission(
 
   // If this is the first score, it counts for learner progress:
   if (isFirstScore) {
+    // What was approved before the work was scored can't stand over a confirmed critical failure.
+    if (evaluation.confirmedCriticalFailures.length) {
+      await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
+    }
+
     const submissionStatus = evaluation.passed ? "passed" : "revision_required";
     await db
       .update(schema.moduleSubmission)
@@ -581,30 +633,32 @@ export async function scoreModuleSubmission(
       await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
     }
 
-    // Send email notification to SME via worker (#16 with @entrust/notify #17)
-    try {
-      const [ownerUser] = await db
-        .select({ email: schema.user.email })
-        .from(schema.member)
-        .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-        .where(
-          and(
-            eq(schema.member.organizationId, row.enrollment.organizationId),
-            eq(schema.member.role, "owner")
+    // Queued after the score commits: the learner isn't told about a score that rolled back, and a queue problem can't undo one.
+    after.push(async (db) => {
+      try {
+        const [ownerUser] = await db
+          .select({ email: schema.user.email })
+          .from(schema.member)
+          .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+          .where(
+            and(
+              eq(schema.member.organizationId, row.enrollment.organizationId),
+              eq(schema.member.role, "owner")
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (ownerUser?.email) {
-        await enqueue(JOB_NAMES.SEND_EMAIL, {
-          to: ownerUser.email,
-          subject: `TRADE Feedback: Module ${sub.moduleId} submission has been scored`,
-          text: `Your practical deliverable for Module ${sub.moduleId} has been evaluated.\nOutcome: ${evaluation.outcome}\nScore: ${evaluation.totalPoints}/${evaluation.maxPoints} (${evaluation.band})\n\nLog in to the TRADE platform to review your assessor feedback.`,
-        });
+        if (ownerUser?.email) {
+          await enqueue(JOB_NAMES.SEND_EMAIL, {
+            to: ownerUser.email,
+            subject: `TRADE Feedback: Module ${sub.moduleId} submission has been scored`,
+            text: `Your practical deliverable for Module ${sub.moduleId} has been evaluated.\nOutcome: ${evaluation.outcome}\nScore: ${evaluation.totalPoints}/${evaluation.maxPoints} (${evaluation.band})\n\nLog in to the TRADE platform to review your assessor feedback.`,
+          });
+        }
+      } catch (err) {
+        console.warn("[trade:scoring] Could not queue notification email:", err);
       }
-    } catch (err) {
-      console.warn("[trade:scoring] Could not queue notification email:", err);
-    }
+    });
   }
 
   // Audit log
@@ -758,6 +812,9 @@ async function applyScoreOverride(
       )
     );
 
+  if (confirmedFailures.length) {
+    await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
+  }
   if (evaluation.passed) {
     await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
   } else if (officialScore.passed) {
@@ -835,6 +892,9 @@ export async function listSubmissionScores(
 
   if (!principal.staffRole && !principal.smeRoles.has(sub.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
+  }
+  if (principal.staffRole && !(await accessTo(db, principal, sub.organizationId))) {
+    throw new ServiceError("not_found", "Submission not found.");
   }
 
   const scores = await db

@@ -8,6 +8,7 @@ import type {
 } from "@entrust/trade-engine";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { assignedOrganizationIds, limitedToAssignedCohorts, canReachOrganization } from "./trade-shared";
 import type {
   CreateEvidenceInput,
   EvidenceListQueryInput,
@@ -29,6 +30,10 @@ export async function listEvidence(
   if (principal.staffRole) {
     if (query.organizationId) {
       orgFilter = [query.organizationId];
+    }
+    if (limitedToAssignedCohorts(principal)) {
+      const assigned = await assignedOrganizationIds(db, principal.userId);
+      orgFilter = orgFilter ? orgFilter.filter((o) => assigned.includes(o)) : assigned;
     }
   } else {
     const userOrgIds = Array.from(principal.smeRoles.keys());
@@ -173,15 +178,24 @@ export async function createEvidence(
       "You cannot create evidence for this organization."
     );
   }
+  if (principal.staffRole && !(await canReachOrganization(db, principal, targetOrgId))) {
+    throw new ServiceError("not_found", "Organisation not found.");
+  }
 
   if (input.fileId) {
     const [f] = await db
       .select({ id: schema.file.id })
       .from(schema.file)
-      .where(eq(schema.file.id, input.fileId));
+      // Only this business's own file: another's id must not reveal its name, type or size.
+      .where(and(eq(schema.file.id, input.fileId), eq(schema.file.organizationId, targetOrgId)));
     if (!f) {
       throw new ServiceError("not_found", "Attached file not found.");
     }
+  }
+
+  // Whether evidence has been reviewed or verified is for Entrust staff to say, not for the business presenting it.
+  if (!principal.staffRole && (input.confidence === "reviewed" || input.confidence === "verified")) {
+    throw new ServiceError("forbidden", "Only Entrust staff can mark evidence as reviewed or verified.");
   }
 
   const confidence: EvidenceConfidence =
@@ -250,7 +264,7 @@ export async function reviewEvidence(
     .from(schema.evidenceRecord)
     .where(eq(schema.evidenceRecord.id, evidenceId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Evidence record not found.");
   }
 
@@ -323,7 +337,7 @@ export async function requestEvidence(
     .from(schema.organization)
     .where(eq(schema.organization.id, input.organizationId));
 
-  if (!org) {
+  if (!org || !(await canReachOrganization(db, principal, org.id))) {
     throw new ServiceError("not_found", "Organization not found.");
   }
 

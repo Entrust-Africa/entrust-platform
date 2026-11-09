@@ -1,6 +1,6 @@
 import type { ModuleContent } from "../schema";
 
-// Loaded from Entrust's M02 document. A draft until Entrust approves it; content fixes go back to them.
+// Loaded from Entrust's M02 document.
 export const M02_V1_0_0: ModuleContent = {
   module: "M02",
   version: "1.0.0",
@@ -16,7 +16,11 @@ export const M02_V1_0_0: ModuleContent = {
     "Understand basic data security and access-control principles.",
     "Prepare a digital business information file that can support financing and export activities.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

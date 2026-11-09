@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { getCohort, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
+import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
+import { PlanAndPathway } from "./plan-and-pathway";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
 
@@ -58,7 +60,7 @@ function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
       <StatusBadge tone="ok">Submitted</StatusBadge>
       {row.pathway && (
         <StatusBadge tone={row.pathway === "B" ? "product" : "info"}>
-          {`Pathway ${row.pathway}${row.pathwayStatus === "provisional" ? " (provisional)" : ""}`}
+          {`Pathway ${row.pathway}${row.pathwayStatus === "provisional" ? " (self-reported)" : ""}`}
         </StatusBadge>
       )}
       <Link href={`/diagnostic/${row.id}`} className="font-semibold text-brand-600 hover:underline">
@@ -86,6 +88,7 @@ export default async function CohortDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const me = await getMe();
+  const canEnrol = me?.staffRole === "admin" || me?.staffRole === "facilitator";
   if (!me) redirect("/sign-in");
 
   const isStaff = Boolean(me.staffRole);
@@ -94,6 +97,7 @@ export default async function CohortDetailPage(props: {
   }
 
   const { id } = await props.params;
+  const cohortStaff = me.staffRole === "admin" ? await getCohortStaff(id) : null;
   const [cohort, waiting, diagnostics, placements, sessions] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
@@ -137,7 +141,7 @@ export default async function CohortDetailPage(props: {
           </div>
           <div className="flex items-center gap-2">
             <ScheduleSessionDialog cohortId={cohort.id} />
-            <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
       </div>
@@ -175,6 +179,8 @@ export default async function CohortDetailPage(props: {
           </p>
         </Card>
       </div>
+
+      {cohortStaff && <CohortStaffPanel cohortId={cohort.id} staff={cohortStaff} />}
 
       {/* Live Sessions & Workshops Section */}
       <div className="space-y-4">
@@ -269,7 +275,7 @@ export default async function CohortDetailPage(props: {
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
             </p>
             <div className="mt-4">
-              <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
             </div>
           </Card>
         ) : (
@@ -284,6 +290,7 @@ export default async function CohortDetailPage(props: {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Onboarding diagnostic</th>
                     <th className="px-4 py-3">Placement assessment</th>
+                    <th className="px-4 py-3">Plan and pathway</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -313,6 +320,9 @@ export default async function CohortDetailPage(props: {
                       </td>
                       <td className="px-4 py-3">
                         <PlacementCell row={placementOf.get(enr.enrollmentId)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <StatusUpdater

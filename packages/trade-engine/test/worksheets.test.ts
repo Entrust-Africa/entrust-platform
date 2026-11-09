@@ -230,6 +230,17 @@ describe("M04 Transaction Finance and Payment-Risk Brief", () => {
 });
 
 describe("prefilling one worksheet from another", () => {
+  it("only ever carries fields the target has, so a prefilled draft can be submitted", () => {
+    const sample = (kind: string, options?: readonly { value: string }[]) => (["number", "money", "percent"].includes(kind) ? 5 : kind === "date" ? "2026-11-01" : kind === "choice" ? options![0]!.value : kind === "checkbox" ? true : "Some words");
+    for (const target of WORKSHEET_DEFINITIONS.filter((d) => d.prefillFrom)) {
+      const source = WORKSHEET_DEFINITIONS.find((d) => d.id === target.prefillFrom)!;
+      const values: Record<string, unknown> = {};
+      for (const f of source.fields) if (!f.showWhen) values[f.id] = sample(f.kind, f.options);
+      const prefilled = prefillFrom(target.id, { id: source.id, values, computed: computeWorksheet(source.id, values).computed });
+      expect(computeWorksheet(target.id, prefilled).problems.filter((p) => p.message.includes("no such field")), target.id).toEqual([]);
+    }
+  });
+
   const wc = {
     id: "m03-working-capital-brief",
     values: { currency: "USD", exchange_rate: 56.5, rate_date: "2026-11-01", pre_shipment_outflows: 560_000, internal_cash: 150_000, buyer_advance: 200_000 },

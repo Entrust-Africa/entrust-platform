@@ -21,7 +21,7 @@ beforeAll(async () => {
   const [sme, reviewer] = (await Promise.all(["pd-sme", "pd-reviewer"].map(signUp))) as [TestUser, TestUser];
   Object.assign(w, { sme, reviewer });
   await createOrganization("pd-sme-org", [[sme, "owner"]], { platform: "trade" });
-  w.entrust = await createOrganization("pd-entrust", [[reviewer, "reviewer"]], { smeProfile: false });
+  w.entrust = await createOrganization("pd-entrust", [[reviewer, "facilitator"]], { smeProfile: false });
   process.env.ENTRUST_ORG_ID = w.entrust;
 });
 

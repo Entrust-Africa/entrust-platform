@@ -12,6 +12,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import {
   ASSESSMENT_STATUSES,
@@ -36,6 +37,7 @@ import {
 } from "@entrust/trade-engine";
 import { MODULE_IDS, PATHWAYS } from "@entrust/trade-rules";
 import { organization, user } from "./auth";
+import { exportCase } from "./clear";
 import { file } from "./core";
 
 // TRADE platform PostgreSQL schema (#55).
@@ -87,6 +89,22 @@ export const cohort = trade.table(
     index("trade_cohort_program_idx").on(t.programId),
     index("trade_cohort_sponsor_idx").on(t.sponsorOrganizationId),
   ],
+);
+
+// The Entrust facilitators and reviewers assigned to a cohort. They reach only the SMEs in their cohorts; an administrator reaches all.
+export const cohortStaff = trade.table(
+  "cohort_staff",
+  {
+    cohortId: uuid("cohort_id")
+      .notNull()
+      .references(() => cohort.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assignedByUserId: text("assigned_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.cohortId, t.userId] }), index("trade_cohort_staff_user_idx").on(t.userId)],
 );
 
 // An SME organisation's enrolment in a cohort. One per SME per cohort; an SME may enrol in several cohorts.
@@ -1188,3 +1206,92 @@ export const publicDiagnostic = trade.table(
     index("trade_public_diagnostic_created_idx").on(t.createdAt),
   ],
 );
+
+// An action in an SME's 90-day plan (FR-11, M12). It belongs to the organisation, so it stays available after the certificate.
+export const actionItem = trade.table(
+  "action_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    priority: text("priority"),
+    responsible: text("responsible").notNull(),
+    startDate: date("start_date", { mode: "string" }),
+    dueDate: date("due_date", { mode: "string" }),
+    resources: text("resources"),
+    expectedResult: text("expected_result"),
+    performanceIndicator: text("performance_indicator"),
+    status: text("status").notNull().default("not_started"),
+    evidence: text("evidence"),
+    reviewComments: text("review_comments"),
+    milestone: integer("milestone").notNull().default(90),
+    sourceWorksheetVersionId: uuid("source_worksheet_version_id").references(() => worksheetVersion.id, { onDelete: "set null" }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_action_item_org_idx").on(t.organizationId, t.milestone)],
+);
+
+// A 30, 60 or 90-day follow-up on the plan: the answers to M12's questions at that point.
+export const actionReview = trade.table(
+  "action_review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    day: integer("day").notNull(),
+    answers: jsonb("answers").$type<Record<string, string>>().notNull().default({}),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_action_review_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+// One planned or active export (FR-10, M08), with the reference a CLEAR case shares when the business runs it there. It records what
+// the business says and has done; it never certifies compliance or approves a shipment.
+export const exportTransaction = trade.table(
+  "export_transaction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    reference: text("reference").notNull().unique(),
+    isPractice: boolean("is_practice").notNull().default(false),
+    stage: text("stage").notNull().default("enquiry"),
+    product: text("product").notNull(),
+    destination: text("destination"),
+    quantity: text("quantity"),
+    buyerName: text("buyer_name"),
+    buyerStatus: text("buyer_status"),
+    orderDocument: text("order_document"),
+    agreedPrice: text("agreed_price"),
+    currency: text("currency"),
+    incoterm: text("incoterm"),
+    namedPlace: text("named_place"),
+    costingAndMargin: text("costing_and_margin"),
+    paymentTerms: text("payment_terms"),
+    paymentRisk: text("payment_risk"),
+    productionStatus: text("production_status"),
+    documentChecklist: text("document_checklist"),
+    logistics: text("logistics"),
+    customsStatus: text("customs_status"),
+    insuranceStatus: text("insurance_status"),
+    exceptions: text("exceptions"),
+    outstandingActions: text("outstanding_actions"),
+    responsible: text("responsible"),
+    paymentStatus: text("payment_status"),
+    actualCosts: text("actual_costs"),
+    closeout: text("closeout"),
+    clearCaseId: uuid("clear_case_id").references(() => exportCase.id, { onDelete: "set null" }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_export_transaction_org_idx").on(t.organizationId, t.createdAt)],
+);
+

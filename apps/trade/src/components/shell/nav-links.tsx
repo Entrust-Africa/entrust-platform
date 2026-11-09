@@ -27,8 +27,7 @@ import {
   User,
   Users,
   FileText,
-  Gavel,
-} from "lucide-react";
+  Gavel, Percent, Sparkles, PackageCheck } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { summitAccess } from "@/lib/summit";
@@ -97,6 +96,10 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
         ],
       },
     ];
+    // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
+    if (user?.staffRole === "reviewer") {
+      groups[0]!.items = groups[0]!.items.filter((item) => item.href !== "/register" && item.href !== "/diagnostics");
+    }
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
     // sponsors, delegates, the directory).
     const summit: NavItem[] = [
@@ -144,6 +147,10 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/portfolio", label: "Portfolio", icon: FolderGit2, match: (path) => path.startsWith("/portfolio") },
     { href: "/pipeline", label: "Pipeline", icon: Briefcase, match: (path) => path.startsWith("/pipeline") },
     { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
+    { href: "/transactions", label: "Export transactions", icon: PackageCheck, match: (path) => path.startsWith("/transactions") },
+    { href: "/action-plan", label: "Action plan", icon: ListChecks, match: (path) => path.startsWith("/action-plan") },
+    { href: "/tools/pricing", label: "Pricing calculator", icon: Percent, match: (path) => path.startsWith("/tools/pricing") },
+    { href: "/ai-lab", label: "AI Practice Lab", icon: Sparkles, match: (path) => path.startsWith("/ai-lab") },
     practice,
     simulator,
     { href: "/consent", label: "What you share", icon: ShieldCheck, match: (path) => path.startsWith("/consent") },

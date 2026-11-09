@@ -1,6 +1,6 @@
 import type { ModuleContent } from "../schema";
 
-// Loaded from Entrust's M12 document. A draft until Entrust approves it; content fixes go back to them.
+// Loaded from Entrust's M12 document.
 export const M12_V1_0_0: ModuleContent = {
   module: "M12",
   version: "1.0.0",
@@ -16,7 +16,11 @@ export const M12_V1_0_0: ModuleContent = {
     "Establish milestones and performance indicators.",
     "Review progress at 30, 60 and 90 days and revise the plan when necessary.",
   ],
-  status: "draft",
+  status: "approved",
+  approval: {
+    by: "Minase Fikadu, TRADE platform team",
+    at: "2026-11-09",
+  },
   lessons: [
     {
       id: "introduction",

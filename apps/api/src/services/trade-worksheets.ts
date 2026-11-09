@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import {
   WORKSHEET_DEFINITIONS,
@@ -18,7 +18,7 @@ import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import { accessTo, recordTradeChange, type Access } from "./trade-shared";
-import { allWorksheetDefinitions, canOpenWorksheet, findWorksheetDefinition, isLearningPlan } from "./trade-worksheet-definitions";
+import { allWorksheetDefinitions, canOpenWorksheet, findWorksheetDefinition, isLearningPlan, prefillContentWorksheet } from "./trade-worksheet-definitions";
 
 // Worksheets (#64, #65): structured forms an SME fills in while it learns. Values save as they type and are labelled self-reported.
 // Submitting turns a draft into a numbered version that is kept and never edited; editing starts the next draft from it. The
@@ -93,14 +93,16 @@ async function enrollmentFor(db: Executor, ctx: Ctx, input: { enrollmentId?: str
   if (!organizationId) throw new ServiceError("invalid", "Say which organisation (`organizationId`) or enrolment (`enrollmentId`) this is for.");
   const access = await accessTo(db, principal, organizationId);
   if (!access) throw new ServiceError("not_found", "Organisation not found.");
+  // An SME keeps its outputs after a programme, and can update them (review section 6). The live enrolment comes first, then
+  // the newest one that isn't withdrawn.
   const enrollments = await db
     .select()
     .from(schema.enrollment)
-    .where(and(eq(schema.enrollment.organizationId, organizationId), inArray(schema.enrollment.status, [...LIVE_ENROLLMENT])))
+    .where(and(eq(schema.enrollment.organizationId, organizationId), ne(schema.enrollment.status, "withdrawn")))
     .orderBy(desc(schema.enrollment.enrolledAt));
-  if (enrollments.length === 0) throw new ServiceError("precondition_failed", "This organisation isn't enrolled in a TRADE cohort yet.");
-  if (enrollments.length > 1) throw new ServiceError("invalid", "This organisation has more than one enrolment. Say which one (`enrollmentId`).");
-  return { enrollment: enrollments[0]!, access };
+  const chosen = enrollments.find((e) => (LIVE_ENROLLMENT as readonly string[]).includes(e.status)) ?? enrollments[0];
+  if (!chosen) throw new ServiceError("precondition_failed", "This organisation isn't enrolled in a TRADE cohort yet.");
+  return { enrollment: chosen, access };
 }
 
 /** The enrolment's avenue and live-order flag, which the M04 brief's checks read. */
@@ -245,7 +247,9 @@ export async function startDraft(ctx: Ctx, worksheetId: string, input: { enrollm
           .orderBy(desc(schema.worksheetVersion.version))
           .limit(1);
         if (source) {
-          values = prefillFrom(def.id, { id: source.worksheetId, values: source.values, computed: ((source.result as { computed?: WorksheetResult["computed"] } | null)?.computed ?? {}) });
+          values = findWorksheet(def.id)
+            ? prefillFrom(def.id, { id: source.worksheetId, values: source.values, computed: ((source.result as { computed?: WorksheetResult["computed"] } | null)?.computed ?? {}) })
+            : prefillContentWorksheet(def.id, source.values);
           if (Object.keys(values).length) prefilledFromVersionId = source.id;
         }
       }
@@ -311,6 +315,7 @@ function checkShape(def: WorksheetDefinition, values: Record<string, unknown>): 
 export async function saveValues(ctx: Ctx, id: string, input: Record<string, unknown>): Promise<WorksheetVersionView> {
   return ctx.db.transaction(async (tx) => {
     const { row, enrollment, access } = await findVersion(tx, ctx, id, { lock: true });
+    if (enrollment.status === "withdrawn") throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team fills in a worksheet.");
     if (row.status !== "draft") throw new ServiceError("invalid_transition", "A submitted version can't be edited. Start a new draft to change it.");
     const def = definitionOf(row.worksheetId);
@@ -352,6 +357,7 @@ function missingFor(def: WorksheetDefinition, values: WorksheetValues): string[]
 export async function submitVersion(ctx: Ctx, id: string): Promise<WorksheetVersionView> {
   return ctx.db.transaction(async (tx) => {
     const { row, enrollment, access } = await findVersion(tx, ctx, id, { lock: true });
+    if (enrollment.status === "withdrawn") throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
     if (access.staff || !access.write) throw new ServiceError("forbidden", "Only the SME's own team can submit a worksheet.");
     if (row.status !== "draft") throw new ServiceError("invalid_transition", "This version has already been submitted.");
     const def = definitionOf(row.worksheetId);

@@ -5,6 +5,7 @@ import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { canReachCohort, canReachOrganization, refuseNewWork } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   CohortKnowledgeCheckStats,
@@ -24,6 +25,7 @@ export async function submitKnowledgeCheckAttempt(
     .select({
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -41,6 +43,7 @@ export async function submitKnowledgeCheckAttempt(
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  refuseNewWork(enrollment.status);
 
   // Load the module content with answer keys (server-side grading).
   // Learners can only take knowledge checks on approved content.
@@ -204,6 +207,9 @@ export async function listKnowledgeCheckAttempts(
   if (!principal.staffRole && !principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
   }
+  if (principal.staffRole && !(await canReachOrganization(db, principal, enrollment.organizationId))) {
+    throw new ServiceError("not_found", "Enrollment not found.");
+  }
 
   const rows = await db
     .select()
@@ -253,6 +259,9 @@ export async function getCohortKnowledgeCheckStats(
 
   if (!principal.staffRole) {
     throw new ServiceError("forbidden", "Staff access required.");
+  }
+  if (!(await canReachCohort(db, principal, cohortId))) {
+    throw new ServiceError("not_found", "Cohort not found.");
   }
 
   const [cohort] = await db

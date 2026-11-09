@@ -228,6 +228,15 @@ export async function recordAttendance(
       throw new ServiceError("invalid", `Invalid attendance status: ${r.status}`);
     }
 
+    // Attendance is for the people in this session's cohort, so a mistyped ID can't mark someone else as present.
+    const [inCohort] = await db
+      .select({ id: schema.enrollment.id })
+      .from(schema.enrollment)
+      .innerJoin(schema.member, eq(schema.member.organizationId, schema.enrollment.organizationId))
+      .where(and(eq(schema.enrollment.cohortId, sess.cohortId), eq(schema.enrollment.organizationId, r.organizationId), eq(schema.member.userId, r.userId)))
+      .limit(1);
+    if (!inCohort) throw new ServiceError("invalid", "That person isn't in this session's cohort.");
+
     const [saved] = await db
       .insert(schema.attendance)
       .values({

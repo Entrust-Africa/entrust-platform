@@ -5,7 +5,8 @@ import { getDb, ATTENDANCE_STATUSES, schema } from "@entrust/db";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppEnv } from "../../app";
 import { ServiceError } from "../../services/errors";
-import { loadPrincipal } from "../../services/access";
+import { loadPrincipal, type Principal } from "../../services/access";
+import { canReachCohort } from "../../services/trade-shared";
 import {
   createSession,
   getFacilitatorRoster,
@@ -66,6 +67,12 @@ const recordAttendanceSchema = z.object({
   records: z.array(attendanceRecordSchema).min(1),
 });
 
+/** A session belongs to its cohort: a facilitator or reviewer on another cohort can't see or change it. */
+async function assertStaffOnSession(db: ReturnType<typeof getDb>, principal: Principal, sessionId: string): Promise<void> {
+  const [session] = await db.select({ cohortId: schema.liveSession.cohortId }).from(schema.liveSession).where(eq(schema.liveSession.id, sessionId));
+  if (!session || !(await canReachCohort(db, principal, session.cohortId))) throw new ServiceError("not_found", "Session not found.");
+}
+
 export const tradeSessions = new Hono<AppEnv>()
   // Create session for cohort (staff only)
   .post(
@@ -87,6 +94,7 @@ export const tradeSessions = new Hono<AppEnv>()
       }
 
       const cohortId = c.req.param("cohortId");
+      if (!(await canReachCohort(db, principal, cohortId))) throw new ServiceError("not_found", "Cohort not found.");
       const body = c.req.valid("json");
       const session = await createSession(db, {
         ...body,
@@ -105,6 +113,7 @@ export const tradeSessions = new Hono<AppEnv>()
     const cohortId = c.req.param("cohortId");
 
     const isStaff = Boolean(principal.staffRole);
+    if (isStaff && !(await canReachCohort(db, principal, cohortId))) throw new ServiceError("not_found", "Cohort not found.");
 
     // If not staff, ensure user is a member of an SME enrolled in this cohort
     if (!isStaff) {
@@ -139,6 +148,7 @@ export const tradeSessions = new Hono<AppEnv>()
     const sessionId = c.req.param("id");
 
     const isStaff = Boolean(principal.staffRole);
+    if (isStaff) await assertStaffOnSession(db, principal, sessionId);
     const sess = await getSession(db, sessionId, isStaff);
 
     if (!isStaff) {
@@ -180,6 +190,7 @@ export const tradeSessions = new Hono<AppEnv>()
       }
 
       const sessionId = c.req.param("id");
+      await assertStaffOnSession(db, principal, sessionId);
       const body = c.req.valid("json");
       const updated = await updateSession(db, sessionId, body);
       return c.json(updated);
@@ -196,6 +207,7 @@ export const tradeSessions = new Hono<AppEnv>()
     }
 
     const sessionId = c.req.param("id");
+    await assertStaffOnSession(db, principal, sessionId);
     const roster = await getFacilitatorRoster(db, sessionId);
     return c.json(roster);
   })
@@ -220,6 +232,7 @@ export const tradeSessions = new Hono<AppEnv>()
       }
 
       const sessionId = c.req.param("id");
+      await assertStaffOnSession(db, principal, sessionId);
       const body = c.req.valid("json");
       const recorded = await recordAttendance(db, user.id, sessionId, body.records);
       return c.json({ recorded });
@@ -237,6 +250,7 @@ export const tradeSessions = new Hono<AppEnv>()
     }
 
     const sessionId = c.req.param("id");
+    await assertStaffOnSession(db, principal, sessionId);
     const result = await queueSessionReminders(db, sessionId);
     return c.json(result);
   });

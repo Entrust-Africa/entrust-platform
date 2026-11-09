@@ -23,6 +23,7 @@ export function pathwayInputFromDiagnostic(template: DiagnosticTemplate, answers
   return {
     asOf: options.asOf,
     lastShipmentDate: effective[exported] === YES && typeof date === "string" ? date : undefined,
+    shipmentDateUnknown: effective[exported] === YES && typeof date !== "string",
     shipmentVerified: options.shipmentVerified ?? false,
     liveOrder: liveOrder.some((id) => effective[id] === YES),
   };

@@ -7,10 +7,13 @@ import type {
   ModuleExemptionStatus,
   ModuleStatus,
 } from "@entrust/trade-engine";
-import type { ModuleId, Pathway } from "@entrust/trade-rules";
+import { latestTradeRules, type ModuleId, type Pathway } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { assignedOrganizationIds, canReachOrganization, limitedToAssignedCohorts } from "./trade-shared";
+import { evaluateAndSyncModuleCompletion, hasUnresolvedCriticalFailure } from "./trade-completion";
+
+const isMandatoryModule = (moduleId: string): boolean => latestTradeRules().modules.some((m) => m.id === moduleId && m.requiredForAll);
 import type {
   ApprovePlanInput,
   CreateExemptionInput,
@@ -49,6 +52,11 @@ export async function listPlans(
     }
   } else if (query.organizationId) {
     allowedOrgIds = [query.organizationId];
+  }
+  // A facilitator or reviewer sees the plans of the businesses in their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const assigned = await assignedOrganizationIds(db, principal.userId);
+    allowedOrgIds = allowedOrgIds ? allowedOrgIds.filter((o) => assigned.includes(o)) : assigned;
   }
 
   const conditions = [];
@@ -191,7 +199,7 @@ export async function approvePlan(
     )
     .where(eq(schema.learningPlan.id, planId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
 
@@ -258,8 +266,8 @@ export async function overridePlan(
 ): Promise<LearningPlanRecord> {
   const { principal, db, now } = ctx;
 
-  if (!principal.staffRole) {
-    throw new ServiceError("forbidden", "Only Entrust staff can override learning plans.");
+  if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator or facilitator can override learning plans.");
   }
 
   if (!input.reason?.trim()) {
@@ -283,7 +291,7 @@ export async function overridePlan(
     )
     .where(eq(schema.learningPlan.id, planId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
 
@@ -295,7 +303,15 @@ export async function overridePlan(
 
   const beforeModules = currentAssignments.map((a) => a.moduleId);
 
+  // Checked before anything changes, so a refused override changes nothing.
+  const softened = (input.additions ?? []).filter((a) => isMandatoryModule(a.moduleId) && !["required", "priority_required"].includes(a.status ?? "required"));
+  if (softened.length) throw new ServiceError("invalid", `${softened.map((a) => a.moduleId).join(", ")} must stay required: every learner has to complete them.`);
+
   if (input.removals && input.removals.length > 0) {
+    // M11 and M12 are mandatory for everyone completing the programme (review section 8), so a plan can't drop them.
+    const mandatory = latestTradeRules().modules.filter((m) => m.requiredForAll).map((m) => m.id as string);
+    const blocked = input.removals.filter((id) => mandatory.includes(id));
+    if (blocked.length) throw new ServiceError("invalid", `${blocked.join(", ")} can't be removed: every learner has to complete them.`);
     await db
       .delete(schema.moduleAssignment)
       .where(
@@ -325,7 +341,7 @@ export async function overridePlan(
             status: add.status ?? "required",
             sequence: seq,
             source: "staff_override",
-            reasonCodes: ["staff_override"],
+            reasonCodes: ["STAFF_OVERRIDE"],
           })
           .where(eq(schema.moduleAssignment.id, existingItem.id));
       } else {
@@ -335,7 +351,7 @@ export async function overridePlan(
           status: add.status ?? "required",
           sequence: seq,
           source: "staff_override",
-          reasonCodes: ["staff_override"],
+          reasonCodes: ["STAFF_OVERRIDE"],
           createdAt: now,
         });
       }
@@ -396,6 +412,11 @@ export async function listExemptions(
     }
   } else if (query.organizationId) {
     allowedOrgIds = [query.organizationId];
+  }
+  // A facilitator or reviewer sees the plans of the businesses in their own cohorts.
+  if (limitedToAssignedCohorts(principal)) {
+    const assigned = await assignedOrganizationIds(db, principal.userId);
+    allowedOrgIds = allowedOrgIds ? allowedOrgIds.filter((o) => assigned.includes(o)) : assigned;
   }
 
   const conditions = [];
@@ -501,6 +522,12 @@ export async function createExemption(
       "You cannot request exemptions for this organization."
     );
   }
+  if (principal.staffRole && !principal.smeRoles.has(enr.organizationId) && !(await canReachOrganization(db, principal, enr.organizationId))) {
+    throw new ServiceError("not_found", "Enrollment not found.");
+  }
+  if (isMandatoryModule(input.moduleId)) {
+    throw new ServiceError("invalid", `${input.moduleId} can't be exempted: every learner has to complete it.`);
+  }
 
   const [evidence] = await db
     .select({
@@ -574,8 +601,8 @@ export async function reviewExemption(
 ): Promise<ModuleExemptionView> {
   const { principal, db, now } = ctx;
 
-  if (!principal.staffRole) {
-    throw new ServiceError("forbidden", "Only Entrust staff can review exemptions.");
+  if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator or facilitator can review exemptions.");
   }
 
   if (input.status === "rejected" && !input.comment?.trim()) {
@@ -600,8 +627,18 @@ export async function reviewExemption(
     )
     .where(eq(schema.moduleExemption.id, exemptionId));
 
-  if (!existing) {
+  if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Module exemption not found.");
+  }
+
+  if (input.status === "approved") {
+    if (isMandatoryModule(existing.moduleId)) {
+      throw new ServiceError("invalid", `${existing.moduleId} can't be exempted: every learner has to complete it.`);
+    }
+    // Critical failures block a pass whatever the score, so an exemption can't be the way round one until a later pass.
+    if (await hasUnresolvedCriticalFailure(db, existing.enrollmentId, existing.moduleId)) {
+      throw new ServiceError("invalid", "This module has a confirmed critical failure, so it can't be exempted.");
+    }
   }
 
   await db

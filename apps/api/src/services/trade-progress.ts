@@ -4,6 +4,7 @@ import type { ModuleProgressStatus } from "@entrust/trade-engine";
 import type { ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
+import { canReachOrganization } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ModuleProgressQueryInput,
@@ -36,6 +37,8 @@ export async function listEnrollmentProgress(
     if (!principal.smeRoles.has(enrollment.organizationId)) {
       throw new ServiceError("forbidden", "Access denied.");
     }
+  } else if (!(await canReachOrganization(db, principal, enrollment.organizationId))) {
+    throw new ServiceError("not_found", "Enrollment not found.");
   }
 
   const conditions = [eq(schema.moduleProgress.enrollmentId, query.enrollmentId)];
@@ -67,7 +70,15 @@ export async function listEnrollmentProgress(
 const LEARNER_SET_STATUSES: readonly ModuleProgressStatus[] = ["not_started", "in_progress", "submitted"];
 const RESULT_STATUSES: readonly ModuleProgressStatus[] = ["passed", "exempted"];
 
-export async function recordModuleProgress(
+/** Saves for one enrolment run one at a time. Two at once could collide on a first save, or lose a completed lesson. */
+export async function recordModuleProgress(ctx: Ctx, input: RecordModuleProgressInput): Promise<ModuleProgressView> {
+  return ctx.db.transaction(async (tx) => {
+    await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, input.enrollmentId)).for("update");
+    return applyModuleProgress({ ...ctx, db: tx }, input);
+  });
+}
+
+async function applyModuleProgress(
   ctx: Ctx,
   input: RecordModuleProgressInput
 ): Promise<ModuleProgressView> {
@@ -77,6 +88,7 @@ export async function recordModuleProgress(
     .select({
       id: schema.enrollment.id,
       organizationId: schema.enrollment.organizationId,
+      status: schema.enrollment.status,
     })
     .from(schema.enrollment)
     .where(eq(schema.enrollment.id, input.enrollmentId))
@@ -93,6 +105,10 @@ export async function recordModuleProgress(
 
   if (!principal.smeRoles.has(enrollment.organizationId)) {
     throw new ServiceError("forbidden", "Access denied.");
+  }
+
+  if (enrollment.status === "withdrawn") {
+    throw new ServiceError("invalid", "This enrolment was withdrawn, so it can't take new work.");
   }
 
   // Check active plan and assignment for submission constraints:

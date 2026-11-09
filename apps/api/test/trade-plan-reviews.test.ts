@@ -75,6 +75,7 @@ beforeAll(async () => {
       name: "Plan Cohort 1",
     })
     .returning();
+  await db.insert(schema.cohortStaff).values([facilitator!, reviewer!].map((staff) => ({ cohortId: cohort!.id, userId: staff.id })));
 
   const [enr] = await db
     .insert(schema.enrollment)
@@ -321,7 +322,7 @@ describe("TRADE: plan review, overrides and exemptions (#60)", () => {
 
   it("rejecting exemption without comment fails validation", async () => {
     const res = await callV1(
-      w.reviewer,
+      w.facilitator,
       "POST",
       `/trade/exemptions/${createdExemptionId}/review`,
       { status: "rejected" },

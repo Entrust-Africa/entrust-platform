@@ -37,7 +37,7 @@ export function AvenueSplit({ a, b, provisional }: { a: number; b: number; provi
               </dd>
             </div>
           </dl>
-          {provisional > 0 && <p className="text-xs text-ink-3">{provisional} of the Pathway B forms are provisional until staff see a shipment record.</p>}
+          {provisional > 0 && <p className="text-xs text-ink-3">{provisional} of the Pathway B forms are self-reported, with no shipment record seen yet.</p>}
         </>
       )}
     </figure>
