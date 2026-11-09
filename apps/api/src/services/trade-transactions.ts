@@ -5,6 +5,7 @@ import type { CreateTransactionInput, UpdateTransactionInput } from "../schemas/
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { accessTo, recordTradeChange } from "./trade-shared";
+import { recordClosedTransaction } from "./trade-sme-record";
 
 // The Export Transaction Workspace (FR-10, M08): one record per active or planned export, with a reference CLEAR shares when the
 // business runs the transaction there. It records what the business says and has done. It doesn't certify compliance or approve a
@@ -100,5 +101,7 @@ export async function updateTransaction(ctx: Ctx, id: string, input: UpdateTrans
     before: { stage: existing.stage, clearCaseId: existing.clearCaseId },
     after: { stage: row!.stage, clearCaseId: row!.clearCaseId, changed: Object.keys(input) },
   });
+  // Closing out a real transaction is what records a completed shipment on the business's record.
+  if (existing.stage !== "closed") await recordClosedTransaction(ctx, row!);
   return view(row!, cases.find((c) => c.id === row!.clearCaseId));
 }

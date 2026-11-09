@@ -1324,3 +1324,102 @@ export const staffMfaSession = trade.table("staff_mfa_session", {
     .references(() => user.id, { onDelete: "cascade" }),
   verifiedAt: timestamp("verified_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ---- The SME record (architecture spec sections 5 and 6.7) ----
+
+export const EXPORT_EVIDENCE_STATUSES = ["self_reported", "document_supported", "independently_verified"] as const;
+export type ExportEvidenceStatus = (typeof EXPORT_EVIDENCE_STATUSES)[number];
+
+// The single record of a business's completed shipments (spec 5.5). A row is written when a real transaction is closed out
+// (never for a confirmed order, and never for a practice transaction), or when staff or the business add an earlier shipment.
+// The evidence status says how far the shipment has been checked; only staff move it up from `self_reported`.
+export const smeExportHistory = trade.table(
+  "sme_export_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** The transaction that was closed out, if this row came from one. One row per transaction. */
+    transactionId: uuid("transaction_id")
+      .unique()
+      .references(() => exportTransaction.id, { onDelete: "set null" }),
+    product: text("product").notNull(),
+    destination: text("destination"),
+    buyerName: text("buyer_name"),
+    /** The day the shipment left, as the business or staff gave it. */
+    shipmentDate: date("shipment_date"),
+    evidenceStatus: text("evidence_status", { enum: EXPORT_EVIDENCE_STATUSES }).notNull().default("self_reported"),
+    evidenceNote: text("evidence_note"),
+    recordedByUserId: text("recorded_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    statusChangedByUserId: text("status_changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_export_history_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+export const PATHWAY_REVIEW_STATUSES = ["open", "resolved"] as const;
+
+// Raised when a business records its first completed shipment (spec 6.7). It asks staff to look at the enrolment's pathway.
+// Nothing changes the pathway on its own: staff confirm or change it as they do today, and resolve the review.
+export const pathwayReview = trade.table(
+  "pathway_review",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrollmentId: uuid("enrollment_id")
+      .notNull()
+      .references(() => enrollment.id, { onDelete: "cascade" }),
+    exportHistoryId: uuid("export_history_id").references(() => smeExportHistory.id, { onDelete: "set null" }),
+    status: text("status", { enum: PATHWAY_REVIEW_STATUSES }).notNull().default("open"),
+    resolvedByUserId: text("resolved_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolution: text("resolution"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("trade_pathway_review_enrollment_idx").on(t.enrollmentId),
+    // One open review per enrolment at a time.
+    uniqueIndex("trade_pathway_review_open_uidx").on(t.enrollmentId).where(sql`${t.status} = 'open'`),
+  ],
+);
+
+// What a business sells (spec 5.3). One business can hold several.
+export const smeProduct = trade.table(
+  "sme_product",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category"),
+    hsCode: text("hs_code"),
+    /** Kept, not deleted, once a business stops selling it, so the history still makes sense. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_sme_product_org_idx").on(t.organizationId)],
+);
+
+// The history of changes to a business's profile (spec 5.4): who changed which detail, from what, to what. A change to
+// the legal name, registration number, tax number, sector or country is material and flagged so staff can see it.
+export const smeProfileChange = trade.table(
+  "sme_profile_change",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    changedByUserId: text("changed_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    material: boolean("material").notNull().default(false),
+    changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_sme_profile_change_org_idx").on(t.organizationId, t.changedAt)],
+);
