@@ -132,6 +132,8 @@ describe("what counts towards a pass", () => {
     const [earlyEvidence] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Earlier training" } as never).returning();
     const [earlyExemption] = await db.insert(schema.moduleExemption).values({ enrollmentId: w.enrollment, moduleId: "M05", evidenceRecordId: earlyEvidence!.id, status: "approved", reason: "Did this before", requestedByUserId: w.learner.id } as never).returning();
     w.earlyExemption = earlyExemption!.id;
+    // Nor does an administrator's override from before it.
+    ok(await callV1(w.admin, "POST", "/trade/admin/override-module-completion", { enrollmentId: w.enrollment, moduleId: "M05", reason: "Covered elsewhere" }));
     const v2 = ok(await post(w.learner, "/module-submissions", { enrollmentId: w.enrollment, moduleId: "M05" }));
     const failed = ok(await post(w.reviewer, `/module-submissions/${v2.id}/score`, { scores: allMarks(), confirmedCriticalFailures: [content.rubric.criticalFailures[0]!.id], feedback: "Fabricated." }));
     expect(failed.passed).toBe(false);
@@ -144,6 +146,13 @@ describe("what counts towards a pass", () => {
     // An exemption approved before the score doesn't survive the critical failure.
     const [early] = await db.select().from(schema.moduleExemption).where(eq(schema.moduleExemption.id, w.earlyExemption));
     expect(early?.status).toBe("rejected");
+    const [progress] = await db.select().from(schema.moduleProgress).where(and(eq(schema.moduleProgress.enrollmentId, w.enrollment), eq(schema.moduleProgress.moduleId, "M05")));
+    expect(progress?.adminOverrideAt).toBeNull();
+
+    // And no override can pass it while it stands.
+    const overridden = await callV1(w.admin, "POST", "/trade/admin/override-module-completion", { enrollmentId: w.enrollment, moduleId: "M05", reason: "Please pass it" });
+    expect(overridden.status).toBe(422);
+    expect(overridden.body.error).toContain("critical failure");
 
     // An exemption can't be the way round it, or round a mandatory module.
     const [evidence] = await db.insert(schema.evidenceRecord).values({ organizationId: w.org, title: "Prior training" } as never).returning();

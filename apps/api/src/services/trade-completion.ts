@@ -365,6 +365,40 @@ export async function reopenAfterFailedOverride(
 }
 
 /**
+ * Whether a module has a confirmed critical failure with no pass since. The spec's rule: no passing result while one is
+ * unresolved. It's resolved by passing newer work, or by an administrator changing the score with a reason.
+ */
+export async function hasUnresolvedCriticalFailure(db: Executor, enrollmentId: string, moduleId: string): Promise<boolean> {
+  const scored = await db
+    .select({ failures: schema.rubricAssessment.confirmedCriticalFailures, passed: schema.rubricAssessment.passed })
+    .from(schema.moduleSubmission)
+    .innerJoin(schema.rubricAssessment, and(eq(schema.rubricAssessment.submissionId, schema.moduleSubmission.id), eq(schema.rubricAssessment.isFirstScore, true)))
+    .where(and(eq(schema.moduleSubmission.enrollmentId, enrollmentId), eq(schema.moduleSubmission.moduleId, moduleId as ModuleId)))
+    .orderBy(desc(schema.moduleSubmission.version));
+  for (const score of scored) {
+    if (score.passed) return false;
+    if (score.failures.length) return true;
+  }
+  return false;
+}
+
+/** A critical failure takes away what would otherwise count as complete: an exemption, and an administrator's override. */
+export async function clearCompletionAfterCriticalFailure(db: Executor, ctx: { principal: { userId: string }; now: Date }, organizationId: string, enrollmentId: string, moduleId: string): Promise<void> {
+  const withdrawn = await db
+    .update(schema.moduleExemption)
+    .set({ status: "rejected", reviewComment: "Withdrawn: the module's submission has a confirmed critical failure.", reviewedAt: ctx.now, updatedAt: ctx.now })
+    .where(and(eq(schema.moduleExemption.enrollmentId, enrollmentId), eq(schema.moduleExemption.moduleId, moduleId as ModuleId), inArray(schema.moduleExemption.status, ["pending", "approved"])))
+    .returning({ id: schema.moduleExemption.id });
+  for (const { id } of withdrawn) {
+    await recordTradeChange(db, ctx.principal.userId, { action: "trade.module_exemption.withdrawn", organizationId, entityType: "trade.module_exemption", entityId: id, after: { reason: "Confirmed critical failure" } });
+  }
+  await db
+    .update(schema.moduleProgress)
+    .set({ adminOverrideByUserId: null, adminOverrideReason: null, adminOverrideAt: null, updatedAt: ctx.now })
+    .where(and(eq(schema.moduleProgress.enrollmentId, enrollmentId), eq(schema.moduleProgress.moduleId, moduleId as ModuleId)));
+}
+
+/**
  * Admin override to manually complete a module with a required reason (#71).
  */
 export async function adminOverrideModuleCompletion(
@@ -385,6 +419,10 @@ export async function adminOverrideModuleCompletion(
 
     if (!enrollment) {
       throw new ServiceError("not_found", "Enrollment not found.");
+    }
+
+    if (await hasUnresolvedCriticalFailure(tx, enrollmentId, moduleId)) {
+      throw new ServiceError("invalid", "This module has a confirmed critical failure, so it can't be completed by override. The learner resubmits, or you change the score with a reason.");
     }
 
     // Upsert module progress to passed with admin override

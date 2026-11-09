@@ -11,7 +11,7 @@ import { latestTradeRules, type ModuleId, type Pathway } from "@entrust/trade-ru
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { assignedOrganizationIds, canReachOrganization, limitedToAssignedCohorts } from "./trade-shared";
-import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { evaluateAndSyncModuleCompletion, hasUnresolvedCriticalFailure } from "./trade-completion";
 
 const isMandatoryModule = (moduleId: string): boolean => latestTradeRules().modules.some((m) => m.id === moduleId && m.requiredForAll);
 import type {
@@ -636,14 +636,7 @@ export async function reviewExemption(
       throw new ServiceError("invalid", `${existing.moduleId} can't be exempted: every learner has to complete it.`);
     }
     // Critical failures block a pass whatever the score, so an exemption can't be the way round one until a later pass.
-    const scored = await db
-      .select({ failures: schema.rubricAssessment.confirmedCriticalFailures, passed: schema.rubricAssessment.passed })
-      .from(schema.moduleSubmission)
-      .innerJoin(schema.rubricAssessment, and(eq(schema.rubricAssessment.submissionId, schema.moduleSubmission.id), eq(schema.rubricAssessment.isFirstScore, true)))
-      .where(and(eq(schema.moduleSubmission.enrollmentId, existing.enrollmentId), eq(schema.moduleSubmission.moduleId, existing.moduleId)))
-      .orderBy(desc(schema.moduleSubmission.version));
-    const sinceLastPass = scored.slice(0, scored.findIndex((s) => s.passed) === -1 ? scored.length : scored.findIndex((s) => s.passed));
-    if (sinceLastPass.some((s) => s.failures.length)) {
+    if (await hasUnresolvedCriticalFailure(db, existing.enrollmentId, existing.moduleId)) {
       throw new ServiceError("invalid", "This module has a confirmed critical failure, so it can't be exempted.");
     }
   }

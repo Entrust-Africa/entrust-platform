@@ -6,7 +6,7 @@ import { type ModuleId } from "@entrust/trade-rules";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { clearCompletionAfterCriticalFailure, evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
 import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 import type {
@@ -597,24 +597,9 @@ async function applyScore(
 
   // If this is the first score, it counts for learner progress:
   if (isFirstScore) {
-    // An exemption approved before the work was scored can't stand over a confirmed critical failure.
+    // What was approved before the work was scored can't stand over a confirmed critical failure.
     if (evaluation.confirmedCriticalFailures.length) {
-      const withdrawn = await db
-        .update(schema.moduleExemption)
-        .set({ status: "rejected", reviewComment: "Withdrawn: the module's submission has a confirmed critical failure.", reviewedAt: now, updatedAt: now })
-        .where(and(eq(schema.moduleExemption.enrollmentId, sub.enrollmentId), eq(schema.moduleExemption.moduleId, sub.moduleId), inArray(schema.moduleExemption.status, ["pending", "approved"])))
-        .returning({ id: schema.moduleExemption.id });
-      for (const { id } of withdrawn) {
-        await db.insert(schema.auditLog).values({
-          actorUserId: principal.userId,
-          organizationId: row.enrollment.organizationId,
-          platform: "trade",
-          action: "trade.module_exemption.withdrawn",
-          entityType: "trade.module_exemption",
-          entityId: id,
-          reason: "Confirmed critical failure",
-        });
-      }
+      await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
     }
 
     const submissionStatus = evaluation.passed ? "passed" : "revision_required";
@@ -827,6 +812,9 @@ async function applyScoreOverride(
       )
     );
 
+  if (confirmedFailures.length) {
+    await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
+  }
   if (evaluation.passed) {
     await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
   } else if (officialScore.passed) {
