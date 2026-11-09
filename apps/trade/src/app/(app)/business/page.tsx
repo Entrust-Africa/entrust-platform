@@ -47,8 +47,8 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
       </div>
       {profile.data ? (
         <>
-          {readiness.data && <ReadinessProfiles data={readiness.data} />}
           <ReferralConsent initial={referrals.data?.items ?? []} isOwner={activeOrg.role === "owner"} />
+          {readiness.data && <ReadinessProfiles data={readiness.data} />}
           <BuyerList items={buyers.data?.items ?? []} />
           <BusinessRecord
           initial={{ profile: profile.data, products: products.data?.items ?? [], shipments: shipments.data?.items ?? [], history: history.data?.items ?? [] } satisfies BusinessRecordData}

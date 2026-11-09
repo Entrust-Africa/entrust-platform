@@ -40,7 +40,7 @@ export function ReferralConsent({ initial, isOwner }: { initial: Referral[]; isO
             <p className="text-sm text-ink-2">They would receive: {r.sharedDataKinds.map((k) => KIND_LABEL[k] ?? k).join(", ") || "nothing about your business"}.</p>
             {r.outcome && <p className="text-xs text-ink-2">Outcome: {r.outcome}</p>}
             {isOwner && r.consentStatus === "requested" && (
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-wrap gap-2 pt-1">
                 <Button size="sm" disabled={busy} onClick={() => void decide(r.id, "grant")}>I agree to share this with {r.destinationName}</Button>
                 <Button size="sm" variant="secondary" disabled={busy} onClick={() => void decide(r.id, "decline")}>No, don't share</Button>
               </div>
