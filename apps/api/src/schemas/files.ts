@@ -62,6 +62,8 @@ export const FileRecord = z
     contentType: z.string().openapi({ example: "application/pdf" }),
     sizeBytes: z.number().int().openapi({ example: 1048576 }),
     sha256: z.string().openapi({ example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }),
+    /** `unscanned` until a malware scanner is connected. */
+    scanStatus: z.enum(["unscanned", "clean", "infected"]),
     createdAt: z.string().datetime().openapi({ example: "2026-10-25T12:00:00Z" }),
   })
   .openapi("FileRecord");

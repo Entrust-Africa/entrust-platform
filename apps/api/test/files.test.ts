@@ -4,7 +4,7 @@ import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { app } from "../src/app";
 import { MemoryStorageProvider, signUploadToken } from "../src/services/storage";
-import { cleanup, createOrganization, db, signUp, callV1, type TestUser } from "./support";
+import { cleanup, createOrganization, db, makeFile, signUp, callV1, type TestUser } from "./support";
 
 const w = {} as {
   ownerA: TestUser;
@@ -45,6 +45,12 @@ afterAll(async () => {
   delete process.env.ENTRUST_ORG_ID;
   await cleanup();
 });
+
+/** A buffer of the given size that starts as the type says it does. */
+const withSignature = (contentType: "application/pdf" | "image/png" | "image/jpeg", size: number): Buffer => {
+  const head = { "application/pdf": Buffer.from("%PDF-1.4\n"), "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "image/jpeg": Buffer.from([0xff, 0xd8, 0xff, 0xe0]) }[contentType];
+  return Buffer.concat([head, Buffer.alloc(size - head.length)]);
+};
 
 describe("Files API", () => {
   const dummySha256 = createHash("sha256").update("test content").digest("hex");
@@ -228,6 +234,7 @@ describe("Files API", () => {
 
       // Seed mock storage accurately as an S3 PUT would
       MemoryStorageProvider.put(storageKey, {
+        data: withSignature("application/pdf", fileSize),
         sizeBytes: fileSize,
         sha256: sha,
         contentType: "application/pdf",
@@ -321,7 +328,7 @@ describe("Files API", () => {
     });
 
     it("supports HTTP PUT and GET via mock-storage endpoints in development/testing", async () => {
-      const content = Buffer.from("mock s3 upload payload");
+      const content = Buffer.from("%PDF-1.4 mock s3 upload payload");
       const sha = createHash("sha256").update(content).digest("hex");
       const initRes = await callV1(w.ownerA, "POST", "/files/upload-url", {
         organizationId: w.orgA,
@@ -363,6 +370,46 @@ describe("Files API", () => {
     });
   });
 
+  describe("what a file really is", () => {
+    it("refuses a file whose name doesn't belong to its type", async () => {
+      const res = await callV1(w.ownerA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "report.pdf.html",
+        contentType: "application/pdf",
+        sizeBytes: 100,
+        sha256: createHash("sha256").update("x").digest("hex"),
+      });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toContain("file name doesn't match");
+    });
+
+    it("refuses a file whose contents aren't the type it was declared as, and keeps no record of it", async () => {
+      const content = Buffer.from("MZ this is a program, renamed");
+      const sha = createHash("sha256").update(content).digest("hex");
+      const init = await callV1(w.ownerA, "POST", "/files/upload-url", {
+        organizationId: w.orgA,
+        originalName: "invoice.pdf",
+        contentType: "application/pdf",
+        sizeBytes: content.length,
+        sha256: sha,
+      });
+      MemoryStorageProvider.put(init.body.storageKey, { data: content, sizeBytes: content.length, sha256: sha, contentType: "application/pdf" });
+      const res = await callV1(w.ownerA, "POST", "/files/finalise", { uploadToken: init.body.uploadToken });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toContain("contents don't match");
+      expect((await callV1(w.ownerA, "GET", `/files/${init.body.fileId}`)).status).toBe(404);
+    });
+
+    it("keeps every file unscanned until a scanner is connected, and won't hand out one that was flagged", async () => {
+      const id = await makeFile(w.orgA, w.ownerA.id, "scan.pdf");
+      expect((await callV1(w.ownerA, "GET", `/files/${id}`)).body.file.scanStatus).toBe("unscanned");
+      await db.update(schema.file).set({ scanStatus: "infected" }).where(eq(schema.file.id, id));
+      const res = await callV1(w.ownerA, "GET", `/files/${id}/download-url`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain("malware scan");
+    });
+  });
+
   describe("File Retrieval and Download URLs", () => {
     let testFileId: string;
 
@@ -377,6 +424,7 @@ describe("Files API", () => {
       });
       testFileId = initRes.body.fileId;
       MemoryStorageProvider.put(initRes.body.storageKey, {
+        data: withSignature("image/png", 1024),
         sizeBytes: 1024,
         sha256: sha,
         contentType: "image/png",

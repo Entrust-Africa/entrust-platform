@@ -20,6 +20,9 @@ import {
   MemoryStorageProvider,
   signUploadToken,
   verifyUploadToken,
+  SIGNATURE_BYTES,
+  extensionMatches,
+  signatureMatches,
 } from "../services/storage";
 
 const tags = ["Files"];
@@ -171,6 +174,10 @@ export const files = router
       throw new ServiceError("forbidden", "You do not have permission to upload files for this organisation.");
     }
 
+    if (!extensionMatches(body.originalName, body.contentType)) {
+      throw new ServiceError("invalid", "The file name doesn't match its type. A PDF ends in .pdf, a JPEG in .jpg or .jpeg and a PNG in .png.");
+    }
+
     const fileId = randomUUID();
     const basename = body.originalName.split(/[/\\]/).pop() ?? "file";
     const cleanName = basename.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/^\.+/, "") || "file";
@@ -235,6 +242,10 @@ export const files = router
       payload.sha256,
       payload.contentType,
     );
+    // The bytes have to be what the type says. The type and size were declared by the client, so they aren't enough.
+    if (!signatureMatches(await storage.readHead(payload.storageKey, SIGNATURE_BYTES), payload.contentType)) {
+      throw new ServiceError("invalid", "The file's contents don't match its type. Upload a real PDF, JPEG or PNG.");
+    }
 
     // Atomic insert and audit log in a single transaction
     const inserted = await db.transaction(async (tx) => {
@@ -286,6 +297,7 @@ export const files = router
           contentType: inserted.contentType,
           sizeBytes: inserted.sizeBytes,
           sha256: inserted.sha256,
+          scanStatus: inserted.scanStatus,
           createdAt: inserted.createdAt.toISOString(),
         },
       },
@@ -319,6 +331,7 @@ export const files = router
           contentType: row.contentType,
           sizeBytes: row.sizeBytes,
           sha256: row.sha256,
+          scanStatus: row.scanStatus,
           createdAt: row.createdAt.toISOString(),
         },
       },
@@ -340,6 +353,8 @@ export const files = router
     if (!actor) {
       throw new ServiceError("not_found", "File not found.");
     }
+
+    if (row.scanStatus === "infected") throw new ServiceError("forbidden", "This file was flagged by a malware scan and can't be downloaded.");
 
     const expiresInSeconds = 900; // 15 minutes
     const storage = getStorageProvider();
