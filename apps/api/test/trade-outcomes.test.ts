@@ -81,13 +81,16 @@ describe("TRADE financing and export outcomes API (#69)", () => {
     const listRes = await get(owner, `/outcomes?organizationId=${org}&kind=financing`);
     const financingId = listRes.body.items[0].id;
 
-    const res = await patch(owner, `/outcomes/financing/${financingId}/status`, {
+    const update = {
       status: "approved",
       amountApproved: 85000,
       approvalDate: new Date().toISOString(),
       evidenceTier: "formal_bank_decision",
       notes: "Credit committee sanction letter received.",
-    });
+    };
+    // A business can't confirm its own bank decision. Entrust staff can, and the business can still update it after.
+    expect((await patch(owner, `/outcomes/financing/${financingId}/status`, update)).status).toBe(403);
+    const res = await patch(admin, `/outcomes/financing/${financingId}/status`, update);
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
@@ -189,7 +192,7 @@ describe("TRADE financing and export outcomes API (#69)", () => {
       status: "paid",
       valuePaid: 60000,
       paymentDate: new Date().toISOString(),
-      evidenceTier: "formal_bank_decision",
+      evidenceTier: "documented",
       notes: "Swift MT103 export proceeds receipt confirmed by commercial bank.",
     });
 

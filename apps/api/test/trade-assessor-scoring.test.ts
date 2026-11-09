@@ -181,6 +181,20 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
     expect(res.body.error).toContain("knowledge check must be passed");
   });
 
+  it("refuses evidence that isn't this business's own on a submission", async () => {
+    await db
+      .update(schema.moduleProgress)
+      .set({ theoryCompletedAt: new Date() })
+      .where(and(eq(schema.moduleProgress.enrollmentId, w.enrollmentId), eq(schema.moduleProgress.moduleId, "M01")));
+    const res = await callV1(w.smeLearner, "POST", "/trade/module-submissions", {
+      enrollmentId: w.enrollmentId,
+      moduleId: "M01",
+      evidenceRecordIds: [randomUUID()],
+    });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toContain("Evidence");
+  });
+
   it("submits practical deliverable once theory is completed", async () => {
     // Complete theory
     await db

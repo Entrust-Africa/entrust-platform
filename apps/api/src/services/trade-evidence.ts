@@ -178,10 +178,16 @@ export async function createEvidence(
     const [f] = await db
       .select({ id: schema.file.id })
       .from(schema.file)
-      .where(eq(schema.file.id, input.fileId));
+      // Only this business's own file: another's id must not reveal its name, type or size.
+      .where(and(eq(schema.file.id, input.fileId), eq(schema.file.organizationId, targetOrgId)));
     if (!f) {
       throw new ServiceError("not_found", "Attached file not found.");
     }
+  }
+
+  // Whether evidence has been reviewed or verified is for Entrust staff to say, not for the business presenting it.
+  if (!principal.staffRole && (input.confidence === "reviewed" || input.confidence === "verified")) {
+    throw new ServiceError("forbidden", "Only Entrust staff can mark evidence as reviewed or verified.");
   }
 
   const confidence: EvidenceConfidence =

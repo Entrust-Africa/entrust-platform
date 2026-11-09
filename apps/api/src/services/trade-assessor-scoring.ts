@@ -96,6 +96,15 @@ export async function createModuleSubmission(
     );
   }
 
+  // Evidence attached to a submission has to be this business's own.
+  if (input.evidenceRecordIds?.length) {
+    const own = await db
+      .select({ id: schema.evidenceRecord.id })
+      .from(schema.evidenceRecord)
+      .where(and(inArray(schema.evidenceRecord.id, input.evidenceRecordIds), eq(schema.evidenceRecord.organizationId, enrollment.organizationId)));
+    if (own.length !== new Set(input.evidenceRecordIds).size) throw new ServiceError("not_found", "Evidence record not found.");
+  }
+
   // 3. Resolve worksheet version and snapshot
   let worksheetVersionId: string | null = input.worksheetVersionId ?? null;
   let worksheetSnapshot: Record<string, unknown> = {};

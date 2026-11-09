@@ -97,6 +97,13 @@ function mapOutcomeRow(
   };
 }
 
+/** A formal bank decision is evidence Entrust staff confirm. A business can say what it reports and what it has documented. */
+function assertEvidenceTierAllowed(principal: { staffRole: unknown }, tier: string | null | undefined): void {
+  if (tier === "formal_bank_decision" && !principal.staffRole) {
+    throw new ServiceError("forbidden", "Only Entrust staff can record a formal bank decision.");
+  }
+}
+
 export async function listOutcomes(
   ctx: Ctx,
   query: { organizationId?: string; enrollmentId?: string; kind?: "financing" | "export" }
@@ -158,7 +165,7 @@ export async function createFinancingOutcome(
       approvalDate: input.approvalDate ? new Date(input.approvalDate) : null,
       disbursementDate: input.disbursementDate ? new Date(input.disbursementDate) : null,
       notes: input.notes ?? null,
-      evidenceTier: input.evidenceTier ?? "self_reported",
+      evidenceTier: (assertEvidenceTierAllowed(principal, input.evidenceTier), input.evidenceTier ?? "self_reported"),
       evidenceUrl: input.evidenceUrl ?? null,
     })
     .returning();
@@ -227,6 +234,8 @@ export async function updateFinancingStatus(
     updateValues.disbursementDate = input.disbursementDate ? new Date(input.disbursementDate) : null;
   }
   if (input.evidenceTier !== undefined) {
+    // Saving a record staff already confirmed keeps its tier. Only a change to it needs staff.
+    if (input.evidenceTier !== outcome.evidenceTier) assertEvidenceTierAllowed(principal, input.evidenceTier);
     updateValues.evidenceTier = input.evidenceTier;
   }
   if (input.evidenceUrl !== undefined) {
@@ -300,7 +309,7 @@ export async function createExportOutcome(
       deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : null,
       paymentDate: input.paymentDate ? new Date(input.paymentDate) : null,
       notes: input.notes ?? null,
-      evidenceTier: input.evidenceTier ?? "self_reported",
+      evidenceTier: (assertEvidenceTierAllowed(principal, input.evidenceTier), input.evidenceTier ?? "self_reported"),
       evidenceUrl: input.evidenceUrl ?? null,
     })
     .returning();
@@ -372,6 +381,8 @@ export async function updateExportStatus(
     updateValues.paymentDate = input.paymentDate ? new Date(input.paymentDate) : null;
   }
   if (input.evidenceTier !== undefined) {
+    // Saving a record staff already confirmed keeps its tier. Only a change to it needs staff.
+    if (input.evidenceTier !== outcome.evidenceTier) assertEvidenceTierAllowed(principal, input.evidenceTier);
     updateValues.evidenceTier = input.evidenceTier;
   }
   if (input.evidenceUrl !== undefined) {

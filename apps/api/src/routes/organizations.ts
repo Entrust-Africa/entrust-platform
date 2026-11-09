@@ -276,7 +276,18 @@ export const organizations = new Hono<AppEnv>()
       }
     }
 
-    await getDb().update(schema.member).set({ role: body.role }).where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, targetUserId)));
+    await getDb().transaction(async (tx) => {
+      await tx.update(schema.member).set({ role: body.role }).where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, targetUserId)));
+      await tx.insert(schema.auditLog).values({
+        actorUserId: user.id,
+        organizationId,
+        action: "organization.member.role_changed",
+        entityType: "member",
+        entityId: targetMember.id,
+        before: { userId: targetUserId, role: targetMember.role },
+        after: { userId: targetUserId, role: body.role },
+      });
+    });
     return c.json({ ok: true });
   })
   .delete("/organizations/:organizationId/members/:userId", async (c) => {
@@ -305,7 +316,17 @@ export const organizations = new Hono<AppEnv>()
       }
     }
 
-    await getDb().delete(schema.member).where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, targetUserId)));
+    await getDb().transaction(async (tx) => {
+      await tx.delete(schema.member).where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, targetUserId)));
+      await tx.insert(schema.auditLog).values({
+        actorUserId: user.id,
+        organizationId,
+        action: "organization.member.removed",
+        entityType: "member",
+        entityId: targetMember.id,
+        before: { userId: targetUserId, role: targetMember.role },
+      });
+    });
     return c.json({ ok: true });
   })
   .patch("/organizations/:organizationId/profile", zValidator("json", profile), async (c) => {

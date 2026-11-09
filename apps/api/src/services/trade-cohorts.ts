@@ -206,6 +206,8 @@ export async function enrolSme(
   if (!org) throw new ServiceError("not_found", "Organisation not found.");
   const kind = organizationKind(org.metadata);
   if (kind && kind !== "sme") throw new ServiceError("invalid", "Only an SME can be enrolled in a cohort.");
+  // Every SME record has one SME ID. An organisation made outside the registration form has none yet.
+  if (!org.smeId) throw new ServiceError("invalid", "This organisation has no SME ID. Register it as an SME first.");
 
   // 3. Check for existing enrolment in this cohort
   const [existing] = await db

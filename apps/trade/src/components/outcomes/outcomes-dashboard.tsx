@@ -116,7 +116,7 @@ export function OutcomesDashboard({
     amountDisbursed: "",
     approvalDate: new Date().toISOString().slice(0, 16),
     disbursementDate: "",
-    evidenceTier: "formal_bank_decision" as any,
+    evidenceTier: "documented" as any,
     notes: "",
   });
 
@@ -131,6 +131,10 @@ export function OutcomesDashboard({
     evidenceTier: "documented" as any,
     notes: "",
   });
+
+  // A formal bank decision is for Entrust staff to confirm. A record that already has one keeps it when the business updates it.
+  const tierChoices = (current?: string) =>
+    OUTCOME_EVIDENCE_TIERS.filter((tier) => tier !== "formal_bank_decision" || actingAsStaff || tier === current);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -720,7 +724,7 @@ export function OutcomesDashboard({
                     onChange={(e) => setFinancingForm({ ...financingForm, evidenceTier: e.target.value as any })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
-                    {OUTCOME_EVIDENCE_TIERS.map((tier) => (
+                    {tierChoices().map((tier) => (
                       <option key={tier} value={tier}>
                         {humanise(tier)}
                       </option>
@@ -947,7 +951,7 @@ export function OutcomesDashboard({
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, evidenceTier: e.target.value as any })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
-                        {OUTCOME_EVIDENCE_TIERS.map((tier) => (
+                        {tierChoices(updateFinancingForm.evidenceTier).map((tier) => (
                           <option key={tier} value={tier}>
                             {humanise(tier)}
                           </option>
@@ -1044,7 +1048,7 @@ export function OutcomesDashboard({
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, evidenceTier: e.target.value as any })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
-                        {OUTCOME_EVIDENCE_TIERS.map((tier) => (
+                        {tierChoices(updateExportForm.evidenceTier).map((tier) => (
                           <option key={tier} value={tier}>
                             {humanise(tier)}
                           </option>
