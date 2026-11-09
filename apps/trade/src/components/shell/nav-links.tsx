@@ -96,6 +96,10 @@ function groupsFor(user: UserProfile | undefined): NavGroup[] {
         ],
       },
     ];
+    // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
+    if (user?.staffRole === "reviewer") {
+      groups[0]!.items = groups[0]!.items.filter((item) => item.href !== "/register" && item.href !== "/diagnostics");
+    }
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
     // sponsors, delegates, the directory).
     const summit: NavItem[] = [

@@ -100,8 +100,10 @@ describe("who can open a business's page", () => {
     }
   });
 
-  it("is open to admins, facilitators and reviewers", async () => {
-    for (const user of [w.admin, w.facilitator, w.reviewer]) {
+  it("is open to admins and facilitators, and not to a reviewer", async () => {
+    expect((await callV1(w.reviewer, "GET", `/trade/register/${ids["1"]}`)).status).toBe(403);
+    expect((await callV1(w.reviewer, "GET", `/trade/applications/${ids["Bahir Coffee@2026-03-27"]}`)).status).toBe(403);
+    for (const user of [w.admin, w.facilitator]) {
       expect((await callV1(user, "GET", `/trade/register/${ids["1"]}`)).status).toBe(200);
       expect((await callV1(user, "GET", `/trade/applications/${ids["Bahir Coffee@2026-03-27"]}`)).status).toBe(200);
     }

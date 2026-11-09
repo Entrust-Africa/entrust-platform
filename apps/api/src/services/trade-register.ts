@@ -26,7 +26,7 @@ export const toInput = (row: typeof schema.smeRegister.$inferSelect): RegisterIn
 
 /** Every business in the register, by SME ID, with what is worked out from each, and the totals across them. */
 export async function listRegister(ctx: Ctx): Promise<RegisterListView> {
-  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see the SME register");
+  requireStaff(ctx.principal, ["admin", "facilitator"], "see the SME register");
   const rows = await ctx.db.select().from(schema.smeRegister).orderBy(asc(schema.smeRegister.code));
   const records = rows.map((row) => deriveRegister(toInput(row)));
   return {
@@ -40,7 +40,7 @@ export async function listRegister(ctx: Ctx): Promise<RegisterListView> {
  * address), those responses are listed so staff can open them. Only responses from Ethiopia are ever looked at.
  */
 export async function getRegisterRecord(ctx: Ctx, id: string): Promise<RegisterDetailView> {
-  requireStaff(ctx.principal, ["admin", "facilitator", "reviewer"], "see the SME register");
+  requireStaff(ctx.principal, ["admin", "facilitator"], "see the SME register");
   const [row] = await ctx.db.select().from(schema.smeRegister).where(eq(schema.smeRegister.id, id));
   if (!row) throw new ServiceError("not_found", "That business isn't in the register.");
 

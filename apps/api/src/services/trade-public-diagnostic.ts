@@ -26,8 +26,8 @@ const HOUR_MS = 60 * 60 * 1000;
 /** The most answers one save may carry: the form has fewer than 200 questions. */
 const MAX_ANSWERS_PER_SAVE = 400;
 
-/** Entrust staff of any role may read the submissions. */
-const requireStaff = (principal: Principal): void => requireRole(principal, ["admin", "facilitator", "reviewer"], "read the onboarding diagnostics");
+/** Administrators and facilitators read the submissions, to enrol businesses. A reviewer works from the cohorts they're on. */
+const requireStaff = (principal: Principal): void => requireRole(principal, ["admin", "facilitator"], "read the onboarding diagnostics");
 
 const todayOf = (now: Date): string => now.toISOString().slice(0, 10);
 
