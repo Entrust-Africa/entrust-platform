@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { RegisterMenu } from "@/components/register-menu";
-import { HOST, SUPPORT_EMAIL } from "@/lib/content";
+import { HOST, PARTNERSHIP_PACK, SUPPORT_EMAIL } from "@/lib/content";
 import { joinOptions } from "@/lib/join";
 import { signInUrl } from "@/lib/period";
 
@@ -100,6 +100,9 @@ export function SiteFooter() {
               {label}
             </Link>
           ))}
+          <a href={PARTNERSHIP_PACK.href} target="_blank" rel="noopener" className="hover:text-white">
+            Partnership pack (PDF)
+          </a>
           <a href={signInUrl()} className="hover:text-white">
             Applicant sign in
           </a>

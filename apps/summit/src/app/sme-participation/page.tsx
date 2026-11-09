@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Page, SectionLabel, amberButton, outlineButton } from "@/components/site";
+import { PARTNERSHIP_PACK } from "@/lib/content";
 import { ASSESSMENT_AREAS, ASSESSMENT_OUTCOMES, SECTORS } from "@/lib/info";
 import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
 
@@ -26,7 +27,7 @@ export default async function SmeParticipationPage() {
               ))}
             </ol>
             <p className="mt-6 text-sm leading-relaxed text-ink/70">
-              The assessment considers supporting documentation, business operations, products and services, market opportunities, financial information and the enterprise&apos;s capacity to work with international partners.
+              The assessment considers supporting documentation, business operations, products and services, market opportunities, financial information and the enterprise&apos;s capacity to work with international partners. Financial information is given as figures the business types in: financial records do not need to be submitted.
             </p>
           </div>
           <div>
@@ -40,7 +41,7 @@ export default async function SmeParticipationPage() {
               ))}
             </ul>
             <p className="mt-6 text-sm leading-relaxed text-ink/70">
-              Selected SMEs present their businesses and take part in structured engagement with relevant international stakeholders. Basic participation is complimentary; an exhibition booth is optional and bought separately. Confidential assessment scores and financial records are never made public.
+              Selected SMEs present their businesses and take part in structured engagement with relevant international stakeholders. Basic participation is complimentary; an exhibition booth is optional and bought separately. Confidential assessment scores and the financial figures a business gives are never made public.
             </p>
           </div>
         </div>
@@ -74,6 +75,12 @@ export default async function SmeParticipationPage() {
               Explore African SMEs
             </Link>
           </div>
+          <p className="mt-6 text-sm">
+            <a href={PARTNERSHIP_PACK.href} target="_blank" rel="noopener" className="font-semibold text-amber underline underline-offset-2 hover:text-white">
+              Download the Institutional Partnership Pack ({PARTNERSHIP_PACK.size})
+            </a>{" "}
+            <span className="text-white/60">for the recruitment brief, the selection framework and the sponsorship cost.</span>
+          </p>
           <p className="mt-6 max-w-xl text-xs leading-relaxed text-white/55">Already selected? Register for free as a Selected SME Delegate with your application number, and book an exhibition booth if you want one.</p>
           <Link href="/participate/register?category=selected-sme" className={`${outlineButton} mt-6 border-white/35 text-white hover:border-white hover:bg-white/10`}>
             Selected SME registration

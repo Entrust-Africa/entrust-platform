@@ -78,7 +78,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ slug: 
               )}
             </dl>
             <p className="text-xs leading-relaxed text-ink/60">
-              This profile shows what the business chose to share. It is not a guarantee of quality or performance. ADTIS does not publish assessment scores or financial records.
+              This profile shows what the business chose to share. It is not a guarantee of quality or performance. ADTIS does not publish assessment scores or financial figures.
             </p>
           </div>
 
