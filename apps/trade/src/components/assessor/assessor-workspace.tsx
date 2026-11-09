@@ -167,7 +167,7 @@ export function AssessorWorkspace({
   const wsSnapshot = submission.worksheetSnapshot as {
     values?: Record<string, unknown>;
     result?: { computed?: Record<string, unknown>; flags?: Array<{ code: string; message: string }> };
-    worksheets?: Array<{ id: string; worksheetId: string; title: string; version: number; values: Record<string, unknown> }>;
+    worksheets?: Array<{ id: string; worksheetId: string; title: string; version: number; values: Record<string, unknown>; result?: { computed?: Record<string, unknown>; flags?: { code: string; message: string }[] } | null }>;
   };
 
   return (

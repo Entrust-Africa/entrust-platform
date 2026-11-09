@@ -1,3 +1,4 @@
+import { WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
 import type { LearnerModuleData } from "../modules/module-viewer";
 
 interface SubmittedOutput {
@@ -6,12 +7,13 @@ interface SubmittedOutput {
   title: string;
   version: number;
   values: Record<string, unknown>;
+  result?: { computed?: Record<string, unknown>; flags?: { code: string; message: string }[] } | null;
 }
 
 /** A choice field's stored answer is its value, so it needs its options to read back in words. */
 interface Field {
   kind?: string;
-  options?: { value: string; label: string }[];
+  options?: readonly { value: string; label: string }[] | undefined;
 }
 
 const blank = (value: unknown) => value === null || value === undefined || value === "";
@@ -26,7 +28,7 @@ function answer(field: Field, value: unknown): string {
 /** Each output the learner submitted, read the way they filled it in: the questions in words, and tables as tables. */
 export function SubmittedOutputs({ outputs, module }: { outputs: SubmittedOutput[]; module: LearnerModuleData }) {
   // Content worksheets are published as "m05-ideal-buyer-profile" from the module's "ideal_buyer_profile".
-  const definition = (worksheetId: string) => module.worksheets.find((w) => `${module.module.toLowerCase()}-${w.id.replaceAll("_", "-")}` === worksheetId);
+  const definition = (worksheetId: string) => module.worksheets.find((w) => `${module.module.toLowerCase()}-${w.id.replaceAll("_", "-")}` === worksheetId) ?? WORKSHEET_DEFINITIONS.find((d) => d.id === worksheetId);
 
   return (
     <div className="space-y-2">
@@ -82,6 +84,24 @@ export function SubmittedOutputs({ outputs, module }: { outputs: SubmittedOutput
             ) : (
               <pre className="mt-2 overflow-x-auto text-xs text-ink-2">{JSON.stringify(output.values, null, 1)}</pre>
             )}
+            {output.result?.computed && Object.keys(output.result.computed).length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-ink-3">Worked out from these figures</p>
+                <dl className="mt-1 space-y-1">
+                  {Object.entries(output.result.computed).map(([key, value]) => (
+                    <div key={key} className="flex flex-wrap justify-between gap-2 text-xs">
+                      <dt className="break-all font-mono text-ink-2">{key}</dt>
+                      <dd className="font-semibold text-ink">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            {(output.result?.flags ?? []).map((flag) => (
+              <p key={flag.code} className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                {flag.message}
+              </p>
+            ))}
           </details>
         );
       })}

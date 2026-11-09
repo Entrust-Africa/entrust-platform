@@ -88,6 +88,7 @@ export default async function CohortDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const me = await getMe();
+  const canEnrol = me?.staffRole === "admin" || me?.staffRole === "facilitator";
   if (!me) redirect("/sign-in");
 
   const isStaff = Boolean(me.staffRole);
@@ -140,7 +141,7 @@ export default async function CohortDetailPage(props: {
           </div>
           <div className="flex items-center gap-2">
             <ScheduleSessionDialog cohortId={cohort.id} />
-            <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
       </div>
@@ -274,7 +275,7 @@ export default async function CohortDetailPage(props: {
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
             </p>
             <div className="mt-4">
-              <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />
+              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
             </div>
           </Card>
         ) : (
