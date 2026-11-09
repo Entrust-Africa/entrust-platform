@@ -1581,3 +1581,84 @@ export const notificationPreference = trade.table(
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind] })],
 );
+
+// ---- Partner referrals (FRD FR-13, spec 13 and 16) ----
+
+export const REFERRAL_DESTINATION_TYPES = ["bank", "insurer", "service_provider"] as const;
+export const REFERRAL_DATA_KINDS = ["profile", "products", "export_history", "financial_worksheets"] as const;
+export const REFERRAL_CONSENT_STATUSES = ["not_requested", "requested", "granted", "declined", "withdrawn"] as const;
+export const REFERRAL_STATUSES = ["draft", "awaiting_consent", "ready", "shared", "accepted", "declined", "completed", "closed"] as const;
+
+// Staff refer a business to a bank, an insurer or a service provider. Nothing about the business goes to the partner until the
+// business has agreed to that recipient, for that purpose and for those kinds of information; agreeing to TRADE's terms is not
+// enough. The business can withdraw at any time, and a withdrawn consent closes the door again.
+export const partnerReferral = trade.table(
+  "partner_referral",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    destinationName: text("destination_name").notNull(),
+    destinationType: text("destination_type", { enum: REFERRAL_DESTINATION_TYPES }).notNull(),
+    reason: text("reason").notNull(),
+    /** What the business is asked to let the partner have. Only these kinds are ever in the package. */
+    sharedDataKinds: jsonb("shared_data_kinds").$type<string[]>().notNull().default([]),
+    consentStatus: text("consent_status", { enum: REFERRAL_CONSENT_STATUSES }).notNull().default("not_requested"),
+    consentAt: timestamp("consent_at", { withTimezone: true }),
+    consentByUserId: text("consent_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    status: text("status", { enum: REFERRAL_STATUSES }).notNull().default("draft"),
+    referralDate: date("referral_date", { mode: "string" }),
+    responsibleUserId: text("responsible_user_id").references(() => user.id, { onDelete: "set null" }),
+    outcome: text("outcome"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_partner_referral_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+// The history of a referral: who asked, who agreed, what was shared and when (acceptance test INT-07).
+export const partnerReferralEvent = trade.table(
+  "partner_referral_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referralId: uuid("referral_id")
+      .notNull()
+      .references(() => partnerReferral.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    note: text("note"),
+    /** For a share, the kinds that were in the package. */
+    detail: jsonb("detail").$type<Record<string, unknown>>(),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trade_partner_referral_event_idx").on(t.referralId, t.createdAt)],
+);
+
+// ---- Integration records (spec 12.4) ----
+
+export const INTEGRATION_PROVIDERS = ["mizan", "clear", "africonnect"] as const;
+export const INTEGRATION_SYNC_STATUSES = ["pending", "synced", "failed", "disabled"] as const;
+
+// One row for each thing TRADE holds that lives in another system, with how its last sync went. A failure is recorded here and
+// never stops learning or the business profile.
+export const integrationRecord = trade.table(
+  "integration_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: INTEGRATION_PROVIDERS }).notNull(),
+    externalReference: text("external_reference"),
+    recordType: text("record_type").notNull(),
+    syncStatus: text("sync_status", { enum: INTEGRATION_SYNC_STATUSES }).notNull().default("pending"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    errorDescription: text("error_description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("trade_integration_record_org_idx").on(t.organizationId, t.provider)],
+);
