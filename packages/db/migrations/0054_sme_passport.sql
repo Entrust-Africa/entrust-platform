@@ -1,0 +1,40 @@
+CREATE TABLE "trade"."sme_passport" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" text,
+	"application_id" uuid,
+	"passport_id" text NOT NULL,
+	"tier" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"status_reason" text,
+	"verified_on" date NOT NULL,
+	"valid_until" date NOT NULL,
+	"display_name" text NOT NULL,
+	"tagline" text,
+	"country" text NOT NULL,
+	"sector" text,
+	"established" integer,
+	"employees_range" text,
+	"ownership" text,
+	"founder" text,
+	"headline" text,
+	"overview" text,
+	"products" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"women_in_trade" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"target_markets" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"seeking" text,
+	"checks" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"website" text,
+	"email" text,
+	"phones" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"address" text,
+	"created_by_user_id" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "sme_passport_organization_id_unique" UNIQUE("organization_id"),
+	CONSTRAINT "sme_passport_application_id_unique" UNIQUE("application_id"),
+	CONSTRAINT "sme_passport_passport_id_unique" UNIQUE("passport_id")
+);
+--> statement-breakpoint
+ALTER TABLE "trade"."sme_passport" ADD CONSTRAINT "sme_passport_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "core"."organization"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "trade"."sme_passport" ADD CONSTRAINT "sme_passport_application_id_program_application_id_fk" FOREIGN KEY ("application_id") REFERENCES "trade"."program_application"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "trade"."sme_passport" ADD CONSTRAINT "sme_passport_created_by_user_id_user_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "core"."user"("id") ON DELETE set null ON UPDATE no action;
