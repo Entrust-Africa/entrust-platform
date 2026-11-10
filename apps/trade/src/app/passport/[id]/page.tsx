@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import { headers } from "next/headers";
-import { BadgeCheck, CheckCircle2, ShieldAlert, Star } from "lucide-react";
+import { ArrowLeft, BadgeCheck, CheckCircle2, ShieldAlert, Star } from "lucide-react";
 import { Card, StatusBadge } from "@entrust/ui";
 import { Qr } from "@/components/passport/qr";
+import { getMe } from "@/lib/api";
 import { STANDING_LABEL, TIERS, countryName, passportAddress, passportDate, type PublicPassport } from "@/lib/passport";
 
 // What the QR code on an Entrust Africa Verified SME Passport opens. Public: no sign-in. It shows only what staff published on the
@@ -20,6 +23,15 @@ async function load(id: string): Promise<{ passport: PublicPassport | null; notF
     return { passport: (await res.json()) as PublicPassport, notFound: false };
   } catch {
     return { passport: null, notFound: false };
+  }
+}
+
+/** Whether the visitor is signed in to TRADE, so the way back can go to their dashboard or to the sign-in page. A failure counts as signed out. */
+async function signedIn(): Promise<boolean> {
+  try {
+    return (await getMe()) !== null;
+  } catch {
+    return false;
   }
 }
 
@@ -43,11 +55,24 @@ export default async function PassportPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const { passport, notFound } = await load(id);
   const address = passportAddress(await headers(), (passport?.passportId ?? id).toUpperCase());
+  const member = await signedIn();
 
   return (
     <div className="min-h-screen bg-canvas px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-4xl space-y-5">
-        <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">Entrust Africa · Verified SME Passport</p>
+        <header className="flex items-center justify-between gap-3">
+          <a href="https://entrust-africa.com" rel="noopener noreferrer" aria-label="Entrust Africa" className="shrink-0">
+            <Image src="/entrust-africa.png" alt="Entrust Africa" width={900} height={178} className="h-7 w-auto sm:h-9" priority />
+          </a>
+          <Link
+            href={member ? "/" : "/sign-in"}
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            {member ? "Go to my dashboard" : "Sign in to TRADE"}
+          </Link>
+        </header>
+        <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">Verified SME Passport</p>
 
         {notFound ? (
           <Card className="space-y-3 border-red-200 bg-red-50/50 p-8 text-center">
@@ -79,7 +104,12 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
   return (
     <>
       <Card className="overflow-hidden p-0">
-        <div className="space-y-3 p-5 sm:p-7">
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-7">
+          {d?.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- the business's own logo, from our files or a link staff entered
+            <img src={d.logoUrl} alt={`${p.displayName} logo`} width={112} height={112} className="size-24 shrink-0 rounded-full border border-line bg-white object-contain sm:size-28" />
+          )}
+          <div className="min-w-0 space-y-3">
           <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">{p.displayName}</h1>
           {d?.tagline && <p className="text-sm text-ink-2">{d.tagline}</p>}
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -94,6 +124,7 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
             <span className="text-ink-2">
               ID <span className="font-mono font-bold text-ink">{p.passportId}</span>
             </span>
+          </div>
           </div>
         </div>
         <div
