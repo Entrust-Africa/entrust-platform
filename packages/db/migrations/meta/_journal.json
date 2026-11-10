@@ -379,6 +379,13 @@
       "when": 1794254371998,
       "tag": "0053_summit_form_without_financial_records",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1794315318571,
+      "tag": "0054_sme_passport",
+      "breakpoints": true
     }
   ]
 }
