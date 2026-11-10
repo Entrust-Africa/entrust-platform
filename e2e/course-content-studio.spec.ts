@@ -51,6 +51,7 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
 
   // 2. Helper to register and prepare a user
   async function createVerifiedUser(name: string, email: string, role?: string, orgId?: string) {
+    await page.context().clearCookies();
     await page.goto("http://localhost:3001/sign-in");
     await page.getByRole("button", { name: "Create an account" }).click();
     await page.getByLabel("Full name").fill(name);
@@ -75,6 +76,7 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
       });
     }
 
+    await page.context().clearCookies();
     return userRow!;
   }
 
@@ -103,6 +105,7 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   // STEP 1: Facilitator logs in and views Course Studio
   // ----------------------------------------------------
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.context().clearCookies();
   await page.goto("http://localhost:3001/sign-in");
   await page.getByLabel("Email").fill(facilitatorEmail);
   await page.getByLabel("Password").fill(password);
