@@ -31,6 +31,7 @@ interface Form {
   seeking: string;
   checks: string[];
   website: string;
+  logoUrl: string;
   email: string;
   phones: string;
   address: string;
@@ -75,6 +76,7 @@ function formFrom(p: PassportContent | null, s: PassportSuggestion): Form {
     seeking: p?.seeking ?? "",
     checks: p?.checks ?? [],
     website: p?.website ?? s.website ?? "",
+    logoUrl: p?.logoUrl ?? "",
     email: p?.email ?? s.email ?? "",
     phones: (p?.phones ?? s.phones).join("\n"),
     address: p?.address ?? s.address ?? "",
@@ -112,6 +114,7 @@ function bodyFrom(f: Form, link: Link | null) {
     seeking: orNull(f.seeking),
     checks: f.checks,
     website: orNull(f.website),
+    logoUrl: orNull(f.logoUrl),
     email: orNull(f.email),
     phones: lines(f.phones),
     address: orNull(f.address),
@@ -317,6 +320,7 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
 
           <div className="grid gap-4 sm:grid-cols-2">
             {text("website", "Website")}
+            {text("logoUrl", "Logo", "A path like /passports/EA-ETH-0001.png, or an https link")}
             {text("email", "Email")}
             {text("address", "Address")}
             <div className="flex flex-col gap-1.5">

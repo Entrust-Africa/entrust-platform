@@ -35,6 +35,8 @@ const PassportContent = z
     validUntil: day,
     displayName: line.min(1),
     tagline: optional(line),
+    // The business's own logo: a file kept with the TRADE site ("/passports/…") or a secure link to an image.
+    logoUrl: optional(z.string().trim().max(500).regex(/^(\/(?!\/)[\w./-]+|https:\/\/\S+)$/, "Use a path that starts with / or an https:// link")),
     country: z.string().trim().length(2).toUpperCase(),
     sector: optional(line),
     established: z.number().int().min(1800).max(2100).nullable(),

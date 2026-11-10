@@ -17,6 +17,7 @@ export interface PassportContent {
   ownership: string | null;
   founder: string | null;
   headline: string | null;
+  logoUrl: string | null;
   overview: string | null;
   products: { name: string; detail: string | null; code: string | null }[];
   womenInTrade: string[];

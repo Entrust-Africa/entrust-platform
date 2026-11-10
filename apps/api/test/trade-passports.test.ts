@@ -33,6 +33,7 @@ const body = (over: Record<string, unknown> = {}) => ({
   email: "info@example.com",
   phones: ["+251 900 000 000"],
   address: "Addis Ababa",
+  logoUrl: null,
   ...over,
 });
 const save = (user: TestUser | null, over: Record<string, unknown> = {}, number = ID) => callV1(user, "PUT", `/trade/passports/${number}`, body(over));
@@ -176,5 +177,13 @@ describe("what a person scanning the code sees", () => {
     expect((await publicGet(ID)).body.standing).toBe("active");
     const [row] = await db.select().from(schema.smePassport).where(eq(schema.smePassport.passportId, ID));
     expect(row!.statusReason).toBeNull();
+  });
+
+  it("shows a logo path or https link on the public page and refuses anything else", async () => {
+    expect((await save(w.admin, { logoUrl: "/passports/EA-TST-9001.png" })).status).toBe(200);
+    expect((await publicGet(ID)).body.details.logoUrl).toBe("/passports/EA-TST-9001.png");
+    for (const bad of ["javascript:alert(1)", "http://example.com/a.png", "//evil.test/a.png"]) {
+      expect((await save(w.admin, { logoUrl: bad })).status).toBe(400);
+    }
   });
 });

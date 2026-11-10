@@ -23,6 +23,7 @@ export interface PassportContent {
   validUntil: string;
   displayName: string;
   tagline: string | null;
+  logoUrl: string | null;
   country: string;
   sector: string | null;
   established: number | null;
@@ -51,6 +52,7 @@ const contentOf = (row: Row): PassportContent => ({
   validUntil: row.validUntil,
   displayName: row.displayName,
   tagline: row.tagline,
+  logoUrl: row.logoUrl,
   country: row.country,
   sector: row.sector,
   established: row.established,

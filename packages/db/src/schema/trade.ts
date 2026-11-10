@@ -1453,6 +1453,7 @@ export const smePassport = trade.table(
     validUntil: date("valid_until").notNull(),
     displayName: text("display_name").notNull(),
     tagline: text("tagline"),
+    logoUrl: text("logo_url"),
     country: text("country").notNull(),
     sector: text("sector"),
     established: integer("established"),
