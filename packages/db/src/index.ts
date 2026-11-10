@@ -15,9 +15,11 @@ export {
   ATTENDANCE_STATUSES,
   MODULE_SUBMISSION_STATUSES,
   RUBRIC_SCORE_OUTCOMES,
+  MODULE_CONTENT_STATUSES,
   type DeliveryMode,
   type EnrollmentStatus,
   type AttendanceStatus,
   type ModuleSubmissionStatus,
   type RubricScoreOutcome,
+  type ModuleContentStatus,
 } from "./schema/trade";

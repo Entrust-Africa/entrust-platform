@@ -306,3 +306,43 @@ export interface ModuleItemSummary {
   latestVersion: string | null;
   versions: string[];
 }
+
+export interface AdminModuleVersionSummary {
+  id: string;
+  moduleId: string;
+  version: string;
+  status: "draft" | "in_review" | "approved" | "archived";
+  title: string;
+  deliverable: string;
+  objectives: string[];
+  contentHash: string;
+  changeSummary: string | null;
+  createdByUserId: string | null;
+  createdByUser?: { id: string; name: string | null; email: string } | null;
+  updatedByUserId: string | null;
+  submittedByUserId: string | null;
+  submittedAt: string | null;
+  approvedByUserId: string | null;
+  approvedByUser?: { id: string; name: string | null; email: string } | null;
+  approvedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminModuleSummary {
+  id: string;
+  title: string;
+  deliverable: string;
+  objectives: string[];
+  latestApprovedVersion: string | null;
+  activeDraftVersion: string | null;
+  inReviewVersion: string | null;
+  versions: AdminModuleVersionSummary[];
+}
+
+export interface AdminModuleVersionDetail extends AdminModuleVersionSummary {
+  content: Record<string, any>;
+  validationErrors: string[];
+}
+
