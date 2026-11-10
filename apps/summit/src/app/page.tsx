@@ -4,7 +4,7 @@ import { HostedBy, SectionLabel, SiteFooter, SiteHeader, amberButton, outlineOnD
 import { getCatalogue, type Product } from "@/lib/commerce";
 import { EVENT_LINE, HEADLINE, INTRO, OBJECTIVES, WHO, WHY } from "@/lib/content";
 import { joinOptions, type JoinKey } from "@/lib/join";
-import { applicationsLine, countryNames, getPeriod } from "@/lib/period";
+import { applicationsLine, getPeriod, openToLine } from "@/lib/period";
 
 // The application window and the prices change when Entrust edits them, so every visit asks the API.
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ function fromPrice(products: Product[]): string | null {
 export default async function SummitLandingPage() {
   const [period, catalogue] = await Promise.all([getPeriod(), getCatalogue()]);
   const statusLine = applicationsLine(period);
-  const countries = period ? countryNames(period.countries) : [];
+  const openTo = period ? openToLine(period.countries) : null;
 
   const tiles = [
     { href: "/exhibit", label: "Exhibit", text: "Book a booth and show your products to buyers and investors.", price: fromPrice(catalogue?.exhibition ?? []) },
@@ -154,10 +154,10 @@ export default async function SummitLandingPage() {
               );
             })}
           </div>
-          {(statusLine || countries.length > 0) && (
+          {(statusLine || openTo) && (
             <div className="mt-6 space-y-2">
               {statusLine && <p className="font-mono text-[11px] tracking-[0.16em] text-amber-ink uppercase">SME applications: {statusLine.replace(/^Applications /, "")}</p>}
-              {countries.length > 0 && <p className="text-xs leading-relaxed text-ink/60">Open to businesses in {countries.join(", ")}.</p>}
+              {openTo && <p className="text-xs leading-relaxed text-ink/60">{openTo}</p>}
             </div>
           )}
         </div>
