@@ -1437,10 +1437,14 @@ export const smePassport = trade.table(
   "sme_passport",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Where the passport's details started from, if anywhere: a business on the platform, or an application in the SME
+    // register (a business can have a passport before it has an account). Neither is public. Either can be missing.
     organizationId: text("organization_id")
-      .notNull()
       .unique()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "set null" }),
+    applicationId: uuid("application_id")
+      .unique()
+      .references((): AnyPgColumn => programApplication.id, { onDelete: "set null" }),
     passportId: text("passport_id").notNull().unique(),
     tier: text("tier", { enum: PASSPORT_TIERS }).notNull(),
     status: text("status", { enum: PASSPORT_STATUSES }).notNull().default("active"),

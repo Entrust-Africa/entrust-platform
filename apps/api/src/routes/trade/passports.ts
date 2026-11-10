@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { getDb } from "@entrust/db";
 import { PASSPORT_STATUSES, PASSPORT_TIERS } from "@entrust/trade-engine";
 import type { AppEnv } from "../../app";
-import { listPassports, passportForBusiness, publicPassport, savePassport } from "../../services/trade-passports";
+import { listPassports, passportForStaff, passportPrefill, publicPassport, savePassport } from "../../services/trade-passports";
 import { clearRouter, contextFor, json, listErrors, problem } from "../clear/shared";
 
 // The Entrust Africa Verified SME Passport: a public page behind the passport's QR code, and the staff screens that make it.
@@ -55,7 +55,13 @@ const PassportContent = z
   })
   .openapi("TradePassport");
 
-const SaveBody = PassportContent.extend({ passportId: z.string().trim().optional(), statusReason: z.string().trim().max(500).nullable().optional().transform((v) => v ?? null) }).openapi("TradePassportInput");
+const SaveBody = PassportContent.omit({ passportId: true })
+  .extend({
+    statusReason: z.string().trim().max(500).nullable().optional().transform((v) => v ?? null),
+    smeId: z.string().trim().min(1).max(40).optional(),
+    applicationId: z.uuid().optional(),
+  })
+  .openapi("TradePassportInput");
 
 const PublicPassport = z
   .object({
@@ -69,17 +75,27 @@ const PublicPassport = z
   })
   .openapi("TradePublicPassport");
 
-const Editor = z
+const Source = z.object({
+  kind: z.enum(["business", "application"]),
+  label: z.string(),
+  smeId: z.string().nullable(),
+  organizationId: z.string().nullable(),
+  applicationId: z.string().nullable(),
+});
+
+const Editor = z.object({ passport: PassportContent, source: Source.nullable() }).openapi("TradePassportEditor");
+
+const Prefill = z
   .object({
-    business: z.object({ organizationId: z.string(), smeId: z.string(), legalName: z.string() }),
-    passport: PassportContent.nullable(),
-    suggestion: PassportContent.pick({ displayName: true, country: true, sector: true, established: true, employeesRange: true, ownership: true, website: true, email: true, phones: true, address: true }),
+    source: Source,
+    existingPassportId: z.string().nullable(),
+    suggestion: PassportContent.pick({ displayName: true, country: true, sector: true, established: true, employeesRange: true, ownership: true, founder: true, website: true, email: true, phones: true, address: true }),
   })
-  .openapi("TradePassportEditor");
+  .openapi("TradePassportPrefill");
 
 const List = z
   .object({
-    items: z.array(z.object({ passportId: z.string(), smeId: z.string(), displayName: z.string(), tier: z.enum(PASSPORT_TIERS), standing: Standing, verifiedOn: z.string(), validUntil: z.string() })),
+    items: z.array(z.object({ passportId: z.string(), displayName: z.string(), tier: z.enum(PASSPORT_TIERS), standing: Standing, verifiedOn: z.string(), validUntil: z.string() })),
   })
   .openapi("TradePassportList");
 
@@ -103,31 +119,41 @@ const listRoute = createRoute({
   responses: { 200: { description: "The passports", content: json(List) }, ...listErrors, 403: problem("Not Entrust staff") },
 });
 
-const businessParam = z.object({ smeId: z.string().min(1).max(40) });
+const prefillRoute = createRoute({
+  method: "get",
+  path: "/passports/prefill",
+  tags,
+  summary: "What is held about a business, to start a passport from",
+  description:
+    "Give an SME ID (a business on the platform) or an application id (a business in the SME register, Ethiopia only). It returns a suggestion made from what is held (name, country, year, ownership, and the headcount range from the diagnostic or the application) and the number of the passport already made from it, if any. The suggestion is for staff only; nothing becomes public until staff save it on the passport. Entrust admins and facilitators.",
+  request: { query: z.object({ smeId: z.string().min(1).max(40).optional(), applicationId: z.uuid().optional() }) },
+  responses: { 200: { description: "The suggestion", content: json(Prefill) }, ...listErrors, 403: problem("Not Entrust staff") },
+});
+
+const numberParam = z.object({ passportId: z.string().min(1).max(40) });
 const editorRoute = createRoute({
   method: "get",
-  path: "/passports/by-sme/{smeId}",
+  path: "/passports/{passportId}",
   tags,
-  summary: "A business's passport and what could fill one in",
-  description:
-    "The business's passport, or null, with a suggestion made from what the platform holds (name, country, year, address and a headcount range taken from the diagnostic). The suggestion is for staff only; nothing becomes public until staff save it on the passport. Entrust admins and facilitators.",
-  request: { params: businessParam },
-  responses: { 200: { description: "The passport and the suggestion", content: json(Editor) }, ...listErrors, 403: problem("Not Entrust staff") },
+  summary: "One passport as staff see it",
+  description: "Every line of the passport, including the reason for a suspension, and what it was made from. Entrust admins and facilitators.",
+  request: { params: numberParam },
+  responses: { 200: { description: "The passport", content: json(Editor) }, ...listErrors, 403: problem("Not Entrust staff") },
 });
 
 const saveRoute = createRoute({
   method: "put",
-  path: "/passports/by-sme/{smeId}",
+  path: "/passports/{passportId}",
   tags,
-  summary: "Issue or change a business's passport",
+  summary: "Issue or change a passport",
   description:
-    "Saves every line of the passport. The number (EA-ETH-0002) is given on the first save and can't change. A status other than active needs a reason. Entrust admins only; every save is audited.",
-  request: { params: businessParam, body: { required: true, content: json(SaveBody) } },
+    "Saves every line of the passport with this number (EA-ETH-0002). A new passport can say which business (`smeId`) or register application (`applicationId`) it was made from; the link is kept. A status other than active needs a reason. Entrust admins only; every save is audited.",
+  request: { params: numberParam, body: { required: true, content: json(SaveBody) } },
   responses: {
     200: { description: "The saved passport", content: json(PassportContent) },
     ...listErrors,
     403: problem("Only Entrust admins can issue or change a passport"),
-    409: problem("The number is already issued to another business"),
+    409: problem("The business or application already has a passport"),
     422: problem("The values aren't allowed"),
   },
 });
@@ -136,8 +162,9 @@ publicRouter.openapi(publicRoute, async (c) => c.json(await publicPassport(getDb
 
 router
   .openapi(listRoute, async (c) => c.json(await listPassports(await contextFor(c.get("user"))), 200))
-  .openapi(editorRoute, async (c) => c.json(await passportForBusiness(await contextFor(c.get("user")), c.req.valid("param").smeId), 200))
-  .openapi(saveRoute, async (c) => c.json(await savePassport(await contextFor(c.get("user")), c.req.valid("param").smeId, c.req.valid("json")), 200));
+  .openapi(prefillRoute, async (c) => c.json(await passportPrefill(await contextFor(c.get("user")), c.req.valid("query")), 200))
+  .openapi(editorRoute, async (c) => c.json(await passportForStaff(await contextFor(c.get("user")), c.req.valid("param").passportId), 200))
+  .openapi(saveRoute, async (c) => c.json(await savePassport(await contextFor(c.get("user")), c.req.valid("param").passportId, c.req.valid("json")), 200));
 
 export const tradePublicPassports = publicRouter;
 export const tradePassports = router;

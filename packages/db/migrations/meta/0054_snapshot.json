@@ -1,5 +1,5 @@
 {
-  "id": "2029d6cc-64f1-4827-bcc5-e654bdb3492a",
+  "id": "540f9f6d-a24a-4ae9-b3a0-2aa64a0aeecd",
   "prevId": "cd928f50-6cc2-4d5a-aee9-bc075beb1eb8",
   "version": "7",
   "dialect": "postgresql",
@@ -11596,7 +11596,13 @@
           "name": "organization_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "application_id": {
+          "name": "application_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "passport_id": {
           "name": "passport_id",
@@ -11788,7 +11794,21 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "sme_passport_application_id_program_application_id_fk": {
+          "name": "sme_passport_application_id_program_application_id_fk",
+          "tableFrom": "sme_passport",
+          "tableTo": "program_application",
+          "schemaTo": "trade",
+          "columnsFrom": [
+            "application_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "sme_passport_created_by_user_id_user_id_fk": {
@@ -11813,6 +11833,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "organization_id"
+          ]
+        },
+        "sme_passport_application_id_unique": {
+          "name": "sme_passport_application_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "application_id"
           ]
         },
         "sme_passport_passport_id_unique": {
