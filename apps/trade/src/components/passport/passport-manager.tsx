@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Card, Field, StatusBadge } from "@entrust/ui";
-import { STANDING_LABEL, TIERS, passportDate, type PassportContent, type PassportEditorData, type PassportListItem, type PassportTier } from "@/lib/passport";
+import { STANDING_LABEL, TIERS, passportDate, type PassportContent, type PassportEditorData, type PassportListItem, type PassportPrefill, type PassportSource, type PassportSuggestion, type PassportTier } from "@/lib/passport";
 import { tradeFetch } from "@/lib/trade-client";
 
 const select = "h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
@@ -36,6 +36,10 @@ interface Form {
   address: string;
 }
 
+/** What a new passport is made from: a business on the platform or an application in the register. */
+type Link = { smeId?: string; applicationId?: string };
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const NUMBER = /^EA-[A-Z]{3}-\d{4}$/i;
 const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
 const orNull = (text: string) => (text.trim() ? text.trim() : null);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -45,9 +49,9 @@ const yearLater = () => {
   return d.toISOString().slice(0, 10);
 };
 
-function formFrom(data: PassportEditorData): Form {
-  const p = data.passport;
-  const s = data.suggestion;
+const EMPTY_SUGGESTION: PassportSuggestion = { displayName: "", country: "ET", sector: null, established: null, employeesRange: null, ownership: null, founder: null, website: null, email: null, phones: [], address: null };
+
+function formFrom(p: PassportContent | null, s: PassportSuggestion): Form {
   return {
     passportId: p?.passportId ?? "",
     tier: p?.tier ?? "bronze",
@@ -62,7 +66,7 @@ function formFrom(data: PassportEditorData): Form {
     established: String(p?.established ?? s.established ?? ""),
     employeesRange: p ? (p.employeesRange ?? "") : (s.employeesRange ?? ""),
     ownership: p?.ownership ?? s.ownership ?? "",
-    founder: p?.founder ?? "",
+    founder: p?.founder ?? s.founder ?? "",
     headline: p?.headline ?? "",
     overview: p?.overview ?? "",
     products: (p?.products ?? []).map((x) => [x.name, x.detail ?? "", x.code ?? ""].join(" | ").replace(/( \| )+$/, "")).join("\n"),
@@ -77,9 +81,10 @@ function formFrom(data: PassportEditorData): Form {
   };
 }
 
-function bodyFrom(f: Form, isNew: boolean) {
+function bodyFrom(f: Form, link: Link | null) {
   return {
-    ...(isNew ? { passportId: f.passportId.trim() } : {}),
+    ...(link?.smeId ? { smeId: link.smeId } : {}),
+    ...(link?.applicationId ? { applicationId: link.applicationId } : {}),
     tier: f.tier,
     status: f.status,
     statusReason: f.status === "active" ? null : orNull(f.statusReason),
@@ -116,8 +121,9 @@ function bodyFrom(f: Form, isNew: boolean) {
 /** The staff screen for passports: the ones issued, and a form to issue or change one from a business's SME ID. */
 export function PassportManager({ items: initial, canIssue, checks, loadError }: { items: PassportListItem[]; canIssue: boolean; checks: string[]; loadError: string | null }) {
   const [items, setItems] = useState(initial);
-  const [smeId, setSmeId] = useState("");
-  const [data, setData] = useState<PassportEditorData | null>(null);
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState<{ passport: PassportContent | null; source: PassportSource | null; suggestion: PassportSuggestion } | null>(null);
+  const [link, setLink] = useState<Link | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(loadError);
@@ -127,20 +133,37 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
   const text = (key: keyof Form, label: string, hint?: string) => (
     <Field label={label} hint={hint} value={String(form?.[key] ?? "")} disabled={!canIssue} onChange={(e) => set(key, e.target.value as never)} />
   );
-  const lookup = async (id: string) => {
+
+  const show = (next: { passport: PassportContent | null; source: PassportSource | null; suggestion: PassportSuggestion }) => {
+    setData(next);
+    setForm(formFrom(next.passport, next.suggestion));
+    setLink(next.passport ? null : next.source?.smeId ? { smeId: next.source.smeId } : next.source?.applicationId ? { applicationId: next.source.applicationId } : null);
+  };
+  const clear = (message: string | null) => {
+    setData(null);
+    setForm(null);
+    setError(message);
+  };
+  const openNumber = async (number: string) => {
+    const res = await tradeFetch<PassportEditorData>("GET", `/passports/${encodeURIComponent(number.trim())}`);
+    if (!res.ok || !res.data) return clear(res.status === 404 ? "No passport has that number." : res.error);
+    show({ passport: res.data.passport, source: res.data.source, suggestion: EMPTY_SUGGESTION });
+  };
+  /** Opens what the box holds: a passport number, a register application (its id or its link) or a business's SME ID. */
+  const lookup = async (input: string) => {
+    const value = input.trim();
     setBusy(true);
     setError(null);
     setNotice(null);
-    const res = await tradeFetch<PassportEditorData>("GET", `/passports/by-sme/${encodeURIComponent(id.trim())}`);
-    setBusy(false);
-    if (!res.ok || !res.data) {
-      setData(null);
-      setForm(null);
-      return setError(res.status === 404 ? "No business has that SME ID." : res.error);
+    if (NUMBER.test(value)) await openNumber(value);
+    else {
+      const application = value.match(UUID)?.[0];
+      const res = await tradeFetch<PassportPrefill>("GET", `/passports/prefill?${application ? `applicationId=${application.toLowerCase()}` : `smeId=${encodeURIComponent(value)}`}`);
+      if (!res.ok || !res.data) clear(res.status === 404 ? "Nothing was found for that. Use an SME ID, an application link or a passport number." : res.error);
+      else if (res.data.existingPassportId) await openNumber(res.data.existingPassportId);
+      else show({ passport: null, source: res.data.source, suggestion: res.data.suggestion });
     }
-    setData(res.data);
-    setForm(formFrom(res.data));
-    setSmeId(res.data.business.smeId);
+    setBusy(false);
   };
 
   const save = async () => {
@@ -148,16 +171,16 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
     setBusy(true);
     setError(null);
     setNotice(null);
-    const res = await tradeFetch<PassportContent>("PUT", `/passports/by-sme/${encodeURIComponent(data.business.smeId)}`, bodyFrom(form, !data.passport));
+    const number = (data.passport?.passportId ?? form.passportId).trim().toUpperCase();
+    const res = await tradeFetch<PassportContent>("PUT", `/passports/${encodeURIComponent(number)}`, bodyFrom(form, data.passport ? null : link));
     if (!res.ok || !res.data) {
       setBusy(false);
       return setError(res.error);
     }
-    setNotice(`Saved. The public page for ${res.data.passportId} is live.`);
     const list = await tradeFetch<{ items: PassportListItem[] }>("GET", "/passports");
     if (list.data) setItems(list.data.items);
+    await openNumber(res.data.passportId);
     setBusy(false);
-    await lookup(data.business.smeId);
     setNotice(`Saved. The public page for ${res.data.passportId} is live.`);
   };
 
@@ -177,14 +200,14 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
                 {item.displayName} <span className="font-mono text-xs font-normal text-ink-3">{item.passportId}</span>
               </p>
               <p className="text-xs text-ink-3">
-                {TIERS[item.tier].name} · verified {passportDate(item.verifiedOn)} · valid until {passportDate(item.validUntil)} · {item.smeId}
+                {TIERS[item.tier].name} · verified {passportDate(item.verifiedOn)} · valid until {passportDate(item.validUntil)}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <StatusBadge tone={item.standing === "active" ? "ok" : "danger"}>{STANDING_LABEL[item.standing]}</StatusBadge>
               <a href={`/passport/${item.passportId}`} className="font-semibold text-brand-600 underline-offset-4 hover:underline">View page</a>
               <a href={`/passport/${item.passportId}/qr.svg`} download={`${item.passportId}-qr.svg`} className="font-semibold text-brand-600 underline-offset-4 hover:underline">QR code (SVG)</a>
-              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void lookup(item.smeId)}>{canIssue ? "Edit" : "Open"}</Button>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void lookup(item.passportId)}>{canIssue ? "Edit" : "Open"}</Button>
             </div>
           </div>
         ))}
@@ -195,25 +218,33 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (smeId.trim()) void lookup(smeId);
+            if (query.trim()) void lookup(query);
           }}
         >
-          <Field className="min-w-64 flex-1" label="Business SME ID" placeholder="ET-SME-000001" value={smeId} onChange={(e) => setSmeId(e.target.value)} />
-          <Button type="submit" loading={busy} disabled={!smeId.trim()}>{`Open passport`}</Button>
+          <Field
+            className="min-w-64 flex-1"
+            label="Business"
+            hint="An SME ID (ET-SME-000001), a link or id of an application in the SME register, or a passport number (EA-ETH-0002)."
+            placeholder="ET-SME-000001, or paste the application link"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <Button type="submit" loading={busy} disabled={!query.trim()}>Open</Button>
         </form>
       </Card>
 
       {data && form && (
         <Card className="space-y-6 p-4 sm:p-5">
           <div>
-            <h2 className="font-display text-lg font-bold text-ink">{data.business.legalName}</h2>
+            <h2 className="font-display text-lg font-bold text-ink">{data.passport?.displayName ?? data.source?.label ?? "New passport"}</h2>
             <p className="text-xs text-ink-3">
-              {data.business.smeId} · {isNew ? "No passport yet. The details below are suggestions from what the platform holds; none is public until you save." : `Passport ${data.passport?.passportId}`}
+              {data.source ? `${data.source.kind === "business" ? `Business ${data.source.smeId}` : "Application in the SME register"}: ${data.source.label}. ` : ""}
+              {isNew ? "No passport yet. The details below are suggestions from what is held; none is public until you save." : `Passport ${data.passport?.passportId}`}
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Passport number" placeholder="EA-ETH-0002" value={form.passportId} disabled={!canIssue || !isNew} hint={isNew ? "Three letters for the country, then four digits. It can't change." : undefined} onChange={(e) => set("passportId", e.target.value)} />
+            <Field label="Passport number" placeholder="EA-ETH-0002" value={form.passportId} disabled={!canIssue || !isNew} hint={isNew ? "Three letters for the country, then four digits. It can't change." : undefined} onChange={(e) => set("passportId", e.target.value.toUpperCase())} />
             <div className="flex flex-col gap-1.5">
               <label htmlFor="pp-tier" className="text-sm font-semibold text-ink">Tier</label>
               <select id="pp-tier" className={select} disabled={!canIssue} value={form.tier} onChange={(e) => set("tier", e.target.value as PassportTier)}>
@@ -239,7 +270,7 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
             {text("country", "Country (two letters)")}
             {text("sector", "Sector")}
             {text("established", "Year established")}
-            {text("employeesRange", "Employees (range)", data.suggestion.employeesRange ? `The diagnostic suggests ${data.suggestion.employeesRange}. Confirm it before it goes public.` : "The diagnostic has no headcount for this business. Leave blank to show \"Not stated\".")}
+            {text("employeesRange", "Employees (range)", data.suggestion.employeesRange ? `Suggested from what the business told Entrust: ${data.suggestion.employeesRange}. Confirm it before it goes public.` : "No headcount is held for this business. Leave blank to show \"Not stated\".")}
             {text("ownership", "Ownership", "For example: 100% women-owned")}
             {text("founder", "Founder")}
             {text("seeking", "Seeking")}

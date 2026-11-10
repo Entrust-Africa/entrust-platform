@@ -39,15 +39,41 @@ export interface PublicPassport {
   details: Omit<PassportContent, "passportId" | "tier" | "status" | "statusReason" | "verifiedOn" | "validUntil" | "displayName"> | null;
 }
 
+export interface PassportSource {
+  kind: "business" | "application";
+  label: string;
+  smeId: string | null;
+  organizationId: string | null;
+  applicationId: string | null;
+}
+
+export interface PassportSuggestion {
+  displayName: string;
+  country: string;
+  sector: string | null;
+  established: number | null;
+  employeesRange: string | null;
+  ownership: string | null;
+  founder: string | null;
+  website: string | null;
+  email: string | null;
+  phones: string[];
+  address: string | null;
+}
+
+export interface PassportPrefill {
+  source: PassportSource;
+  existingPassportId: string | null;
+  suggestion: PassportSuggestion;
+}
+
 export interface PassportEditorData {
-  business: { organizationId: string; smeId: string; legalName: string };
-  passport: PassportContent | null;
-  suggestion: Pick<PassportContent, "displayName" | "country" | "sector" | "established" | "employeesRange" | "ownership" | "website" | "email" | "phones" | "address">;
+  passport: PassportContent;
+  source: PassportSource | null;
 }
 
 export interface PassportListItem {
   passportId: string;
-  smeId: string;
   displayName: string;
   tier: PassportTier;
   standing: PassportStanding;
