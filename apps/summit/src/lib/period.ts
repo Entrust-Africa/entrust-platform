@@ -87,6 +87,6 @@ const AFRICAN_COUNTRIES = [
 export function openToLine(codes: readonly string[]): string | null {
   if (codes.length === 0) return null;
   const set = new Set(codes.map((c) => c.toUpperCase()));
-  if (AFRICAN_COUNTRIES.every((c) => set.has(c))) return "Open to businesses in all African countries.";
+  if (AFRICAN_COUNTRIES.every((c) => set.has(c))) return "Open to businesses in Africa.";
   return `Open to businesses in ${countryNames(codes).join(", ")}.`;
 }
