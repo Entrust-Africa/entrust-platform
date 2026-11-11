@@ -67,3 +67,4 @@ export { APPLICATION_COHORTS, PILOT_COHORTS, buildCatalogue, cohortOfProgramme, 
 export type { ApplicationRow, CatalogueCohort, CatalogueSme, CohortStatus, PilotCohort } from "./catalogue";
 export { PASSPORT_CHECKS, PASSPORT_ID_PATTERN, PASSPORT_STANDING_LABELS, PASSPORT_STATUSES, PASSPORT_TIERS, PASSPORT_TIER_LABELS, employeeRange, isPassportId, normalisePassportId, passportStanding } from "./passport";
 export type { PassportStanding, PassportStatus, PassportTier } from "./passport";
+export { TRADE_TIME_ZONE, formatTradeDateTime, parseTradeLocalDateTime, toTradeLocalDateTime, tradeToday } from "./time";

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseTradeLocalDateTime } from "@entrust/trade-engine";
 import { serverApi } from "@/lib/api";
 import type { AttendanceStatus } from "@/lib/types";
 
@@ -24,6 +25,11 @@ export async function createSessionAction(_: ActionState, form: FormData): Promi
   if (!cohortId) return { error: "Cohort ID is required." };
   if (!title) return { error: "Session title is required." };
   if (!startTime || !endTime) return { error: "Start and end times are required." };
+  // The form's times are Addis Ababa time. This runs on a UTC server, where `new Date()` would read them as UTC.
+  const start = parseTradeLocalDateTime(startTime);
+  const end = parseTradeLocalDateTime(endTime);
+  if (!start || !end) return { error: "Enter the start and end as a date and a time." };
+  if (end <= start) return { error: "The session has to end after it starts." };
 
   const moduleCodes = moduleCodesRaw
     ? moduleCodesRaw
@@ -39,8 +45,8 @@ export async function createSessionAction(_: ActionState, form: FormData): Promi
       title,
       description: description || undefined,
       moduleCodes,
-      startTime: new Date(startTime).toISOString(),
-      endTime: new Date(endTime).toISOString(),
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
       venue: venue || null,
       recordingUrl: recordingUrl || null,
       learnerMaterials: [],

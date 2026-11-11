@@ -42,7 +42,7 @@ const reminders = createRoute({
   tags,
   summary: "Send the overdue-action and unfinished-learning reminders now",
   description: "Administrators only. Meant to be called on a schedule; each reminder goes out once however often this runs.",
-  responses: { 200: ok("How many people were told", z.object({ overdueActions: z.number(), incompleteLearning: z.number() })), ...writeErrors },
+  responses: { 200: ok("How many people were told", z.object({ overdueActions: z.number(), incompleteLearning: z.number(), failed: z.number() })), ...writeErrors },
 });
 
 export const tradeNotifications = router

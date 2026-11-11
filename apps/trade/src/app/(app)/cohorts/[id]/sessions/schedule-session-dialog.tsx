@@ -94,8 +94,9 @@ export function ScheduleSessionDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Start Time</label>
+                  <label htmlFor="session-start" className="block text-xs font-semibold text-ink">Start (Addis Ababa time)</label>
                   <input
+                    id="session-start"
                     type="datetime-local"
                     name="startTime"
                     required
@@ -103,8 +104,9 @@ export function ScheduleSessionDialog({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink">End Time</label>
+                  <label htmlFor="session-end" className="block text-xs font-semibold text-ink">End (Addis Ababa time)</label>
                   <input
+                    id="session-end"
                     type="datetime-local"
                     name="endTime"
                     required

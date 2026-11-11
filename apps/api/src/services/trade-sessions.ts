@@ -4,7 +4,8 @@ import {
   ATTENDANCE_STATUSES,
   type AttendanceStatus,
 } from "@entrust/db";
-import { enqueue, JOB_NAMES } from "@entrust/jobs";
+import { notify, organizationMemberIds } from "./trade-notifications";
+import { formatSessionTime } from "./trade-time";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 
@@ -399,64 +400,40 @@ export async function getFacilitatorRoster(db: Executor, sessionId: string) {
   };
 }
 
+/**
+ * Reminds everyone in the cohort's registered and active businesses about a session, in the platform and by email as each
+ * person prefers. Each person is reminded once per session time: sending again changes nothing, and moving the session
+ * lets a new reminder go out. Returns how many people were reminded this time.
+ */
 export async function queueSessionReminders(db: Executor, sessionId: string) {
   const sess = await getSession(db, sessionId, true);
 
-  // 1. Get enrolled SME organisations
   const enrollments = await db
     .select({ organizationId: schema.enrollment.organizationId })
     .from(schema.enrollment)
-    .where(
-      and(
-        eq(schema.enrollment.cohortId, sess.cohortId),
-        inArray(schema.enrollment.status, ["registered", "active"]),
-      ),
-    );
-
-  const orgIds = enrollments.map((e) => e.organizationId);
-  if (orgIds.length === 0) return { queued: 0 };
-
-  // 2. Get members of these organisations
-  const members = await db
-    .select({
-      userId: schema.member.userId,
-      name: schema.user.name,
-      email: schema.user.email,
-    })
-    .from(schema.member)
-    .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
-    .where(inArray(schema.member.organizationId, orgIds));
-
-  // Deduplicate members across organisations
-  const uniqueMembers = Array.from(new Map(members.map((m) => [m.userId, m])).values());
+    .where(and(eq(schema.enrollment.cohortId, sess.cohortId), inArray(schema.enrollment.status, ["registered", "active"])));
 
   let queued = 0;
-  for (const m of uniqueMembers) {
-    const singletonKey = `trade-session-reminder-${sessionId}-${m.userId}`;
-    try {
-      await enqueue(
-        JOB_NAMES.SEND_EMAIL,
-        {
-          to: m.email,
-          subject: `Reminder: ${sess.title} (${sess.cohortName})`,
-          template: "trade-session-reminder",
-          props: {
-            sessionTitle: sess.title,
-            cohortName: sess.cohortName,
-            startTime: sess.startTime.toISOString(),
-            venue: sess.venue || undefined,
-            meetingUrl: sess.venue || undefined,
-            recipientName: m.name,
-          },
+  for (const { organizationId } of enrollments) {
+    queued += await notify(db, {
+      userIds: await organizationMemberIds(db, organizationId),
+      kind: "session_reminder",
+      title: `Reminder: ${sess.title} (${sess.cohortName})`,
+      body: `${sess.title} starts ${formatSessionTime(sess.startTime)}.${sess.venue ? ` Where: ${sess.venue}.` : ""}`,
+      organizationId,
+      dedupeKey: `session:${sessionId}:${sess.startTime.toISOString()}`,
+      email: (person) => ({
+        template: "trade-session-reminder",
+        props: {
+          sessionTitle: sess.title,
+          cohortName: sess.cohortName,
+          startTime: formatSessionTime(sess.startTime),
+          venue: sess.venue || undefined,
+          meetingUrl: sess.venue || undefined,
+          ...(person.name ? { recipientName: person.name } : {}),
         },
-        {
-          singletonKey,
-        },
-      );
-      queued++;
-    } catch (err) {
-      console.error(`[trade:sessions] Could not enqueue reminder for user ${m.userId}:`, err);
-    }
+      }),
+    });
   }
 
   return { queued };

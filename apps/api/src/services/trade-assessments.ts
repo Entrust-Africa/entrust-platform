@@ -10,6 +10,7 @@ import {
   placementAnswerToForm,
   placementAsForm,
   validateResponses,
+  tradeToday,
   visibleQuestions as placementVisible,
   type Answer as EngineAnswer,
   type Answers as EngineAnswers,
@@ -56,7 +57,8 @@ function requireWrite(access: Access, doing: string): void {
   if (!access.write) throw new ServiceError("forbidden", `You can't ${doing}.`);
 }
 
-const todayOf = (now: Date): string => now.toISOString().slice(0, 10);
+/** Today in Addis Ababa, where the businesses are: UTC is still on yesterday until 03:00 there. */
+const todayOf = (now: Date): string => tradeToday(now);
 
 const problemsText = (problems: readonly string[]): string =>
   problems.slice(0, 5).join("; ") + (problems.length > 5 ? `; and ${problems.length - 5} more` : "");

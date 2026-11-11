@@ -1608,6 +1608,11 @@ export const notification = trade.table(
     dedupeKey: text("dedupe_key"),
     /** queued: handed to the email queue. skipped: the person turned email off for this kind. failed: the queue refused it. */
     emailStatus: text("email_status", { enum: ["queued", "skipped", "failed"] }),
+    /**
+     * False when the person wants this kind by email only. The row is still kept, because it's what stops the same thing
+     * being emailed twice (the dedupe key), but it isn't shown in the platform.
+     */
+    inApp: boolean("in_app").notNull().default(true),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

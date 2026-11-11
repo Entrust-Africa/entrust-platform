@@ -67,8 +67,8 @@ describe("telling people", () => {
     expect((await get(w.owner, "/notification-preferences")).body.items.find((p: Json) => p.kind === "assessment_result")).toMatchObject({ email: true, inApp: true });
     await put(w.owner, "/notification-preferences", { kind: "assessment_result", email: false, inApp: true });
     await put(w.member, "/notification-preferences", { kind: "assessment_result", email: true, inApp: false });
-    expect(await tell([w.owner.id, w.member.id])).toBe(1);
-    // The owner has it in the platform only; the member by email only.
+    // Both are told: the owner in the platform only, the member by email only.
+    expect(await tell([w.owner.id, w.member.id])).toBe(2);
     expect((await get(w.owner, "/notifications")).body.items).toHaveLength(1);
     expect((await get(w.member, "/notifications")).body.items).toHaveLength(0);
     expect(queue.jobs.map((j) => j.data.to)).toHaveLength(1);
@@ -86,10 +86,25 @@ describe("telling people", () => {
     expect(row!.emailStatus).toBe("failed");
   });
 
-  it("tells a person once for the same thing", async () => {
+  it("tells a person once for the same thing, in the platform and by email", async () => {
     expect(await tell([w.owner.id], { dedupeKey: "same-thing" })).toBe(1);
     expect(await tell([w.owner.id], { dedupeKey: "same-thing" })).toBe(0);
     expect(await db.select().from(schema.notification)).toHaveLength(1);
+    // The email is what people notice: the second call mustn't queue another.
+    expect(queue.jobs).toHaveLength(1);
+  });
+
+  it("emails a person who wants email only once for the same thing, and keeps it out of their list", async () => {
+    await put(w.owner, "/notification-preferences", { kind: "assessment_result", email: true, inApp: false });
+    expect(await tell([w.owner.id], { dedupeKey: "email-only" })).toBe(1);
+    expect(await tell([w.owner.id], { dedupeKey: "email-only" })).toBe(0);
+    expect(queue.jobs).toHaveLength(1);
+    expect((await get(w.owner, "/notifications")).body).toEqual({ unread: 0, items: [] });
+  });
+
+  it("records that an email was queued, or that it failed", async () => {
+    await tell([w.owner.id], { dedupeKey: "queued" });
+    expect((await db.select().from(schema.notification))[0]!.emailStatus).toBe("queued");
   });
 
   it("lets a person read their own and no one else's", async () => {
@@ -123,11 +138,24 @@ describe("what sets them off", () => {
     ]);
     const first = await sendDueReminders(db);
     expect(first.overdueActions).toBe(2);
-    const second = await sendDueReminders(db);
+    expect(queue.jobs).toHaveLength(2);
+    // The next day's run: nothing new, and no second email to either person.
+    const second = await sendDueReminders(db, new Date(Date.now() + 86_400_000));
     expect(second.overdueActions).toBe(0);
+    expect(queue.jobs).toHaveLength(2);
     const items = (await get(w.owner, "/notifications")).body.items;
     expect(items).toHaveLength(1);
     expect(items[0].body).toContain("Register with the customs authority");
+  });
+
+  it("doesn't chase a business that withdrew or finished", async () => {
+    const left = await createOrganization("nt-left", [[w.stranger, "owner"]], { platform: "trade" });
+    const [cohort] = await db.select({ id: schema.cohort.id }).from(schema.cohort).where(eq(schema.cohort.id, w.cohort));
+    await db.insert(schema.enrollment).values({ cohortId: cohort!.id, organizationId: left, status: "withdrawn" });
+    await db.insert(schema.actionItem).values({ organizationId: left, description: "Left behind", responsible: "Owner", dueDate: "2020-01-01", status: "in_progress" });
+    await sendDueReminders(db);
+    expect((await get(w.stranger, "/notifications")).body.items).toEqual([]);
+    expect(queue.jobs.filter((j) => j.data.props.paragraphs?.[0]?.includes("Left behind"))).toEqual([]);
   });
 
   it("reminds a business about learning it left unfinished, once a week", async () => {
@@ -136,6 +164,14 @@ describe("what sets them off", () => {
     expect((await sendDueReminders(db)).incompleteLearning).toBe(2);
     expect((await sendDueReminders(db)).incompleteLearning).toBe(0);
     expect((await get(w.owner, "/notifications")).body.items[0]).toMatchObject({ kind: "learning_incomplete", path: "/modules/M04" });
+  });
+
+  it("keeps to one learning reminder a week across the new year", async () => {
+    const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.organizationId, w.org));
+    await db.insert(schema.moduleProgress).values({ enrollmentId: enrollment!.id, moduleId: "M05", contentVersion: "1.0.0", status: "in_progress", lessonProgress: {}, updatedAt: new Date("2026-12-01T00:00:00Z") });
+    // 31 December and 1 January are in the same week: the second run tells nobody again.
+    expect((await sendDueReminders(db, new Date("2026-12-31T06:00:00Z"))).incompleteLearning).toBeGreaterThan(0);
+    expect((await sendDueReminders(db, new Date("2027-01-01T06:00:00Z"))).incompleteLearning).toBe(0);
   });
 
   it("lets only an administrator send the reminders", async () => {

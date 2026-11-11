@@ -15,6 +15,7 @@ import type {
   ModuleItemSummary,
   ModuleProgressView,
 } from "@/lib/types";
+import { sessionWhen } from "@/lib/trade-time";
 
 export const metadata = { title: "My plan" };
 
@@ -543,8 +544,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
                 <div>
                   <div className="font-semibold text-ink text-sm">{sess.title}</div>
                   <div className="text-ink-2 mt-0.5">
-                    {new Date(sess.startTime).toLocaleString()} –{" "}
-                    {new Date(sess.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {sessionWhen(sess.startTime, sess.endTime)}
                   </div>
                   {sess.moduleCodes.length > 0 && (
                     <div className="mt-1 flex gap-1">

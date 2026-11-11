@@ -3,7 +3,7 @@ import { ensureAfriConnectAccount, type EnsureAccountResult } from "@entrust/aut
 import { schema } from "@entrust/db";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import { NOT_KNOWN, checkAnswers, isNotKnown, type FormDefinition, type FormQuestion } from "@entrust/forms";
-import { PATHWAY_NAMES, assignPathwayFromDiagnostic } from "@entrust/trade-engine";
+import { PATHWAY_NAMES, assignPathwayFromDiagnostic, tradeToday } from "@entrust/trade-engine";
 import { findDiagnosticTemplate, findTradeRules, latestDiagnosticTemplate, latestTradeRules } from "@entrust/trade-rules";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
@@ -29,7 +29,8 @@ const MAX_ANSWERS_PER_SAVE = 400;
 /** Administrators and facilitators read the submissions, to enrol businesses. A reviewer works from the cohorts they're on. */
 const requireStaff = (principal: Principal): void => requireRole(principal, ["admin", "facilitator"], "read the onboarding diagnostics");
 
-const todayOf = (now: Date): string => now.toISOString().slice(0, 10);
+/** Today in Addis Ababa: a business filling the form in at 01:00 there is already on the new day, while UTC isn't. */
+const todayOf = (now: Date): string => tradeToday(now);
 
 const problemsText = (problems: readonly string[]): string =>
   problems.slice(0, 5).join("; ") + (problems.length > 5 ? `; and ${problems.length - 5} more` : "");

@@ -9,6 +9,7 @@ import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { PlanAndPathway } from "./plan-and-pathway";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
+import { sessionClock, sessionDay } from "@/lib/trade-time";
 
 export const metadata = { title: "Cohort Details" };
 
@@ -210,10 +211,10 @@ export default async function CohortDetailPage(props: {
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-ink-3">
-                      {new Date(sess.startTime).toLocaleDateString()}
+                      {sessionDay(sess.startTime)}
                     </span>
                     <span className="text-xs text-ink-3 font-mono">
-                      {new Date(sess.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {sessionClock(sess.startTime)} Addis
                     </span>
                   </div>
 
