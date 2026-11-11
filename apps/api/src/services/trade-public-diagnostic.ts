@@ -8,6 +8,7 @@ import { findDiagnosticTemplate, findTradeRules, latestDiagnosticTemplate, lates
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
 import { requireStaff as requireRole, type Ctx, type Principal } from "./access";
+import { canReachOrganization } from "./trade-shared";
 
 // The onboarding diagnostic (#78) filled in without an account. Entrust shares one public link; each visitor starts a draft
 // that only they can reach, by a private link (the row keeps a hash of its token), and submits it. Nothing here needs a
@@ -160,7 +161,9 @@ export async function startPublicDiagnostic(ctx: Writer, input: StartInput): Pro
       template: "summit-notice",
       props: {
         heading: "Your onboarding diagnostic",
-        greeting: `Hello ${input.businessName.trim()},`,
+        // Nothing the visitor typed goes in this email: the address isn't proven yet, and Entrust's mail mustn't carry a
+        // stranger's words to someone else's inbox.
+        greeting: "Hello,",
         paragraphs: [
           "Thank you for starting the Entrust TRADE onboarding diagnostic. This is your private link. Your answers save as you go, so you can stop and carry on from this link whenever you like, on any device.",
           "Please don't forward it: anyone with the link can read and change your answers.",
@@ -414,7 +417,8 @@ export async function submitPublicDiagnostic(ctx: Writer, token: string): Promis
       template: "summit-notice",
       props: {
         heading: "We have your onboarding diagnostic",
-        greeting: view.businessName ? `Hello ${view.businessName},` : "Hello,",
+        // The business's name, as the visitor typed it, only once opening the emailed link has proven the address is theirs.
+        greeting: view.emailVerified && view.businessName ? `Hello ${view.businessName},` : "Hello,",
         paragraphs: [
           "Thank you. Entrust has received your onboarding diagnostic and will use it to place you on the right learning path before the training starts.",
           "You don't need to do anything else now. A member of the Entrust team will be in touch.",
@@ -441,6 +445,10 @@ export interface PublicDiagnosticSession {
   startedAt: string;
   /** The questions answered of those the form shows. Only for a form still in progress. */
   progress: { answered: number; total: number; percent: number } | null;
+  /** Whether whoever filled this form in opened the link in the email, proving the address is theirs. */
+  emailVerified: boolean;
+  /** The enrolment staff linked this submission to, if any. */
+  linkedEnrollmentId: string | null;
 }
 
 /**
@@ -462,6 +470,11 @@ export interface PublicDiagnosticPerson {
   submittedCount: number;
   /** An organisation on TRADE whose owner or member has this email, if any. */
   organization: { id: string; name: string } | null;
+  /**
+   * Whether the form shown for this person came from someone who proved the address. Anyone can type any email into
+   * the public form, so an unproven one is marked as such and never takes the place of a proven one.
+   */
+  emailVerified: boolean;
   /** Newest first. */
   sessions: PublicDiagnosticSession[];
 }
@@ -504,6 +517,8 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
       liveOrder: table.liveOrder,
       submittedAt: table.submittedAt,
       createdAt: table.createdAt,
+      emailVerifiedAt: table.emailVerifiedAt,
+      linkedEnrollmentId: table.linkedEnrollmentId,
     })
     .from(table)
     .orderBy(desc(sql`coalesce(${table.submittedAt}, ${table.createdAt})`));
@@ -515,9 +530,12 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
     if (forms) forms.push(row);
     else byEmail.set(row.email, [row]);
   }
+  // The form that speaks for a person is their newest submitted one from someone who proved the address. A stranger can
+  // type a real business's email, so an unproven submission never replaces a proven one.
   const people = [...byEmail.values()].map((forms) => {
     const submitted = forms.filter((f) => f.status === "submitted");
-    return { forms, submitted, lead: submitted[0] ?? forms[0]! };
+    const proven = submitted.filter((f) => f.emailVerifiedAt !== null);
+    return { forms, submitted, lead: proven[0] ?? submitted[0] ?? forms[0]! };
   });
 
   const leads = people.filter((p) => p.submitted.length > 0).map((p) => p.lead);
@@ -591,6 +609,7 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
       latestAt: (forms[0]!.submittedAt ?? forms[0]!.createdAt).toISOString(),
       submittedCount: done.length,
       organization: organizations.get(lead.email) ?? null,
+      emailVerified: lead.emailVerifiedAt !== null,
       sessions: forms.map((f) => ({
         id: f.id,
         businessName: f.businessName,
@@ -601,6 +620,8 @@ export async function listPublicDiagnostics(ctx: Ctx, input: ListInput): Promise
         submittedAt: f.submittedAt?.toISOString() ?? null,
         startedAt: f.createdAt.toISOString(),
         progress: progressOf.get(f.id) ?? null,
+        emailVerified: f.emailVerifiedAt !== null,
+        linkedEnrollmentId: f.linkedEnrollmentId,
       })),
     })),
     counts: { ...totals, perDay },
@@ -628,12 +649,68 @@ export async function getPublicDiagnosticForStaff(ctx: Ctx, id: string) {
   return {
     ...view,
     id: row.id,
+    linkedEnrollmentId: row.linkedEnrollmentId,
     startedAt: row.createdAt.toISOString(),
     signedName: row.signedName,
     signedPosition: row.signedPosition,
     signedDate: row.signedDate,
     sections,
   };
+}
+
+// ---- Linking a submission to an enrolment ----
+
+/**
+ * The public diagnostic belongs to no enrolment, so on its own it never reaches placement: an enrolled business would
+ * have to fill the whole form in again. A facilitator or administrator who has matched a submission to a business links
+ * it to the business's enrolment, which takes the avenue the form assigned. Only a submission whose email was proven can
+ * be linked, and only to an enrolment with no avenue yet.
+ */
+export async function linkPublicDiagnostic(ctx: Ctx, id: string, enrollmentId: string) {
+  requireStaff(ctx.principal);
+  if (!/^[0-9a-f-]{36}$/.test(id)) throw new ServiceError("not_found", "Diagnostic not found.");
+  return ctx.db.transaction(async (tx) => {
+    const [enrollment] = await tx.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId)).for("update");
+    if (!enrollment || !(await canReachOrganization(tx, ctx.principal, enrollment.organizationId))) throw new ServiceError("not_found", "Enrolment not found.");
+    const [row] = await tx.select().from(schema.publicDiagnostic).where(eq(schema.publicDiagnostic.id, id)).for("update");
+    if (!row) throw new ServiceError("not_found", "Diagnostic not found.");
+    if (row.status !== "submitted" || !row.pathway || !row.rulesVersion) throw new ServiceError("precondition_failed", "Only a submitted diagnostic can be linked to an enrolment.");
+    if (!row.emailVerifiedAt) {
+      throw new ServiceError("precondition_failed", "Whoever filled this in hasn't opened the link in their email, so it isn't proven to come from the business. Ask them to open it first.");
+    }
+    if (row.linkedEnrollmentId) throw new ServiceError("conflict", "This diagnostic is already linked to an enrolment.");
+    if (enrollment.status === "withdrawn" || enrollment.status === "completed") throw new ServiceError("invalid", "This enrolment isn't running, so it can't take a diagnostic.");
+    const [live] = await tx
+      .select({ id: schema.pathwayAssignment.id })
+      .from(schema.pathwayAssignment)
+      .where(and(eq(schema.pathwayAssignment.enrollmentId, enrollmentId), inArray(schema.pathwayAssignment.status, ["provisional", "confirmed"])));
+    if (live) throw new ServiceError("conflict", "This enrolment already has an avenue from a diagnostic. Change it on the cohort page if it's wrong.");
+
+    const [assignment] = await tx
+      .insert(schema.pathwayAssignment)
+      .values({
+        enrollmentId,
+        pathway: row.pathway,
+        status: row.pathwayProvisional ? "provisional" : "confirmed",
+        liveOrder: row.liveOrder ?? false,
+        rulesVersion: row.rulesVersion,
+        reasonCodes: row.reasonCodes ?? [],
+        decidedByUserId: ctx.principal.userId,
+        decisionReason: `From the public onboarding diagnostic submitted on ${row.submittedAt?.toISOString().slice(0, 10) ?? "an earlier date"}.`,
+      })
+      .returning();
+    await tx.update(schema.publicDiagnostic).set({ linkedEnrollmentId: enrollmentId }).where(eq(schema.publicDiagnostic.id, id));
+    await tx.insert(schema.auditLog).values({
+      actorUserId: ctx.principal.userId,
+      organizationId: enrollment.organizationId,
+      platform: "trade",
+      action: "trade.pathway.from_public_diagnostic",
+      entityType: "enrollment",
+      entityId: enrollmentId,
+      after: { publicDiagnosticId: id, pathway: row.pathway, status: assignment!.status, liveOrder: assignment!.liveOrder },
+    });
+    return { enrollmentId, pathway: assignment!.pathway, status: assignment!.status, liveOrder: assignment!.liveOrder };
+  });
 }
 
 // ---- Export ----
@@ -684,6 +761,7 @@ export async function exportPublicDiagnosticsCsv(ctx: Ctx): Promise<string> {
     "Reference",
     "Submitted",
     "Email",
+    "Email proven",
     "Phone",
     "Business",
     "Pathway",
@@ -704,6 +782,7 @@ export async function exportPublicDiagnosticsCsv(ctx: Ctx): Promise<string> {
         r.id,
         r.submittedAt?.toISOString() ?? "",
         r.email,
+        r.emailVerifiedAt ? "Yes" : "No",
         r.phone ?? "",
         r.businessName ?? "",
         r.pathway ?? "",

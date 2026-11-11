@@ -1203,6 +1203,8 @@ export const publicDiagnostic = trade.table(
     emailProofHash: text("email_proof_hash"),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    // The enrolment staff matched this submission to. Linking gives the enrolment the avenue the form assigned.
+    linkedEnrollmentId: uuid("linked_enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

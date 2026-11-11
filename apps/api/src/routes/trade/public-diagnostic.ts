@@ -8,6 +8,7 @@ import {
   getPublicDiagnostic,
   getPublicDiagnosticForStaff,
   hashAddress,
+  linkPublicDiagnostic,
   listPublicDiagnostics,
   publicTemplate,
   savePublicDiagnostic,
@@ -87,4 +88,8 @@ export const tradePublicDiagnostic = new Hono<AppEnv>()
     c.header("Content-Disposition", `attachment; filename="onboarding-diagnostics-${now().toISOString().slice(0, 10)}.csv"`);
     return c.body("﻿" + csv);
   })
-  .get("/public-diagnostics/:id", async (c) => c.json(await getPublicDiagnosticForStaff(await contextFor(c.get("user")), c.req.param("id"))));
+  .get("/public-diagnostics/:id", async (c) => c.json(await getPublicDiagnosticForStaff(await contextFor(c.get("user")), c.req.param("id"))))
+  // Matches a proven submission to a business's enrolment, which takes the avenue it assigned (so placement can start).
+  .post("/public-diagnostics/:id/link", zValidator("json", z.object({ enrollmentId: z.string().uuid() }), invalid), async (c) =>
+    c.json(await linkPublicDiagnostic(await contextFor(c.get("user")), c.req.param("id"), c.req.valid("json").enrollmentId)),
+  );

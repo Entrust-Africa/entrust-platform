@@ -347,7 +347,7 @@ describe("submitting the diagnostic", () => {
     const done = await submittedDiagnostic({ Q135: "no" });
     const rows = await db.select().from(schema.auditLog).where(eq(schema.auditLog.organizationId, done.organizationId));
     const actions = rows.filter((r) => r.platform === "trade").map((r) => r.action).sort();
-    expect(actions).toEqual(["sme_profile.updated", "trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
+    expect(actions.filter((a) => a !== "trade.profile.material_change")).toEqual(["sme_profile.updated", "trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
   });
 });
 
@@ -878,6 +878,12 @@ describe("section 1 of the diagnostic and the SME registry", () => {
     expect(entry?.before).toMatchObject({ tin: null, yearEstablished: null, permanentEmployees: null });
     expect(entry?.after).toMatchObject({ legalName: "Awash Spice Exporters PLC", tin: "TIN-777", yearEstablished: 2012, permanentEmployees: 12, womanOwned: true });
     expect((entry?.before as Record<string, unknown>).legalName).not.toBe("Awash Spice Exporters PLC");
+    // The business's profile history shows the change, and a material one is flagged, as for an edit on the business page.
+    const history = await db.select().from(schema.smeProfileChange).where(eq(schema.smeProfileChange.organizationId, submitted.organizationId));
+    expect(history.find((h) => h.field === "tin")).toMatchObject({ oldValue: null, newValue: "TIN-777", material: true });
+    expect(history.find((h) => h.field === "permanentEmployees")).toMatchObject({ newValue: "12", material: false });
+    const [flag] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.organizationId, submitted.organizationId), eq(schema.auditLog.action, "trade.profile.material_change")));
+    expect(flag?.after).toMatchObject({ source: "onboarding_diagnostic" });
   });
 
   it("changes only what the person edited, and writes nothing when nothing changed", async () => {

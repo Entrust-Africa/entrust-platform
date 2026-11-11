@@ -3,6 +3,7 @@ import { schema } from "@entrust/db";
 import { checkAnswers, isNotKnown } from "@entrust/forms";
 import { findDiagnosticTemplate, type DiagnosticTemplate } from "@entrust/trade-rules";
 import type { Executor } from "./db";
+import { PROFILE_FIELDS } from "./trade-sme-record";
 import { recordTradeChange, wrapAnswer } from "./trade-shared";
 
 // Section 1 of the onboarding diagnostic is the SME's registry entry (the template's `storage` says "sme_profile"). When a
@@ -138,7 +139,31 @@ export async function writeSectionOne(
   const changed = Object.keys(after) as ProfileColumn[];
   if (changed.length === 0 && Object.keys(skipped).length === 0) return [];
 
-  if (changed.length) await tx.update(schema.smeProfile).set(after).where(eq(schema.smeProfile.id, profile.id));
+  if (changed.length) {
+    await tx.update(schema.smeProfile).set(after).where(eq(schema.smeProfile.id, profile.id));
+    // The same history and "material change" flag as an edit on the business page: a change through the diagnostic is
+    // a change to the record all the same.
+    await tx.insert(schema.smeProfileChange).values(
+      changed.map((field) => ({
+        organizationId,
+        changedByUserId: userId,
+        field,
+        oldValue: before[field] === null || before[field] === undefined ? null : String(before[field]),
+        newValue: after[field] === null || after[field] === undefined ? null : String(after[field]),
+        material: PROFILE_FIELDS[field].material,
+      })),
+    );
+    const material = changed.filter((field) => PROFILE_FIELDS[field].material);
+    if (material.length) {
+      await recordTradeChange(tx, userId, {
+        action: "trade.profile.material_change",
+        organizationId,
+        entityType: "sme_profile",
+        entityId: profile.id,
+        after: { fields: material, source: "onboarding_diagnostic" },
+      });
+    }
+  }
   await recordTradeChange(tx, userId, {
     action: "sme_profile.updated",
     entityType: "sme_profile",
