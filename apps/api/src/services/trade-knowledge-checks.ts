@@ -1,12 +1,12 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { gradeKnowledgeCheck } from "@entrust/trade-engine";
-import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { canReachCohort, canReachOrganization, refuseNewWork } from "./trade-shared";
 import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { resolveTradeModuleContent } from "./trade-modules";
 import type {
   CohortKnowledgeCheckStats,
   KnowledgeCheckAttemptInput,
@@ -47,7 +47,7 @@ export async function submitKnowledgeCheckAttempt(
 
   // Load the module content with answer keys (server-side grading).
   // Learners can only take knowledge checks on approved content.
-  const content = findVersion(moduleId, "learner", input.contentVersion);
+  const content = await resolveTradeModuleContent(db, moduleId, "learner", input.contentVersion);
   if (!content) {
     throw new ServiceError("not_found", `Module ${moduleId} has no approved content available.`);
   }
