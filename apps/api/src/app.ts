@@ -37,6 +37,7 @@ import { tradeActionPlan } from "./routes/trade/action-plan";
 import { tradeTransactions } from "./routes/trade/transactions";
 import { tradeAi } from "./routes/trade/ai";
 import { tradeRegister } from "./routes/trade/register";
+import { tradePassports, tradePublicPassports } from "./routes/trade/passports";
 import { tradeSessions } from "./routes/trade/sessions";
 import { tradeSponsors } from "./routes/trade/sponsors";
 import { tradeSmeRecord } from "./routes/trade/sme-record";
@@ -102,6 +103,7 @@ export const app = base
   // The public diagnostic and public certificates go first: the signed-in TRADE routers below guard every path under /v1/trade.
   .route("/v1/trade", tradePublicDiagnostic)
   .route("/v1/trade", tradePublicCertificates)
+  .route("/v1/trade", tradePublicPassports)
   .route("/v1/trade", tradeModules)
   .route("/v1/trade", tradeKnowledgeChecks)
   .route("/v1/trade", tradeSubmissions)
@@ -121,6 +123,7 @@ export const app = base
   .route("/v1/trade", tradePractice)
   .route("/v1/trade", tradePrograms)
   .route("/v1/trade", tradeRegister)
+  .route("/v1/trade", tradePassports)
   .route("/v1/trade", tradeSessions)
   .route("/v1/trade", tradeApplications)
   .route("/v1/trade", tradeCatalogue)

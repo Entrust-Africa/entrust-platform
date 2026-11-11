@@ -65,3 +65,5 @@ export { APPLICATION_QUESTIONS, applicationCountry, hasExported, isApplicationRe
 export type { ApplicationInput, ApplicationQuestionKey, ReadApplicationsResult } from "./applications";
 export { APPLICATION_COHORTS, PILOT_COHORTS, buildCatalogue, cohortOfProgramme, catalogueFromApplications, catalogueFromRegister, identityKeys, markSharedBusinesses, sameBusiness } from "./catalogue";
 export type { ApplicationRow, CatalogueCohort, CatalogueSme, CohortStatus, PilotCohort } from "./catalogue";
+export { PASSPORT_CHECKS, PASSPORT_ID_PATTERN, PASSPORT_STANDING_LABELS, PASSPORT_STATUSES, PASSPORT_TIERS, PASSPORT_TIER_LABELS, employeeRange, isPassportId, normalisePassportId, passportStanding } from "./passport";
+export type { PassportStanding, PassportStatus, PassportTier } from "./passport";

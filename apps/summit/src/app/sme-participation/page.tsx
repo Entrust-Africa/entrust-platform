@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Page, SectionLabel, amberButton, outlineButton } from "@/components/site";
 import { PARTNERSHIP_PACK } from "@/lib/content";
 import { ASSESSMENT_AREAS, ASSESSMENT_OUTCOMES, SECTORS } from "@/lib/info";
-import { applicationsLine, applyUrl, countryNames, getPeriod } from "@/lib/period";
+import { applicationsLine, applyUrl, getPeriod, openToLine } from "@/lib/period";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "SME participation · Africa Diaspora Trade & Investment Summit 2027", description: "How African SMEs are assessed and selected for ADTIS 2027." };
@@ -10,7 +10,7 @@ export const metadata = { title: "SME participation · Africa Diaspora Trade & I
 export default async function SmeParticipationPage() {
   const period = await getPeriod();
   const line = applicationsLine(period);
-  const countries = period ? countryNames(period.countries) : [];
+  const openTo = period ? openToLine(period.countries) : null;
   return (
     <Page label="SME participation" title="Selected through assessment, not open entry" intro="About 300 to 400 SMEs from 10 African countries are assessed, and 100 businesses are selected to take part in the summit's structured business engagement programme.">
       <section className="bg-white px-6 py-20 lg:px-16 lg:py-28">
@@ -66,7 +66,7 @@ export default async function SmeParticipationPage() {
           <SectionLabel onDark>Apply</SectionLabel>
           <h2 className="mt-6 max-w-3xl font-display text-[clamp(2rem,4vw,3rem)] leading-[1.05] uppercase">SME registration is separate from general summit registration</h2>
           {line && <p className="mt-5 font-mono text-xs tracking-[0.16em] text-amber uppercase">{line}</p>}
-          {countries.length > 0 && <p className="mt-2 text-sm text-white/70">Open to businesses in {countries.join(", ")}.</p>}
+          {openTo && <p className="mt-2 text-sm text-white/70">{openTo}</p>}
           <div className="mt-10 flex flex-wrap gap-4">
             <a href={applyUrl()} className={amberButton}>
               Register as an SME

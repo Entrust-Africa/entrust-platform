@@ -16,6 +16,8 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
+  PASSPORT_STATUSES,
+  PASSPORT_TIERS,
   ASSESSMENT_STATUSES,
   SPONSOR_DATA_KINDS,
   SUMMIT_DATA_KINDS,
@@ -1426,6 +1428,53 @@ export const smeProfileChange = trade.table(
     changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("trade_sme_profile_change_org_idx").on(t.organizationId, t.changedAt)],
+);
+
+// The Entrust Africa Verified SME Passport (one per business). The page the QR code opens is built from this row only, so
+// nothing private (scores, finances, the diagnostic) can reach it: staff type or confirm each public line, the employee range
+// included. `passportId` is the number printed on the passport (EA-ETH-0002) and never changes.
+export const smePassport = trade.table(
+  "sme_passport",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Where the passport's details started from, if anywhere: a business on the platform, or an application in the SME
+    // register (a business can have a passport before it has an account). Neither is public. Either can be missing.
+    organizationId: text("organization_id")
+      .unique()
+      .references(() => organization.id, { onDelete: "set null" }),
+    applicationId: uuid("application_id")
+      .unique()
+      .references((): AnyPgColumn => programApplication.id, { onDelete: "set null" }),
+    passportId: text("passport_id").notNull().unique(),
+    tier: text("tier", { enum: PASSPORT_TIERS }).notNull(),
+    status: text("status", { enum: PASSPORT_STATUSES }).notNull().default("active"),
+    statusReason: text("status_reason"),
+    verifiedOn: date("verified_on").notNull(),
+    validUntil: date("valid_until").notNull(),
+    displayName: text("display_name").notNull(),
+    tagline: text("tagline"),
+    logoUrl: text("logo_url"),
+    country: text("country").notNull(),
+    sector: text("sector"),
+    established: integer("established"),
+    employeesRange: text("employees_range"),
+    ownership: text("ownership"),
+    founder: text("founder"),
+    headline: text("headline"),
+    overview: text("overview"),
+    products: jsonb("products").$type<{ name: string; detail: string | null; code: string | null }[]>().notNull().default([]),
+    womenInTrade: jsonb("women_in_trade").$type<string[]>().notNull().default([]),
+    targetMarkets: jsonb("target_markets").$type<{ label: string; places: string[] }[]>().notNull().default([]),
+    seeking: text("seeking"),
+    checks: jsonb("checks").$type<string[]>().notNull().default([]),
+    website: text("website"),
+    email: text("email"),
+    phones: jsonb("phones").$type<string[]>().notNull().default([]),
+    address: text("address"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
 );
 
 // ---- Buyers and transactions (spec sections 10.2 to 10.5) ----

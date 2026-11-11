@@ -29,6 +29,7 @@ import {
   User,
   Users,
   FileText,
+  BadgeCheck,
   FileEdit,
   Gavel, Percent, Sparkles, PackageCheck, Building2, Bell } from "lucide-react";
 import { cn } from "@entrust/ui";
@@ -91,6 +92,7 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/cohorts", label: "Cohorts", icon: Users, match: (path) => path === "/cohorts" || path.startsWith("/cohorts/") },
           { href: "/catalogue", label: "SME catalogue", icon: Store, match: (path) => path.startsWith("/catalogue") },
           { href: "/register", label: "SME register", icon: ClipboardList, match: (path) => path.startsWith("/register") },
+          { href: "/passports", label: "SME passports", icon: BadgeCheck, match: (path) => path.startsWith("/passports") },
           { href: "/diagnostics", label: "Diagnostics", icon: ListChecks, match: (path) => path.startsWith("/diagnostics") },
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
           { href: "/referrals", label: "Referrals", icon: Handshake, match: (path) => path.startsWith("/referrals") },
@@ -105,7 +107,7 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
     // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
     if (user?.staffRole === "reviewer") {
       groups[0]!.items = groups[0]!.items.filter(
-        (item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/admin/modules",
+        (item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/passports" && item.href !== "/admin/modules",
       );
     }
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,

@@ -75,3 +75,18 @@ export function countryNames(codes: readonly string[]): string[] {
     })
     .sort((a, b) => a.localeCompare(b, "en"));
 }
+
+/** The African Union's member states, so a period open to all of them reads as "all African countries". */
+const AFRICAN_COUNTRIES = [
+  "DZ", "AO", "BJ", "BW", "BF", "BI", "CV", "CM", "CF", "TD", "KM", "CG", "CD", "CI", "DJ", "EG", "GQ", "ER", "SZ", "ET",
+  "GA", "GM", "GH", "GN", "GW", "KE", "LS", "LR", "LY", "MG", "MW", "ML", "MR", "MU", "MA", "MZ", "NA", "NE", "NG", "RW",
+  "ST", "SN", "SC", "SL", "SO", "ZA", "SS", "SD", "TZ", "TG", "TN", "UG", "ZM", "ZW",
+];
+
+/** "Open to businesses in …" for a period's countries, or null when none are set. */
+export function openToLine(codes: readonly string[]): string | null {
+  if (codes.length === 0) return null;
+  const set = new Set(codes.map((c) => c.toUpperCase()));
+  if (AFRICAN_COUNTRIES.every((c) => set.has(c))) return "Open to businesses in Africa.";
+  return `Open to businesses in ${countryNames(codes).join(", ")}.`;
+}
