@@ -94,6 +94,7 @@ function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
         </td>
         <td className="px-4 py-3">
           {statusBadge(person.status)}
+          {!person.emailVerified && <StatusBadge tone="danger">Email not proven</StatusBadge>}
           {furthest && <Meter progress={furthest} />}
         </td>
         <td className="px-4 py-3">{avenue(person)}</td>
@@ -127,6 +128,7 @@ function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
             </td>
             <td className="px-4 py-2.5">
               {statusBadge(s.status)}
+              {!s.emailVerified && <StatusBadge tone="danger">Email not proven</StatusBadge>}
               {s.progress && <Meter progress={s.progress} />}
             </td>
             <td className="px-4 py-2.5">{avenue(s)}</td>

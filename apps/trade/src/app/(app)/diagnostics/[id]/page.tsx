@@ -4,6 +4,7 @@ import { Card, StatusBadge } from "@entrust/ui";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type { PublicDiagnosticDetail } from "@/lib/types";
+import { LinkToEnrolment } from "./link-to-enrolment";
 
 export const metadata = { title: "Onboarding diagnostic" };
 
@@ -19,6 +20,9 @@ export default async function DiagnosticDetailPage({ params }: { params: Promise
   const result = await tradeGet<PublicDiagnosticDetail>(`/public-diagnostics/${encodeURIComponent(id)}`);
   if (!result.data) notFound();
   const d = result.data;
+  // The running enrolments staff can link this submission to.
+  const live = await tradeGet<{ enrollments: { id: string; organizationName: string; cohortName: string; status: string }[] }>("/enrollments");
+  const enrollments = (live.data?.enrollments ?? []).filter((e) => ["invited", "registered", "active", "paused"].includes(e.status));
   const answered = d.sections.reduce((n, s) => n + s.items.length, 0);
 
   return (
@@ -44,13 +48,26 @@ export default async function DiagnosticDetailPage({ params }: { params: Promise
               )}
             </p>
           </div>
-          <StatusBadge tone={d.status === "submitted" ? "ok" : "warn"}>{d.status === "submitted" ? "Submitted" : "In progress"}</StatusBadge>
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge tone={d.status === "submitted" ? "ok" : "warn"}>{d.status === "submitted" ? "Submitted" : "In progress"}</StatusBadge>
+            <StatusBadge tone={d.emailVerified ? "ok" : "danger"}>{d.emailVerified ? "Email proven" : "Email not proven"}</StatusBadge>
+          </div>
         </div>
+        {!d.emailVerified && (
+          <p className="mt-2 rounded-md bg-warn-50 px-3 py-2 text-sm text-warn">
+            Whoever filled this in never opened the link sent to {d.email}, so anyone could have typed that address. Don&apos;t treat it as the
+            business&apos;s own until they open the link.
+          </p>
+        )}
         <p className="mt-2 text-xs text-ink-3">
           Started {formatDate(d.startedAt)}
           {d.submittedAt ? `, submitted ${formatDate(d.submittedAt)}` : `, ${d.progress.answered} of ${d.progress.total} questions answered`}. Form version {d.templateVersion}.
         </p>
       </div>
+
+      {d.status === "submitted" && (me.staffRole === "admin" || me.staffRole === "facilitator") && (
+        <LinkToEnrolment diagnosticId={d.id} linkedEnrollmentId={d.linkedEnrollmentId} emailVerified={d.emailVerified} enrollments={enrollments} />
+      )}
 
       {d.pathway && (
         <Card className="space-y-3 p-5">

@@ -114,6 +114,9 @@ export interface PublicDiagnosticSession {
   submittedAt: string | null;
   startedAt: string;
   progress: { answered: number; total: number; percent: number } | null;
+  /** Whoever filled it in opened the link in their email, so the address is theirs. */
+  emailVerified: boolean;
+  linkedEnrollmentId: string | null;
 }
 
 /** Everything one email address has started, as the staff list shows it: one line, with their forms underneath. */
@@ -128,6 +131,8 @@ export interface PublicDiagnosticPerson {
   latestAt: string;
   submittedCount: number;
   organization: { id: string; name: string } | null;
+  /** The form shown for this person came from someone who proved the address. */
+  emailVerified: boolean;
   sessions: PublicDiagnosticSession[];
 }
 
@@ -156,6 +161,8 @@ export interface PublicDiagnosticDetail {
   progress: { total: number; answered: number; percent: number };
   pathway: { pathway: string; name: string; status: "provisional" | "confirmed"; liveOrder: boolean; reasons: string[] } | null;
   sections: { id: string; title: string; items: { id: string; text: string; answer: string }[] }[];
+  emailVerified: boolean;
+  linkedEnrollmentId: string | null;
 }
 
 export interface SessionMaterial {
