@@ -20,6 +20,10 @@ const w = {} as {
 };
 
 const get = (user: TestUser | null, path: string) => callV1(user, "GET", `/trade${path}`);
+const ok = (res: { status: number; body: Json }) => {
+  expect(res.status, JSON.stringify(res.body).slice(0, 400)).toBeLessThan(300);
+  return res.body;
+};
 
 beforeAll(async () => {
   await cleanup();
@@ -94,6 +98,43 @@ describe("who can open a report", () => {
     expect(res.status).toBe(200);
     expect(res.body.scope.cohorts.map((c: Json) => c.id)).toEqual([w.bigCohort]);
     expect(res.body.reach.enrolled).toBe(6);
+  });
+});
+
+describe("what a sponsor can't narrow or work out", () => {
+  it("won't narrow a sponsor's report to a pathway or a cohort", async () => {
+    for (const path of [`/reports/cohorts/${w.bigCohort}?pathway=A`, `/reports/programs/${w.program}?pathway=B`, `/reports/programs/${w.program}?cohortId=${w.bigCohort}`, `/reports/cohorts/${w.bigCohort}/export?pathway=A`]) {
+      expect((await get(w.bankViewer, path)).status, path).toBe(422);
+    }
+    // Staff can.
+    expect((await get(w.admin, `/reports/programs/${w.program}?cohortId=${w.bigCohort}`)).status).toBe(200);
+  });
+
+  it("hides a programme figure that, less the other cohorts', would give back one the five-business rule hid", async () => {
+    // The bank also sponsors a cohort of one business, with an approval of its own.
+    const [program] = await db.insert(schema.program).values({ name: `${PREFIX}rp-two-cohorts` }).returning();
+    const [big, lone] = await db
+      .insert(schema.cohort)
+      .values([
+        { programId: program!.id, name: `${PREFIX}rp-two-big`, country: "ET", sponsorOrganizationId: w.bank },
+        { programId: program!.id, name: `${PREFIX}rp-two-lone`, country: "ET", sponsorOrganizationId: w.bank },
+      ])
+      .returning();
+    const loneSme = await createOrganization("rp-sme-lone", [[w.owner, "owner"]], { platform: "trade" });
+    const bigEnrollments = await db.insert(schema.enrollment).values(w.smes.slice(1, 6).map((organizationId) => ({ cohortId: big!.id, organizationId, status: "completed" as const }))).returning();
+    const [loneEnrollment] = await db.insert(schema.enrollment).values({ cohortId: lone!.id, organizationId: loneSme, status: "active" }).returning();
+    await db.insert(schema.outcome).values([
+      ...bigEnrollments.map((e) => ({ organizationId: e.organizationId, enrollmentId: e.id, kind: "financing" as const, status: "approved", currency: "EUR", amountRequested: "100", amountApproved: "100" })),
+      { organizationId: loneSme, enrollmentId: loneEnrollment!.id, kind: "financing" as const, status: "approved", currency: "EUR", amountRequested: "900", amountApproved: "900" },
+    ]);
+    const eur = (body: Json) => body.finance.byCurrency.find((r: Json) => r.currency === "EUR");
+    // The big cohort's own report shows its five approvals.
+    expect(eur(ok(await get(w.bankViewer, `/reports/cohorts/${big!.id}`))).approvals).toEqual({ count: 5, amount: 500 });
+    // Six businesses are behind the programme figure, but one of them alone is the lone cohort's: 1,400 less 500 would
+    // be its approval.
+    expect(eur(ok(await get(w.bankViewer, `/reports/programs/${program!.id}`)))?.approvals ?? { count: null, amount: null }).toEqual({ count: null, amount: null });
+    // Staff see it all.
+    expect(eur(ok(await get(w.admin, `/reports/programs/${program!.id}`))).approvals).toEqual({ count: 6, amount: 1400 });
   });
 });
 
