@@ -379,6 +379,8 @@ export function AssessorWorkspace({
                         <button
                           key={pts}
                           type="button"
+                          aria-label={`${crit.title}: ${pts} of ${crit.maxPoints}`}
+                          aria-pressed={current.points === pts}
                           onClick={() => handleScoreChange(crit.id, pts)}
                           className={`size-8 rounded font-mono text-xs font-bold transition-all border ${
                             current.points === pts
@@ -451,8 +453,8 @@ export function AssessorWorkspace({
 
             {/* General Assessor Feedback */}
             <div className="space-y-2 pt-2 border-t border-line">
-              <label className="text-xs font-semibold text-ink">General Assessor Feedback</label>
-              <textarea
+              <label htmlFor="assessor-assessor-workspace-1" className="text-xs font-semibold text-ink">General Assessor Feedback</label>
+              <textarea id="assessor-assessor-workspace-1"
                 rows={3}
                 placeholder="Overall observations, recommendations for buyer engagement, or required revisions..."
                 value={feedback}
@@ -483,7 +485,7 @@ export function AssessorWorkspace({
             {/* Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-line">
               <div className="text-xs text-ink-2">
-                Pass requirement: <span className="font-semibold text-ink">{rubric.passMark} pts (67%)</span>
+                Pass requirement: <span className="font-semibold text-ink">{rubric.passMark} of {maxPoints} pts ({maxPoints > 0 ? Math.round((rubric.passMark / maxPoints) * 100) : 0}%)</span>
                 {" • "}Must-have min: <span className="font-semibold text-ink">{rubric.mustHaveMinimum} pts</span>
               </div>
 
