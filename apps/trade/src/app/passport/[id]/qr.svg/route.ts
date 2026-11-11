@@ -9,5 +9,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   if (!/^[A-Za-z0-9-]{3,40}$/.test(id)) return new Response("Not found", { status: 404 });
   const svg = renderSVG(passportAddress(request.headers, id.toUpperCase()), { ecc: "M", border: 2 });
-  return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" } });
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "private, no-store" } });
 }

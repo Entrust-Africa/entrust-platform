@@ -29,7 +29,7 @@ Each service is built by Railpack and configured with service variables, not fil
 - `RAILPACK_NODE_VERSION=24`
 - `RAILPACK_BUILD_CMD=pnpm exec turbo run build --filter=@entrust/<app>`
 - `RAILPACK_START_CMD=cd apps/<app> && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}` (the three web apps), or `cd apps/worker && node dist/index.mjs` (the worker)
-- `API_URL` and `NEXT_PUBLIC_API_URL` (CLEAR and TRADE), or `API_URL` and `SUMMIT_APP_URL` (Summit page): `https://api.entrust-africa.com`, and `https://trade.entrust-africa.com` for `SUMMIT_APP_URL`. `NEXT_PUBLIC_` values are baked in at build time, so changing one needs a redeploy.
+- `API_URL` and `NEXT_PUBLIC_API_URL` (CLEAR and TRADE), or `API_URL` and `SUMMIT_APP_URL` (Summit page): `https://api.entrust-africa.com`, and `https://trade.entrust-africa.com` for `SUMMIT_APP_URL`. TRADE also needs `TRADE_APP_URL` (`https://trade.entrust-africa.com`): the passport QR codes hold that address, never the request's host. `NEXT_PUBLIC_` values are baked in at build time, so changing one needs a redeploy.
 - The worker's own variables are listed under "Settings" below.
 
 With the Railway CLI: `railway service status --service entrust-trade`, `railway logs --build --service entrust-trade`, `railway service redeploy --service entrust-trade`.

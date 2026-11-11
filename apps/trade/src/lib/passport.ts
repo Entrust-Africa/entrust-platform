@@ -104,8 +104,14 @@ export function countryName(code: string): string {
   }
 }
 
-/** The address the QR code holds, from the host the request came in on (behind Railway's proxy, the forwarded one). */
+/**
+ * The address the QR code holds. It comes from TRADE_APP_URL, never from the request: a printed QR code built from a Host or
+ * X-Forwarded-Host header someone sent would send everyone who scans it to that host. Only local development, with no
+ * TRADE_APP_URL, falls back to the host the request came in on.
+ */
 export function passportAddress(headers: Headers, passportId: string): string {
+  const configured = process.env.TRADE_APP_URL?.trim().replace(/\/+$/, "");
+  if (configured) return `${configured}/passport/${encodeURIComponent(passportId)}`;
   const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? "localhost:3000";
   const proto = headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}/passport/${encodeURIComponent(passportId)}`;
