@@ -1063,11 +1063,11 @@ export const EvidenceRecordList = z
 export const CreateEvidenceBody = z
   .object({
     organizationId: z.string().optional(),
-    title: z.string().trim().min(1, "Title is required"),
+    title: z.string().trim().min(1, "Title is required").max(300),
     fileId: z.uuid().optional(),
     enrollmentId: z.uuid().optional(),
     targetType: z.enum(EVIDENCE_TARGET_TYPES).default("assessment_question"),
-    targetId: z.string().trim().optional(),
+    targetId: z.string().trim().max(100).optional(),
     confidence: z.enum(EVIDENCE_CONFIDENCE).optional(),
   })
   .openapi("CreateEvidenceBody");
@@ -1075,7 +1075,7 @@ export const CreateEvidenceBody = z
 export const ReviewEvidenceBody = z
   .object({
     status: z.enum(["under_review", "accepted", "rejected", "resubmission_required"]),
-    comment: z.string().trim().optional(),
+    comment: z.string().trim().max(5000).optional(),
     confidence: z.enum(EVIDENCE_CONFIDENCE).optional(),
   })
   .openapi("ReviewEvidenceBody");
@@ -1084,10 +1084,10 @@ export const RequestEvidenceBody = z
   .object({
     organizationId: z.string().min(1),
     enrollmentId: z.uuid().optional(),
-    title: z.string().trim().min(1, "Title is required"),
+    title: z.string().trim().min(1, "Title is required").max(300),
     targetType: z.enum(EVIDENCE_TARGET_TYPES).default("assessment_question"),
-    targetId: z.string().trim().optional(),
-    prompt: z.string().trim().min(1, "Instructions/prompt are required"),
+    targetId: z.string().trim().max(100).optional(),
+    prompt: z.string().trim().min(1, "Instructions/prompt are required").max(5000),
   })
   .openapi("RequestEvidenceBody");
 
@@ -1177,7 +1177,7 @@ export const PlanParam = z
 
 export const ApprovePlanBody = z
   .object({
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(5000).optional(),
   })
   .openapi("ApprovePlanBody");
 
@@ -1318,7 +1318,10 @@ export const KnowledgeCheckAttemptInput = z
   .object({
     enrollmentId: z.uuid(),
     contentVersion: z.string().trim().optional(),
-    answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+    // Question IDs to option IDs, as short as the content's slugs. Stored as sent, so bounded.
+    answers: z
+      .record(z.string().max(40), z.union([z.string().max(40), z.array(z.string().max(40)).max(10)]))
+      .refine((answers) => Object.keys(answers).length <= 100, "A knowledge check has at most 100 questions."),
   })
   .openapi("TradeKnowledgeCheckAttemptInput");
 
@@ -1413,7 +1416,7 @@ export const CreateModuleSubmissionBody = z
 
 export const RubricCriterionScoreInput = z.object({
   points: z.number().int().min(0),
-  comment: z.string().trim().optional(),
+  comment: z.string().trim().max(5000).optional(),
 });
 
 export const RubricScoredCriterionView = z.object({
@@ -1498,18 +1501,18 @@ export const SubmissionParam = z
 
 export const ScoreSubmissionBody = z
   .object({
-    scores: z.record(z.string(), RubricCriterionScoreInput),
-    confirmedCriticalFailures: z.array(z.string()).optional().default([]),
-    feedback: z.string().trim().optional(),
+    scores: z.record(z.string().max(80), RubricCriterionScoreInput),
+    confirmedCriticalFailures: z.array(z.string().max(80)).max(20).optional().default([]),
+    feedback: z.string().trim().max(10000).optional(),
   })
   .openapi("ScoreTradeSubmissionBody");
 
 export const OverrideScoreBody = z
   .object({
-    scores: z.record(z.string(), RubricCriterionScoreInput).optional(),
-    confirmedCriticalFailures: z.array(z.string()).optional(),
-    feedback: z.string().trim().optional(),
-    overrideReason: z.string().trim().min(1, "A reason is required to override a score"),
+    scores: z.record(z.string().max(80), RubricCriterionScoreInput).optional(),
+    confirmedCriticalFailures: z.array(z.string().max(80)).max(20).optional(),
+    feedback: z.string().trim().max(10000).optional(),
+    overrideReason: z.string().trim().min(1, "A reason is required to override a score").max(2000),
   })
   .openapi("OverrideTradeScoreBody");
 
@@ -1643,14 +1646,14 @@ export const CreateOpportunityBody = z
   .object({
     organizationId: z.string().optional(),
     enrollmentId: z.string().uuid().optional(),
-    title: z.string().trim().min(1, "Title is required"),
-    companyName: z.string().trim().min(1, "Company name is required"),
-    buyerName: z.string().trim().optional(),
-    country: z.string().trim().min(1, "Country is required"),
-    website: z.string().trim().url().optional().or(z.literal("")),
-    sourceLinks: z.array(z.string().url()).optional().default([]),
-    decisionMakerRole: z.string().trim().optional(),
-    notes: z.string().trim().optional(),
+    title: z.string().trim().min(1, "Title is required").max(300),
+    companyName: z.string().trim().min(1, "Company name is required").max(300),
+    buyerName: z.string().trim().max(300).optional(),
+    country: z.string().trim().min(1, "Country is required").max(100),
+    website: z.string().trim().max(2000).url().optional().or(z.literal("")),
+    sourceLinks: z.array(z.string().max(2000).url()).max(20).optional().default([]),
+    decisionMakerRole: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(10000).optional(),
     verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES).optional().default("unverified"),
     stage: z.enum(PIPELINE_STAGES).optional().default("lead_discovered"),
     estimatedValue: z.number().nonnegative().optional().nullable(),
@@ -1667,7 +1670,7 @@ export const UpdateOpportunityStageBody = z
 export const CreateOpportunityActivityBody = z
   .object({
     type: z.enum(COMMERCIAL_ACTIVITY_TYPES),
-    summary: z.string().trim().min(1, "Summary is required"),
+    summary: z.string().trim().min(1, "Summary is required").max(5000),
     occurredAt: z.string().datetime(),
     followUpDate: z.string().datetime().optional().nullable(),
     evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
@@ -1781,7 +1784,7 @@ export const CreateFinancingOutcomeBody = z
   .object({
     organizationId: z.string().optional(),
     enrollmentId: z.string().uuid().optional(),
-    lenderName: z.string().trim().min(1, "Lender name is required"),
+    lenderName: z.string().trim().min(1, "Lender name is required").max(300),
     financingType: z.enum(FINANCING_TYPES),
     amountRequested: z.number().positive("Amount requested must be positive"),
     amountApproved: z.number().nonnegative().optional().nullable(),
@@ -1790,7 +1793,7 @@ export const CreateFinancingOutcomeBody = z
     status: z.enum(FINANCING_OUTCOME_STATUSES).optional().default("application_prepared"),
     approvalDate: z.string().datetime().optional().nullable(),
     disbursementDate: z.string().datetime().optional().nullable(),
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(5000).optional(),
     evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
     evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
   })
@@ -1805,7 +1808,7 @@ export const UpdateFinancingStatusBody = z
     disbursementDate: z.string().datetime().optional().nullable(),
     evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
     evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(5000).optional(),
   })
   .openapi("UpdateTradeFinancingStatusBody");
 
@@ -1814,9 +1817,9 @@ export const CreateExportOutcomeBody = z
     organizationId: z.string().optional(),
     enrollmentId: z.string().uuid().optional(),
     opportunityId: z.string().uuid().optional().nullable(),
-    buyerName: z.string().trim().min(1, "Buyer name is required"),
-    destinationCountry: z.string().trim().min(1, "Destination country is required"),
-    productDescription: z.string().trim().min(1, "Product description is required"),
+    buyerName: z.string().trim().min(1, "Buyer name is required").max(300),
+    destinationCountry: z.string().trim().min(1, "Destination country is required").max(100),
+    productDescription: z.string().trim().min(1, "Product description is required").max(2000),
     valuePlanned: z.number().nonnegative().optional().nullable(),
     valueShipped: z.number().nonnegative().optional().nullable(),
     valuePaid: z.number().nonnegative().optional().nullable(),
@@ -1825,7 +1828,7 @@ export const CreateExportOutcomeBody = z
     shipmentDate: z.string().datetime().optional().nullable(),
     deliveryDate: z.string().datetime().optional().nullable(),
     paymentDate: z.string().datetime().optional().nullable(),
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(5000).optional(),
     evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional().default("self_reported"),
     evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
   })
@@ -1841,7 +1844,7 @@ export const UpdateExportStatusBody = z
     paymentDate: z.string().datetime().optional().nullable(),
     evidenceTier: z.enum(OUTCOME_EVIDENCE_TIERS).optional(),
     evidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(5000).optional(),
   })
   .openapi("UpdateTradeExportStatusBody");
 
@@ -1914,13 +1917,13 @@ export type OutcomeView = z.infer<typeof OutcomeView>;
 
 const isoDay = z.iso.date();
 const ActionFields = {
-  description: z.string().trim().min(1, "Say what the action is"),
+  description: z.string().trim().min(1, "Say what the action is").max(2000),
   priority: z.enum(ACTION_PRIORITIES).nullable().optional(),
-  responsible: z.string().trim().min(1, "Name the person responsible"),
+  responsible: z.string().trim().min(1, "Name the person responsible").max(200),
   startDate: isoDay.nullable().optional(),
-  resources: z.string().trim().nullable().optional(),
-  expectedResult: z.string().trim().nullable().optional(),
-  performanceIndicator: z.string().trim().nullable().optional(),
+  resources: z.string().trim().max(2000).nullable().optional(),
+  expectedResult: z.string().trim().max(2000).nullable().optional(),
+  performanceIndicator: z.string().trim().max(2000).nullable().optional(),
 };
 
 export const ActionPlanQuery = z.object({ organizationId: z.string().optional() }).openapi("TradeActionPlanQuery");
@@ -1937,8 +1940,8 @@ export const UpdateActionItemBody = z
     responsible: ActionFields.responsible.optional(),
     dueDate: isoDay.optional(),
     status: z.enum(ACTION_STATUSES).optional(),
-    evidence: z.string().trim().nullable().optional(),
-    reviewComments: z.string().trim().nullable().optional(),
+    evidence: z.string().trim().max(5000).nullable().optional(),
+    reviewComments: z.string().trim().max(5000).nullable().optional(),
     milestone: z.union([z.literal(30), z.literal(60), z.literal(90)]).optional(),
   })
   .openapi("UpdateTradeActionItemBody");
