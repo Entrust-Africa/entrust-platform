@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, StatusBadge, cn } from "@entrust/ui";
+import { useAutosave } from "@/components/form-runner/use-autosave";
+import type { AnswerPatch } from "@/components/form-runner/types";
 import { browserApi, errorText, ok } from "@/lib/summit-api";
 import {
   currencyOf,
@@ -30,39 +32,18 @@ export function WorksheetRunner({ definition, initial }: { definition: Worksheet
   const router = useRouter();
   const [values, setValues] = useState<Values>(initial.values);
   const [result, setResult] = useState<WorksheetResult>(initial.result);
-  const [state, setState] = useState<"saved" | "saving" | "error">("saved");
   const [message, setMessage] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
-  const pending = useRef<Values>({});
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const inFlight = useRef(false);
   const currency = currencyOf(values);
 
-  async function flush() {
-    if (inFlight.current) return;
-    const batch = pending.current;
-    if (Object.keys(batch).length === 0) return;
-    pending.current = {};
-    inFlight.current = true;
-    setState("saving");
-    let failed = false;
-    try {
-      const saved = await ok(browserApi().v1.trade["worksheet-versions"][":id"].values.$put({ param: { id: initial.id }, json: { values: batch } }));
-      setResult(saved.result);
-      setState("saved");
-      setMessage(undefined);
-    } catch (error) {
-      // Put the changes back so the next try sends them, and say why.
-      failed = true;
-      pending.current = { ...batch, ...pending.current };
-      setState("error");
-      setMessage(errorText(error));
-    } finally {
-      inFlight.current = false;
-      // More came in while this was saving: send it too, unless this one failed (the next edit tries again).
-      if (!failed && Object.keys(pending.current).length > 0) timer.current = setTimeout(flush, SAVE_DELAY);
-    }
-  }
+  // The same saving as the diagnostic's forms: changes go a moment after the last one, one save at a time and in order;
+  // what is waiting goes when the tab is hidden or the page is left, and the browser warns before unsaved changes go.
+  const autosave = useAutosave(async (patch) => {
+    const saved = await ok(browserApi().v1.trade["worksheet-versions"][":id"].values.$put({ param: { id: initial.id }, json: { values: patch } }));
+    setResult(saved.result);
+  }, { delayMs: SAVE_DELAY });
+  const state = autosave.state.status === "error" ? "error" : autosave.state.status === "unsaved" || autosave.state.status === "saving" ? "saving" : "saved";
+  const saveMessage = autosave.state.status === "error" ? autosave.state.message : undefined;
 
   function change(key: string, value: unknown) {
     const next = value === "" ? null : value;
@@ -72,30 +53,22 @@ export function WorksheetRunner({ definition, initial }: { definition: Worksheet
       else copy[key] = next;
       return copy;
     });
-    pending.current = { ...pending.current, [key]: next };
-    setState("saving");
-    clearTimeout(timer.current);
-    timer.current = setTimeout(flush, SAVE_DELAY);
+    autosave.queue({ [key]: next } as AnswerPatch);
   }
 
-  useEffect(() => () => clearTimeout(timer.current), []);
-
   async function submit() {
-    clearTimeout(timer.current);
     setSubmitting(true);
     setMessage(undefined);
     try {
-      // Whatever is still waiting goes first, so the version holds what the learner sees.
-      if (Object.keys(pending.current).length > 0) {
-        const saved = await ok(browserApi().v1.trade["worksheet-versions"][":id"].values.$put({ param: { id: initial.id }, json: { values: pending.current } }));
-        pending.current = {};
-        setResult(saved.result);
+      // Everything waiting, and any save already on its way, lands first, so the version holds what the learner sees.
+      if (!(await autosave.flush())) {
+        setMessage("Your last changes haven't saved yet, so it wasn't submitted. Check your connection and try again.");
+        return;
       }
       await ok(browserApi().v1.trade["worksheet-versions"][":id"].submit.$post({ param: { id: initial.id } }));
       router.refresh();
     } catch (error) {
       setMessage(errorText(error));
-      setState("error");
     } finally {
       setSubmitting(false);
     }
@@ -178,13 +151,13 @@ export function WorksheetRunner({ definition, initial }: { definition: Worksheet
       <p className="text-xs text-ink-3">These figures are self-reported until Entrust staff review them.</p>
 
       <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface p-3 shadow-md">
-        <Button loading={submitting} onClick={submit}>
+        <Button loading={submitting} disabled={state === "saving"} onClick={submit}>
           Submit this version
         </Button>
         <p className="text-xs text-ink-3">A submitted version is kept as it is. To change it later you start the next one.</p>
-        {message && (
+        {(message ?? saveMessage) && (
           <p role="alert" className="w-full rounded-md bg-danger-50 px-3 py-2 text-sm font-medium text-danger">
-            {message}
+            {message ?? saveMessage}
           </p>
         )}
       </div>
