@@ -318,6 +318,7 @@ export const AssessmentList = z
 
 export const AssessmentListQuery = z.object({
   organizationId: z.string().optional().openapi({ description: "Narrow to one organisation. Default: all the caller's." }),
+  cohortId: z.string().uuid().optional().openapi({ description: "Narrow to one cohort's enrolments, all of them. Without it the newest 200 are listed." }),
   kind: FormKind.optional(),
 });
 

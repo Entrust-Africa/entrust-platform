@@ -403,6 +403,22 @@ describe("staff", () => {
     expect((await get(w.owner, `/assessments/${draft.id}`)).body.filledInByStaff).toBeTruthy();
   });
 
+  it("list one cohort's forms in full, with each submitted diagnostic's avenue", async () => {
+    const [cohort] = await db.select().from(schema.cohort).where(eq(schema.cohort.name, `${PREFIX}cohort`)).limit(1);
+    const done = await submittedDiagnostic({ Q135: "no" });
+    const res = await get(w.admin, `/assessments?kind=diagnostic&cohortId=${cohort!.id}`);
+    expect(res.status).toBe(200);
+    const mine = res.body.items.find((i: Json) => i.id === done.id);
+    expect(mine).toMatchObject({ pathway: "A", pathwayStatus: "confirmed" });
+    // Every row is this cohort's.
+    const enrollments = await db.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.cohortId, cohort!.id));
+    const ids = new Set(enrollments.map((e) => e.id));
+    expect(res.body.items.every((i: Json) => ids.has(i.enrollmentId))).toBe(true);
+    // Another cohort's list doesn't have it.
+    const [other] = await db.insert(schema.cohort).values({ programId: cohort!.programId, name: `${PREFIX}other-cohort-list` }).returning();
+    expect((await get(w.admin, `/assessments?kind=diagnostic&cohortId=${other!.id}`)).body.items).toEqual([]);
+  });
+
   it("can read as a reviewer but not write", async () => {
     const draft = await startFor(w.owner, "diagnostic", w.enrollment);
     expect((await get(w.reviewer, `/assessments/${draft.id}`)).status).toBe(200);

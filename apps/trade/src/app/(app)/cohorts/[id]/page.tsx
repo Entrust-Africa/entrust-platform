@@ -7,6 +7,7 @@ import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { PlanAndPathway } from "./plan-and-pathway";
+import { StartForBusiness } from "./start-for-business";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
 import { sessionClock, sessionDay } from "@/lib/trade-time";
@@ -53,10 +54,29 @@ function formatDeliveryMode(mode: string): string {
   }
 }
 
+interface CellContext {
+  enrollmentId: string;
+  organizationName: string;
+  /** An administrator or facilitator, who can fill a form in with the business. */
+  canStart: boolean;
+}
+
+/** A form in progress, with a way to open it. */
+function InProgress({ href }: { href: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge tone="warn">In progress</StatusBadge>
+      <Link href={href} className="font-semibold text-brand-600 hover:underline">
+        Open
+      </Link>
+    </div>
+  );
+}
+
 /** What a business's onboarding diagnostic looks like to staff: not started, in progress, or submitted with its avenue. */
-function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
-  if (!row) return <span className="text-ink-3">Not started</span>;
-  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+function DiagnosticCell({ row, context }: { row: StaffAssessmentRow | undefined; context: CellContext }) {
+  if (!row) return context.canStart ? <StartForBusiness kind="diagnostic" enrollmentId={context.enrollmentId} organizationName={context.organizationName} /> : <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <InProgress href={`/diagnostic/${row.id}`} />;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <StatusBadge tone="ok">Submitted</StatusBadge>
@@ -73,9 +93,9 @@ function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
 }
 
 /** What a business's placement assessment looks like to staff: not started, in progress, or scored with a link to its report. */
-function PlacementCell({ row }: { row: StaffAssessmentRow | undefined }) {
-  if (!row) return <span className="text-ink-3">Not started</span>;
-  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+function PlacementCell({ row, context }: { row: StaffAssessmentRow | undefined; context: CellContext }) {
+  if (!row) return context.canStart ? <StartForBusiness kind="placement" enrollmentId={context.enrollmentId} organizationName={context.organizationName} /> : <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <InProgress href={`/assessment/${row.id}`} />;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <StatusBadge tone={row.status === "review_required" ? "warn" : "ok"}>{row.status === "review_required" ? "Needs review" : "Scored"}</StatusBadge>
@@ -103,8 +123,8 @@ export default async function CohortDetailPage(props: {
   const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
-    listDiagnostics(),
-    listPlacements(),
+    listDiagnostics(id),
+    listPlacements(id),
     listSessions(id),
     tradeGet<{ items: { id: string; enrollmentId: string; shipment: { product: string; evidenceStatus: string } | null }[] }>(`/pathway-reviews?cohortId=${encodeURIComponent(id)}&status=open`),
   ]);
@@ -325,10 +345,10 @@ export default async function CohortDetailPage(props: {
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3">
-                        <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} />
+                        <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} context={{ enrollmentId: enr.enrollmentId, organizationName: enr.organizationName, canStart: canEnrol && (enr.status === "active" || enr.status === "registered" || enr.status === "invited") }} />
                       </td>
                       <td className="px-4 py-3">
-                        <PlacementCell row={placementOf.get(enr.enrollmentId)} />
+                        <PlacementCell row={placementOf.get(enr.enrollmentId)} context={{ enrollmentId: enr.enrollmentId, organizationName: enr.organizationName, canStart: canEnrol && (enr.status === "active" || enr.status === "registered" || enr.status === "invited") }} />
                       </td>
                       <td className="px-4 py-3">
                         <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} review={reviewOf.get(enr.enrollmentId) ?? null} />

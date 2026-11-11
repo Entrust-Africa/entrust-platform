@@ -380,6 +380,7 @@ export async function getAssessment(ctx: Ctx, id: string): Promise<AssessmentVie
 
 export interface ListInput {
   organizationId?: string | undefined;
+  cohortId?: string | undefined;
   kind?: FormKind | undefined;
 }
 
@@ -409,13 +410,21 @@ export async function listAssessments(ctx: Ctx, input: ListInput) {
       and(
         inArray(schema.tradeAssessment.kind, input.kind ? [input.kind] : [...ASSESSMENT_FORM_KINDS]),
         organizations ? inArray(schema.enrollment.organizationId, organizations) : undefined,
+        input.cohortId ? eq(schema.enrollment.cohortId, input.cohortId) : undefined,
       ),
     )
     .orderBy(desc(schema.tradeAssessment.createdAt))
-    .limit(200);
-  const diagnostics = rows.filter((r) => r.row.kind === "diagnostic" && r.row.status !== "draft" && r.row.status !== "superseded");
-  const pathways = new Map<string, Awaited<ReturnType<typeof pathwayView>>>();
-  for (const d of diagnostics) if (!pathways.has(d.row.enrollmentId)) pathways.set(d.row.enrollmentId, await pathwayView(ctx.db, d.row.enrollmentId));
+    // A cohort's list is the whole cohort, so its page never shows "Not started" for a form past a cap.
+    .limit(input.cohortId ? 5000 : 200);
+  // The avenues of every submitted diagnostic's enrolment, in one query rather than one per row.
+  const diagnosticEnrollments = [...new Set(rows.filter((r) => r.row.kind === "diagnostic" && r.row.status !== "draft" && r.row.status !== "superseded").map((r) => r.row.enrollmentId))];
+  const live = diagnosticEnrollments.length
+    ? await ctx.db
+        .select({ enrollmentId: schema.pathwayAssignment.enrollmentId, pathway: schema.pathwayAssignment.pathway, status: schema.pathwayAssignment.status })
+        .from(schema.pathwayAssignment)
+        .where(and(inArray(schema.pathwayAssignment.enrollmentId, diagnosticEnrollments), inArray(schema.pathwayAssignment.status, ["provisional", "confirmed"])))
+    : [];
+  const pathways = new Map(live.map((p) => [p.enrollmentId, { pathway: p.pathway, status: p.status === "provisional" ? ("provisional" as const) : ("confirmed" as const) }]));
   return rows.map(({ row, organizationId, organization, cohort }) => ({
     id: row.id,
     kind: row.kind as FormKind,
