@@ -44,6 +44,14 @@ const ModuleSummary = z
   })
   .openapi("TradeModuleSummary");
 
+
+/** A currency as its ISO code, so "usd" and "USD " are one currency in the reports. */
+const currencyCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3}$/, "Use a three-letter currency code, such as USD or ETB.");
+
 export const ModuleList = z.object({ items: z.array(ModuleSummary) }).openapi("TradeModuleList");
 
 export const ModuleParam = z.object({ id: z.string().openapi({ example: "M04" }) });
@@ -1646,7 +1654,7 @@ export const CreateOpportunityBody = z
     verificationStatus: z.enum(VERIFICATION_LADDER_STATUSES).optional().default("unverified"),
     stage: z.enum(PIPELINE_STAGES).optional().default("lead_discovered"),
     estimatedValue: z.number().nonnegative().optional().nullable(),
-    currency: z.string().trim().default("USD"),
+    currency: currencyCode.default("USD"),
   })
   .openapi("CreateTradeOpportunityBody");
 
@@ -1778,7 +1786,7 @@ export const CreateFinancingOutcomeBody = z
     amountRequested: z.number().positive("Amount requested must be positive"),
     amountApproved: z.number().nonnegative().optional().nullable(),
     amountDisbursed: z.number().nonnegative().optional().nullable(),
-    currency: z.string().trim().default("USD"),
+    currency: currencyCode.default("USD"),
     status: z.enum(FINANCING_OUTCOME_STATUSES).optional().default("application_prepared"),
     approvalDate: z.string().datetime().optional().nullable(),
     disbursementDate: z.string().datetime().optional().nullable(),
@@ -1812,7 +1820,7 @@ export const CreateExportOutcomeBody = z
     valuePlanned: z.number().nonnegative().optional().nullable(),
     valueShipped: z.number().nonnegative().optional().nullable(),
     valuePaid: z.number().nonnegative().optional().nullable(),
-    currency: z.string().trim().default("USD"),
+    currency: currencyCode.default("USD"),
     status: z.enum(EXPORT_OUTCOME_STATUSES).optional().default("planned"),
     shipmentDate: z.string().datetime().optional().nullable(),
     deliveryDate: z.string().datetime().optional().nullable(),
@@ -2007,7 +2015,7 @@ export const UpdateTransactionBody = z
     buyerStatus: z.string().trim().max(5000).nullable().optional(),
     orderDocument: z.string().trim().max(5000).nullable().optional(),
     agreedPrice: z.string().trim().max(5000).nullable().optional(),
-    currency: z.string().trim().max(5000).nullable().optional(),
+    currency: currencyCode.nullable().optional(),
     incoterm: z.string().trim().max(5000).nullable().optional(),
     namedPlace: z.string().trim().max(5000).nullable().optional(),
     costingAndMargin: z.string().trim().max(5000).nullable().optional(),

@@ -38,7 +38,15 @@ import {
   FINANCING_OUTCOME_STATUSES,
   FINANCING_TYPES,
   OUTCOME_EVIDENCE_TIERS,
+  parseTradeLocalDateTime,
+  toTradeLocalDateTime,
 } from "@entrust/trade-engine";
+
+/** Statuses that say the goods left: they need the value and date of the real shipment. */
+const shippedStatus = (status: string): boolean => ["shipped", "delivered", "payment_pending", "paid"].includes(status);
+
+/** A form's date and time, read as Addis Ababa time, as the ISO timestamp the API stores. */
+const localToIso = (value: string): string | null => parseTradeLocalDateTime(value)?.toISOString() ?? null;
 
 interface OutcomesDashboardProps {
   initialOutcomes: OutcomeView[];
@@ -114,7 +122,7 @@ export function OutcomesDashboard({
     status: "approved" as any,
     amountApproved: "",
     amountDisbursed: "",
-    approvalDate: new Date().toISOString().slice(0, 16),
+    approvalDate: "",
     disbursementDate: "",
     evidenceTier: "documented" as any,
     notes: "",
@@ -125,7 +133,7 @@ export function OutcomesDashboard({
     status: "shipped" as any,
     valueShipped: "",
     valuePaid: "",
-    shipmentDate: new Date().toISOString().slice(0, 16),
+    shipmentDate: "",
     deliveryDate: "",
     paymentDate: "",
     evidenceTier: "documented" as any,
@@ -180,19 +188,23 @@ export function OutcomesDashboard({
         status: (outcome.status === "application_prepared" ? "approved" : outcome.status === "approved" ? "disbursed" : outcome.status) as any,
         amountApproved: outcome.amountApproved ? String(outcome.amountApproved) : outcome.amountRequested ? String(outcome.amountRequested) : "",
         amountDisbursed: outcome.amountDisbursed ? String(outcome.amountDisbursed) : "",
-        approvalDate: outcome.approvalDate ? outcome.approvalDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        disbursementDate: outcome.disbursementDate ? outcome.disbursementDate.slice(0, 16) : "",
+        // Stored times are shown in Addis Ababa time and read back the same way, so saving doesn't move them by the
+        // browser's offset. Nothing is filled in that the business didn't record: an empty date stays empty.
+        approvalDate: outcome.approvalDate ? toTradeLocalDateTime(outcome.approvalDate) : "",
+        disbursementDate: outcome.disbursementDate ? toTradeLocalDateTime(outcome.disbursementDate) : "",
         evidenceTier: outcome.evidenceTier,
         notes: "",
       });
     } else {
       setUpdateExportForm({
         status: (outcome.status === "planned" ? "shipped" : outcome.status === "shipped" ? "delivered" : outcome.status === "delivered" ? "paid" : outcome.status) as any,
-        valueShipped: outcome.valueShipped ? String(outcome.valueShipped) : outcome.valuePlanned ? String(outcome.valuePlanned) : "",
+        // The shipped value is what actually left, not the planned value, and the date is the day it shipped, not today:
+        // both are typed in, never assumed.
+        valueShipped: outcome.valueShipped ? String(outcome.valueShipped) : "",
         valuePaid: outcome.valuePaid ? String(outcome.valuePaid) : "",
-        shipmentDate: outcome.shipmentDate ? outcome.shipmentDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        deliveryDate: outcome.deliveryDate ? outcome.deliveryDate.slice(0, 16) : "",
-        paymentDate: outcome.paymentDate ? outcome.paymentDate.slice(0, 16) : "",
+        shipmentDate: outcome.shipmentDate ? toTradeLocalDateTime(outcome.shipmentDate) : "",
+        deliveryDate: outcome.deliveryDate ? toTradeLocalDateTime(outcome.deliveryDate) : "",
+        paymentDate: outcome.paymentDate ? toTradeLocalDateTime(outcome.paymentDate) : "",
         evidenceTier: outcome.evidenceTier,
         notes: "",
       });
@@ -298,8 +310,8 @@ export function OutcomesDashboard({
             status: updateFinancingForm.status,
             amountApproved: updateFinancingForm.amountApproved ? Number(updateFinancingForm.amountApproved) : null,
             amountDisbursed: updateFinancingForm.amountDisbursed ? Number(updateFinancingForm.amountDisbursed) : null,
-            approvalDate: updateFinancingForm.approvalDate ? new Date(updateFinancingForm.approvalDate).toISOString() : null,
-            disbursementDate: updateFinancingForm.disbursementDate ? new Date(updateFinancingForm.disbursementDate).toISOString() : null,
+            approvalDate: updateFinancingForm.approvalDate ? localToIso(updateFinancingForm.approvalDate) : null,
+            disbursementDate: updateFinancingForm.disbursementDate ? localToIso(updateFinancingForm.disbursementDate) : null,
             evidenceTier: updateFinancingForm.evidenceTier,
             notes: updateFinancingForm.notes || undefined,
           },
@@ -315,9 +327,9 @@ export function OutcomesDashboard({
             status: updateExportForm.status,
             valueShipped: updateExportForm.valueShipped ? Number(updateExportForm.valueShipped) : null,
             valuePaid: updateExportForm.valuePaid ? Number(updateExportForm.valuePaid) : null,
-            shipmentDate: updateExportForm.shipmentDate ? new Date(updateExportForm.shipmentDate).toISOString() : null,
-            deliveryDate: updateExportForm.deliveryDate ? new Date(updateExportForm.deliveryDate).toISOString() : null,
-            paymentDate: updateExportForm.paymentDate ? new Date(updateExportForm.paymentDate).toISOString() : null,
+            shipmentDate: updateExportForm.shipmentDate ? localToIso(updateExportForm.shipmentDate) : null,
+            deliveryDate: updateExportForm.deliveryDate ? localToIso(updateExportForm.deliveryDate) : null,
+            paymentDate: updateExportForm.paymentDate ? localToIso(updateExportForm.paymentDate) : null,
             evidenceTier: updateExportForm.evidenceTier,
             notes: updateExportForm.notes || undefined,
           },
@@ -1068,19 +1080,24 @@ export function OutcomesDashboard({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Value shipped</label>
+                      <label htmlFor="export-value-shipped" className="block text-xs font-semibold text-ink mb-1">Value shipped{shippedStatus(updateExportForm.status) ? " (required)" : ""}</label>
                       <input
+                        id="export-value-shipped"
                         type="number"
-                        placeholder="e.g. 60000"
+                        min="0"
+                        placeholder="What actually shipped"
+                        required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.valueShipped}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valueShipped: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Shipment date</label>
+                      <label htmlFor="export-shipment-date" className="block text-xs font-semibold text-ink mb-1">Shipment date (Addis Ababa time){shippedStatus(updateExportForm.status) ? ", required" : ""}</label>
                       <input
+                        id="export-shipment-date"
                         type="datetime-local"
+                        required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.shipmentDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, shipmentDate: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"

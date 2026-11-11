@@ -216,4 +216,37 @@ describe("TRADE financing and export outcomes API (#69)", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it("won't record a shipment without what shipped and when", async () => {
+    const planned = await post(owner, "/outcomes/export", { organizationId: org, enrollmentId, buyerName: "Nairobi Foods", destinationCountry: "KE", productDescription: "Lentils", valuePlanned: 20000 });
+    expect(planned.status).toBe(201);
+    // Moving it to shipped on the planned value alone, with no date, is refused.
+    const bare = await patch(owner, `/outcomes/export/${planned.body.id}/status`, { status: "shipped" });
+    expect(bare.status).toBe(422);
+    const noDate = await patch(owner, `/outcomes/export/${planned.body.id}/status`, { status: "shipped", valueShipped: 18000 });
+    expect(noDate.status).toBe(422);
+    const shipped = await patch(owner, `/outcomes/export/${planned.body.id}/status`, { status: "shipped", valueShipped: 18000, shipmentDate: "2026-11-05T07:00:00.000Z" });
+    expect(shipped.status).toBe(200);
+    expect(shipped.body).toMatchObject({ valueShipped: 18000, shipmentDate: "2026-11-05T07:00:00.000Z" });
+  });
+
+  it("drops a bank decision staff confirmed back to self-reported when the business changes its figures", async () => {
+    const created = await post(owner, "/outcomes/financing", { organizationId: org, enrollmentId, lenderName: "Zemen Bank", financingType: "working_capital", amountRequested: 50000 });
+    expect(created.status).toBe(201);
+    const id = created.body.id;
+    // Staff confirm the bank's decision.
+    const confirmed = await patch(admin, `/outcomes/financing/${id}/status`, { status: "approved", amountApproved: 40000, approvalDate: "2026-11-01T00:00:00.000Z", evidenceTier: "formal_bank_decision" });
+    expect(confirmed.body.evidenceTier).toBe("formal_bank_decision");
+
+    // The business adds a note: the confirmation stands.
+    const noted = await patch(owner, `/outcomes/financing/${id}/status`, { status: "approved", notes: "Signed the facility letter" });
+    expect(noted.body.evidenceTier).toBe("formal_bank_decision");
+    expect(noted.body.amountApproved).toBe(40000);
+
+    // The business raises the approved amount: it's what the business reports now, not what staff confirmed.
+    const raised = await patch(owner, `/outcomes/financing/${id}/status`, { status: "approved", amountApproved: 90000, evidenceTier: "formal_bank_decision" });
+    expect(raised.status).toBe(200);
+    expect(raised.body).toMatchObject({ amountApproved: 90000, evidenceTier: "self_reported" });
+    expect(raised.body.events[0].notes).toContain("self-reported until staff confirm it again");
+  });
 });

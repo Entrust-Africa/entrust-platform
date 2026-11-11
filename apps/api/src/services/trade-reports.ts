@@ -100,7 +100,8 @@ async function cohortScope(ctx: Ctx, id: string, filters: ReportFilters = {}): P
 
 const toNumber = (value: string | null | undefined): number => (value ? Number(value) : 0);
 const round = (value: number): number => Math.round(value * 100) / 100;
-const currencyOf = (value: string | null | undefined): string => value ?? "USD";
+/** Records from before currencies were checked can say "usd" or "USD ": they count as one. */
+const currencyOf = (value: string | null | undefined): string => value?.trim().toUpperCase() || "USD";
 
 /**
  * Narrows what a report is worked out from to the filters asked for. A pathway keeps the businesses on it and everything that
@@ -362,8 +363,9 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
     } else if (o.status !== "cancelled") {
       const totals = exportTotals.get(currency) ?? { shipments: emptyTotal(), payments: emptyTotal() };
       exportTotals.set(currency, totals);
-      if (SHIPPED_STATUSES.has(o.status) || toNumber(o.valueShipped) > 0 || o.shipmentDate) addTo(totals.shipments, o.organizationId, toNumber(o.valueShipped));
-      if (o.status === "paid" || toNumber(o.valuePaid) > 0 || o.paymentDate) addTo(totals.payments, o.organizationId, toNumber(o.valuePaid));
+      // A shipment is one the business says went out, with a value. A planned record that happens to carry a date isn't one.
+      if (SHIPPED_STATUSES.has(o.status) && toNumber(o.valueShipped) > 0) addTo(totals.shipments, o.organizationId, toNumber(o.valueShipped));
+      if (toNumber(o.valuePaid) > 0) addTo(totals.payments, o.organizationId, toNumber(o.valuePaid));
     }
   }
   const money = (total: Total, kind: SponsorDataKind) => {

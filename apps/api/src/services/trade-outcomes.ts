@@ -97,6 +97,39 @@ function mapOutcomeRow(
   };
 }
 
+/** The tiers only Entrust staff can give a record: once a record holds one, staff stand behind its figures. */
+const STAFF_CONFIRMED_TIERS: readonly string[] = ["formal_bank_decision"];
+
+/**
+ * A business changing the figures, dates or status of a record staff confirmed would put its own numbers under staff's
+ * confirmation, and reports would count them as confirmed. Its change still goes in, as what it reports: the record drops
+ * back to self-reported until staff confirm it again. Notes alone don't touch the confirmation.
+ */
+function confirmationLost(
+  principal: { staffRole: unknown },
+  outcome: typeof schema.outcome.$inferSelect,
+  changes: Partial<typeof schema.outcome.$inferInsert>,
+): boolean {
+  if (principal.staffRole || !STAFF_CONFIRMED_TIERS.includes(outcome.evidenceTier)) return false;
+  const same = (a: unknown, b: unknown) => (a instanceof Date || b instanceof Date ? new Date(a as Date).getTime() === new Date(b as Date).getTime() : (a ?? null) === (b ?? null) || Number(a) === Number(b));
+  return Object.entries(changes).some(([key, value]) => {
+    if (key === "updatedAt" || key === "notes" || key === "evidenceTier" || key === "evidenceUrl") return false;
+    const current = outcome[key as keyof typeof outcome];
+    if (value === null || current === null) return (value ?? null) !== (current ?? null);
+    return !same(value, current);
+  });
+}
+
+/** Statuses that say the goods left. Reports count them as shipments, so they carry what actually shipped and when. */
+const SHIPPED: readonly string[] = ["shipped", "delivered", "payment_pending", "paid"];
+
+function requireShipment(status: string, record: { valueShipped?: string | null | undefined; shipmentDate?: Date | null | undefined; valuePaid?: string | null | undefined }): void {
+  if (!SHIPPED.includes(status)) return;
+  if (!record.valueShipped || Number(record.valueShipped) <= 0) throw new ServiceError("invalid", "Say what value actually shipped.");
+  if (!record.shipmentDate) throw new ServiceError("invalid", "Say when it shipped.");
+  if (status === "paid" && (!record.valuePaid || Number(record.valuePaid) <= 0)) throw new ServiceError("invalid", "Say how much was paid.");
+}
+
 /** A formal bank decision is evidence Entrust staff confirm. A business can say what it reports and what it has documented. */
 function assertEvidenceTierAllowed(principal: { staffRole: unknown }, tier: string | null | undefined): void {
   if (tier === "formal_bank_decision" && !principal.staffRole) {
@@ -244,6 +277,8 @@ export async function updateFinancingStatus(
   if (input.notes !== undefined) {
     updateValues.notes = input.notes ?? null;
   }
+  const unconfirmed = confirmationLost(principal, outcome, updateValues);
+  if (unconfirmed) updateValues.evidenceTier = "self_reported";
 
   const [updated] = await db
     .update(schema.outcome)
@@ -259,9 +294,11 @@ export async function updateFinancingStatus(
     actorUserId: principal.userId,
     previousStatus: outcome.status,
     newStatus: input.status,
-    evidenceTier: (input.evidenceTier ?? updated.evidenceTier) as OutcomeEvidenceTier,
+    evidenceTier: updated.evidenceTier as OutcomeEvidenceTier,
     evidenceUrl: input.evidenceUrl ?? updated.evidenceUrl ?? null,
-    notes: input.notes ?? `Status transitioned from ${outcome.status} to ${input.status}`,
+    notes: unconfirmed
+      ? "The business changed figures staff had confirmed, so the record is self-reported until staff confirm it again."
+      : (input.notes ?? `Status transitioned from ${outcome.status} to ${input.status}`),
   });
 
   await recordTradeChange(db, principal.userId, {
@@ -269,8 +306,8 @@ export async function updateFinancingStatus(
     organizationId: outcome.organizationId,
     entityId: outcomeId,
     entityType: "outcome",
-    before: { status: outcome.status },
-    after: { status: input.status },
+    before: { status: outcome.status, evidenceTier: outcome.evidenceTier, amountApproved: outcome.amountApproved, amountDisbursed: outcome.amountDisbursed },
+    after: { status: input.status, evidenceTier: updated.evidenceTier, amountApproved: updated.amountApproved, amountDisbursed: updated.amountDisbursed },
   });
 
   const events = await db
@@ -289,6 +326,11 @@ export async function createExportOutcome(
   const { db, principal } = ctx;
   const { organizationId, access } = await resolveOrganization(db, ctx, input);
   if (!access.write) throw new ServiceError("forbidden", "Write access required.");
+  requireShipment(input.status ?? "planned", {
+    valueShipped: input.valueShipped != null ? String(input.valueShipped) : null,
+    shipmentDate: input.shipmentDate ? new Date(input.shipmentDate) : null,
+    valuePaid: input.valuePaid != null ? String(input.valuePaid) : null,
+  });
 
   const [created] = await db
     .insert(schema.outcome)
@@ -391,6 +433,9 @@ export async function updateExportStatus(
   if (input.notes !== undefined) {
     updateValues.notes = input.notes ?? null;
   }
+  requireShipment(input.status, { ...outcome, ...updateValues });
+  const unconfirmed = confirmationLost(principal, outcome, updateValues);
+  if (unconfirmed) updateValues.evidenceTier = "self_reported";
 
   const [updated] = await db
     .update(schema.outcome)
@@ -406,9 +451,11 @@ export async function updateExportStatus(
     actorUserId: principal.userId,
     previousStatus: outcome.status,
     newStatus: input.status,
-    evidenceTier: (input.evidenceTier ?? updated.evidenceTier) as OutcomeEvidenceTier,
+    evidenceTier: updated.evidenceTier as OutcomeEvidenceTier,
     evidenceUrl: input.evidenceUrl ?? updated.evidenceUrl ?? null,
-    notes: input.notes ?? `Export status transitioned from ${outcome.status} to ${input.status}`,
+    notes: unconfirmed
+      ? "The business changed figures staff had confirmed, so the record is self-reported until staff confirm it again."
+      : (input.notes ?? `Export status transitioned from ${outcome.status} to ${input.status}`),
   });
 
   await recordTradeChange(db, principal.userId, {
@@ -416,8 +463,8 @@ export async function updateExportStatus(
     organizationId: outcome.organizationId,
     entityId: outcomeId,
     entityType: "outcome",
-    before: { status: outcome.status },
-    after: { status: input.status },
+    before: { status: outcome.status, evidenceTier: outcome.evidenceTier, valueShipped: outcome.valueShipped, valuePaid: outcome.valuePaid },
+    after: { status: input.status, evidenceTier: updated.evidenceTier, valueShipped: updated.valueShipped, valuePaid: updated.valuePaid },
   });
 
   const events = await db
