@@ -627,6 +627,9 @@ export const evidenceRecord = trade.table(
     requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
     requestedAt: timestamp("requested_at", { withTimezone: true }),
     requestPrompt: text("request_prompt"),
+    // What the business wrote when it answered a request or sent the evidence again.
+    responseNote: text("response_note"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()

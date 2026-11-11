@@ -1050,6 +1050,8 @@ export const EvidenceRecordSchema = z
     requestedByUserName: z.string().nullable().optional(),
     requestedAt: z.iso.datetime().nullable(),
     requestPrompt: z.string().nullable(),
+    responseNote: z.string().nullable(),
+    submittedAt: z.iso.datetime().nullable(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
@@ -1081,6 +1083,15 @@ export const ReviewEvidenceBody = z
   })
   .openapi("ReviewEvidenceBody");
 
+/** The business's answer to a request for evidence, or its resubmission: the document, and a note if it helps. */
+export const AnswerEvidenceBody = z
+  .object({
+    fileId: z.uuid().optional(),
+    note: z.string().trim().max(5000).optional(),
+  })
+  .refine((body) => body.fileId || body.note, "Attach a document or write a note.")
+  .openapi("AnswerEvidenceBody");
+
 export const RequestEvidenceBody = z
   .object({
     organizationId: z.string().min(1),
@@ -1110,6 +1121,7 @@ export const EvidenceParam = z
 
 export type EvidenceRecordView = z.infer<typeof EvidenceRecordSchema>;
 export type CreateEvidenceInput = z.infer<typeof CreateEvidenceBody>;
+export type AnswerEvidenceInput = z.infer<typeof AnswerEvidenceBody>;
 export type ReviewEvidenceInput = z.infer<typeof ReviewEvidenceBody>;
 export type RequestEvidenceInput = z.infer<typeof RequestEvidenceBody>;
 export type EvidenceListQueryInput = z.infer<typeof EvidenceListQuery>;
