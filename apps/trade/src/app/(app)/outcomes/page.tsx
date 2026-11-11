@@ -3,6 +3,7 @@ import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import { OutcomesDashboard } from "@/components/outcomes/outcomes-dashboard";
 import type { OutcomeView } from "@/lib/types";
+import { businessInView } from "@/lib/business";
 
 export const metadata = { title: "Financing & outcomes" };
 
@@ -15,10 +16,8 @@ export default async function OutcomesPage({ searchParams }: OutcomesPageProps) 
   if (!me) redirect("/sign-in");
 
   const { organizationId: queryOrgId } = (await searchParams) ?? {};
-  const activeOrg =
-    (queryOrgId ? me.organizations?.find((o) => o.id === queryOrgId) : null) ??
-    me.organizations?.find((o) => o.id === me.activeOrganizationId) ??
-    me.organizations?.[0];
+  // Staff open a business by its id in the address; a member gets their own.
+  const activeOrg = await businessInView(me, queryOrgId);
 
   if (!activeOrg) {
     redirect("/");

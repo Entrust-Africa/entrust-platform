@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeGet } from "@/lib/trade-api";
-import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { PlanAndPathway } from "./plan-and-pathway";
+import { EditCohortDialog } from "./edit-cohort-dialog";
 import { StartForBusiness } from "./start-for-business";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
@@ -120,6 +121,7 @@ export default async function CohortDetailPage(props: {
 
   const { id } = await props.params;
   const cohortStaff = me.staffRole === "admin" ? await getCohortStaff(id) : null;
+  const sponsors = me.staffRole === "admin" ? await listSponsors() : [];
   const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
@@ -164,6 +166,7 @@ export default async function CohortDetailPage(props: {
             <h1 className="mt-1 font-display text-2xl font-bold text-ink">{cohort.name}</h1>
           </div>
           <div className="flex items-center gap-2">
+            {canEnrol && <EditCohortDialog cohort={cohort} sponsors={sponsors} isAdmin={me.staffRole === "admin"} />}
             {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
             {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
@@ -324,6 +327,21 @@ export default async function CohortDetailPage(props: {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-ink">{enr.organizationName}</div>
                         <div className="font-mono text-ink-3 text-[11px]">{enr.organizationId}</div>
+                        <nav aria-label={`${enr.organizationName}'s record`} className="mt-1 flex flex-wrap gap-x-2 text-[11px] font-semibold">
+                          {[
+                            ["/business", "Business"],
+                            ["/pipeline", "Pipeline"],
+                            ["/outcomes", "Outcomes"],
+                            ["/transactions", "Transactions"],
+                            ["/action-plan", "Action plan"],
+                            ["/evidence", "Evidence"],
+                            ["/plan", "Plan"],
+                          ].map(([path, label]) => (
+                            <Link key={path} href={`${path}?organizationId=${encodeURIComponent(enr.organizationId)}`} className="text-brand-600 underline-offset-4 hover:underline">
+                              {label}
+                            </Link>
+                          ))}
+                        </nav>
                         {me.staffRole !== "reviewer" && (
                           <Link href={`/referrals?organizationId=${encodeURIComponent(enr.organizationId)}&organizationName=${encodeURIComponent(enr.organizationName)}`} className="text-[11px] font-semibold text-brand-600 underline-offset-4 hover:underline">
                             Refer to a partner

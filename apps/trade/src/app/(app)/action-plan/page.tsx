@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ActionPlanBoard, type ActionPlan } from "@/components/action-plan/action-plan-board";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
+import { businessInView } from "@/lib/business";
 
 export const metadata = { title: "90-day action plan" };
 
@@ -10,10 +11,8 @@ export default async function ActionPlanPage({ searchParams }: { searchParams?: 
   if (!me) redirect("/sign-in");
 
   const { organizationId } = (await searchParams) ?? {};
-  const activeOrg =
-    (organizationId ? me.organizations?.find((o) => o.id === organizationId) : null) ??
-    me.organizations?.find((o) => o.id === me.activeOrganizationId) ??
-    me.organizations?.[0];
+  // Staff open a business by its id in the address; a member gets their own.
+  const activeOrg = await businessInView(me, organizationId);
   if (!activeOrg) redirect("/");
 
   const plan = await tradeGet<ActionPlan>(`/action-plan?organizationId=${encodeURIComponent(activeOrg.id)}`);

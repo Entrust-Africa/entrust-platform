@@ -70,4 +70,5 @@ export type {
   OutcomeView,
   UpdateExportStatusInput,
   UpdateFinancingStatusInput,
+  EvidenceRecordView,
 } from "./schemas/trade";

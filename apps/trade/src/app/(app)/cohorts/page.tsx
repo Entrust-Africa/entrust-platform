@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card, EmptyState, StatusBadge } from "@entrust/ui";
-import { listCohorts, listOrganizations, listPrograms } from "@/lib/api";
+import { listCohorts, listPrograms, listSponsors } from "@/lib/api";
 import { ok } from "@/lib/summit-api";
 import { load, requireUser } from "@/lib/summit-server";
 import type { CatalogueCohort } from "@/lib/catalogue";
@@ -165,7 +165,7 @@ export default async function CohortsPage() {
     load(PATH, (api) => ok(api.v1.trade.catalogue.$get())),
     listCohorts(),
     listPrograms(),
-    listOrganizations(),
+    listSponsors(),
   ]);
 
   return (
@@ -175,7 +175,14 @@ export default async function CohortsPage() {
           <h1 className="font-display text-2xl font-bold text-ink">Programme cohorts</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-2">The training cohorts you enrol businesses into, and the pilot cohorts that have already run with the businesses in each.</p>
         </div>
-        <CreateCohortDialog programs={programs} sponsors={orgs} />
+        <div className="flex flex-wrap items-center gap-2">
+          {me.staffRole === "admin" && (
+            <Link href="/admin/sponsors" className="inline-flex h-10 items-center rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2">
+              Sponsor banks
+            </Link>
+          )}
+          <CreateCohortDialog programs={programs} sponsors={orgs} />
+        </div>
       </div>
 
       <section aria-labelledby="training" className="space-y-3">

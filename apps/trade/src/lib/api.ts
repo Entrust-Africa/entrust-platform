@@ -43,6 +43,15 @@ export async function listOrganizations(): Promise<{ id: string; name: string }[
   return organizations.map(({ id, name }) => ({ id, name }));
 }
 
+/**
+ * The sponsor organisations a cohort can name (Entrust staff only). Not the signed-in person's own organisations: a sponsor
+ * is a bank Entrust set up, and the API refuses anything else on a cohort.
+ */
+export async function listSponsors(): Promise<{ id: string; name: string }[]> {
+  const result = await tradeGet<{ items: { id: string; name: string }[] }>("/sponsors");
+  return (result.data?.items ?? []).map(({ id, name }) => ({ id, name }));
+}
+
 /** All programs (Entrust staff only). */
 export async function listPrograms(): Promise<TradeProgram[]> {
   const res = await (await serverApi()).v1.trade.programs.$get();

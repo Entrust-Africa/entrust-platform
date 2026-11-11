@@ -302,6 +302,7 @@ export type {
   OutcomeView,
   UpdateExportStatusInput,
   UpdateFinancingStatusInput,
+  EvidenceRecordView,
 } from "@entrust/api/client";
 
 export interface ModuleItemSummary {
