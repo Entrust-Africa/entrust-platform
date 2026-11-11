@@ -375,7 +375,7 @@ export interface UpdateDraftVersionInput {
   strictValidation?: boolean;
 }
 
-/** Updates a draft version. Modifications to approved or archived versions are rejected. */
+/** Updates a draft version. Once a version is submitted for review (or approved, or archived) its content no longer changes. */
 export async function updateDraftVersion(
   ctx: Ctx,
   moduleId: string,
@@ -395,8 +395,8 @@ export async function updateDraftVersion(
     throw new ServiceError("not_found", `Version ${version} of module ${moduleId} does not exist.`);
   }
 
-  if (row.status === "approved" || row.status === "archived") {
-    throw new ServiceError("conflict", `Version ${version} is ${row.status} and cannot be modified. Approved versions are immutable.`);
+  if (row.status !== "draft") {
+    throw new ServiceError("conflict", `Version ${version} is ${row.status.replace("_", " ")} and can't be changed. Only a draft can be edited.`);
   }
 
   const currentContent = row.content as unknown as ModuleContent;
@@ -425,7 +425,8 @@ export async function updateDraftVersion(
 
   const contentHash = computeContentHash(mergedContent);
 
-  await ctx.db
+  // Only while it is still a draft: a submit or an approval that lands between the read above and this write wins.
+  const [updated] = await ctx.db
     .update(schema.moduleContentVersion)
     .set({
       title: mergedContent.title,
@@ -437,7 +438,9 @@ export async function updateDraftVersion(
       updatedByUserId: ctx.principal.userId,
       updatedAt: new Date(),
     })
-    .where(eq(schema.moduleContentVersion.id, row.id));
+    .where(and(eq(schema.moduleContentVersion.id, row.id), eq(schema.moduleContentVersion.status, "draft")))
+    .returning({ id: schema.moduleContentVersion.id });
+  if (!updated) throw new ServiceError("conflict", `Version ${version} was submitted or approved while you were editing it. Reload it to see where it stands.`);
 
   await recordTradeChange(ctx.db, ctx.principal.userId, {
     action: "trade.content.draft_updated",
@@ -480,7 +483,7 @@ export async function submitDraftForReview(
     throw new ServiceError("invalid", `Cannot submit for review due to validation errors:\n${validationErrors.join("\n")}`);
   }
 
-  await ctx.db
+  const [submitted] = await ctx.db
     .update(schema.moduleContentVersion)
     .set({
       status: "in_review",
@@ -489,7 +492,9 @@ export async function submitDraftForReview(
       updatedByUserId: ctx.principal.userId,
       updatedAt: new Date(),
     })
-    .where(eq(schema.moduleContentVersion.id, row.id));
+    .where(and(eq(schema.moduleContentVersion.id, row.id), eq(schema.moduleContentVersion.status, "draft"), eq(schema.moduleContentVersion.contentHash, row.contentHash)))
+    .returning({ id: schema.moduleContentVersion.id });
+  if (!submitted) throw new ServiceError("conflict", `Version ${version} changed while it was being submitted. Reload it and submit again.`);
 
   await recordTradeChange(ctx.db, ctx.principal.userId, {
     action: "trade.content.review_submitted",
@@ -535,6 +540,9 @@ export async function approveModuleVersion(
   if (row.status === "approved") {
     throw new ServiceError("conflict", `Version ${version} of module ${moduleId} is already approved.`);
   }
+  if (row.status !== "in_review") {
+    throw new ServiceError("conflict", `Version ${version} of module ${moduleId} is ${row.status}. Only a version submitted for review can be approved.`);
+  }
 
   const approvedContent: ModuleContent = {
     ...(row.content as unknown as ModuleContent),
@@ -552,7 +560,7 @@ export async function approveModuleVersion(
 
   const contentHash = computeContentHash(approvedContent);
 
-  await ctx.db
+  const [approvedRow] = await ctx.db
     .update(schema.moduleContentVersion)
     .set({
       status: "approved",
@@ -563,7 +571,9 @@ export async function approveModuleVersion(
       updatedByUserId: ctx.principal.userId,
       updatedAt: new Date(),
     })
-    .where(eq(schema.moduleContentVersion.id, row.id));
+    .where(and(eq(schema.moduleContentVersion.id, row.id), eq(schema.moduleContentVersion.status, "in_review"), eq(schema.moduleContentVersion.contentHash, row.contentHash)))
+    .returning({ id: schema.moduleContentVersion.id });
+  if (!approvedRow) throw new ServiceError("conflict", `Version ${version} of module ${moduleId} changed while it was being approved. Reload it and try again.`);
 
   await recordTradeChange(ctx.db, ctx.principal.userId, {
     action: "trade.content.approved",

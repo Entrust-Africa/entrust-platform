@@ -102,6 +102,8 @@ export default function ModuleEditorPage() {
   const isApproved = versionDetail?.status === "approved" || versionDetail?.status === "archived";
   const isInReview = versionDetail?.status === "in_review";
   const isDraft = versionDetail?.status === "draft";
+  // Only a draft can be edited: once it is submitted for review the content stays as the reviewer saw it.
+  const locked = !isDraft;
 
   // Build current merged content object for saving
   function buildPayloadContent() {
@@ -124,7 +126,7 @@ export default function ModuleEditorPage() {
   }
 
   async function handleSaveDraft(strict = true) {
-    if (isApproved) return;
+    if (locked) return;
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
@@ -245,7 +247,7 @@ export default function ModuleEditorPage() {
             Preview as Learner
           </Button>
 
-          {!isApproved && (
+          {isDraft && (
             <>
               <Button
                 variant="secondary"
@@ -258,13 +260,15 @@ export default function ModuleEditorPage() {
                 {saving ? "Saving..." : "Save Draft"}
               </Button>
 
-              {isDraft && (
-                <Button size="sm" variant="secondary" onClick={handleSubmitReview} disabled={saving} className="text-amber-700 border-amber-300 hover:bg-amber-50">
-                  <Send className="w-4 h-4 mr-1.5" />
-                  Submit for Review
-                </Button>
-              )}
+              <Button size="sm" variant="secondary" onClick={handleSubmitReview} disabled={saving} className="text-amber-700 border-amber-300 hover:bg-amber-50">
+                <Send className="w-4 h-4 mr-1.5" />
+                Submit for Review
+              </Button>
+            </>
+          )}
 
+          {isInReview && (
+            <>
               <Button
                 size="sm"
                 onClick={() => setShowApproveModal(true)}
@@ -369,7 +373,7 @@ export default function ModuleEditorPage() {
               <label className="block text-xs font-bold text-neutral-800 mb-1">Module Title</label>
               <input
                 type="text"
-                disabled={isApproved}
+                disabled={locked}
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value);
@@ -383,7 +387,7 @@ export default function ModuleEditorPage() {
               <label className="block text-xs font-bold text-neutral-800 mb-1">Deliverable Outcome</label>
               <textarea
                 rows={2}
-                disabled={isApproved}
+                disabled={locked}
                 value={deliverable}
                 onChange={(e) => {
                   setDeliverable(e.target.value);
@@ -396,7 +400,7 @@ export default function ModuleEditorPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-bold text-neutral-800">Learning Objectives</label>
-                {!isApproved && (
+                {!locked && (
                   <Button
                     type="button"
                     variant="secondary"
@@ -417,7 +421,7 @@ export default function ModuleEditorPage() {
                     <span className="text-xs font-mono text-neutral-400 w-5">{i + 1}.</span>
                     <input
                       type="text"
-                      disabled={isApproved}
+                      disabled={locked}
                       value={obj}
                       onChange={(e) => {
                         const copy = [...objectives];
@@ -427,7 +431,7 @@ export default function ModuleEditorPage() {
                       }}
                       className="flex-1 px-3 py-1.5 text-sm border border-neutral-300 rounded-md focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:bg-neutral-50"
                     />
-                    {!isApproved && (
+                    {!locked && (
                       <button
                         type="button"
                         onClick={() => {
@@ -452,7 +456,7 @@ export default function ModuleEditorPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-neutral-500">Edit curriculum lessons, reading time estimates, and video references.</p>
-            {!isApproved && (
+            {!locked && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -477,7 +481,7 @@ export default function ModuleEditorPage() {
                   </span>
                   <input
                     type="text"
-                    disabled={isApproved}
+                    disabled={locked}
                     value={lesson.title}
                     onChange={(e) => {
                       const updated = [...lessons];
@@ -493,7 +497,7 @@ export default function ModuleEditorPage() {
                     <Clock className="w-3.5 h-3.5 text-neutral-400" />
                     <input
                       type="number"
-                      disabled={isApproved}
+                      disabled={locked}
                       min={1}
                       value={lesson.minutes ?? 15}
                       onChange={(e) => {
@@ -506,7 +510,7 @@ export default function ModuleEditorPage() {
                     />
                     <span className="text-xs text-neutral-500">min</span>
                   </div>
-                  {!isApproved && (
+                  {!locked && (
                     <button
                       type="button"
                       onClick={() => {
@@ -525,7 +529,7 @@ export default function ModuleEditorPage() {
                 <label className="block text-xs font-semibold text-neutral-700 mb-1">Lesson Markdown Content</label>
                 <textarea
                   rows={8}
-                  disabled={isApproved}
+                  disabled={locked}
                   value={lesson.body}
                   onChange={(e) => {
                     const updated = [...lessons];
@@ -557,7 +561,7 @@ export default function ModuleEditorPage() {
                   type="number"
                   min={1}
                   max={100}
-                  disabled={isApproved}
+                  disabled={locked}
                   value={knowledgeCheck.passMark}
                   onChange={(e) => {
                     setKnowledgeCheck({ ...knowledgeCheck, passMark: parseInt(e.target.value, 10) || 80 });
@@ -574,7 +578,7 @@ export default function ModuleEditorPage() {
             <p className="text-xs text-neutral-500">
               Questions must contain at least 2 options and at least one marked correct answer. Explanations help learners understand the concepts.
             </p>
-            {!isApproved && (
+            {!locked && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -614,7 +618,7 @@ export default function ModuleEditorPage() {
                   </span>
                   <input
                     type="text"
-                    disabled={isApproved}
+                    disabled={locked}
                     value={q.text}
                     onChange={(e) => {
                       const updated = { ...knowledgeCheck };
@@ -626,7 +630,7 @@ export default function ModuleEditorPage() {
                     className="flex-1 text-sm font-medium px-3 py-1.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-sky-500 disabled:bg-neutral-50"
                   />
                 </div>
-                {!isApproved && (
+                {!locked && (
                   <button
                     type="button"
                     onClick={() => {
@@ -647,7 +651,7 @@ export default function ModuleEditorPage() {
               <div className="pl-4 border-l-2 border-neutral-100 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-neutral-700">Answer Options (Check correct):</p>
-                  {!isApproved && (
+                  {!locked && (
                     <button
                       type="button"
                       onClick={() => {
@@ -673,7 +677,7 @@ export default function ModuleEditorPage() {
                     <div key={opt.id || oIdx} className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        disabled={isApproved}
+                        disabled={locked}
                         checked={isChecked}
                         onChange={(e) => {
                           const updated = { ...knowledgeCheck };
@@ -690,7 +694,7 @@ export default function ModuleEditorPage() {
                       />
                       <input
                         type="text"
-                        disabled={isApproved}
+                        disabled={locked}
                         value={opt.text}
                         onChange={(e) => {
                           const updated = { ...knowledgeCheck };
@@ -727,7 +731,7 @@ export default function ModuleEditorPage() {
                 </label>
                 <textarea
                   rows={2}
-                  disabled={isApproved}
+                  disabled={locked}
                   placeholder="Provide educational explanation displayed to learners upon submitting their quiz attempt..."
                   value={q.explanation || ""}
                   onChange={(e) => {
@@ -758,7 +762,7 @@ export default function ModuleEditorPage() {
                 <input
                   type="number"
                   min={1}
-                  disabled={isApproved}
+                  disabled={locked}
                   value={rubric.passMark ?? 14}
                   onChange={(e) => {
                     setRubric({ ...rubric, passMark: parseInt(e.target.value, 10) || 14 });
@@ -773,7 +777,7 @@ export default function ModuleEditorPage() {
                 <input
                   type="number"
                   min={0}
-                  disabled={isApproved}
+                  disabled={locked}
                   value={rubric.mustHaveMinimum ?? 2}
                   onChange={(e) => {
                     setRubric({ ...rubric, mustHaveMinimum: parseInt(e.target.value, 10) || 2 });
@@ -789,7 +793,7 @@ export default function ModuleEditorPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-neutral-800">Grading Criteria</h4>
-              {!isApproved && (
+              {!locked && (
                 <Button
                   type="button"
                   variant="secondary"
@@ -822,7 +826,7 @@ export default function ModuleEditorPage() {
                     </span>
                     <input
                       type="text"
-                      disabled={isApproved}
+                      disabled={locked}
                       value={crit.title}
                       onChange={(e) => {
                         const copy = [...rubric.criteria];
@@ -837,7 +841,7 @@ export default function ModuleEditorPage() {
                     <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer">
                       <input
                         type="checkbox"
-                        disabled={isApproved}
+                        disabled={locked}
                         checked={crit.mustHave}
                         onChange={(e) => {
                           const copy = [...rubric.criteria];
@@ -854,7 +858,7 @@ export default function ModuleEditorPage() {
                       <input
                         type="number"
                         min={1}
-                        disabled={isApproved}
+                        disabled={locked}
                         value={crit.maxPoints}
                         onChange={(e) => {
                           const copy = [...rubric.criteria];
@@ -865,7 +869,7 @@ export default function ModuleEditorPage() {
                         className="w-12 text-xs px-1.5 py-0.5 border border-neutral-300 rounded text-center"
                       />
                     </div>
-                    {!isApproved && (
+                    {!locked && (
                       <button
                         type="button"
                         onClick={() => {
@@ -884,7 +888,7 @@ export default function ModuleEditorPage() {
                 </div>
                 <textarea
                   rows={2}
-                  disabled={isApproved}
+                  disabled={locked}
                   value={crit.description || ""}
                   onChange={(e) => {
                     const copy = [...rubric.criteria];
@@ -913,7 +917,7 @@ export default function ModuleEditorPage() {
                 <span className="text-xs font-mono font-bold text-neutral-700">{ws.id}</span>
                 <input
                   type="text"
-                  disabled={isApproved}
+                  disabled={locked}
                   value={ws.title}
                   onChange={(e) => {
                     const copy = [...worksheets];
@@ -946,7 +950,7 @@ export default function ModuleEditorPage() {
                 <span className="text-xs font-mono font-bold text-neutral-700">{prompt.id}</span>
                 <input
                   type="text"
-                  disabled={isApproved}
+                  disabled={locked}
                   value={prompt.title}
                   onChange={(e) => {
                     const copy = [...aiPrompts];
@@ -959,7 +963,7 @@ export default function ModuleEditorPage() {
               </div>
               <textarea
                 rows={3}
-                disabled={isApproved}
+                disabled={locked}
                 value={prompt.prompt}
                 onChange={(e) => {
                   const copy = [...aiPrompts];

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type TestUser } from "./support";
@@ -10,6 +10,9 @@ describe("TRADE staff course content studio (#212)", () => {
   let reviewer: TestUser;
   let org: string;
   let entrust: string;
+  let enrollmentId: string;
+  // Versions this file makes; it removes only these.
+  const STUDIO_VERSIONS = ["1.1.0", "1.2.0"];
 
   const get = (user: TestUser | null, path: string) => callV1(user, "GET", `/trade${path}`);
   const post = (user: TestUser | null, path: string, body?: unknown) => callV1(user, "POST", `/trade${path}`, body);
@@ -17,7 +20,7 @@ describe("TRADE staff course content studio (#212)", () => {
 
   beforeAll(async () => {
     await cleanup();
-    await db.delete(schema.moduleContentVersion).where(eq(schema.moduleContentVersion.version, "1.1.0"));
+    await db.delete(schema.moduleContentVersion).where(inArray(schema.moduleContentVersion.version, STUDIO_VERSIONS));
     const users = await Promise.all(["content-learner", "content-facil", "content-admin", "content-rev"].map(signUp));
     [learner, facilitator, admin, reviewer] = users as [TestUser, TestUser, TestUser, TestUser];
 
@@ -32,11 +35,16 @@ describe("TRADE staff course content studio (#212)", () => {
       { smeProfile: false },
     );
     process.env.ENTRUST_ORG_ID = entrust;
+
+    const [program] = await db.insert(schema.program).values({ name: `${PREFIX}content studio`, description: "Content studio tests" }).returning();
+    const [cohort] = await db.insert(schema.cohort).values({ programId: program!.id, name: `${PREFIX}content cohort`, deliveryMode: "hybrid" }).returning();
+    const [enrollment] = await db.insert(schema.enrollment).values({ cohortId: cohort!.id, organizationId: org, status: "active" }).returning();
+    enrollmentId = enrollment!.id;
   });
 
   afterAll(async () => {
     delete process.env.ENTRUST_ORG_ID;
-    await db.delete(schema.moduleContentVersion).where(eq(schema.moduleContentVersion.version, "1.1.0"));
+    await db.delete(schema.moduleContentVersion).where(inArray(schema.moduleContentVersion.version, STUDIO_VERSIONS));
     await cleanup();
   });
 
@@ -148,6 +156,12 @@ describe("TRADE staff course content studio (#212)", () => {
     expect(res.body.submittedByUserId).toBe(facilitator.id);
   });
 
+  it("refuses edits once a version is submitted, so the reviewer approves what they saw", async () => {
+    const res = await patch(facilitator, "/admin/modules/M01/versions/1.1.0", { title: "Changed after submitting" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("Only a draft can be edited");
+  });
+
   it("forbids facilitator from approving the version", async () => {
     const res = await post(facilitator, "/admin/modules/M01/versions/1.1.0/approve", {
       notes: "Facilitator trying to approve",
@@ -171,7 +185,15 @@ describe("TRADE staff course content studio (#212)", () => {
       title: "Illegal modification attempt",
     });
     expect(res.status).toBe(409);
-    expect(res.body.error).toContain("Approved versions are immutable");
+    expect(res.body.error).toContain("Only a draft can be edited");
+  });
+
+  it("refuses to approve a draft that was never submitted for review", async () => {
+    const created = await post(facilitator, "/admin/modules/M01/versions", { sourceVersion: "1.1.0", targetVersion: "1.2.0" });
+    expect(created.status).toBe(201);
+    const res = await post(admin, "/admin/modules/M01/versions/1.2.0/approve", { notes: "Skipping review" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("Only a version submitted for review can be approved");
   });
 
   it("verifies audit log entries recorded for every step of version lifecycle", async () => {
@@ -199,5 +221,16 @@ describe("TRADE staff course content studio (#212)", () => {
     const baselineRes = await get(learner, "/modules/M01?version=1.0.0");
     expect(baselineRes.status).toBe(200);
     expect(baselineRes.body.content.version).toBe("1.0.0");
+  });
+
+  it("grades a knowledge check on the version approved in the studio", async () => {
+    const staffView = await get(admin, "/admin/modules/M01/versions/1.1.0");
+    const questions = staffView.body.content.knowledgeCheck.questions as { id: string; correct: string[] }[];
+    const answers = Object.fromEntries(questions.map((q) => [q.id, q.correct]));
+
+    const res = await post(learner, "/modules/M01/knowledge-check/attempts", { enrollmentId, contentVersion: "1.1.0", answers });
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBe(100);
+    expect(res.body.passed).toBe(true);
   });
 });
