@@ -1,6 +1,7 @@
 import { compareVersions, latestTradeRules } from "@entrust/trade-rules";
 import type { ContentStatus, ModuleId } from "@entrust/trade-rules";
 import type { ModuleContent } from "./schema";
+import { isRetired } from "./retired";
 import { validateModuleContent } from "./validate";
 
 import { M01_V0_1_0 } from "./versions/m01";
@@ -23,7 +24,8 @@ import { M12_V1_0_0 } from "./versions/m12-v1-0-0";
 export * from "./schema";
 export { learnerModuleSchema, toLearnerView } from "./learner";
 export type { LearnerModuleContent } from "./learner";
-export { validateModuleContent } from "./validate";
+export { standardProblems, validateModuleContent } from "./validate";
+export { RETIRED_VERSIONS, isRetired } from "./retired";
 
 // Every version of every module's learning package. Put a module version here as one file in
 // ./versions, named for the module and version, exporting a ModuleContent. A draft can still change.
@@ -71,7 +73,7 @@ export interface ModuleSummary {
 /** The versions of a module the audience can open, newest first. */
 export function visibleVersions(module: ModuleId, audience: Audience, content: readonly ModuleContent[] = MODULE_CONTENT): ModuleContent[] {
   return content
-    .filter((c) => c.module === module && (audience === "staff" || c.status === "approved"))
+    .filter((c) => c.module === module && (audience === "staff" || (c.status === "approved" && !isRetired(c))))
     .sort((a, b) => compareVersions(b.version, a.version));
 }
 

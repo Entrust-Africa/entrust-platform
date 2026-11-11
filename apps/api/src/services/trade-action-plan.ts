@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { ACTION_REVIEW_QUESTIONS, ACTION_STATUSES, isActionOverdue, milestoneForDueDate, milestoneProgress, type ActionMilestone, type ActionStatus } from "@entrust/trade-engine";
 import type { CreateActionItemInput, RecordActionReviewInput, UpdateActionItemInput } from "../schemas/trade";
@@ -105,6 +105,13 @@ export async function updateActionItem(ctx: Ctx, id: string, input: UpdateAction
  * typed twice and nothing is invented. Bringing the same version in again changes nothing.
  */
 export async function importActionRegister(ctx: Ctx, input: { organizationId?: string | undefined }) {
+  // Two quick clicks take turns on the register version, so the second finds the first's import and adds nothing.
+  return ctx.db.transaction((db) => applyActionRegisterImport({ ...ctx, db }, input));
+}
+
+const actionKey = (description: string) => description.trim().replace(/\s+/g, " ").toLowerCase();
+
+async function applyActionRegisterImport(ctx: Ctx, input: { organizationId?: string | undefined }) {
   const { organizationId, access } = await organizationFor(ctx, input.organizationId);
   if (!access.write) throw new ServiceError("forbidden", "Write access required.");
   const [latest] = await ctx.db
@@ -115,6 +122,7 @@ export async function importActionRegister(ctx: Ctx, input: { organizationId?: s
     .orderBy(desc(schema.worksheetVersion.submittedAt))
     .limit(1);
   if (!latest) throw new ServiceError("precondition_failed", "Submit your 90-Day Action Register in M12 first.");
+  await ctx.db.select({ id: schema.worksheetVersion.id }).from(schema.worksheetVersion).where(eq(schema.worksheetVersion.id, latest.version.id)).for("update");
 
   const [already] = await ctx.db
     .select({ id: schema.actionItem.id })
@@ -123,12 +131,21 @@ export async function importActionRegister(ctx: Ctx, input: { organizationId?: s
     .limit(1);
   if (already) return { imported: 0 };
 
+  // A newer version of the register repeats the actions an earlier one brought in: those are already in the tracker, and
+  // may have moved on there, so only the new ones come in.
+  const imported = await ctx.db
+    .select({ description: schema.actionItem.description })
+    .from(schema.actionItem)
+    .where(and(eq(schema.actionItem.organizationId, organizationId), isNotNull(schema.actionItem.sourceWorksheetVersionId)));
+  const known = new Set(imported.map((i) => actionKey(i.description)));
+
   const rows = (latest.version.values as { actions?: Record<string, unknown>[] }).actions ?? [];
   const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
   const on = today(ctx);
   const values = rows.flatMap((row) => {
     const description = text(row.action);
-    if (!description) return [];
+    if (!description || known.has(actionKey(description))) return [];
+    known.add(actionKey(description));
     const dueDate = text(row.deadline);
     const status = text(row.status);
     return [{

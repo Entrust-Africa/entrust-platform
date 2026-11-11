@@ -63,8 +63,20 @@ function sponsorScope(ctx: Ctx): ReadonlySet<string> | null {
   return ids;
 }
 
+/**
+ * A sponsor sees each cohort it sponsors as a whole. A filter would split the group: a business that shares only its
+ * outcomes shows by name under one pathway and not the other, which gives its placement away, and two figures that each
+ * pass the five-business rule (all approvals, then one pathway's) give the rest by subtraction.
+ */
+function refuseSponsorFilters(sponsorIds: ReadonlySet<string> | null, filters: ReportFilters): void {
+  if (sponsorIds && (filters.pathway || filters.cohortId)) {
+    throw new ServiceError("invalid", "A sponsor's reports cover each sponsored cohort as a whole, so they can't be narrowed to a pathway or a cohort.");
+  }
+}
+
 async function programScope(ctx: Ctx, id: string, filters: ReportFilters = {}): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
+  refuseSponsorFilters(sponsorIds, filters);
   const [program] = await ctx.db.select().from(schema.program).where(eq(schema.program.id, id));
   if (!program) throw new ServiceError("not_found", "Report not found.");
   const all = await ctx.db.select().from(schema.cohort).where(eq(schema.cohort.programId, id)).orderBy(asc(schema.cohort.startDate), asc(schema.cohort.name));
@@ -85,6 +97,7 @@ async function programScope(ctx: Ctx, id: string, filters: ReportFilters = {}): 
 
 async function cohortScope(ctx: Ctx, id: string, filters: ReportFilters = {}): Promise<Scope> {
   const sponsorIds = sponsorScope(ctx);
+  refuseSponsorFilters(sponsorIds, filters);
   if (limitedToAssignedCohorts(ctx.principal) && !(await canReachCohort(ctx.db, ctx.principal, id))) throw new ServiceError("not_found", "Report not found.");
   const [found] = await ctx.db
     .select({ cohort: schema.cohort, program: schema.program.name })
@@ -100,7 +113,8 @@ async function cohortScope(ctx: Ctx, id: string, filters: ReportFilters = {}): P
 
 const toNumber = (value: string | null | undefined): number => (value ? Number(value) : 0);
 const round = (value: number): number => Math.round(value * 100) / 100;
-const currencyOf = (value: string | null | undefined): string => value ?? "USD";
+/** Records from before currencies were checked can say "usd" or "USD ": they count as one. */
+const currencyOf = (value: string | null | undefined): string => value?.trim().toUpperCase() || "USD";
 
 /**
  * Narrows what a report is worked out from to the filters asked for. A pathway keeps the businesses on it and everything that
@@ -260,7 +274,16 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
     if (sponsorsOfSme.get(c.organizationId)?.has(c.sponsorId)) consenting.get(c.kind as SponsorDataKind)?.add(c.organizationId);
   }
 
-  const canSee = (smes: ReadonlySet<string>, kind: SponsorDataKind) => isStaff || figureIsVisible(smes, consenting.get(kind)!);
+  // A programme figure is the sum of its cohorts' figures, and a sponsor can read each cohort's report too. So for a
+  // sponsor it shows only when every cohort's part would show on its own: otherwise the programme figure minus the other
+  // cohorts' would give back a figure the five-business rule hid.
+  const cohortsOfSme = new Map<string, Set<string>>();
+  for (const e of enrollments) cohortsOfSme.set(e.organizationId, (cohortsOfSme.get(e.organizationId) ?? new Set()).add(e.cohortId));
+  const partsVisible = (smes: ReadonlySet<string>, consentingSmes: ReadonlySet<string>) =>
+    scope.kind !== "program" ||
+    scope.cohorts.every((c) => figureIsVisible(new Set([...smes].filter((sme) => cohortsOfSme.get(sme)?.has(c.id))), consentingSmes));
+  const canSee = (smes: ReadonlySet<string>, kind: SponsorDataKind) =>
+    isStaff || (figureIsVisible(smes, consenting.get(kind)!) && partsVisible(smes, consenting.get(kind)!));
   const shown = (value: number, smes: ReadonlySet<string>, kind: SponsorDataKind) => (canSee(smes, kind) ? value : null);
   const shownGroup = (cells: readonly GroupCell[], kind: SponsorDataKind, totalIsVisible = true): (number | null)[] =>
     isStaff ? cells.map((c) => c.value) : protectGroup(cells, consenting.get(kind)!, totalIsVisible);
@@ -362,8 +385,9 @@ function buildReport(scope: Scope, facts: Facts, now: Date) {
     } else if (o.status !== "cancelled") {
       const totals = exportTotals.get(currency) ?? { shipments: emptyTotal(), payments: emptyTotal() };
       exportTotals.set(currency, totals);
-      if (SHIPPED_STATUSES.has(o.status) || toNumber(o.valueShipped) > 0 || o.shipmentDate) addTo(totals.shipments, o.organizationId, toNumber(o.valueShipped));
-      if (o.status === "paid" || toNumber(o.valuePaid) > 0 || o.paymentDate) addTo(totals.payments, o.organizationId, toNumber(o.valuePaid));
+      // A shipment is one the business says went out, with a value. A planned record that happens to carry a date isn't one.
+      if (SHIPPED_STATUSES.has(o.status) && toNumber(o.valueShipped) > 0) addTo(totals.shipments, o.organizationId, toNumber(o.valueShipped));
+      if (toNumber(o.valuePaid) > 0) addTo(totals.payments, o.organizationId, toNumber(o.valuePaid));
     }
   }
   const money = (total: Total, kind: SponsorDataKind) => {

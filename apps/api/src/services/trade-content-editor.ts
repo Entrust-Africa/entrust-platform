@@ -4,6 +4,8 @@ import { schema } from "@entrust/db";
 import {
   MODULE_CONTENT,
   findVersion,
+  isRetired,
+  standardProblems,
   toLearnerView,
   validateModuleContent,
   type Audience,
@@ -23,38 +25,57 @@ export function computeContentHash(content: unknown): string {
 let seeded = false;
 
 /**
- * Seeds the database with the baseline module content versions from @entrust/trade-content if empty.
- * All repository versions are marked as 'approved' with their canonical SHA-256 hash.
+ * Puts every version in @entrust/trade-content into the studio's table that isn't there yet, once per process. A version
+ * added to the repo later reaches the studio too, so the studio can't hand out its number to a draft. An approved repo
+ * version is stored as approved, a retired one as archived; a draft as a draft. A retired version stored earlier as
+ * approved is archived, so no learner starts or is graded on it.
  */
 export async function seedModuleVersionsIfEmpty(db: Executor): Promise<void> {
   if (seeded) return;
-  const [existing] = await db
-    .select({ id: schema.moduleContentVersion.id })
-    .from(schema.moduleContentVersion)
-    .limit(1);
-
-  if (!existing) {
-    for (const c of MODULE_CONTENT) {
-      const hash = computeContentHash(c);
+  const stored = await db
+    .select({ moduleId: schema.moduleContentVersion.moduleId, version: schema.moduleContentVersion.version, status: schema.moduleContentVersion.status, contentHash: schema.moduleContentVersion.contentHash })
+    .from(schema.moduleContentVersion);
+  const now = new Date();
+  for (const c of MODULE_CONTENT) {
+    const hash = computeContentHash(c);
+    const row = stored.find((r) => r.moduleId === c.module && r.version === c.version);
+    const retired = isRetired(c);
+    if (!row) {
       await db
         .insert(schema.moduleContentVersion)
         .values({
           moduleId: c.module,
           version: c.version,
-          status: c.status === "approved" ? "approved" : "draft",
+          status: c.status !== "approved" ? "draft" : retired ? "archived" : "approved",
           title: c.title,
           deliverable: c.deliverable,
           objectives: c.objectives,
           content: c as unknown as Record<string, unknown>,
           contentHash: hash,
           changeSummary: "Baseline repository content",
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          ...(retired ? { archivedAt: now } : {}),
+          createdAt: now,
+          updatedAt: now,
         })
         .onConflictDoNothing();
+      continue;
+    }
+    if (retired && row.status === "approved") {
+      await db
+        .update(schema.moduleContentVersion)
+        .set({ status: "archived", archivedAt: now, updatedAt: now })
+        .where(and(eq(schema.moduleContentVersion.moduleId, c.module), eq(schema.moduleContentVersion.version, c.version), eq(schema.moduleContentVersion.status, "approved")));
+    } else if (c.status === "approved" && row.contentHash !== hash) {
+      // The studio's row wins for its number: say so, rather than serve one and silently drop the other.
+      console.warn(`[trade:content] ${c.module}@${c.version} in the repo differs from the studio's copy; the studio's is used.`);
     }
   }
   seeded = true;
+}
+
+/** Forgets that the table was seeded, for tests that change what's stored. */
+export function forgetSeeding(): void {
+  seeded = false;
 }
 
 export interface AdminModuleVersionSummary {
@@ -293,7 +314,9 @@ export async function createDraftVersion(
     .where(and(eq(schema.moduleContentVersion.moduleId, moduleId as ModuleId), eq(schema.moduleContentVersion.version, targetVersion)))
     .limit(1);
 
-  if (existing) {
+  // The repo's versions are in the table once seeded, but a number the repo holds is refused either way: approving a
+  // studio draft under it would replace the repo's content for everyone pinned to that version.
+  if (existing || MODULE_CONTENT.some((c) => c.module === moduleId && c.version === targetVersion)) {
     throw new ServiceError("conflict", `Version ${targetVersion} already exists for module ${moduleId}.`);
   }
 
@@ -478,7 +501,9 @@ export async function submitDraftForReview(
     throw new ServiceError("invalid", `Only drafts can be submitted for review. Current status is '${row.status}'.`);
   }
 
+  // Checked against Entrust's standard as well, as approval will be: better to hear it now than from the approver.
   const validationErrors = validateModuleContent([row.content]);
+  if (validationErrors.length === 0) validationErrors.push(...standardProblems(row.content as unknown as ModuleContent));
   if (validationErrors.length > 0) {
     throw new ServiceError("invalid", `Cannot submit for review due to validation errors:\n${validationErrors.join("\n")}`);
   }

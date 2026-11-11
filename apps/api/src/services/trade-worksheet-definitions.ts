@@ -1,4 +1,4 @@
-import { findVersion, visibleVersions } from "@entrust/trade-content";
+import { MODULE_CONTENT, findVersion, visibleVersions, type ModuleContent } from "@entrust/trade-content";
 import { WORKSHEET_DEFINITIONS, findWorksheet, type WorksheetDefinition } from "@entrust/trade-engine";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 
@@ -42,9 +42,14 @@ export function prefillContentWorksheet(targetId: string, values: Readonly<Recor
   return buyers.length ? { buyers: buyers.map((b) => Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined && v !== null && v !== ""))) } : {};
 }
 
-/** The worksheets a module's newest content version carries. M01, M03, M04 and M07 add these to the forms the engine defines, for the outputs those forms don't cover. */
-function fromContent(moduleId: ModuleId): WorksheetDefinition[] {
-  const content = visibleVersions(moduleId, "staff")[0];
+/**
+ * The worksheets of the newest version learners can open. M01, M03, M04 and M07 add these to the forms the engine defines,
+ * for the outputs those forms don't cover. A draft committed to the repo doesn't count: its worksheets would otherwise
+ * reach learners and change what a submission and completion need before anyone approved it. A module with drafts only
+ * shows its newest draft's worksheets, to staff (canOpenWorksheet keeps them from learners).
+ */
+function fromContent(moduleId: ModuleId, bundle: readonly ModuleContent[] = MODULE_CONTENT): WorksheetDefinition[] {
+  const content = visibleVersions(moduleId, "learner", bundle)[0] ?? visibleVersions(moduleId, "staff", bundle)[0];
   if (!content) return [];
   return content.worksheets.map((w) => ({
     id: `${moduleId.toLowerCase()}-${w.id.replaceAll("_", "-")}`,
@@ -60,9 +65,9 @@ function fromContent(moduleId: ModuleId): WorksheetDefinition[] {
   }));
 }
 
-export const moduleContentWorksheets = (moduleId: ModuleId): WorksheetDefinition[] => fromContent(moduleId);
+export const moduleContentWorksheets = (moduleId: ModuleId, bundle: readonly ModuleContent[] = MODULE_CONTENT): WorksheetDefinition[] => fromContent(moduleId, bundle);
 
-export const allWorksheetDefinitions = (): WorksheetDefinition[] => [...WORKSHEET_DEFINITIONS, ...MODULE_IDS.flatMap(fromContent)];
+export const allWorksheetDefinitions = (): WorksheetDefinition[] => [...WORKSHEET_DEFINITIONS, ...MODULE_IDS.flatMap((id) => fromContent(id))];
 
 export const findWorksheetDefinition = (id: string): WorksheetDefinition | undefined =>
   findWorksheet(id) ?? allWorksheetDefinitions().find((d) => d.id === id);

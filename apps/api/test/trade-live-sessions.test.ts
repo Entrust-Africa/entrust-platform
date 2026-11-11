@@ -242,15 +242,17 @@ describe("TRADE: live sessions and attendance (#73)", () => {
   });
 
   describe("Reminder email dispatch and idempotency", () => {
-    it("queues reminders and respects singletonKey idempotency", async () => {
-      // First dispatch
+    it("reminds each person once per session time, however often it's sent", async () => {
       const res1 = await callV1(w.facilitator, "POST", `/trade/sessions/${sessionId}/reminders`);
       expect(res1.status).toBe(200);
       expect(res1.body.queued).toBeGreaterThan(0);
+      const [reminder] = await db.select().from(schema.notification).where(and(eq(schema.notification.userId, w.smeOwner.id), eq(schema.notification.kind, "session_reminder")));
+      expect(reminder!.body).toContain("(Addis Ababa time)");
 
-      // Second dispatch (running twice): pg-boss singleton key prevents redundant duplicates
+      // A second click reminds nobody again.
       const res2 = await callV1(w.facilitator, "POST", `/trade/sessions/${sessionId}/reminders`);
       expect(res2.status).toBe(200);
+      expect(res2.body.queued).toBe(0);
     });
   });
 });

@@ -49,15 +49,6 @@ export default async function ModuleDetailPage({
   const activeOrg =
     me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
 
-  const versionQuery = version ? `?version=${encodeURIComponent(version)}` : "";
-  const modRes = await tradeGet<ApiModuleDetail>(`/modules/${id}${versionQuery}`);
-
-  if (modRes.status === 404 || !modRes.data) {
-    notFound();
-  }
-
-  const moduleDetail = modRes.data;
-
   // Resolve relevant enrollment
   let enrollmentId = queryEnrollmentId;
   if (!enrollmentId && activeOrg) {
@@ -83,6 +74,18 @@ export default async function ModuleDetailPage({
     }
     progress = progRes.data?.items?.[0] ?? null;
   }
+
+  // A learner works on the version they were pinned to when they started the module, even after a newer one is approved.
+  // A version named in the address is a preview; a finished module whose version was retired opens the newest instead.
+  const wanted = version ?? progress?.contentVersion;
+  let modRes = await tradeGet<ApiModuleDetail>(`/modules/${id}${wanted ? `?version=${encodeURIComponent(wanted)}` : ""}`);
+  if (modRes.status === 404 && wanted && !version) modRes = await tradeGet<ApiModuleDetail>(`/modules/${id}`);
+
+  if (modRes.status === 404 || !modRes.data) {
+    notFound();
+  }
+
+  const moduleDetail = modRes.data;
 
   return (
     <div className="space-y-6">

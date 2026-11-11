@@ -347,7 +347,7 @@ describe("submitting the diagnostic", () => {
     const done = await submittedDiagnostic({ Q135: "no" });
     const rows = await db.select().from(schema.auditLog).where(eq(schema.auditLog.organizationId, done.organizationId));
     const actions = rows.filter((r) => r.platform === "trade").map((r) => r.action).sort();
-    expect(actions).toEqual(["sme_profile.updated", "trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
+    expect(actions.filter((a) => a !== "trade.profile.material_change")).toEqual(["sme_profile.updated", "trade.assessment.started", "trade.assessment.submitted", "trade.pathway.assigned"]);
   });
 });
 
@@ -401,6 +401,22 @@ describe("staff", () => {
     expect(row?.assessedByUserId).toBe(w.facilitator.id);
     // The SME sees who filled it in.
     expect((await get(w.owner, `/assessments/${draft.id}`)).body.filledInByStaff).toBeTruthy();
+  });
+
+  it("list one cohort's forms in full, with each submitted diagnostic's avenue", async () => {
+    const [cohort] = await db.select().from(schema.cohort).where(eq(schema.cohort.name, `${PREFIX}cohort`)).limit(1);
+    const done = await submittedDiagnostic({ Q135: "no" });
+    const res = await get(w.admin, `/assessments?kind=diagnostic&cohortId=${cohort!.id}`);
+    expect(res.status).toBe(200);
+    const mine = res.body.items.find((i: Json) => i.id === done.id);
+    expect(mine).toMatchObject({ pathway: "A", pathwayStatus: "confirmed" });
+    // Every row is this cohort's.
+    const enrollments = await db.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.cohortId, cohort!.id));
+    const ids = new Set(enrollments.map((e) => e.id));
+    expect(res.body.items.every((i: Json) => ids.has(i.enrollmentId))).toBe(true);
+    // Another cohort's list doesn't have it.
+    const [other] = await db.insert(schema.cohort).values({ programId: cohort!.programId, name: `${PREFIX}other-cohort-list` }).returning();
+    expect((await get(w.admin, `/assessments?kind=diagnostic&cohortId=${other!.id}`)).body.items).toEqual([]);
   });
 
   it("can read as a reviewer but not write", async () => {
@@ -641,6 +657,8 @@ describe("a scored placement assessment", () => {
     const again = evaluatePlacement(rules, {
       answers,
       approvedNotApplicable: approved,
+      // The evidence staff accepted for the business's answers is part of the input: there is none here.
+      evidence: {},
       pathway: { rulesVersion: rules.version, pathway: avenue!.pathway, provisional: avenue!.status === "provisional", liveOrder: avenue!.liveOrder, reasonCodes: avenue!.reasonCodes as never },
     });
 
@@ -876,6 +894,12 @@ describe("section 1 of the diagnostic and the SME registry", () => {
     expect(entry?.before).toMatchObject({ tin: null, yearEstablished: null, permanentEmployees: null });
     expect(entry?.after).toMatchObject({ legalName: "Awash Spice Exporters PLC", tin: "TIN-777", yearEstablished: 2012, permanentEmployees: 12, womanOwned: true });
     expect((entry?.before as Record<string, unknown>).legalName).not.toBe("Awash Spice Exporters PLC");
+    // The business's profile history shows the change, and a material one is flagged, as for an edit on the business page.
+    const history = await db.select().from(schema.smeProfileChange).where(eq(schema.smeProfileChange.organizationId, submitted.organizationId));
+    expect(history.find((h) => h.field === "tin")).toMatchObject({ oldValue: null, newValue: "TIN-777", material: true });
+    expect(history.find((h) => h.field === "permanentEmployees")).toMatchObject({ newValue: "12", material: false });
+    const [flag] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.organizationId, submitted.organizationId), eq(schema.auditLog.action, "trade.profile.material_change")));
+    expect(flag?.after).toMatchObject({ source: "onboarding_diagnostic" });
   });
 
   it("changes only what the person edited, and writes nothing when nothing changed", async () => {

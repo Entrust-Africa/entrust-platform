@@ -11,7 +11,17 @@ interface SmeView {
   cohort: { id: string; name: string };
   sme: { organizationId: string; name: string; legalName: string | null; smeId: string | null; country: string | null };
   sharedKinds: string[];
-  data: Record<string, { available: boolean; pathway?: { name: string; pathway: string; status: string; reasons: string[] } | null; placementAssessment?: { status: string } | null; modules?: { moduleId: string; status: string }[] }>;
+  data: Record<
+    string,
+    {
+      available: boolean;
+      pathway?: { name: string; pathway: string; status: string; reasons: string[] } | null;
+      placementAssessment?: { status: string } | null;
+      modules?: { moduleId: string; status: string }[];
+      /** For financial worksheets and the M04 brief: the newest submitted version of each, figures only. */
+      worksheets?: SharedWorksheet[];
+    }
+  >;
   disclaimer: string;
 }
 
@@ -25,7 +35,52 @@ const TITLES: Record<string, string> = {
   insurance_profile: "Insurance profile",
 };
 
+interface SharedWorksheet {
+  worksheetId: string;
+  title: string;
+  version: number;
+  submittedAt: string | null;
+  currency: string;
+  computed: Record<string, unknown>;
+}
+
 const words = (value: string) => value.replaceAll("_", " ");
+const label = (key: string) => {
+  const text = key.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+const figure = (value: unknown) => (typeof value === "number" ? value.toLocaleString("en-GB", { maximumFractionDigits: 2 }) : String(value ?? "—"));
+
+/** The figures of each shared worksheet, as the business submitted them. */
+function Worksheets({ items }: { items: SharedWorksheet[] }) {
+  if (items.length === 0) return <p className="mt-2 text-sm text-ink-2">Shared, and nothing submitted yet. The newest submitted version appears here.</p>;
+  return (
+    <div className="mt-2 space-y-4">
+      {items.map((w) => {
+        const rows = Object.entries(w.computed).filter(([, v]) => typeof v === "number" || typeof v === "string");
+        return (
+          <div key={w.worksheetId}>
+            <p className="text-sm font-semibold text-ink">
+              {w.title} <span className="font-normal text-ink-3">version {w.version}{w.submittedAt ? `, submitted ${new Date(w.submittedAt).toLocaleDateString("en-GB")}` : ""} · {w.currency}</span>
+            </p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-ink-2">No figures were worked out on this version.</p>
+            ) : (
+              <dl className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                {rows.map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3 border-b border-line/60 py-1">
+                    <dt className="text-ink-2">{label(key)}</dt>
+                    <dd className="font-semibold tabular-nums text-ink">{figure(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default async function SponsorSmePage({ params }: { params: Promise<{ cohortId: string; organizationId: string }> }) {
   const me = await getMe();
@@ -87,7 +142,11 @@ export default async function SponsorSmePage({ params }: { params: Promise<{ coh
               ) : (
                 <p className="mt-2 text-sm text-ink-2">No module started yet.</p>
               )
-            ) : null}
+            ) : kind === "financial_worksheets" || kind === "m04_brief" ? (
+              <Worksheets items={entry.worksheets ?? []} />
+            ) : (
+              <p className="mt-2 text-sm text-ink-2">Shared, and not recorded in TRADE yet. It will appear here once it is.</p>
+            )}
           </Card>
         );
       })}

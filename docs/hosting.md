@@ -12,11 +12,13 @@
 ## How a change goes live
 
 1. A pull request merges to `main` and CI runs.
-2. `.github/workflows/deploy.yml` then runs, in this order: the database migrations, the API Worker, then the four Railway services and the website together, then the smoke checks.
+2. `.github/workflows/deploy.yml` then runs. Its first job, "Check what may deploy", lets only a push to `main` in this repository through: a fork's pull request whose branch happens to be called `main` doesn't count. Then, in this order: the database migrations, the API Worker, then the four Railway services and the website together, then the smoke checks. Every job runs in the GitHub environment `production`, which allows the `main` branch only.
 3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
-4. The smoke checks open the addresses people really use (not the `workers.dev` copies), retrying for up to five minutes while a new build starts, and confirm the worker's newest deployment is running.
+4. The smoke checks first wait until `https://api.entrust-africa.com/v1/health` reports the commit being deployed (the deploy stamps it on the Worker as `GIT_COMMIT`) and look a certificate up, which needs the database. They warn when health says a production setting is missing (`configured: false`; the Worker's logs say which, as `[config:error]`). Then they open the addresses people really use (not the `workers.dev` copies), retrying for up to five minutes while a new build starts, and confirm the worker's newest deployment is running.
 
-So an app never deploys before CI has passed and the API is live. Nothing is deployed by hand any more; if the workflow is down, run `railway up --service <name> --environment production --ci` from a clean checkout of `main`. To roll back, redeploy an earlier deployment of the service in the Railway dashboard.
+So an app never deploys before CI has passed and the API is live. "Run workflow" on "Deploy to production" deploys `main` only, and only a commit CI has passed on. Nothing is deployed by hand any more; if the workflow is down, run `railway up --service <name> --environment production --ci` from a clean checkout of `main`.
+
+**Rolling back.** Run the "Roll back production" workflow on `main`. It puts the API Worker back on its previous version (`wrangler rollback`) and each chosen Railway service on the build it ran before its current one. Migrations aren't undone: they only add, so the previous code runs on the newer schema. A failed Railway build fails the deploy run with a message saying so: the previous build of that service keeps running against the new API until it is fixed or everything is rolled back.
 
 CLEAR, TRADE and the Summit page used to be built into Cloudflare Workers as well (`entrust-clear`, `entrust-trade`, `entrust-summit`). The workflow no longer deploys them, so whatever is still on those workers is an old, unused copy.
 

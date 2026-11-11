@@ -36,6 +36,16 @@ export async function ensureBuyer(
     .orderBy(asc(schema.smeBuyer.createdAt))
     .limit(1);
   if (matches[0]) return matches[0];
+  // A transaction can name a buyer before the pipeline does, with no country. The first time the country is known it's
+  // the same buyer, so the record gets the country rather than a twin.
+  if (country) {
+    const [placeless] = await db
+      .update(schema.smeBuyer)
+      .set({ country, ...(input.website ? { website: input.website } : {}) })
+      .where(and(eq(schema.smeBuyer.organizationId, organizationId), eq(schema.smeBuyer.nameKey, nameKey), eq(schema.smeBuyer.country, "")))
+      .returning();
+    if (placeless) return placeless;
+  }
   const [created] = await db
     .insert(schema.smeBuyer)
     .values({ organizationId, name, nameKey, country, website: input.website ?? null, verificationStatus: input.verificationStatus ?? "unverified" })

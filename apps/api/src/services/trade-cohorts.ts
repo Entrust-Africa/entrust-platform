@@ -9,6 +9,7 @@ import {
 import { organizationKind } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { tradeToday } from "@entrust/trade-engine";
 import { recordTradeChange } from "./trade-shared";
 
 // ---- Program Services ----
@@ -56,21 +57,30 @@ export interface CreateCohortInput {
   endDate?: string | null;
 }
 
+/** A sponsor named on a cohort has to be a sponsor organisation: naming a business or Entrust would give it a sponsor's view. */
+async function requireSponsor(db: Executor, organizationId: string): Promise<void> {
+  const [sponsor] = await db
+    .select({ id: schema.organization.id, metadata: schema.organization.metadata })
+    .from(schema.organization)
+    .where(eq(schema.organization.id, organizationId));
+  if (!sponsor || organizationKind(sponsor.metadata) !== "sponsor") throw new ServiceError("not_found", "Sponsor organisation not found.");
+}
+
+function checkDates(startDate: string | null | undefined, endDate: string | null | undefined): void {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (startDate && !iso.test(startDate)) throw new ServiceError("invalid", "The start date is a date, YYYY-MM-DD.");
+  if (endDate && !iso.test(endDate)) throw new ServiceError("invalid", "The end date is a date, YYYY-MM-DD.");
+  if (startDate && endDate && endDate < startDate) throw new ServiceError("invalid", "A cohort can't end before it starts.");
+}
+
 export async function createCohort(db: Executor, input: CreateCohortInput) {
   const name = input.name.trim();
   if (!name) throw new ServiceError("invalid", "Cohort name is required.");
 
   // Verify program exists
   await getProgram(db, input.programId);
-
-  // If sponsorOrganizationId provided, verify it exists
-  if (input.sponsorOrganizationId) {
-    const [sponsor] = await db
-      .select({ id: schema.organization.id })
-      .from(schema.organization)
-      .where(eq(schema.organization.id, input.sponsorOrganizationId));
-    if (!sponsor) throw new ServiceError("not_found", "Sponsor organisation not found.");
-  }
+  if (input.sponsorOrganizationId) await requireSponsor(db, input.sponsorOrganizationId);
+  checkDates(input.startDate, input.endDate);
 
   const [row] = await db
     .insert(schema.cohort)
@@ -87,6 +97,44 @@ export async function createCohort(db: Executor, input: CreateCohortInput) {
     .returning();
 
   return row!;
+}
+
+export interface UpdateCohortInput {
+  name?: string | undefined;
+  deliveryMode?: DeliveryMode | undefined;
+  country?: string | undefined;
+  language?: string | undefined;
+  sponsorOrganizationId?: string | null | undefined;
+  startDate?: string | null | undefined;
+  endDate?: string | null | undefined;
+}
+
+/**
+ * Corrects a cohort's details. Changing or removing the sponsor changes who sees the cohort's reports, so only an
+ * administrator does that (the route checks), and it's on the audit trail with the rest.
+ */
+export async function updateCohort(db: Executor, actorUserId: string, cohortId: string, input: UpdateCohortInput) {
+  const [current] = await db.select().from(schema.cohort).where(eq(schema.cohort.id, cohortId));
+  if (!current) throw new ServiceError("not_found", "Cohort not found.");
+  if (input.sponsorOrganizationId) await requireSponsor(db, input.sponsorOrganizationId);
+  const startDate = input.startDate === undefined ? current.startDate : input.startDate;
+  const endDate = input.endDate === undefined ? current.endDate : input.endDate;
+  checkDates(startDate, endDate);
+  const change = {
+    ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+    ...(input.deliveryMode !== undefined ? { deliveryMode: input.deliveryMode } : {}),
+    ...(input.country !== undefined ? { country: input.country } : {}),
+    ...(input.language !== undefined ? { language: input.language } : {}),
+    ...(input.sponsorOrganizationId !== undefined ? { sponsorOrganizationId: input.sponsorOrganizationId || null } : {}),
+    ...(input.startDate !== undefined ? { startDate: input.startDate || null } : {}),
+    ...(input.endDate !== undefined ? { endDate: input.endDate || null } : {}),
+  };
+  if (change.name === "") throw new ServiceError("invalid", "Cohort name is required.");
+  if (Object.keys(change).length === 0) return current;
+  const [updated] = await db.update(schema.cohort).set({ ...change, updatedAt: new Date() }).where(eq(schema.cohort.id, cohortId)).returning();
+  const before = Object.fromEntries(Object.keys(change).map((k) => [k, current[k as keyof typeof current]]));
+  await recordTradeChange(db, actorUserId, { action: "trade.cohort.updated", organizationId: null, entityType: "cohort", entityId: cohortId, before, after: change });
+  return updated!;
 }
 
 export async function listCohorts(db: Executor, filter?: { programId?: string }) {
@@ -203,12 +251,15 @@ export async function enrolSme(
   actorUserId: string,
   input: EnrolSmeInput,
 ) {
-  // 1. Verify cohort exists
+  // 1. Verify cohort exists, and that it hasn't ended
   const [cohortRow] = await db
-    .select({ id: schema.cohort.id })
+    .select({ id: schema.cohort.id, endDate: schema.cohort.endDate })
     .from(schema.cohort)
     .where(eq(schema.cohort.id, input.cohortId));
   if (!cohortRow) throw new ServiceError("not_found", "Cohort not found.");
+  if (cohortRow.endDate && cohortRow.endDate < tradeToday()) {
+    throw new ServiceError("invalid", `This cohort ended on ${cohortRow.endDate}, so it takes no new businesses.`);
+  }
 
   // 2. Verify organisation exists and has an SME profile
   const [org] = await db
@@ -244,6 +295,8 @@ export async function enrolSme(
       "This organisation is already enrolled in this cohort.",
     );
   }
+  // One live enrolment at a time: the diagnostic, placement and every screen work from "the" enrolment.
+  await refuseSecondLiveEnrolment(db, input.organizationId);
 
   // 4. Determine initial status: registered if organisation already has members, invited otherwise
   const [memberCount] = await db
@@ -401,9 +454,38 @@ export async function getEnrollment(db: Executor, id: string) {
   return row;
 }
 
+/** Enrolments that are still running. A business has at most one of these. */
+export const LIVE_ENROLMENT_STATUSES = ["invited", "registered", "active", "paused"] as const satisfies readonly EnrollmentStatus[];
+
+async function refuseSecondLiveEnrolment(db: Executor, organizationId: string, except?: string): Promise<void> {
+  // Two enrolments of the same business at once take turns on the business, so both can't pass this check.
+  await db.select({ id: schema.organization.id }).from(schema.organization).where(eq(schema.organization.id, organizationId)).for("update");
+  const live = await db
+    .select({ id: schema.enrollment.id, cohortName: schema.cohort.name })
+    .from(schema.enrollment)
+    .innerJoin(schema.cohort, eq(schema.cohort.id, schema.enrollment.cohortId))
+    .where(and(eq(schema.enrollment.organizationId, organizationId), inArray(schema.enrollment.status, [...LIVE_ENROLMENT_STATUSES])));
+  const other = live.find((e) => e.id !== except);
+  if (other) throw new ServiceError("conflict", `This business is already enrolled in ${other.cohortName}. Withdraw it there first.`);
+}
+
+/**
+ * Where a status can go by hand. A finished programme leaves `completed` only by the reopen path (a score override or a
+ * withdrawn exemption), and `completed` is reached only by completing the modules. A withdrawn business comes back to
+ * `active` by an administrator's decision, with a reason.
+ */
+const ENROLMENT_TRANSITIONS: Readonly<Record<EnrollmentStatus, readonly EnrollmentStatus[]>> = {
+  invited: ["registered", "active", "withdrawn"],
+  registered: ["active", "paused", "withdrawn"],
+  active: ["paused", "withdrawn"],
+  paused: ["active", "withdrawn"],
+  completed: [],
+  withdrawn: ["active"],
+};
+
 export async function updateEnrollmentStatus(
   db: Executor,
-  actorUserId: string,
+  actor: { userId: string; staffRole: string | null },
   enrollmentId: string,
   newStatus: EnrollmentStatus,
   reason?: string | null,
@@ -418,22 +500,38 @@ export async function updateEnrollmentStatus(
     throw new ServiceError("invalid", "An enrolment completes by itself when every assigned module is passed.");
   }
 
-  // Reason is required for pausing and withdrawing
-  if ((newStatus === "paused" || newStatus === "withdrawn") && (!reason || !reason.trim())) {
-    throw new ServiceError("invalid", `A reason is required to mark an enrolment as ${newStatus}.`);
-  }
-
   const [current] = await db
     .select()
     .from(schema.enrollment)
-    .where(eq(schema.enrollment.id, enrollmentId));
+    .where(eq(schema.enrollment.id, enrollmentId))
+    .for("update");
   if (!current) throw new ServiceError("not_found", "Enrolment not found.");
+  const from = current.status as EnrollmentStatus;
+
+  if (from === newStatus) throw new ServiceError("invalid_transition", `This enrolment is already ${newStatus}.`);
+  if (from === "completed") {
+    throw new ServiceError("invalid_transition", "This programme is finished and holds its certificate. It reopens only when a module's result changes.");
+  }
+  if (!ENROLMENT_TRANSITIONS[from].includes(newStatus)) {
+    throw new ServiceError("invalid_transition", `An enrolment can't go from ${from} to ${newStatus}.`);
+  }
+  const reactivating = from === "withdrawn";
+  if (reactivating && actor.staffRole !== "admin") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator can bring back a withdrawn enrolment.");
+  }
+
+  // Reason is required for pausing, withdrawing and bringing a business back
+  if ((newStatus === "paused" || newStatus === "withdrawn" || reactivating) && (!reason || !reason.trim())) {
+    throw new ServiceError("invalid", reactivating ? "Say why this business is coming back." : `A reason is required to mark an enrolment as ${newStatus}.`);
+  }
+  if (reactivating) await refuseSecondLiveEnrolment(db, current.organizationId, enrollmentId);
 
   const now = new Date();
   const updateData: Record<string, any> = {
     status: newStatus,
     updatedAt: now,
     ...(newStatus === "withdrawn" ? { withdrawnAt: now } : {}),
+    ...(reactivating ? { withdrawnAt: null } : {}),
   };
 
   await db
@@ -442,7 +540,7 @@ export async function updateEnrollmentStatus(
     .where(eq(schema.enrollment.id, enrollmentId));
 
   await db.insert(schema.auditLog).values({
-    actorUserId,
+    actorUserId: actor.userId,
     organizationId: current.organizationId,
     platform: "trade",
     action: "enrollment.status_updated",
@@ -456,6 +554,26 @@ export async function updateEnrollmentStatus(
   return { ok: true, id: enrollmentId, status: newStatus };
 }
 
+/**
+ * A facilitator works with the businesses on their own cohorts. Enrolling one that has been in a cohort they aren't on
+ * would open that business's whole record to them (canReachOrganization), so an administrator does that.
+ */
+export async function refuseEnrolmentOutsideReach(db: Executor, principal: { userId: string; staffRole: string | null }, organizationId: string): Promise<void> {
+  if (principal.staffRole === "admin") return;
+  const elsewhere = await db
+    .select({ cohortId: schema.enrollment.cohortId })
+    .from(schema.enrollment)
+    .where(
+      and(
+        eq(schema.enrollment.organizationId, organizationId),
+        sql`not exists (select 1 from ${schema.cohortStaff} where ${schema.cohortStaff.cohortId} = ${schema.enrollment.cohortId} and ${schema.cohortStaff.userId} = ${principal.userId})`,
+      ),
+    )
+    .limit(1);
+  if (elsewhere.length) {
+    throw new ServiceError("forbidden", "This business has been in a cohort you aren't on, so an Entrust administrator enrols it.");
+  }
+}
 
 // ---- Staff assigned to a cohort ----
 

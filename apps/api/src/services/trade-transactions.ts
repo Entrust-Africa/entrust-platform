@@ -66,6 +66,16 @@ async function realCases(ctx: Ctx, organizationId: string) {
     .orderBy(desc(schema.exportCase.createdAt));
 }
 
+/** Whether the transaction was at a shipped stage before this change, now or at some point in its history. */
+async function everShipped(ctx: Ctx, transaction: typeof schema.exportTransaction.$inferSelect): Promise<boolean> {
+  if (SHIPPED_STAGES.includes(transaction.stage)) return true;
+  const events = await ctx.db
+    .select({ summary: schema.transactionEvent.summary })
+    .from(schema.transactionEvent)
+    .where(and(eq(schema.transactionEvent.transactionId, transaction.id), eq(schema.transactionEvent.type, "stage_change")));
+  return events.some((e) => / to (shipped|delivered)$/.test(e.summary));
+}
+
 export async function listTransactions(ctx: Ctx, input: { organizationId?: string | undefined }) {
   const { organizationId } = await organizationFor(ctx, input.organizationId);
   const rows = await ctx.db.select().from(schema.exportTransaction).where(eq(schema.exportTransaction.organizationId, organizationId)).orderBy(desc(schema.exportTransaction.createdAt));
@@ -85,8 +95,16 @@ export async function createTransaction(ctx: Ctx, input: CreateTransactionInput)
   return view(row!);
 }
 
+/** The stage change and the shipment it records are one write: a failure between them can't lose the shipment. */
 export async function updateTransaction(ctx: Ctx, id: string, input: UpdateTransactionInput) {
-  const [existing] = await ctx.db.select().from(schema.exportTransaction).where(eq(schema.exportTransaction.id, id));
+  return ctx.db.transaction((db) => applyTransactionUpdate({ ...ctx, db }, id, input));
+}
+
+/** Stages that mean the goods left. Closing from one of them is a completed shipment; closing from earlier is a deal that ended. */
+const SHIPPED_STAGES: readonly string[] = ["shipped", "delivered"];
+
+async function applyTransactionUpdate(ctx: Ctx, id: string, input: UpdateTransactionInput) {
+  const [existing] = await ctx.db.select().from(schema.exportTransaction).where(eq(schema.exportTransaction.id, id)).for("update");
   const access = existing ? await accessTo(ctx.db, ctx.principal, existing.organizationId) : null;
   if (!existing || !access) throw new ServiceError("not_found", "Transaction not found.");
   if (!access.write) throw new ServiceError("forbidden", "Write access required.");
@@ -110,7 +128,8 @@ export async function updateTransaction(ctx: Ctx, id: string, input: UpdateTrans
     before: { stage: existing.stage, clearCaseId: existing.clearCaseId },
     after: { stage: row!.stage, clearCaseId: row!.clearCaseId, changed: Object.keys(input) },
   });
-  // Closing out a real transaction is what records a completed shipment on the business's record.
-  if (existing.stage !== "closed") await recordClosedTransaction(ctx, row!);
+  // Closing out a real transaction that shipped is what records a completed shipment on the business's record, which
+  // counts as Pathway B evidence. A deal closed at enquiry or quotation never shipped anything.
+  if (existing.stage !== "closed" && row!.stage === "closed" && (await everShipped(ctx, existing))) await recordClosedTransaction(ctx, row!);
   return view(row!, cases.find((c) => c.id === row!.clearCaseId));
 }

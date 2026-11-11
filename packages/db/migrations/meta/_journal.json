@@ -400,6 +400,13 @@
       "when": 1794330000000,
       "tag": "0056_trade_module_content_version",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1794411968839,
+      "tag": "0057_trade_audit_fixes",
+      "breakpoints": true
     }
   ]
 }

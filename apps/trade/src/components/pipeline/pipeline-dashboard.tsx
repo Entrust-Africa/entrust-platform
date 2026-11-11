@@ -681,8 +681,8 @@ export function PipelineDashboard({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Company or importer name *</label>
-                <input
+                <label htmlFor="pipeline-pipeline-dashboard-1" className="block text-xs font-semibold text-ink mb-1">Company or importer name *</label>
+                <input id="pipeline-pipeline-dashboard-1"
                   required
                   type="text"
                   placeholder="e.g. Kaffee Welt GmbH"
@@ -694,8 +694,8 @@ export function PipelineDashboard({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Deal title *</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-2" className="block text-xs font-semibold text-ink mb-1">Deal title *</label>
+                  <input id="pipeline-pipeline-dashboard-2"
                     required
                     type="text"
                     placeholder="e.g. 2026 Arabica Contract"
@@ -705,8 +705,8 @@ export function PipelineDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Destination country *</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-3" className="block text-xs font-semibold text-ink mb-1">Destination country *</label>
+                  <input id="pipeline-pipeline-dashboard-3"
                     required
                     type="text"
                     maxLength={2}
@@ -720,8 +720,8 @@ export function PipelineDashboard({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Contact name</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-4" className="block text-xs font-semibold text-ink mb-1">Contact name</label>
+                  <input id="pipeline-pipeline-dashboard-4"
                     type="text"
                     placeholder="e.g. Hans Gruber"
                     value={addForm.buyerName}
@@ -730,8 +730,8 @@ export function PipelineDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Decision-maker&rsquo;s role</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-5" className="block text-xs font-semibold text-ink mb-1">Decision-maker&rsquo;s role</label>
+                  <input id="pipeline-pipeline-dashboard-5"
                     type="text"
                     placeholder="e.g. Procurement Lead"
                     value={addForm.decisionMakerRole}
@@ -742,8 +742,8 @@ export function PipelineDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Website</label>
-                <input
+                <label htmlFor="pipeline-pipeline-dashboard-6" className="block text-xs font-semibold text-ink mb-1">Website</label>
+                <input id="pipeline-pipeline-dashboard-6"
                   type="url"
                   placeholder="https://example.com"
                   value={addForm.website}
@@ -753,8 +753,8 @@ export function PipelineDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Where you found them (one link per line)</label>
-                <textarea
+                <label htmlFor="pipeline-pipeline-dashboard-7" className="block text-xs font-semibold text-ink mb-1">Where you found them (one link per line)</label>
+                <textarea id="pipeline-pipeline-dashboard-7"
                   rows={2}
                   placeholder="https://linkedin.com/in/...&#10;https://directory.trade.gov/..."
                   value={addForm.sourceLinks}
@@ -765,8 +765,8 @@ export function PipelineDashboard({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-ink mb-1">Estimated deal value</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-8" className="block text-xs font-semibold text-ink mb-1">Estimated deal value</label>
+                  <input id="pipeline-pipeline-dashboard-8"
                     type="number"
                     min={0}
                     placeholder="e.g. 50000"
@@ -776,8 +776,8 @@ export function PipelineDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Currency</label>
-                  <select
+                  <label htmlFor="pipeline-pipeline-dashboard-9" className="block text-xs font-semibold text-ink mb-1">Currency</label>
+                  <select id="pipeline-pipeline-dashboard-9"
                     value={addForm.currency}
                     onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -792,8 +792,8 @@ export function PipelineDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Notes</label>
-                <textarea
+                <label htmlFor="pipeline-pipeline-dashboard-10" className="block text-xs font-semibold text-ink mb-1">Notes</label>
+                <textarea id="pipeline-pipeline-dashboard-10"
                   rows={2}
                   placeholder="How was this lead discovered? Relevant product specifications..."
                   value={addForm.notes}
@@ -842,8 +842,8 @@ export function PipelineDashboard({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Type *</label>
-                  <select
+                  <label htmlFor="pipeline-pipeline-dashboard-11" className="block text-xs font-semibold text-ink mb-1">Type *</label>
+                  <select id="pipeline-pipeline-dashboard-11"
                     value={activityForm.type}
                     onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -858,8 +858,8 @@ export function PipelineDashboard({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Date and time *</label>
-                  <input
+                  <label htmlFor="pipeline-pipeline-dashboard-12" className="block text-xs font-semibold text-ink mb-1">Date and time *</label>
+                  <input id="pipeline-pipeline-dashboard-12"
                     required
                     type="datetime-local"
                     value={activityForm.occurredAt}
@@ -870,8 +870,8 @@ export function PipelineDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">What happened *</label>
-                <textarea
+                <label htmlFor="pipeline-pipeline-dashboard-13" className="block text-xs font-semibold text-ink mb-1">What happened *</label>
+                <textarea id="pipeline-pipeline-dashboard-13"
                   required
                   rows={3}
                   placeholder="e.g. Sent introductory catalogue and quote for 5,000 units FOB Mombasa..."
@@ -924,8 +924,8 @@ export function PipelineDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Link to evidence (optional)</label>
-                <input
+                <label htmlFor="pipeline-pipeline-dashboard-14" className="block text-xs font-semibold text-ink mb-1">Link to evidence (optional)</label>
+                <input id="pipeline-pipeline-dashboard-14"
                   type="url"
                   placeholder="https://..."
                   value={activityForm.evidenceUrl}

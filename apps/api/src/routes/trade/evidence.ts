@@ -1,5 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
 import {
+  AnswerEvidenceBody,
   CreateEvidenceBody,
   EvidenceListQuery,
   EvidenceParam,
@@ -9,6 +10,7 @@ import {
   ReviewEvidenceBody,
 } from "../../schemas/trade";
 import {
+  answerEvidence,
   createEvidence,
   listEvidence,
   requestEvidence,
@@ -76,6 +78,19 @@ const requestEvidenceRoute = createRoute({
   },
 });
 
+const answerEvidenceRoute = createRoute({
+  method: "post",
+  path: "/evidence/{id}/answer",
+  tags,
+  summary: "Answer a request for evidence",
+  description: "The business sends what Entrust asked for (a document, a note, or both), or sends evidence again that Entrust sent back. It goes to staff for review.",
+  request: { params: EvidenceParam, body: { content: json(AnswerEvidenceBody), required: true } },
+  responses: {
+    200: { description: "The evidence record, now waiting for review", content: json(EvidenceRecordSchema) },
+    ...writeErrors,
+  },
+});
+
 export const tradeEvidence = router
   .openapi(listEvidenceRoute, async (c) => {
     const ctx = await contextFor(c.get("user"));
@@ -97,4 +112,9 @@ export const tradeEvidence = router
     const ctx = await contextFor(c.get("user"));
     const requested = await requestEvidence(ctx, c.req.valid("json"));
     return c.json(requested, 201);
+  })
+  .openapi(answerEvidenceRoute, async (c) => {
+    const ctx = await contextFor(c.get("user"));
+    const answered = await answerEvidence(ctx, c.req.valid("param").id, c.req.valid("json"));
+    return c.json(answered, 200);
   });

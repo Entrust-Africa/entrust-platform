@@ -2,13 +2,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeGet } from "@/lib/trade-api";
-import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingSmes } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
 import { PlanAndPathway } from "./plan-and-pathway";
+import { EditCohortDialog } from "./edit-cohort-dialog";
+import { StartForBusiness } from "./start-for-business";
 import { StatusUpdater } from "./status-updater";
 import { ScheduleSessionDialog } from "./sessions/schedule-session-dialog";
+import { sessionClock, sessionDay } from "@/lib/trade-time";
 
 export const metadata = { title: "Cohort Details" };
 
@@ -52,10 +55,29 @@ function formatDeliveryMode(mode: string): string {
   }
 }
 
+interface CellContext {
+  enrollmentId: string;
+  organizationName: string;
+  /** An administrator or facilitator, who can fill a form in with the business. */
+  canStart: boolean;
+}
+
+/** A form in progress, with a way to open it. */
+function InProgress({ href }: { href: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <StatusBadge tone="warn">In progress</StatusBadge>
+      <Link href={href} className="font-semibold text-brand-600 hover:underline">
+        Open
+      </Link>
+    </div>
+  );
+}
+
 /** What a business's onboarding diagnostic looks like to staff: not started, in progress, or submitted with its avenue. */
-function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
-  if (!row) return <span className="text-ink-3">Not started</span>;
-  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+function DiagnosticCell({ row, context }: { row: StaffAssessmentRow | undefined; context: CellContext }) {
+  if (!row) return context.canStart ? <StartForBusiness kind="diagnostic" enrollmentId={context.enrollmentId} organizationName={context.organizationName} /> : <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <InProgress href={`/diagnostic/${row.id}`} />;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <StatusBadge tone="ok">Submitted</StatusBadge>
@@ -72,9 +94,9 @@ function DiagnosticCell({ row }: { row: StaffAssessmentRow | undefined }) {
 }
 
 /** What a business's placement assessment looks like to staff: not started, in progress, or scored with a link to its report. */
-function PlacementCell({ row }: { row: StaffAssessmentRow | undefined }) {
-  if (!row) return <span className="text-ink-3">Not started</span>;
-  if (row.status === "draft") return <StatusBadge tone="warn">In progress</StatusBadge>;
+function PlacementCell({ row, context }: { row: StaffAssessmentRow | undefined; context: CellContext }) {
+  if (!row) return context.canStart ? <StartForBusiness kind="placement" enrollmentId={context.enrollmentId} organizationName={context.organizationName} /> : <span className="text-ink-3">Not started</span>;
+  if (row.status === "draft") return <InProgress href={`/assessment/${row.id}`} />;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <StatusBadge tone={row.status === "review_required" ? "warn" : "ok"}>{row.status === "review_required" ? "Needs review" : "Scored"}</StatusBadge>
@@ -99,11 +121,12 @@ export default async function CohortDetailPage(props: {
 
   const { id } = await props.params;
   const cohortStaff = me.staffRole === "admin" ? await getCohortStaff(id) : null;
+  const sponsors = me.staffRole === "admin" ? await listSponsors() : [];
   const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
     listWaitingSmes(),
-    listDiagnostics(),
-    listPlacements(),
+    listDiagnostics(id),
+    listPlacements(id),
     listSessions(id),
     tradeGet<{ items: { id: string; enrollmentId: string; shipment: { product: string; evidenceStatus: string } | null }[] }>(`/pathway-reviews?cohortId=${encodeURIComponent(id)}&status=open`),
   ]);
@@ -143,7 +166,8 @@ export default async function CohortDetailPage(props: {
             <h1 className="mt-1 font-display text-2xl font-bold text-ink">{cohort.name}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ScheduleSessionDialog cohortId={cohort.id} />
+            {canEnrol && <EditCohortDialog cohort={cohort} sponsors={sponsors} isAdmin={me.staffRole === "admin"} />}
+            {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
             {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
@@ -196,7 +220,7 @@ export default async function CohortDetailPage(props: {
               Interactive sessions scheduled for this cohort, with facilitator preparation and attendance sheets.
             </p>
           </div>
-          <ScheduleSessionDialog cohortId={cohort.id} />
+          {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
         </div>
 
         {sessions.length === 0 ? (
@@ -210,10 +234,10 @@ export default async function CohortDetailPage(props: {
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-ink-3">
-                      {new Date(sess.startTime).toLocaleDateString()}
+                      {sessionDay(sess.startTime)}
                     </span>
                     <span className="text-xs text-ink-3 font-mono">
-                      {new Date(sess.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {sessionClock(sess.startTime)} Addis
                     </span>
                   </div>
 
@@ -303,6 +327,21 @@ export default async function CohortDetailPage(props: {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-ink">{enr.organizationName}</div>
                         <div className="font-mono text-ink-3 text-[11px]">{enr.organizationId}</div>
+                        <nav aria-label={`${enr.organizationName}'s record`} className="mt-1 flex flex-wrap gap-x-2 text-[11px] font-semibold">
+                          {[
+                            ["/business", "Business"],
+                            ["/pipeline", "Pipeline"],
+                            ["/outcomes", "Outcomes"],
+                            ["/transactions", "Transactions"],
+                            ["/action-plan", "Action plan"],
+                            ["/evidence", "Evidence"],
+                            ["/plan", "Plan"],
+                          ].map(([path, label]) => (
+                            <Link key={path} href={`${path}?organizationId=${encodeURIComponent(enr.organizationId)}`} className="text-brand-600 underline-offset-4 hover:underline">
+                              {label}
+                            </Link>
+                          ))}
+                        </nav>
                         {me.staffRole !== "reviewer" && (
                           <Link href={`/referrals?organizationId=${encodeURIComponent(enr.organizationId)}&organizationName=${encodeURIComponent(enr.organizationName)}`} className="text-[11px] font-semibold text-brand-600 underline-offset-4 hover:underline">
                             Refer to a partner
@@ -324,20 +363,23 @@ export default async function CohortDetailPage(props: {
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3">
-                        <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} />
+                        <DiagnosticCell row={diagnosticOf.get(enr.enrollmentId)} context={{ enrollmentId: enr.enrollmentId, organizationName: enr.organizationName, canStart: canEnrol && (enr.status === "active" || enr.status === "registered" || enr.status === "invited") }} />
                       </td>
                       <td className="px-4 py-3">
-                        <PlacementCell row={placementOf.get(enr.enrollmentId)} />
+                        <PlacementCell row={placementOf.get(enr.enrollmentId)} context={{ enrollmentId: enr.enrollmentId, organizationName: enr.organizationName, canStart: canEnrol && (enr.status === "active" || enr.status === "registered" || enr.status === "invited") }} />
                       </td>
                       <td className="px-4 py-3">
                         <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} review={reviewOf.get(enr.enrollmentId) ?? null} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <StatusUpdater
-                          enrollmentId={enr.enrollmentId}
-                          cohortId={cohort.id}
-                          currentStatus={enr.status}
-                        />
+                        {canEnrol ? (
+                          <StatusUpdater
+                            enrollmentId={enr.enrollmentId}
+                            cohortId={cohort.id}
+                            currentStatus={enr.status}
+                            isAdmin={me.staffRole === "admin"}
+                          />
+                        ) : null}
                       </td>
                     </tr>
                   ))}

@@ -66,7 +66,7 @@ export function PlanAndPathway({
       {plan && (
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={plan.status === "review_required" ? "warn" : "ok"}>{PLAN_LABEL[plan.status] ?? plan.status}</StatusBadge>
-          {plan.status === "review_required" && (
+          {plan.status === "review_required" && canConfirmPathway && (
             <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => run(() => tradeFetch("POST", `/plans/${plan.id}/approve`, {}))}>
               Approve plan
             </Button>

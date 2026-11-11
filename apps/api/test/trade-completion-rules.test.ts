@@ -178,8 +178,17 @@ describe("what counts towards a pass", () => {
     expect(await status()).toBe("passed");
   });
 
-  it("works from a generated plan, and optional modules don't hold the programme back", async () => {
+  it("works from a generated plan, and a test-out offer is done by testing out, not by the score that offered it", async () => {
     ok(await callV1(w.admin, "POST", "/trade/admin/override-module-completion", { enrollmentId: w.enrollment, moduleId: "M11", reason: "Covering this rule" }));
+    // M02 and M01 were offered as test-outs. M01 is done: its knowledge check was passed above, which is the test.
+    // M02 isn't, so the programme isn't finished.
+    expect(ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=M01`)).items[0].status).toBe("passed");
+    expect((await get(w.learner, `/enrollments/${w.enrollment}/certificate`)).status).toBe(404);
+    const m02 = findVersion("M02", "learner")!;
+    const answers = Object.fromEntries(m02.knowledgeCheck.questions.map((q) => [q.id, q.correct]));
+    expect(ok(await post(w.learner, "/modules/M02/knowledge-check/attempts", { enrollmentId: w.enrollment, answers })).passed).toBe(true);
+    const [testedOut] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.action, "trade.module.tested_out"), eq(schema.auditLog.organizationId, w.org)));
+    expect(testedOut).toBeDefined();
     const certificate = ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`));
     expect(certificate.isValid).toBe(true);
     const [plan] = await db.select().from(schema.learningPlan).where(eq(schema.learningPlan.id, w.plan));

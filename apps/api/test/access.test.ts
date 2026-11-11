@@ -472,6 +472,7 @@ describe("API documentation", () => {
         "/v1/trade/learning-plans/{id}",
         "/v1/trade/evidence",
         "/v1/trade/evidence/request",
+        "/v1/trade/evidence/{id}/answer",
         "/v1/trade/evidence/{id}/review",
         "/v1/trade/exemptions",
         "/v1/trade/exemptions/{id}/review",

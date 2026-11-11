@@ -171,13 +171,17 @@ afterAll(async () => {
   await cleanup();
 });
 
+/** M01 1.0.0's six criteria, each scored the same. */
+const M01_CRITERIA = ["business_baseline", "capability_gaps", "opportunity_evidence", "buyer_and_deal_qualification", "decision_and_reasoning", "action_plan_and_ownership"];
+const allCriteria = (points: number, comment?: string) => Object.fromEntries(M01_CRITERIA.map((id) => [id, { points, ...(comment ? { comment } : {}) }]));
+
 describe("TRADE Submissions & Rubric Scoring (#67)", () => {
   it("rejects submission if theory knowledge check is not yet passed", async () => {
     // Progress exists but theoryCompletedAt is null
     await db.insert(schema.moduleProgress).values({
       enrollmentId: w.enrollmentId,
       moduleId: "M01",
-      contentVersion: "0.1.0",
+      contentVersion: "1.0.0",
       status: "in_progress",
       lessonProgress: {},
     });
@@ -301,30 +305,27 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
       .limit(1);
     submissionId = sub!.id;
 
-    // Assessor 1 scores: 4 on all criteria (12/12 points), but confirms critical failure "no-export-license"
+    // Assessor 1 gives full marks on M01 1.0.0's six criteria (36 of 36), but confirms critical failure cf1, fabricated
+    // evidence, which fails the work whatever the score.
     const scoreRes = await callV1(
       w.reviewer1,
       "POST",
       `/trade/module-submissions/${submissionId}/score`,
       {
-        scores: {
-          market: { points: 4, comment: "Excellent target market research" },
-          buyer: { points: 4, comment: "Strong buyer profile" },
-          compliance: { points: 4, comment: "Complete checklist" },
-        },
-        confirmedCriticalFailures: ["no-export-license"],
-        feedback: "Deliverable is thorough but missing mandatory export trade license.",
+        scores: allCriteria(6, "Thorough"),
+        confirmedCriticalFailures: ["cf1"],
+        feedback: "Deliverable is thorough but the buyer evidence was fabricated.",
       },
     );
 
     expect(scoreRes.status).toBe(200);
-    expect(scoreRes.body.totalPoints).toBe(12);
-    expect(scoreRes.body.maxPoints).toBe(12);
+    expect(scoreRes.body.totalPoints).toBe(36);
+    expect(scoreRes.body.maxPoints).toBe(36);
     expect(scoreRes.body.percentage).toBe(100);
     expect(scoreRes.body.passed).toBe(false);
     expect(scoreRes.body.outcome).toBe("revision_required");
     expect(scoreRes.body.isFirstScore).toBe(true);
-    expect(scoreRes.body.confirmedCriticalFailures).toEqual(["no-export-license"]);
+    expect(scoreRes.body.confirmedCriticalFailures).toEqual(["cf1"]);
 
     // Verify submission status moved to revision_required
     const [updatedSub] = await db
@@ -354,11 +355,7 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
       "POST",
       `/trade/module-submissions/${submissionId}/score`,
       {
-        scores: {
-          market: { points: 3 },
-          buyer: { points: 3 },
-          compliance: { points: 3 },
-        },
+        scores: allCriteria(4),
         confirmedCriticalFailures: [],
         feedback: "Good work overall.",
       },
@@ -366,7 +363,7 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
 
     expect(scoreRes.status).toBe(200);
     expect(scoreRes.body.isFirstScore).toBe(false);
-    expect(scoreRes.body.totalPoints).toBe(9);
+    expect(scoreRes.body.totalPoints).toBe(24);
     expect(scoreRes.body.passed).toBe(true);
 
     // Submission and progress remain based on official first score (revision_required)
@@ -494,5 +491,22 @@ describe("TRADE Submissions & Rubric Scoring (#67)", () => {
     expect((await callV1(w.admin, "DELETE", `/trade/cohorts/${w.cohortId}/staff/${w.reviewer3.id}`)).status).toBe(200);
     expect((await queue()).body.items).toEqual([]);
     expect((await callV1(w.admin, "GET", `/trade/module-submissions/${sub!.id}`)).status).toBe(200);
+  });
+
+  it("refuses scores the rubric doesn't allow instead of capping or zeroing them", async () => {
+    const [sub] = await db.select().from(schema.moduleSubmission).where(eq(schema.moduleSubmission.enrollmentId, w.enrollmentId)).limit(1);
+    const score = (body: object) => callV1(w.admin, "PATCH", `/trade/module-submissions/${sub!.id}/score`, { overrideReason: "Checking the rubric", ...body });
+    const tooHigh = await score({ scores: { business_baseline: { points: 9 } } });
+    expect(tooHigh.status).toBe(422);
+    expect(tooHigh.body.error).toContain("0 to 6");
+    expect((await score({ scores: { not_a_criterion: { points: 3 } } })).status).toBe(422);
+    expect((await score({ confirmedCriticalFailures: ["no-export-license"] })).status).toBe(422);
+    // A first score has to cover every criterion: one left out isn't a zero.
+    const fresh = await signUp("tr-score-rev4");
+    await db.insert(schema.member).values({ id: randomUUID(), organizationId: w.entrustOrgId, userId: fresh.id, role: "reviewer", createdAt: new Date() });
+    await db.insert(schema.cohortStaff).values({ cohortId: w.cohortId, userId: fresh.id });
+    const partial = await callV1(fresh, "POST", `/trade/module-submissions/${sub!.id}/score`, { scores: { business_baseline: { points: 6 } }, feedback: "Partial" });
+    expect(partial.status).toBe(422);
+    expect(partial.body.error).toContain("has no score");
   });
 });

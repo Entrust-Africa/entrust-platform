@@ -6,6 +6,7 @@ import { ReferralConsent } from "@/components/referrals/referral-consent";
 import type { Referral } from "@/components/referrals/referral-types";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
+import { businessInView } from "@/lib/business";
 
 export const metadata = { title: "My business" };
 
@@ -14,10 +15,8 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
   if (!me) redirect("/sign-in");
 
   const { organizationId } = (await searchParams) ?? {};
-  const activeOrg =
-    (organizationId ? me.organizations?.find((o) => o.id === organizationId) : null) ??
-    me.organizations?.find((o) => o.id === me.activeOrganizationId) ??
-    me.organizations?.[0];
+  // Staff open a business by its id in the address; a member gets their own.
+  const activeOrg = await businessInView(me, organizationId);
   if (!activeOrg) redirect("/");
 
   const q = `organizationId=${encodeURIComponent(activeOrg.id)}`;
@@ -34,7 +33,7 @@ export default async function BusinessPage({ searchParams }: { searchParams?: Pr
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink">My business</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">{activeOrg.staffView ? activeOrg.name : "My business"}</h1>
         <p className="mt-1 max-w-2xl text-sm text-ink-2">Your business's details, what it sells and the shipments it has completed. Correct anything that is wrong; every change is kept in the history.</p>
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           <span className="text-ink-3">Download your business report:</span>

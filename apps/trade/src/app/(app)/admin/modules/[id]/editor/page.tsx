@@ -33,6 +33,7 @@ import { Markdown } from "@/components/markdown";
 import { ModuleViewer, type LearnerModuleData } from "@/components/modules/module-viewer";
 import { tradeFetch } from "@/lib/trade-client";
 import type { AdminModuleVersionDetail } from "@/lib/types";
+import { useMe } from "@/lib/use-me";
 
 export default function ModuleEditorPage() {
   const params = useParams();
@@ -58,7 +59,8 @@ export default function ModuleEditorPage() {
   const [workedExample, setWorkedExample] = useState<{ title: string; body: string } | null>(null);
   const [worksheets, setWorksheets] = useState<any[]>([]);
   const [knowledgeCheck, setKnowledgeCheck] = useState<{ passMark: number; questions: any[] }>({ passMark: 80, questions: [] });
-  const [rubric, setRubric] = useState<any>({ criteria: [], passMark: 14, mustHaveMinimum: 2, bands: [] });
+  // Entrust's common standard: six criteria scored 0 to 6, pass at 24 of 36, no must-have criteria.
+  const [rubric, setRubric] = useState<any>({ criteria: [], passMark: 24, mustHaveMinimum: 0, bands: [] });
   const [aiPrompts, setAiPrompts] = useState<any[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -86,7 +88,7 @@ export default function ModuleEditorPage() {
       setWorkedExample(c?.workedExample || null);
       setWorksheets(c?.worksheets || []);
       setKnowledgeCheck(c?.knowledgeCheck || { passMark: 80, questions: [] });
-      setRubric(c?.rubric || { criteria: [], passMark: 14, mustHaveMinimum: 2, bands: [] });
+      setRubric(c?.rubric || { criteria: [], passMark: 24, mustHaveMinimum: 0, bands: [] });
       setAiPrompts(c?.aiPrompts || []);
       setIsDirty(false);
     } else {
@@ -98,6 +100,18 @@ export default function ModuleEditorPage() {
   useEffect(() => {
     loadVersionData(requestedVersion);
   }, [moduleId, requestedVersion]);
+
+  // Leaving with unsaved edits loses them: the browser asks first.
+  useEffect(() => {
+    if (!isDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isDirty]);
+
+  // Only an Entrust administrator approves a version; the API refuses anyone else, so nobody else is offered it.
+  const me = useMe();
+  const canApprove = me?.staffRole === "admin";
 
   const isApproved = versionDetail?.status === "approved" || versionDetail?.status === "archived";
   const isInReview = versionDetail?.status === "in_review";
@@ -125,8 +139,9 @@ export default function ModuleEditorPage() {
     };
   }
 
-  async function handleSaveDraft(strict = true) {
-    if (locked) return;
+  /** Saves the draft. True when it saved, so a step that needs the saved draft can stop when it didn't. */
+  async function handleSaveDraft(strict = true): Promise<boolean> {
+    if (locked) return false;
     setSaving(true);
     setError(null);
     setSuccessMsg(null);
@@ -149,6 +164,7 @@ export default function ModuleEditorPage() {
       setError(res.error ?? "Failed to save draft.");
     }
     setSaving(false);
+    return Boolean(res.ok && res.data);
   }
 
   async function handleSubmitReview() {
@@ -156,8 +172,12 @@ export default function ModuleEditorPage() {
     setSaving(true);
     setError(null);
 
-    // Save first with strict validation
-    await handleSaveDraft(true);
+    // Save first with strict validation. If that fails, the reviewer would get the last saved copy, not what's on screen,
+    // so nothing is sent.
+    if (isDirty && !(await handleSaveDraft(true))) {
+      setSaving(false);
+      return;
+    }
 
     const res = await tradeFetch<AdminModuleVersionDetail>("POST", `/admin/modules/${moduleId}/versions/${versionDetail.version}/submit-review`);
     if (res.ok && res.data) {
@@ -267,7 +287,7 @@ export default function ModuleEditorPage() {
             </>
           )}
 
-          {isInReview && (
+          {isInReview && canApprove && (
             <>
               <Button
                 size="sm"
@@ -370,8 +390,8 @@ export default function ModuleEditorPage() {
         <Card className="p-6 bg-white border-neutral-200 shadow-sm space-y-6">
           <div className="grid grid-cols-1 gap-5">
             <div>
-              <label className="block text-xs font-bold text-neutral-800 mb-1">Module Title</label>
-              <input
+              <label htmlFor="editor-page-1" className="block text-xs font-bold text-neutral-800 mb-1">Module Title</label>
+              <input id="editor-page-1"
                 type="text"
                 disabled={locked}
                 value={title}
@@ -384,8 +404,8 @@ export default function ModuleEditorPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-neutral-800 mb-1">Deliverable Outcome</label>
-              <textarea
+              <label htmlFor="editor-page-2" className="block text-xs font-bold text-neutral-800 mb-1">Deliverable Outcome</label>
+              <textarea id="editor-page-2"
                 rows={2}
                 disabled={locked}
                 value={deliverable}
@@ -526,8 +546,8 @@ export default function ModuleEditorPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">Lesson Markdown Content</label>
-                <textarea
+                <label htmlFor="editor-page-3" className="block text-xs font-semibold text-neutral-700 mb-1">Lesson Markdown Content</label>
+                <textarea id="editor-page-3"
                   rows={8}
                   disabled={locked}
                   value={lesson.body}
@@ -726,10 +746,10 @@ export default function ModuleEditorPage() {
 
               {/* Explanation Field (Issue #210) */}
               <div className="pt-2 border-t border-neutral-100">
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                <label htmlFor="editor-page-4" className="block text-xs font-semibold text-neutral-700 mb-1">
                   Explanation & Concept Clarification
                 </label>
-                <textarea
+                <textarea id="editor-page-4"
                   rows={2}
                   disabled={locked}
                   placeholder="Provide educational explanation displayed to learners upon submitting their quiz attempt..."
@@ -804,7 +824,7 @@ export default function ModuleEditorPage() {
                       ...rubric,
                       criteria: [
                         ...(rubric.criteria || []),
-                        { id: `c${cCount}`, title: "New Criterion", maxPoints: 3, mustHave: true, description: "Description of criterion..." },
+                        { id: `c${cCount}`, title: "New Criterion", maxPoints: 6, mustHave: false, description: "Description of criterion..." },
                       ],
                     };
                     setRubric(updated);
@@ -1000,8 +1020,8 @@ export default function ModuleEditorPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-neutral-700">Approval Notes</label>
-              <textarea
+              <label htmlFor="editor-page-5" className="block text-xs font-semibold text-neutral-700">Approval Notes</label>
+              <textarea id="editor-page-5"
                 rows={3}
                 placeholder="e.g. Reviewed with trade advisory board and cleared for publishing..."
                 value={approveNotes}

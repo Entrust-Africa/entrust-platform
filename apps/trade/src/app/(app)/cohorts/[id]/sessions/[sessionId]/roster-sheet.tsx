@@ -72,7 +72,9 @@ export function RosterSheet({
       sending: false,
       info: res.error
         ? `Error: ${res.error}`
-        : `Email reminders queued for enrolled participants. (pg-boss singletonKey guarantees delivery at most once even on multiple clicks).`,
+        : res.data?.queued
+          ? `Reminded ${res.data.queued} ${res.data.queued === 1 ? "person" : "people"}. Each person is reminded once for this session time, so sending again won't repeat it.`
+          : "Everyone has already been reminded about this session time.",
     });
   }
 

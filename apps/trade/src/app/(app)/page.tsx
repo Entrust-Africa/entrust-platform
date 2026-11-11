@@ -15,6 +15,7 @@ import type {
   ModuleItemSummary,
   ModuleProgressView,
 } from "@/lib/types";
+import { sessionWhen } from "@/lib/trade-time";
 
 export const metadata = { title: "My plan" };
 
@@ -51,6 +52,8 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
   if (!me) redirect("/sign-in");
   // A member of the Summit's selection committee has no learning plan: their work is the committee's screens.
   if (me.summitCommittee && !me.staffRole) redirect("/summit/committee");
+  // The Quality role reads the programme's reports and nothing else, so that's its home, not a learner's plan.
+  if (me.quality && !me.staffRole) redirect("/reports");
 
   const { enrollmentId: queryEnrollmentId } = (await searchParams) ?? {};
 
@@ -543,8 +546,7 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
                 <div>
                   <div className="font-semibold text-ink text-sm">{sess.title}</div>
                   <div className="text-ink-2 mt-0.5">
-                    {new Date(sess.startTime).toLocaleString()} –{" "}
-                    {new Date(sess.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {sessionWhen(sess.startTime, sess.endTime)}
                   </div>
                   {sess.moduleCodes.length > 0 && (
                     <div className="mt-1 flex gap-1">

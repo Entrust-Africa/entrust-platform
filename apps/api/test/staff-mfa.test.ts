@@ -64,6 +64,15 @@ describe("the second step", () => {
     expect((await callV1(w.learner, "GET", "/trade/programs")).body.code).not.toBe("mfa_required");
   });
 
+  it("guards the shared routes that hold TRADE data too, and leaves the setup routes and CLEAR open", async () => {
+    for (const path of ["/files/00000000-0000-4000-8000-000000000000", "/audit", "/smes/search?q=a", "/organizations"]) {
+      expect((await callV1(w.reviewer, "GET", path)).body.code, path).toBe("mfa_required");
+    }
+    expect((await callV1(w.reviewer, "GET", "/me")).body.code).not.toBe("mfa_required");
+    expect((await callV1(w.reviewer, "GET", "/mfa")).body.code).not.toBe("mfa_required");
+    expect((await callV1(w.reviewer, "GET", "/clear/cases")).body.code).not.toBe("mfa_required");
+  });
+
   it("keeps it to staff", async () => {
     expect((await callV1(w.learner, "POST", "/mfa/enrol")).status).toBe(403);
     expect((await callV1(null, "GET", "/mfa")).status).toBe(401);

@@ -38,7 +38,15 @@ import {
   FINANCING_OUTCOME_STATUSES,
   FINANCING_TYPES,
   OUTCOME_EVIDENCE_TIERS,
+  parseTradeLocalDateTime,
+  toTradeLocalDateTime,
 } from "@entrust/trade-engine";
+
+/** Statuses that say the goods left: they need the value and date of the real shipment. */
+const shippedStatus = (status: string): boolean => ["shipped", "delivered", "payment_pending", "paid"].includes(status);
+
+/** A form's date and time, read as Addis Ababa time, as the ISO timestamp the API stores. */
+const localToIso = (value: string): string | null => parseTradeLocalDateTime(value)?.toISOString() ?? null;
 
 interface OutcomesDashboardProps {
   initialOutcomes: OutcomeView[];
@@ -114,7 +122,7 @@ export function OutcomesDashboard({
     status: "approved" as any,
     amountApproved: "",
     amountDisbursed: "",
-    approvalDate: new Date().toISOString().slice(0, 16),
+    approvalDate: "",
     disbursementDate: "",
     evidenceTier: "documented" as any,
     notes: "",
@@ -125,7 +133,7 @@ export function OutcomesDashboard({
     status: "shipped" as any,
     valueShipped: "",
     valuePaid: "",
-    shipmentDate: new Date().toISOString().slice(0, 16),
+    shipmentDate: "",
     deliveryDate: "",
     paymentDate: "",
     evidenceTier: "documented" as any,
@@ -180,19 +188,23 @@ export function OutcomesDashboard({
         status: (outcome.status === "application_prepared" ? "approved" : outcome.status === "approved" ? "disbursed" : outcome.status) as any,
         amountApproved: outcome.amountApproved ? String(outcome.amountApproved) : outcome.amountRequested ? String(outcome.amountRequested) : "",
         amountDisbursed: outcome.amountDisbursed ? String(outcome.amountDisbursed) : "",
-        approvalDate: outcome.approvalDate ? outcome.approvalDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        disbursementDate: outcome.disbursementDate ? outcome.disbursementDate.slice(0, 16) : "",
+        // Stored times are shown in Addis Ababa time and read back the same way, so saving doesn't move them by the
+        // browser's offset. Nothing is filled in that the business didn't record: an empty date stays empty.
+        approvalDate: outcome.approvalDate ? toTradeLocalDateTime(outcome.approvalDate) : "",
+        disbursementDate: outcome.disbursementDate ? toTradeLocalDateTime(outcome.disbursementDate) : "",
         evidenceTier: outcome.evidenceTier,
         notes: "",
       });
     } else {
       setUpdateExportForm({
         status: (outcome.status === "planned" ? "shipped" : outcome.status === "shipped" ? "delivered" : outcome.status === "delivered" ? "paid" : outcome.status) as any,
-        valueShipped: outcome.valueShipped ? String(outcome.valueShipped) : outcome.valuePlanned ? String(outcome.valuePlanned) : "",
+        // The shipped value is what actually left, not the planned value, and the date is the day it shipped, not today:
+        // both are typed in, never assumed.
+        valueShipped: outcome.valueShipped ? String(outcome.valueShipped) : "",
         valuePaid: outcome.valuePaid ? String(outcome.valuePaid) : "",
-        shipmentDate: outcome.shipmentDate ? outcome.shipmentDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        deliveryDate: outcome.deliveryDate ? outcome.deliveryDate.slice(0, 16) : "",
-        paymentDate: outcome.paymentDate ? outcome.paymentDate.slice(0, 16) : "",
+        shipmentDate: outcome.shipmentDate ? toTradeLocalDateTime(outcome.shipmentDate) : "",
+        deliveryDate: outcome.deliveryDate ? toTradeLocalDateTime(outcome.deliveryDate) : "",
+        paymentDate: outcome.paymentDate ? toTradeLocalDateTime(outcome.paymentDate) : "",
         evidenceTier: outcome.evidenceTier,
         notes: "",
       });
@@ -298,8 +310,8 @@ export function OutcomesDashboard({
             status: updateFinancingForm.status,
             amountApproved: updateFinancingForm.amountApproved ? Number(updateFinancingForm.amountApproved) : null,
             amountDisbursed: updateFinancingForm.amountDisbursed ? Number(updateFinancingForm.amountDisbursed) : null,
-            approvalDate: updateFinancingForm.approvalDate ? new Date(updateFinancingForm.approvalDate).toISOString() : null,
-            disbursementDate: updateFinancingForm.disbursementDate ? new Date(updateFinancingForm.disbursementDate).toISOString() : null,
+            approvalDate: updateFinancingForm.approvalDate ? localToIso(updateFinancingForm.approvalDate) : null,
+            disbursementDate: updateFinancingForm.disbursementDate ? localToIso(updateFinancingForm.disbursementDate) : null,
             evidenceTier: updateFinancingForm.evidenceTier,
             notes: updateFinancingForm.notes || undefined,
           },
@@ -315,9 +327,9 @@ export function OutcomesDashboard({
             status: updateExportForm.status,
             valueShipped: updateExportForm.valueShipped ? Number(updateExportForm.valueShipped) : null,
             valuePaid: updateExportForm.valuePaid ? Number(updateExportForm.valuePaid) : null,
-            shipmentDate: updateExportForm.shipmentDate ? new Date(updateExportForm.shipmentDate).toISOString() : null,
-            deliveryDate: updateExportForm.deliveryDate ? new Date(updateExportForm.deliveryDate).toISOString() : null,
-            paymentDate: updateExportForm.paymentDate ? new Date(updateExportForm.paymentDate).toISOString() : null,
+            shipmentDate: updateExportForm.shipmentDate ? localToIso(updateExportForm.shipmentDate) : null,
+            deliveryDate: updateExportForm.deliveryDate ? localToIso(updateExportForm.deliveryDate) : null,
+            paymentDate: updateExportForm.paymentDate ? localToIso(updateExportForm.paymentDate) : null,
             evidenceTier: updateExportForm.evidenceTier,
             notes: updateExportForm.notes || undefined,
           },
@@ -691,8 +703,8 @@ export function OutcomesDashboard({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Lender *</label>
-                <input
+                <label htmlFor="outcomes-outcomes-dashboard-1" className="block text-xs font-semibold text-ink mb-1">Lender *</label>
+                <input id="outcomes-outcomes-dashboard-1"
                   required
                   type="text"
                   placeholder="e.g. Equity Bank Kenya, Ecobank, Afreximbank"
@@ -704,8 +716,8 @@ export function OutcomesDashboard({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Type of financing *</label>
-                  <select
+                  <label htmlFor="outcomes-outcomes-dashboard-2" className="block text-xs font-semibold text-ink mb-1">Type of financing *</label>
+                  <select id="outcomes-outcomes-dashboard-2"
                     value={financingForm.financingType}
                     onChange={(e) => setFinancingForm({ ...financingForm, financingType: e.target.value as any })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -718,8 +730,8 @@ export function OutcomesDashboard({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Evidence</label>
-                  <select
+                  <label htmlFor="outcomes-outcomes-dashboard-3" className="block text-xs font-semibold text-ink mb-1">Evidence</label>
+                  <select id="outcomes-outcomes-dashboard-3"
                     value={financingForm.evidenceTier}
                     onChange={(e) => setFinancingForm({ ...financingForm, evidenceTier: e.target.value as any })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -735,8 +747,8 @@ export function OutcomesDashboard({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-ink mb-1">Amount asked for *</label>
-                  <input
+                  <label htmlFor="outcomes-outcomes-dashboard-4" className="block text-xs font-semibold text-ink mb-1">Amount asked for *</label>
+                  <input id="outcomes-outcomes-dashboard-4"
                     required
                     type="number"
                     min={1}
@@ -747,8 +759,8 @@ export function OutcomesDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Currency</label>
-                  <select
+                  <label htmlFor="outcomes-outcomes-dashboard-5" className="block text-xs font-semibold text-ink mb-1">Currency</label>
+                  <select id="outcomes-outcomes-dashboard-5"
                     value={financingForm.currency}
                     onChange={(e) => setFinancingForm({ ...financingForm, currency: e.target.value })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -763,8 +775,8 @@ export function OutcomesDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">What it is for</label>
-                <textarea
+                <label htmlFor="outcomes-outcomes-dashboard-6" className="block text-xs font-semibold text-ink mb-1">What it is for</label>
+                <textarea id="outcomes-outcomes-dashboard-6"
                   rows={2}
                   placeholder="Pre-shipment inventory purchase, packaging financing, etc."
                   value={financingForm.notes}
@@ -810,8 +822,8 @@ export function OutcomesDashboard({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Overseas buyer *</label>
-                  <input
+                  <label htmlFor="outcomes-outcomes-dashboard-7" className="block text-xs font-semibold text-ink mb-1">Overseas buyer *</label>
+                  <input id="outcomes-outcomes-dashboard-7"
                     required
                     type="text"
                     placeholder="e.g. Kaffee Welt GmbH"
@@ -821,8 +833,8 @@ export function OutcomesDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Destination country *</label>
-                  <input
+                  <label htmlFor="outcomes-outcomes-dashboard-8" className="block text-xs font-semibold text-ink mb-1">Destination country *</label>
+                  <input id="outcomes-outcomes-dashboard-8"
                     required
                     type="text"
                     maxLength={2}
@@ -835,8 +847,8 @@ export function OutcomesDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Product *</label>
-                <input
+                <label htmlFor="outcomes-outcomes-dashboard-9" className="block text-xs font-semibold text-ink mb-1">Product *</label>
+                <input id="outcomes-outcomes-dashboard-9"
                   required
                   type="text"
                   placeholder="e.g. Grade 1 Washed Coffee Beans (1 Container)"
@@ -848,8 +860,8 @@ export function OutcomesDashboard({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-ink mb-1">Planned deal value</label>
-                  <input
+                  <label htmlFor="outcomes-outcomes-dashboard-10" className="block text-xs font-semibold text-ink mb-1">Planned deal value</label>
+                  <input id="outcomes-outcomes-dashboard-10"
                     type="number"
                     min={0}
                     placeholder="e.g. 60000"
@@ -859,8 +871,8 @@ export function OutcomesDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Currency</label>
-                  <select
+                  <label htmlFor="outcomes-outcomes-dashboard-11" className="block text-xs font-semibold text-ink mb-1">Currency</label>
+                  <select id="outcomes-outcomes-dashboard-11"
                     value={exportForm.currency}
                     onChange={(e) => setExportForm({ ...exportForm, currency: e.target.value })}
                     className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -873,8 +885,8 @@ export function OutcomesDashboard({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Notes</label>
-                <textarea
+                <label htmlFor="outcomes-outcomes-dashboard-12" className="block text-xs font-semibold text-ink mb-1">Notes</label>
+                <textarea id="outcomes-outcomes-dashboard-12"
                   rows={2}
                   placeholder="Port of departure, carrier, terms (FOB/CIF)..."
                   value={exportForm.notes}
@@ -931,8 +943,8 @@ export function OutcomesDashboard({
                 <>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Status *</label>
-                      <select
+                      <label htmlFor="outcomes-outcomes-dashboard-13" className="block text-xs font-semibold text-ink mb-1">Status *</label>
+                      <select id="outcomes-outcomes-dashboard-13"
                         value={updateFinancingForm.status}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, status: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -945,8 +957,8 @@ export function OutcomesDashboard({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
-                      <select
+                      <label htmlFor="outcomes-outcomes-dashboard-14" className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
+                      <select id="outcomes-outcomes-dashboard-14"
                         value={updateFinancingForm.evidenceTier}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, evidenceTier: e.target.value as any })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -971,8 +983,8 @@ export function OutcomesDashboard({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Amount approved</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-15" className="block text-xs font-semibold text-ink mb-1">Amount approved</label>
+                      <input id="outcomes-outcomes-dashboard-15"
                         type="number"
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountApproved}
@@ -981,8 +993,8 @@ export function OutcomesDashboard({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Approval date</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-16" className="block text-xs font-semibold text-ink mb-1">Approval date</label>
+                      <input id="outcomes-outcomes-dashboard-16"
                         type="datetime-local"
                         value={updateFinancingForm.approvalDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, approvalDate: e.target.value })}
@@ -993,8 +1005,8 @@ export function OutcomesDashboard({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Amount paid out</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-17" className="block text-xs font-semibold text-ink mb-1">Amount paid out</label>
+                      <input id="outcomes-outcomes-dashboard-17"
                         type="number"
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountDisbursed}
@@ -1003,8 +1015,8 @@ export function OutcomesDashboard({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Payout date</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-18" className="block text-xs font-semibold text-ink mb-1">Payout date</label>
+                      <input id="outcomes-outcomes-dashboard-18"
                         type="datetime-local"
                         value={updateFinancingForm.disbursementDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, disbursementDate: e.target.value })}
@@ -1014,8 +1026,8 @@ export function OutcomesDashboard({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Note or reference</label>
-                    <textarea
+                    <label htmlFor="outcomes-outcomes-dashboard-19" className="block text-xs font-semibold text-ink mb-1">Note or reference</label>
+                    <textarea id="outcomes-outcomes-dashboard-19"
                       rows={2}
                       placeholder="e.g. Facility agreement executed, funds disbursed via RTGS..."
                       value={updateFinancingForm.notes}
@@ -1028,8 +1040,8 @@ export function OutcomesDashboard({
                 <>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Status *</label>
-                      <select
+                      <label htmlFor="outcomes-outcomes-dashboard-20" className="block text-xs font-semibold text-ink mb-1">Status *</label>
+                      <select id="outcomes-outcomes-dashboard-20"
                         value={updateExportForm.status}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, status: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -1042,8 +1054,8 @@ export function OutcomesDashboard({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
-                      <select
+                      <label htmlFor="outcomes-outcomes-dashboard-21" className="block text-xs font-semibold text-ink mb-1">Evidence *</label>
+                      <select id="outcomes-outcomes-dashboard-21"
                         value={updateExportForm.evidenceTier}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, evidenceTier: e.target.value as any })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -1068,19 +1080,24 @@ export function OutcomesDashboard({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Value shipped</label>
+                      <label htmlFor="export-value-shipped" className="block text-xs font-semibold text-ink mb-1">Value shipped{shippedStatus(updateExportForm.status) ? " (required)" : ""}</label>
                       <input
+                        id="export-value-shipped"
                         type="number"
-                        placeholder="e.g. 60000"
+                        min="0"
+                        placeholder="What actually shipped"
+                        required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.valueShipped}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valueShipped: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Shipment date</label>
+                      <label htmlFor="export-shipment-date" className="block text-xs font-semibold text-ink mb-1">Shipment date (Addis Ababa time){shippedStatus(updateExportForm.status) ? ", required" : ""}</label>
                       <input
+                        id="export-shipment-date"
                         type="datetime-local"
+                        required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.shipmentDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, shipmentDate: e.target.value })}
                         className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -1090,8 +1107,8 @@ export function OutcomesDashboard({
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Delivery date</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-22" className="block text-xs font-semibold text-ink mb-1">Delivery date</label>
+                      <input id="outcomes-outcomes-dashboard-22"
                         type="datetime-local"
                         value={updateExportForm.deliveryDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, deliveryDate: e.target.value })}
@@ -1099,8 +1116,8 @@ export function OutcomesDashboard({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">Payment received</label>
-                      <input
+                      <label htmlFor="outcomes-outcomes-dashboard-23" className="block text-xs font-semibold text-ink mb-1">Payment received</label>
+                      <input id="outcomes-outcomes-dashboard-23"
                         type="number"
                         placeholder="e.g. 60000"
                         value={updateExportForm.valuePaid}
@@ -1111,8 +1128,8 @@ export function OutcomesDashboard({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Payment date</label>
-                    <input
+                    <label htmlFor="outcomes-outcomes-dashboard-24" className="block text-xs font-semibold text-ink mb-1">Payment date</label>
+                    <input id="outcomes-outcomes-dashboard-24"
                       type="datetime-local"
                       value={updateExportForm.paymentDate}
                       onChange={(e) => setUpdateExportForm({ ...updateExportForm, paymentDate: e.target.value })}
@@ -1121,8 +1138,8 @@ export function OutcomesDashboard({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-ink mb-1">Note or bill of lading</label>
-                    <textarea
+                    <label htmlFor="outcomes-outcomes-dashboard-25" className="block text-xs font-semibold text-ink mb-1">Note or bill of lading</label>
+                    <textarea id="outcomes-outcomes-dashboard-25"
                       rows={2}
                       placeholder="e.g. BL issued, Swift message MT103 received..."
                       value={updateExportForm.notes}

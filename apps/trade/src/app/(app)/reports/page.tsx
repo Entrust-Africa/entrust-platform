@@ -15,9 +15,12 @@ interface Choice {
 
 const pathFor = (choice: Pick<Choice, "kind" | "id">) => `/reports/${choice.kind === "program" ? "programs" : "cohorts"}/${encodeURIComponent(choice.id)}`;
 
-/** What the caller can report on: every programme and cohort for Entrust staff, the cohorts it sponsors for a sponsor. */
-async function loadChoices(isStaff: boolean): Promise<Choice[]> {
-  if (isStaff) {
+/**
+ * What the caller can report on: every programme and cohort for Entrust staff and the Quality role, the cohorts it
+ * sponsors for a sponsor.
+ */
+async function loadChoices(seesEverything: boolean): Promise<Choice[]> {
+  if (seesEverything) {
     const [programs, cohorts] = await Promise.all([
       tradeGet<{ programs: { id: string; name: string }[] }>("/programs"),
       tradeGet<{ cohorts: { id: string; name: string; programName: string }[] }>("/cohorts"),
@@ -36,14 +39,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   if (!me) redirect("/sign-in");
   const { program, cohort, pathway, moduleId, cohortId } = await searchParams;
   const isStaff = Boolean(me.staffRole);
-  const choices = await loadChoices(isStaff);
+  // Quality reads every cohort's reports, as staff do, and isn't a sponsor (it has no /sponsor/cohorts).
+  const choices = await loadChoices(isStaff || Boolean(me.quality));
   const asked = cohort ? choices.find((c) => c.kind === "cohort" && c.id === cohort) : program ? choices.find((c) => c.kind === "program" && c.id === program) : undefined;
   const selected = asked ?? choices[0];
-  // Filters the page can narrow a report to. Anything else in the address is ignored.
+  // Filters the page can narrow a report to. Anything else in the address is ignored. A sponsor sees each cohort it
+  // sponsors whole: narrowing by pathway or cohort would give away which businesses are where, so it has the module only.
+  const canSplit = isStaff || Boolean(me.quality);
   const filters = new URLSearchParams();
-  if (pathway === "A" || pathway === "B") filters.set("pathway", pathway);
+  if (canSplit && (pathway === "A" || pathway === "B")) filters.set("pathway", pathway);
   if (moduleId && /^M\d{2}$/.test(moduleId)) filters.set("moduleId", moduleId);
-  if (selected?.kind === "program" && cohortId && /^[0-9a-f-]{36}$/i.test(cohortId)) filters.set("cohortId", cohortId);
+  if (canSplit && selected?.kind === "program" && cohortId && /^[0-9a-f-]{36}$/i.test(cohortId)) filters.set("cohortId", cohortId);
   const report = selected ? await tradeGet<ProgrammeReport>(`${pathFor(selected)}${filters.size ? `?${filters}` : ""}`) : null;
   const cohortsOfProgramme = selected?.kind === "program" ? choices.filter((c) => c.kind === "cohort") : [];
 
@@ -72,7 +78,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       {choices.length === 0 ? (
         <EmptyState
           title="Nothing to report on yet"
-          description={isStaff ? "Create a programme and a cohort, and their figures appear here as businesses work through TRADE." : "When Entrust names your organisation as the sponsor of a cohort, its report appears here."}
+          description={isStaff || me.quality ? "Create a programme and a cohort, and their figures appear here as businesses work through TRADE." : "When Entrust names your organisation as the sponsor of a cohort, its report appears here."}
         />
       ) : (
         <>
@@ -94,14 +100,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           {selected && (
             <form method="get" action="/reports" className="flex flex-wrap items-end gap-3 rounded-md border border-line bg-surface p-3" aria-label="Narrow the report">
               <input type="hidden" name={selected.kind} value={selected.id} />
-              <label className="text-xs font-semibold text-ink-3">
-                Pathway
-                <select name="pathway" defaultValue={filters.get("pathway") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
-                  <option value="">Both</option>
-                  <option value="A">Pathway A</option>
-                  <option value="B">Pathway B</option>
-                </select>
-              </label>
+              {canSplit && (
+                <label className="text-xs font-semibold text-ink-3">
+                  Pathway
+                  <select name="pathway" defaultValue={filters.get("pathway") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                    <option value="">Both</option>
+                    <option value="A">Pathway A</option>
+                    <option value="B">Pathway B</option>
+                  </select>
+                </label>
+              )}
               <label className="text-xs font-semibold text-ink-3">
                 Module
                 <select name="moduleId" defaultValue={filters.get("moduleId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
@@ -111,7 +119,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   ))}
                 </select>
               </label>
-              {cohortsOfProgramme.length > 0 && (
+              {canSplit && cohortsOfProgramme.length > 0 && (
                 <label className="text-xs font-semibold text-ink-3">
                   Cohort
                   <select name="cohortId" defaultValue={filters.get("cohortId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">

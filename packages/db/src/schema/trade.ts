@@ -556,7 +556,10 @@ export const certificate = trade.table(
     issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     revokedByUserId: text("revoked_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    /** Staff's reason. Internal: the audit trail and staff screens show it. */
     revocationReason: text("revocation_reason"),
+    /** What the public certificate check says about a revocation. */
+    publicRevocationReason: text("public_revocation_reason"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -567,6 +570,8 @@ export const certificate = trade.table(
   (t) => [
     index("trade_certificate_enrollment_idx").on(t.enrollmentId),
     uniqueIndex("trade_certificate_code_uidx").on(t.code),
+    // One live certificate per enrolment, so two completions landing together can't both issue one.
+    uniqueIndex("trade_certificate_live_uidx").on(t.enrollmentId).where(sql`${t.revokedAt} is null`),
   ],
 );
 
@@ -622,6 +627,9 @@ export const evidenceRecord = trade.table(
     requestedByUserId: text("requested_by_user_id").references(() => user.id, { onDelete: "set null" }),
     requestedAt: timestamp("requested_at", { withTimezone: true }),
     requestPrompt: text("request_prompt"),
+    // What the business wrote when it answered a request or sent the evidence again.
+    responseNote: text("response_note"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -1198,6 +1206,8 @@ export const publicDiagnostic = trade.table(
     emailProofHash: text("email_proof_hash"),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    // The enrolment staff matched this submission to. Linking gives the enrolment the avenue the form assigned.
+    linkedEnrollmentId: uuid("linked_enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -1608,6 +1618,11 @@ export const notification = trade.table(
     dedupeKey: text("dedupe_key"),
     /** queued: handed to the email queue. skipped: the person turned email off for this kind. failed: the queue refused it. */
     emailStatus: text("email_status", { enum: ["queued", "skipped", "failed"] }),
+    /**
+     * False when the person wants this kind by email only. The row is still kept, because it's what stops the same thing
+     * being emailed twice (the dedupe key), but it isn't shown in the platform.
+     */
+    inApp: boolean("in_app").notNull().default(true),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

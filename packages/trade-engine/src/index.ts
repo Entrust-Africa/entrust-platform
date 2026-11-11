@@ -16,7 +16,7 @@ export { assignPathwayFromDiagnostic, pathwayInputFromDiagnostic } from "./diagn
 export type { DiagnosticPathwayOptions } from "./diagnostic";
 export * from "./calculators";
 export * from "./worksheets";
-export { evaluatePlacement } from "./placement";
+export { evaluatePlacement, recordsVerifiedFrom } from "./placement";
 export type { PlacementInput, PlacementOutcome } from "./placement";
 export { MODULE_STATUS_LABELS, PATHWAY_NAMES, REVIEW_NOTES, buildPlacementReport } from "./report";
 export type { PlacementReport, ReportBaseline, ReportDomain, ReportInput, ReportModule, ReportObjectives, ReportReason } from "./report";
@@ -67,3 +67,5 @@ export { APPLICATION_COHORTS, PILOT_COHORTS, buildCatalogue, cohortOfProgramme, 
 export type { ApplicationRow, CatalogueCohort, CatalogueSme, CohortStatus, PilotCohort } from "./catalogue";
 export { PASSPORT_CHECKS, PASSPORT_ID_PATTERN, PASSPORT_STANDING_LABELS, PASSPORT_STATUSES, PASSPORT_TIERS, PASSPORT_TIER_LABELS, employeeRange, isPassportId, normalisePassportId, passportStanding } from "./passport";
 export type { PassportStanding, PassportStatus, PassportTier } from "./passport";
+export { TRADE_TIME_ZONE, formatTradeDateTime, parseTradeLocalDateTime, toTradeLocalDateTime, tradeToday } from "./time";
+export { safeLinkTarget } from "./links";

@@ -1,7 +1,7 @@
 import { CALCULATOR_NAMES, evaluateRubric } from "@entrust/trade-engine";
 import { MODULE_IDS } from "@entrust/trade-rules";
 import { describe, expect, it } from "vitest";
-import { MODULE_CONTENT, findVersion, learnerModuleSchema, listModules, newerVersion, toLearnerView, validateModuleContent, visibleVersions } from "../src";
+import { MODULE_CONTENT, findVersion, learnerModuleSchema, listModules, newerVersion, standardProblems, toLearnerView, validateModuleContent, visibleVersions } from "../src";
 import type { ModuleContent } from "../src";
 import { approved, fixture } from "./fixture";
 
@@ -159,7 +159,8 @@ describe("modules on Entrust's common assessment standard", () => {
   });
 });
 
-// Entrust's M01, M03, M04 and M07 packages (version 1.0) meet the same standard. A learner who started on 0.1.0 keeps it.
+// Entrust's M01, M03, M04 and M07 packages (version 1.0) meet the same standard. Their 0.1.0 versions are retired: no
+// learner starts or is graded on them.
 describe("the M01, M03, M04 and M07 version 1.0 packages", () => {
   const drafts = MODULE_CONTENT.filter((c) => ["M01", "M03", "M04", "M07"].includes(c.module) && c.version === "1.0.0");
 
@@ -167,7 +168,8 @@ describe("the M01, M03, M04 and M07 version 1.0 packages", () => {
     expect(drafts.map((c) => `${c.module}@${c.version} ${c.status}`)).toEqual(["M01", "M03", "M04", "M07"].map((m) => `${m}@1.0.0 approved`));
     expect(drafts.every((c) => c.approval?.by === "Minase Fikadu, TRADE platform team")).toBe(true);
     for (const module of ["M01", "M03", "M04", "M07"] as const) {
-      expect(visibleVersions(module, "learner").map((c) => c.version)).toEqual(["1.0.0", "0.1.0"]);
+      expect(visibleVersions(module, "learner").map((c) => c.version)).toEqual(["1.0.0"]);
+      expect(visibleVersions(module, "staff").map((c) => c.version)).toEqual(["1.0.0", "0.1.0"]);
     }
   });
 
@@ -223,6 +225,28 @@ describe("validation", () => {
   it("accepts a complete draft and a complete approved version", () => {
     expect(errorsFor(fixture())).toEqual([]);
     expect(errorsFor(approved())).toEqual([]);
+  });
+
+  it("holds an approved version learners are graded on to Entrust's standard", () => {
+    // The fixture is M04@0.1.0, which is retired, so it isn't held to the standard. As a new version it is.
+    expect(errorsFor(approved({ version: "9.0.0" }))).toEqual([
+      "M04@9.0.0: the knowledge check has 10 questions, not 2",
+      "M04@9.0.0: q1 has 4 options, not 3",
+      "M04@9.0.0: q2 has 4 options, not 3",
+      "M04@9.0.0: q2 has one right answer, not 2",
+      "M04@9.0.0: the rubric has 6 criteria, not 3",
+      "M04@9.0.0: gap is scored out of 6, not 3",
+      "M04@9.0.0: gap can't be a must-have criterion",
+      "M04@9.0.0: risk is scored out of 6, not 3",
+      "M04@9.0.0: plan is scored out of 6, not 3",
+      "M04@9.0.0: plan can't be a must-have criterion",
+      "M04@9.0.0: the rubric passes at 24, not 6",
+    ]);
+    // A draft can still be on its way there.
+    expect(errorsFor(fixture({ version: "9.0.0" }))).toEqual([]);
+    const m05 = MODULE_CONTENT.find((c) => c.module === "M05")!;
+    expect(standardProblems(m05)).toEqual([]);
+    expect(standardProblems({ ...m05, knowledgeCheck: { ...m05.knowledgeCheck, passMark: 60 } })).toEqual(["M05@1.0.0: the knowledge check passes at 80%, not 60%"]);
   });
 
   it("rejects a rubric whose pass mark is above its maximum", () => {

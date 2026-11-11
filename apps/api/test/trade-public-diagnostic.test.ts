@@ -1,4 +1,4 @@
-import { like } from "drizzle-orm";
+import { desc, eq, like } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { visibleQuestions, type FormDefinition } from "@entrust/forms";
 import { latestDiagnosticTemplate } from "@entrust/trade-rules";
@@ -306,6 +306,53 @@ describe("staff reading the submissions", () => {
     expect(res.body.items[0]).toMatchObject({ status: "draft", pathway: null, submittedCount: 0 });
     expect(res.body.items[0].sessions).toHaveLength(2);
     expect((await get(w.reviewer, `/public-diagnostics?status=submitted&q=${encodeURIComponent(only)}`)).body.items).toHaveLength(0);
+  });
+
+  it("marks a form whose email wasn't proven, and never lets one replace a proven form", async () => {
+    const shared = email("impersonated");
+    const submit = async (overrides: Record<string, Wire>) => {
+      const token = (await post(null, "/public/diagnostic", { email: shared, phone: PHONE, businessName: "Real Exporters" })).body.token as string;
+      await put(null, `/public/diagnostic/${token}/responses`, { answers: fillIn(diagnostic, overrides) });
+      return (await post(null, `/public/diagnostic/${token}/submit`)).body;
+    };
+    // The business proves its address and submits: Pathway A.
+    await submit({ Q135: "no" });
+    const [proven] = await db.select({ id: schema.publicDiagnostic.id }).from(schema.publicDiagnostic).where(eq(schema.publicDiagnostic.email, shared));
+    await db.update(schema.publicDiagnostic).set({ emailVerifiedAt: new Date() }).where(eq(schema.publicDiagnostic.id, proven!.id));
+    // Later a stranger types the same address and submits something else, without ever opening the email.
+    await submit({ Q135: "yes", Q137: yearAgo() });
+
+    const person = (await get(w.reviewer, `/public-diagnostics?q=${encodeURIComponent(shared)}`)).body.items[0];
+    expect(person).toMatchObject({ pathway: "A", emailVerified: true, submittedCount: 2 });
+    expect(person.sessions.map((x: { emailVerified: boolean }) => x.emailVerified).sort()).toEqual([false, true]);
+  });
+
+  it("links a proven submission to a business's enrolment, which takes its avenue", async () => {
+    const owner = await signUp("pd-link-owner");
+    const org = await createOrganization("pd-link-org", [[owner, "owner"]], { platform: "trade" });
+    const [program] = await db.insert(schema.program).values({ name: `${PREFIX}pd-link-program` }).returning();
+    const [cohort] = await db.insert(schema.cohort).values({ programId: program!.id, name: `${PREFIX}pd-link-cohort` }).returning();
+    const [enrollment] = await db.insert(schema.enrollment).values({ cohortId: cohort!.id, organizationId: org, status: "active" }).returning();
+
+    const token = await start("to-link");
+    await put(null, `/public/diagnostic/${token}/responses`, { answers: fillIn(diagnostic, { Q135: "yes", Q137: yearAgo() }) });
+    await post(null, `/public/diagnostic/${token}/submit`);
+    const [row] = await db.select().from(schema.publicDiagnostic).where(eq(schema.publicDiagnostic.status, "submitted")).orderBy(desc(schema.publicDiagnostic.submittedAt)).limit(1);
+
+    const link = () => post(w.reviewer, `/public-diagnostics/${row!.id}/link`, { enrollmentId: enrollment!.id });
+    // The facilitator isn't on the cohort: the enrolment isn't theirs.
+    expect((await link()).status).toBe(404);
+    await db.insert(schema.cohortStaff).values({ cohortId: cohort!.id, userId: w.reviewer.id });
+    // Nobody proved the address, so it might not be the business's.
+    expect((await link()).status).toBe(422);
+    await db.update(schema.publicDiagnostic).set({ emailVerifiedAt: new Date() }).where(eq(schema.publicDiagnostic.id, row!.id));
+    const linked = await link();
+    expect(linked.status).toBe(200);
+    expect(linked.body).toMatchObject({ pathway: "B", status: "provisional" });
+    const [avenue] = await db.select().from(schema.pathwayAssignment).where(eq(schema.pathwayAssignment.enrollmentId, enrollment!.id));
+    expect(avenue).toMatchObject({ pathway: "B", status: "provisional", decidedByUserId: w.reviewer.id });
+    expect((await link()).status).toBe(409);
+    await db.delete(schema.program).where(eq(schema.program.id, program!.id));
   });
 
   it("shows one submission's answers", async () => {

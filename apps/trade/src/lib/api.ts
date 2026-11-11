@@ -43,6 +43,15 @@ export async function listOrganizations(): Promise<{ id: string; name: string }[
   return organizations.map(({ id, name }) => ({ id, name }));
 }
 
+/**
+ * The sponsor organisations a cohort can name (Entrust staff only). Not the signed-in person's own organisations: a sponsor
+ * is a bank Entrust set up, and the API refuses anything else on a cohort.
+ */
+export async function listSponsors(): Promise<{ id: string; name: string }[]> {
+  const result = await tradeGet<{ items: { id: string; name: string }[] }>("/sponsors");
+  return (result.data?.items ?? []).map(({ id, name }) => ({ id, name }));
+}
+
 /** All programs (Entrust staff only). */
 export async function listPrograms(): Promise<TradeProgram[]> {
   const res = await (await serverApi()).v1.trade.programs.$get();
@@ -102,15 +111,15 @@ export async function listWaitingSmes(): Promise<WaitingSme[]> {
   return result.data?.smes ?? [];
 }
 
-/** Every onboarding diagnostic with its status and avenue, newest first (Entrust staff only). */
-export async function listDiagnostics(): Promise<StaffAssessmentRow[]> {
-  const result = await tradeGet<{ items: StaffAssessmentRow[] }>("/assessments?kind=diagnostic");
+/** Onboarding diagnostics with their status and avenue, newest first (Entrust staff only): one cohort's, all of them, or the newest 200. */
+export async function listDiagnostics(cohortId?: string): Promise<StaffAssessmentRow[]> {
+  const result = await tradeGet<{ items: StaffAssessmentRow[] }>(`/assessments?kind=diagnostic${cohortId ? `&cohortId=${encodeURIComponent(cohortId)}` : ""}`);
   return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
 }
 
-/** Every placement assessment with its status, newest first (Entrust staff only). */
-export async function listPlacements(): Promise<StaffAssessmentRow[]> {
-  const result = await tradeGet<{ items: StaffAssessmentRow[] }>("/assessments?kind=placement");
+/** Placement assessments with their status, newest first (Entrust staff only): one cohort's, all of them, or the newest 200. */
+export async function listPlacements(cohortId?: string): Promise<StaffAssessmentRow[]> {
+  const result = await tradeGet<{ items: StaffAssessmentRow[] }>(`/assessments?kind=placement${cohortId ? `&cohortId=${encodeURIComponent(cohortId)}` : ""}`);
   return (result.data?.items ?? []).filter((item) => item.status !== "superseded");
 }
 

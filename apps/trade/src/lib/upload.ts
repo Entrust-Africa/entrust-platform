@@ -69,10 +69,28 @@ export async function uploadFile(organizationId: string, file: File): Promise<{ 
   return { ok: true, file: { id: done.data.file.id, name: done.data.file.originalName, contentType: done.data.file.contentType, sizeBytes: done.data.file.sizeBytes } };
 }
 
+/**
+ * Opens a link to a new tab once it's known. The tab opens before the wait, while the click still counts: a phone's
+ * pop-up blocker (iOS Safari) refuses one opened after an `await`. Without a tab, the page itself goes there.
+ */
+export async function openInNewTab(load: () => Promise<{ url: string } | { error: string }>): Promise<string | null> {
+  const tab = window.open("", "_blank");
+  const result = await load();
+  if ("error" in result) {
+    tab?.close();
+    return result.error;
+  }
+  if (tab) {
+    tab.opener = null;
+    tab.location.href = result.url;
+  } else window.location.href = result.url;
+  return null;
+}
+
 /** Opens a short-lived download link for a file the caller may see. */
 export async function openFile(fileId: string): Promise<string | null> {
-  const res = await call<{ downloadUrl: string }>(`/v1/files/${fileId}/download-url`, { method: "GET" });
-  if (!res.ok) return res.error;
-  window.open(res.data.downloadUrl, "_blank", "noopener,noreferrer");
-  return null;
+  return openInNewTab(async () => {
+    const res = await call<{ downloadUrl: string }>(`/v1/files/${fileId}/download-url`, { method: "GET" });
+    return res.ok ? { url: res.data.downloadUrl } : { error: res.error };
+  });
 }

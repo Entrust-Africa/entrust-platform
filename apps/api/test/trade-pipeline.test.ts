@@ -82,7 +82,7 @@ describe("TRADE buyer pipeline API (#68)", () => {
 
   it("refuses stage transition when no commercial activity exists", async () => {
     const listRes = await get(owner, `/pipeline?organizationId=${org}`);
-    const oppId = listRes.body.items[0].id;
+    const oppId = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH").id;
 
     const res = await patch(owner, `/pipeline/${oppId}/stage`, {
       stage: "quote_submitted",
@@ -92,11 +92,31 @@ describe("TRADE buyer pipeline API (#68)", () => {
     expect(res.body.error).toContain("at least one recorded commercial activity");
   });
 
+  it("won't let a business mark its own new lead verified or start it at a late stage", async () => {
+    const lead = { organizationId: org, title: "Self-verified lead", companyName: "Shortcut Traders", country: "KE" };
+    expect((await post(owner, "/pipeline", { ...lead, verificationStatus: "qualified_opportunity" })).status).toBe(403);
+    expect((await post(owner, "/pipeline", { ...lead, stage: "quote_submitted" })).status).toBe(422);
+    // Staff can record what they have checked.
+    const staffLead = await post(admin, "/pipeline", { ...lead, verificationStatus: "identity_checked" });
+    expect(staffLead.status).toBe(201);
+    expect(staffLead.body.verificationStatus).toBe("identity_checked");
+  });
+
+  it("records a business's own activity without moving its buyer up the verification ladder", async () => {
+    const listRes = await get(owner, `/pipeline?organizationId=${org}`);
+    const opp = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH");
+    const res = await post(owner, `/pipeline/${opp.id}/activities`, { type: "rfq", summary: "They asked for a quotation, by their account.", occurredAt: new Date().toISOString() });
+    expect(res.status).toBe(201);
+    const after = (await get(owner, `/pipeline?organizationId=${org}`)).body.items.find((o: { id: string }) => o.id === opp.id);
+    expect(after.verificationStatus).toBe("unverified");
+  });
+
   it("records a commercial activity and advances verification ladder", async () => {
     const listRes = await get(owner, `/pipeline?organizationId=${org}`);
-    const oppId = listRes.body.items[0].id;
+    const oppId = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH").id;
 
-    const actRes = await post(owner, `/pipeline/${oppId}/activities`, {
+    // Entrust staff record the contact they checked, which moves the buyer up the ladder.
+    const actRes = await post(admin, `/pipeline/${oppId}/activities`, {
       type: "email",
       summary: "Sent introductory catalogue and pricing brief to Hans Gruber.",
       occurredAt: new Date().toISOString(),
@@ -109,17 +129,18 @@ describe("TRADE buyer pipeline API (#68)", () => {
 
     const getActs = await get(owner, `/pipeline/${oppId}/activities`);
     expect(getActs.status).toBe(200);
-    expect(getActs.body.items).toHaveLength(1);
+    expect(getActs.body.items).toHaveLength(2);
 
     const oppRes = await get(owner, `/pipeline?organizationId=${org}`);
-    expect(oppRes.body.items[0].verificationStatus).toBe("identity_checked");
-    expect(oppRes.body.items[0].activityCount).toBe(1);
-    expect(oppRes.body.items[0].latestActivity).not.toBeNull();
+    const opp = oppRes.body.items.find((o: { id: string }) => o.id === oppId);
+    expect(opp.verificationStatus).toBe("identity_checked");
+    expect(opp.activityCount).toBe(2);
+    expect(opp.latestActivity).not.toBeNull();
   });
 
   it("allows stage transition once activity is recorded", async () => {
     const listRes = await get(owner, `/pipeline?organizationId=${org}`);
-    const oppId = listRes.body.items[0].id;
+    const oppId = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH").id;
 
     const res = await patch(owner, `/pipeline/${oppId}/stage`, {
       stage: "quote_submitted",
@@ -131,7 +152,7 @@ describe("TRADE buyer pipeline API (#68)", () => {
 
   it("evaluates and stores qualification scorecard", async () => {
     const listRes = await get(owner, `/pipeline?organizationId=${org}`);
-    const oppId = listRes.body.items[0].id;
+    const oppId = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH").id;
 
     const res = await post(owner, `/pipeline/${oppId}/scorecard`, {
       productFit: 4,
@@ -153,12 +174,14 @@ describe("TRADE buyer pipeline API (#68)", () => {
     expect(res.body.stageNumber).toBe(4); // quote_submitted -> stage 4
     expect(res.body.title).toBe("Inquiry & Quotation");
     expect(res.body.m05DeliverableStatus.isEligible).toBe(false); // need 5 verified leads
-    expect(res.body.m05DeliverableStatus.missingCount).toBe(4); // 1 verified, 4 missing
+    // Two verified by staff (Kaffee Welt through a checked contact, Shortcut Traders when staff added it), three missing.
+    // The lead the business logged a quotation request on by itself doesn't count.
+    expect(res.body.m05DeliverableStatus.missingCount).toBe(3);
   });
 
   it("denies access to rival organisation", async () => {
     const listRes = await get(owner, `/pipeline?organizationId=${org}`);
-    const oppId = listRes.body.items[0].id;
+    const oppId = listRes.body.items.find((o: { companyName: string }) => o.companyName === "Kaffee Welt GmbH").id;
 
     const res = await patch(rival, `/pipeline/${oppId}/stage`, {
       stage: "disqualified",

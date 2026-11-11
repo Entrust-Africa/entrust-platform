@@ -38,7 +38,7 @@ export async function AssessmentIndexPage({ kind }: { kind: AssessmentKind }) {
         <Card className="p-8 text-center">
           <h1 className="font-display text-xl font-bold text-ink">{KINDS[kind].title}</h1>
           <p className="mt-3 text-sm text-ink-2">
-            {me.staffRole ? "SMEs fill this in from their own account. To fill it in for an SME, open the SME from its cohort." : "Choose your business using the switcher above."}
+            {me.staffRole ? "SMEs fill this in from their own account. To fill it in with a business, open its cohort and use “Start with the business” in its row." : "Choose your business using the switcher above."}
           </p>
         </Card>
       </div>

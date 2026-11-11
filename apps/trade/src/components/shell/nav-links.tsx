@@ -104,6 +104,10 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
         ],
       },
     ];
+    // An administrator sets up the sponsor banks a cohort can name.
+    if (user?.staffRole === "admin") {
+      groups[0]!.items.splice(1, 0, { href: "/admin/sponsors", label: "Sponsor banks", icon: Building2, match: (path) => path.startsWith("/admin/sponsors") });
+    }
     // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
     if (user?.staffRole === "reviewer") {
       groups[0]!.items = groups[0]!.items.filter(
@@ -156,7 +160,8 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
 
   // SME navigation
   const items: NavItem[] = [
-    { href: "/", label: "My plan", icon: LayoutDashboard, match: (path) => path === "/" || path.startsWith("/plan") },
+    { href: "/", label: "My plan", icon: LayoutDashboard, match: (path) => path === "/" },
+    { href: "/plan", label: "Plan and exemptions", icon: ListChecks, match: (path) => path.startsWith("/plan") },
     { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
     { href: "/worksheets", label: "Worksheets", icon: Calculator, match: (path) => path.startsWith("/worksheets") },
     { href: "/business", label: "My business", icon: Building2, match: (path) => path.startsWith("/business") },
@@ -165,6 +170,7 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
     { href: "/outcomes", label: "Financing & outcomes", icon: Coins, match: (path) => path.startsWith("/outcomes") },
     { href: "/transactions", label: "Export transactions", icon: PackageCheck, match: (path) => path.startsWith("/transactions") },
     { href: "/action-plan", label: "Action plan", icon: ListChecks, match: (path) => path.startsWith("/action-plan") },
+    { href: "/evidence", label: "Evidence", icon: FileText, match: (path) => path.startsWith("/evidence") },
     { href: "/tools/pricing", label: "Pricing calculator", icon: Percent, match: (path) => path.startsWith("/tools/pricing") },
     { href: "/ai-lab", label: "AI Practice Lab", icon: Sparkles, match: (path) => path.startsWith("/ai-lab") },
     practice,

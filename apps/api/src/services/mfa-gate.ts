@@ -4,9 +4,12 @@ import { getDb, schema } from "@entrust/db";
 import type { AppEnv } from "../app";
 import { mfaRequired } from "./staff-mfa";
 
-// The second step guards TRADE and the Summit, which run on the architecture spec's rules. CLEAR has its own sign-in and isn't gated,
-// so nothing here can lock Entrust staff out of it. The setup routes under /v1/mfa and /v1/me are outside both prefixes.
-const GATED = ["/v1/trade", "/v1/summit"];
+// The second step guards everything a staff session reaches, not only /v1/trade and /v1/summit: files, the audit trail, the
+// SME registry and organisations hold TRADE's data too. The exceptions are what a session needs to take the second step
+// (/v1/mfa, and /v1/me to learn that it has to) and CLEAR's own routes, which have their own sign-in rules and must not lock
+// staff out. Sign-in itself (/api/auth) isn't under /v1.
+const EXEMPT = ["/v1/mfa", "/v1/me", "/v1/clear", "/v1/health"];
+const isExempt = (path: string): boolean => EXEMPT.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 
 const STAFF_TTL_MS = 60_000;
 const staffCache = new Map<string, { staff: boolean; at: number }>();
@@ -45,7 +48,7 @@ export const mfaGate: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!mfaRequired()) return next();
   const user = c.get("user");
   const session = c.get("session");
-  if (!user || !session || !GATED.some((path) => c.req.path === path || c.req.path.startsWith(`${path}/`))) return next();
+  if (!user || !session || isExempt(c.req.path)) return next();
   if (!(await isEntrustMember(user.id))) return next();
   const remembered = verifiedSessions.get(session.id);
   if (!remembered || Date.now() - remembered.at > VERIFIED_TTL_MS) {

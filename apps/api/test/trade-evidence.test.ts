@@ -6,6 +6,7 @@ import {
   callV1,
   cleanup,
   createOrganization,
+  makeFile,
   db,
   signUp,
   type TestUser,
@@ -282,6 +283,23 @@ describe("TRADE: evidence records, review and evidence labels (#59)", () => {
         ),
       );
     expect(audit).toBeDefined();
+  });
+
+  it("lets the business answer a request, which then goes to staff for review", async () => {
+    const asked = await callV1(w.admin, "POST", "/trade/evidence/request", { organizationId: w.smeOrgId, title: "Bank statement", prompt: "Send last quarter's statement." });
+    // Nothing has come in, so there's nothing to review.
+    expect((await callV1(w.admin, "POST", `/trade/evidence/${asked.body.id}/review`, { status: "accepted" })).status).toBe(409);
+    expect((await callV1(w.outsider, "POST", `/trade/evidence/${asked.body.id}/answer`, { note: "Here" })).status).toBe(404);
+    expect((await callV1(w.smeOwner, "POST", `/trade/evidence/${asked.body.id}/answer`, {})).status).toBe(400);
+    const file = await makeFile(w.smeOrgId, w.smeOwner.id, "statement.pdf");
+    const answered = await callV1(w.smeOwner, "POST", `/trade/evidence/${asked.body.id}/answer`, { fileId: file, note: "Q3 statement" });
+    expect(answered.status).toBe(200);
+    expect(answered.body).toMatchObject({ status: "submitted", fileId: file, confidence: "documented", responseNote: "Q3 statement" });
+    // Once it's with staff it can't be changed until they send it back.
+    expect((await callV1(w.smeOwner, "POST", `/trade/evidence/${asked.body.id}/answer`, { note: "Again" })).status).toBe(409);
+    const back = await callV1(w.admin, "POST", `/trade/evidence/${asked.body.id}/review`, { status: "resubmission_required", comment: "It's cut off on page 2." });
+    expect(back.status).toBe(200);
+    expect((await callV1(w.smeOwner, "POST", `/trade/evidence/${asked.body.id}/answer`, { note: "Full statement attached" })).status).toBe(200);
   });
 
   it("evidence status and confidence changes do not alter placement or assessment scores", async () => {

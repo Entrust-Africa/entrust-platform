@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { auth, APIError, trustedOrigins, type Session } from "@entrust/auth";
@@ -64,6 +65,21 @@ base.use(
     credentials: true,
   }),
 );
+
+// No request body is bigger than it needs to be. Most are a form's worth of JSON, so 1 MB; the workbook imports carry a
+// base64 spreadsheet and the studio a whole module, so they get more. The development file store takes the file itself.
+const MB = 1024 * 1024;
+const LARGER_BODIES: readonly [string, number][] = [
+  ["/v1/trade/register/import", 30 * MB],
+  ["/v1/trade/applications/import", 30 * MB],
+  ["/v1/trade/admin/modules", 5 * MB],
+  ["/v1/files/mock-storage/", 25 * MB],
+];
+const tooLarge = (c: { json: (body: unknown, status: 413) => Response }) => c.json({ error: "The request is too large.", code: "invalid" }, 413);
+base.use("*", async (c, next) => {
+  const maxSize = LARGER_BODIES.find(([prefix]) => c.req.path.startsWith(prefix))?.[1] ?? MB;
+  return bodyLimit({ maxSize, onError: tooLarge })(c, next);
+});
 
 // Resolve the session once per request; routes decide whether it is required.
 base.use("/v1/*", async (c, next) => {

@@ -57,8 +57,8 @@ export function ScheduleSessionDialog({
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-ink">Session Title</label>
-                <input
+                <label htmlFor="sessions-schedule-session-dialog-1" className="block text-xs font-semibold text-ink">Session Title</label>
+                <input id="sessions-schedule-session-dialog-1"
                   type="text"
                   name="title"
                   required
@@ -68,8 +68,8 @@ export function ScheduleSessionDialog({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink">Description (Optional)</label>
-                <textarea
+                <label htmlFor="sessions-schedule-session-dialog-2" className="block text-xs font-semibold text-ink">Description (Optional)</label>
+                <textarea id="sessions-schedule-session-dialog-2"
                   name="description"
                   rows={2}
                   placeholder="Agenda, prerequisites, or preparation instructions..."
@@ -78,10 +78,10 @@ export function ScheduleSessionDialog({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink">
+                <label htmlFor="sessions-schedule-session-dialog-3" className="block text-xs font-semibold text-ink">
                   Covered Modules (Comma-separated)
                 </label>
-                <input
+                <input id="sessions-schedule-session-dialog-3"
                   type="text"
                   name="moduleCodes"
                   placeholder="e.g. M01, M02"
@@ -94,8 +94,9 @@ export function ScheduleSessionDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Start Time</label>
+                  <label htmlFor="session-start" className="block text-xs font-semibold text-ink">Start (Addis Ababa time)</label>
                   <input
+                    id="session-start"
                     type="datetime-local"
                     name="startTime"
                     required
@@ -103,8 +104,9 @@ export function ScheduleSessionDialog({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink">End Time</label>
+                  <label htmlFor="session-end" className="block text-xs font-semibold text-ink">End (Addis Ababa time)</label>
                   <input
+                    id="session-end"
                     type="datetime-local"
                     name="endTime"
                     required
@@ -114,8 +116,8 @@ export function ScheduleSessionDialog({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink">Venue or Meeting Link</label>
-                <input
+                <label htmlFor="sessions-schedule-session-dialog-4" className="block text-xs font-semibold text-ink">Venue or Meeting Link</label>
+                <input id="sessions-schedule-session-dialog-4"
                   type="text"
                   name="venue"
                   placeholder="e.g. https://meet.google.com/xyz or Room 402, Addis Ababa"
@@ -124,8 +126,8 @@ export function ScheduleSessionDialog({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink">Recording URL (After session)</label>
-                <input
+                <label htmlFor="sessions-schedule-session-dialog-5" className="block text-xs font-semibold text-ink">Recording URL (After session)</label>
+                <input id="sessions-schedule-session-dialog-5"
                   type="url"
                   name="recordingUrl"
                   placeholder="https://..."

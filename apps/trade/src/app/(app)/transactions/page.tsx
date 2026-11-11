@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { TransactionWorkspace, type TransactionData } from "@/components/transactions/transaction-workspace";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
+import { businessInView } from "@/lib/business";
 
 export const metadata = { title: "Export transactions" };
 
@@ -9,10 +10,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams?
   const me = await getMe();
   if (!me) redirect("/sign-in");
   const { organizationId } = (await searchParams) ?? {};
-  const activeOrg =
-    (organizationId ? me.organizations?.find((o) => o.id === organizationId) : null) ??
-    me.organizations?.find((o) => o.id === me.activeOrganizationId) ??
-    me.organizations?.[0];
+  // Staff open a business by its id in the address; a member gets their own.
+  const activeOrg = await businessInView(me, organizationId);
   if (!activeOrg) redirect("/");
   const data = await tradeGet<TransactionData>(`/transactions?organizationId=${encodeURIComponent(activeOrg.id)}`);
 

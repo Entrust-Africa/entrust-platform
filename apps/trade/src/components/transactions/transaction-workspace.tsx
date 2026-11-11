@@ -153,7 +153,13 @@ export function TransactionWorkspace({ initial, organizationId, readOnly }: { in
                         {long ? (
                           <textarea className={field} disabled={readOnly} defaultValue={value} onBlur={(e) => commit(e.target.value)} />
                         ) : (
-                          <input className={field} disabled={readOnly} defaultValue={value} onBlur={(e) => commit(e.target.value)} />
+                          <input
+                            className={field}
+                            disabled={readOnly}
+                            defaultValue={value}
+                            {...(key === "currency" ? { maxLength: 3, placeholder: "USD", style: { textTransform: "uppercase" as const } } : {})}
+                            onBlur={(e) => commit(key === "currency" ? e.target.value.toUpperCase() : e.target.value)}
+                          />
                         )}
                       </label>
                     );

@@ -70,6 +70,18 @@ describe("the 90-day action plan", () => {
     expect(version).toBeTruthy();
   });
 
+  it("adds nothing twice when two imports land together, or a newer register repeats earlier actions", async () => {
+    const rows = [1, 2, 3, 4, 5, 6].map((n) => ({ area: "Buyers", result: `Result ${n}`, action: `Action ${n}`, responsible: "Sara", deadline: "2030-01-01", status: "not_started" }));
+    await db
+      .insert(schema.worksheetVersion)
+      .values({ enrollmentId: w.enrollment, worksheetId: "m12-action-register", moduleId: "M12", version: 2, values: { actions: rows }, status: "submitted", submittedAt: new Date(Date.now() + 1000) });
+    const [a, b] = await Promise.all([post(w.owner, "/action-plan/import", { organizationId: w.org }), post(w.owner, "/action-plan/import", { organizationId: w.org })]);
+    // Only Action 6 is new, and it comes in once.
+    expect([ok(a).imported, ok(b).imported].sort()).toEqual([0, 1]);
+    const items = ok(await plan()).items.filter((i: Json) => i.fromRegister);
+    expect(items.map((i: Json) => i.description).sort()).toEqual(["Action 1", "Action 2", "Action 3", "Action 4", "Action 5", "Action 6"]);
+  });
+
   it("records M12's reviews against the plan", async () => {
     expect((await post(w.owner, "/action-plan/reviews", { organizationId: w.org, day: 45, answers: {} })).status).toBe(400);
     expect((await post(w.owner, "/action-plan/reviews", { organizationId: w.org, day: 30, answers: { made_up: "x" } })).status).toBe(422);

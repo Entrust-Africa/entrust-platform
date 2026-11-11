@@ -145,8 +145,8 @@ router
   .openapi(revokeRoute, async (c) => {
     const ctx = await contextFor(c.get("user"));
     const { id } = c.req.valid("param");
-    const { reason } = c.req.valid("json");
-    const cert = await revokeCertificate(ctx, id, reason);
+    const { reason, publicReason } = c.req.valid("json");
+    const cert = await revokeCertificate(ctx, id, reason, publicReason);
     return c.json(cert, 200);
   })
   .openapi(adminOverrideRoute, async (c) => {

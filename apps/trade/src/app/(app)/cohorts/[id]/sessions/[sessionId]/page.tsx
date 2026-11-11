@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Card } from "@entrust/ui";
 import { getFacilitatorRoster, getMe } from "@/lib/api";
 import { RosterSheet } from "./roster-sheet";
+import { sessionWhen } from "@/lib/trade-time";
 
 export const metadata = { title: "Session & Attendance" };
 
@@ -51,8 +52,7 @@ export default async function SessionDetailsPage(props: {
         <Card className="p-4">
           <span className="text-xs text-ink-3 font-medium">Schedule</span>
           <p className="mt-1 text-sm font-semibold text-ink">
-            {new Date(session.startTime).toLocaleString()} –{" "}
-            {new Date(session.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {sessionWhen(session.startTime, session.endTime)}
           </p>
         </Card>
         <Card className="p-4">

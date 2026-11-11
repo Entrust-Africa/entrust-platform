@@ -124,3 +124,39 @@ export function evaluateRubric(
     criterionResults,
   };
 }
+
+/**
+ * What's wrong with a set of scores for a rubric, so the API refuses them instead of quietly capping or zeroing.
+ * `complete` asks for a score on every criterion, as a first score needs; an override may change only some.
+ */
+export function rubricScoreProblems(
+  rubric: RubricDef,
+  scores: Record<string, CriterionScoreInput | undefined>,
+  confirmedCriticalFailures: readonly string[],
+  { complete }: { complete: boolean },
+): string[] {
+  const problems: string[] = [];
+  const criteria = new Map(rubric.criteria.map((c) => [c.id, c]));
+  for (const [id, input] of Object.entries(scores)) {
+    const criterion = criteria.get(id);
+    if (!criterion) {
+      problems.push(`${id} isn't a criterion of this rubric.`);
+      continue;
+    }
+    const points = input?.points;
+    if (typeof points !== "number" || !Number.isInteger(points) || points < 0 || points > criterion.maxPoints) {
+      problems.push(`${criterion.title}: score it from 0 to ${criterion.maxPoints} in whole points.`);
+    }
+  }
+  if (complete) {
+    for (const criterion of rubric.criteria) {
+      if (scores[criterion.id] === undefined) problems.push(`${criterion.title} has no score.`);
+    }
+  }
+  const failures = new Set((rubric.criticalFailures ?? []).map((f) => f.id));
+  for (const id of confirmedCriticalFailures) {
+    if (!failures.has(id)) problems.push(`${id} isn't one of this rubric's critical failures.`);
+  }
+  if (new Set(confirmedCriticalFailures).size !== confirmedCriticalFailures.length) problems.push("A critical failure is listed twice.");
+  return problems;
+}

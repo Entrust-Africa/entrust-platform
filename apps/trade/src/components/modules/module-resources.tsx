@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, Card, Field } from "@entrust/ui";
 import { FileUpload } from "@/components/files/file-upload";
 import { tradeFetch } from "@/lib/trade-client";
+import { openInNewTab } from "@/lib/upload";
 
 interface Resource {
   id: string;
@@ -46,9 +47,11 @@ export function ModuleResources({ moduleId, canManage, entrustOrganizationId }: 
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span className="text-sm">
                 <button type="button" className="font-semibold text-brand-600 underline-offset-4 hover:underline" onClick={async () => {
-                  const res = await tradeFetch<{ downloadUrl: string }>("GET", `/resources/${r.id}/download-url`);
-                  if (res.data) window.open(res.data.downloadUrl, "_blank", "noopener,noreferrer");
-                  else setError(res.error);
+                  const problem = await openInNewTab(async () => {
+                    const res = await tradeFetch<{ downloadUrl: string }>("GET", `/resources/${r.id}/download-url`);
+                    return res.data ? { url: res.data.downloadUrl } : { error: res.error ?? "It couldn't be opened." };
+                  });
+                  if (problem) setError(problem);
                 }}>{r.name}</button>
                 <span className="ml-2 text-xs text-ink-3">{r.resourceType} · version {r.version}{r.accessLevel === "staff" ? " · staff only" : ""}</span>
               </span>

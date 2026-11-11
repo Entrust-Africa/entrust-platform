@@ -51,6 +51,12 @@ async function start(name: string) {
 }
 
 describe("proving the email on the public diagnostic", () => {
+  it("puts nothing the visitor typed in the first email, which goes to an address nobody has proven", async () => {
+    const { address } = await start("no-visitor-text");
+    const mail = queued.find((job) => job.data.to === address) as { data: { props: Record<string, unknown> } } | undefined;
+    expect(JSON.stringify(mail!.data.props)).not.toContain("Business no-visitor-text");
+  });
+
   it("starts unproven; the on-screen token alone never proves it", async () => {
     const { token } = await start("unproven");
     const view = await get(`/public/diagnostic/${token}`);

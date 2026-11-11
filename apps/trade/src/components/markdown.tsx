@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { safeLinkTarget } from "@entrust/trade-engine";
 
 // Lesson and worked-example text is written in Markdown. This renders the small part of it that content uses (headings,
 // paragraphs, lists, quotes, code, tables, bold, italics, links) as React elements, so nothing is ever put in as raw HTML.
@@ -118,7 +119,7 @@ export function parseMarkdown(source: string): Block[] {
 
 // Code, **bold**, *italic* and [text](link), earliest first. A link goes only to http(s), mailto or a path on this site.
 // No lookbehind, which older phones' browsers can't parse, and no underscore forms, which mangle words like snake_case.
-const INLINE = /`([^`]+)`|\*\*([^*]+?)\*\*|\*([^*\s][^*]*?)\*|\[([^\]]+)\]\(((?:https?:\/\/|mailto:|\/(?!\/))[^)\s]*)\)/g;
+const INLINE = /`([^`]+)`|\*\*([^*]+?)\*\*|\*([^*\s][^*]*?)\*|\[([^\]]+)\]\(((?:https?:\/\/|mailto:|\/(?![\/\\]))[^)\s]*)\)/g;
 
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -146,16 +147,22 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
     } else if (italic !== undefined) {
       out.push(<em key={key}>{inline(italic, key)}</em>);
     } else if (label !== undefined && href !== undefined) {
-      const external = /^https?:/.test(href);
+      // The pattern lets through only likely links; this resolves the path the way a browser will, so `/\host` (which a
+      // browser reads as `//host`) is drawn as plain text, not a link to another site.
+      const target = safeLinkTarget(href);
       out.push(
-        <a
-          key={key}
-          href={href}
-          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700"
-        >
-          {inline(label, key)}
-        </a>,
+        target ? (
+          <a
+            key={key}
+            href={target.href}
+            {...(target.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700"
+          >
+            {inline(label, key)}
+          </a>
+        ) : (
+          <span key={key}>{inline(label, key)}</span>
+        ),
       );
     }
     last = at + match[0].length;

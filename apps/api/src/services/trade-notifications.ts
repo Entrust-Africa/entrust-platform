@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { enqueue, JOB_NAMES } from "@entrust/jobs";
+import { enqueue, JOB_NAMES, type EnqueueInput, type SendEmailJobData } from "@entrust/jobs";
 import type { Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
@@ -34,11 +34,22 @@ export interface NotifyInput {
   /** A path in the TRADE app, such as /modules/M04. */
   path?: string | undefined;
   organizationId?: string | null | undefined;
-  /** Set for a message that repeats, so the same thing is told to a person once. */
+  /** Set for a message that repeats, so the same thing is told to a person once, in the platform and by email. */
   dedupeKey?: string | undefined;
+  /** An email in its own template instead of the plain notice, such as a session reminder. Given each person's name. */
+  email?: ((person: { name: string | null }) => CustomEmail) | undefined;
 }
 
-/** Tells each person, in the platform and by email as they prefer. Returns how many were told. Never throws. */
+/** The templates a notification can send instead of the plain notice. */
+type CustomEmail = Pick<Extract<SendEmailJobData, { template: "trade-session-reminder" }>, "template" | "props">;
+
+/**
+ * Tells each person, in the platform and by email as they prefer. Returns how many were told. Never throws.
+ *
+ * The row goes in first and the email only follows when the row is new. With a dedupe key the row is what stops a
+ * repeat: an email queued first would go out again every time, however the in-app message was kept to one. A person who
+ * wants email only still gets a row, kept out of their list, for the same reason.
+ */
 export async function notify(db: Executor, input: NotifyInput): Promise<number> {
   try {
     const userIds = [...new Set(input.userIds)];
@@ -49,38 +60,56 @@ export async function notify(db: Executor, input: NotifyInput): Promise<number> 
     ]);
     let told = 0;
     for (const person of users) {
-      const preference = preferences.find((p) => p.userId === person.id);
-      const wantsInApp = preference?.inApp ?? true;
-      const wantsEmail = preference?.email ?? true;
-      if (!wantsInApp && !wantsEmail) continue;
+      try {
+        const preference = preferences.find((p) => p.userId === person.id);
+        const wantsInApp = preference?.inApp ?? true;
+        const wantsEmail = (preference?.email ?? true) && Boolean(person.email);
+        if (!wantsInApp && !wantsEmail) continue;
 
-      let emailStatus: "queued" | "skipped" | "failed" = "skipped";
-      if (wantsEmail && person.email) {
+        const [row] = await db
+          .insert(schema.notification)
+          .values({
+            userId: person.id,
+            organizationId: input.organizationId ?? null,
+            kind: input.kind,
+            title: input.title,
+            body: input.body,
+            path: input.path ?? null,
+            dedupeKey: input.dedupeKey ?? null,
+            inApp: wantsInApp,
+            emailStatus: "skipped",
+          })
+          .onConflictDoNothing()
+          .returning({ id: schema.notification.id });
+        // Told before: nothing goes out again.
+        if (!row) continue;
+        told++;
+        if (!wantsEmail) continue;
+
+        let emailStatus: "queued" | "failed" = "queued";
         try {
           const url = input.path && appUrl() ? `${appUrl()}${input.path}` : undefined;
+          const custom = input.email?.({ name: person.name });
           await enqueue(
             JOB_NAMES.SEND_EMAIL,
-            {
-              to: person.email,
-              subject: input.title,
-              template: "trade-notice",
-              props: { heading: input.title, greeting: `Hello ${person.name || "there"},`, paragraphs: [input.body], details: [], ...(url ? { action: { label: "Open in TRADE", url } } : {}) },
-            },
-            input.dedupeKey ? { singletonKey: `notice-${person.id}-${input.dedupeKey}` } : undefined,
+            (custom
+              ? { to: person.email, subject: input.title, template: custom.template, props: custom.props }
+              : {
+                  to: person.email,
+                  subject: input.title,
+                  template: "trade-notice",
+                  props: { heading: input.title, greeting: `Hello ${person.name || "there"},`, paragraphs: [input.body], details: [], ...(url ? { action: { label: "Open in TRADE", url } } : {}) },
+                }) as EnqueueInput<typeof JOB_NAMES.SEND_EMAIL>,
           );
-          emailStatus = "queued";
         } catch (error) {
           emailStatus = "failed";
           console.warn("[trade:notifications] Could not queue the email:", error);
         }
+        await db.update(schema.notification).set({ emailStatus }).where(eq(schema.notification.id, row.id));
+      } catch (error) {
+        // One person's problem doesn't stop the others being told.
+        console.warn("[trade:notifications] Could not notify a person:", error);
       }
-      if (!wantsInApp) continue;
-      const inserted = await db
-        .insert(schema.notification)
-        .values({ userId: person.id, organizationId: input.organizationId ?? null, kind: input.kind, title: input.title, body: input.body, path: input.path ?? null, dedupeKey: input.dedupeKey ?? null, emailStatus })
-        .onConflictDoNothing()
-        .returning({ id: schema.notification.id });
-      if (inserted.length > 0) told++;
     }
     return told;
   } catch (error) {
@@ -112,10 +141,12 @@ export async function staffForEnrollment(db: Executor, enrollmentId: string): Pr
 const view = (n: typeof schema.notification.$inferSelect) => ({ id: n.id, kind: n.kind, title: n.title, body: n.body, path: n.path, read: n.readAt !== null, createdAt: n.createdAt.toISOString() });
 
 export async function listNotifications(ctx: Ctx, input: { unreadOnly?: boolean | undefined; limit?: number | undefined }) {
-  const where = input.unreadOnly ? and(eq(schema.notification.userId, ctx.principal.userId), isNull(schema.notification.readAt)) : eq(schema.notification.userId, ctx.principal.userId);
+  // A row kept only to stop a repeat email isn't a message in the platform.
+  const mine = and(eq(schema.notification.userId, ctx.principal.userId), eq(schema.notification.inApp, true));
+  const where = input.unreadOnly ? and(mine, isNull(schema.notification.readAt)) : mine;
   const [rows, [unread]] = await Promise.all([
     ctx.db.select().from(schema.notification).where(where).orderBy(desc(schema.notification.createdAt)).limit(input.limit ?? 30),
-    ctx.db.select({ n: sql<number>`count(*)::int` }).from(schema.notification).where(and(eq(schema.notification.userId, ctx.principal.userId), isNull(schema.notification.readAt))),
+    ctx.db.select({ n: sql<number>`count(*)::int` }).from(schema.notification).where(and(mine, isNull(schema.notification.readAt))),
   ]);
   return { unread: unread?.n ?? 0, items: rows.map(view) };
 }
@@ -153,48 +184,67 @@ export async function setPreference(ctx: Ctx, input: { kind: NotificationKind; e
 /** A learner who hasn't touched a module they started for this long is reminded, at most once a week. */
 const STALE_LEARNING_DAYS = 14;
 
+/** Enrolments that still take reminders. A business that withdrew or finished isn't chased. */
+const REMINDED_ENROLMENT_STATUSES = ["invited", "registered", "active", "paused"] as const;
+
+/** Weeks since 1970, so the weekly key doesn't start again on 1 January and send two reminders in a week. */
+const weekNumber = (now: Date) => Math.floor(now.getTime() / (7 * 86_400_000));
+
 /**
  * Overdue action items and learning left unfinished. Run on a schedule; each reminder is sent once (an action item) or once a
- * week (learning), however often this runs. Returns how many people were told.
+ * week (learning), however often this runs. A problem with one reminder is logged and the rest still go. Returns how many
+ * people were told.
  */
-export async function sendDueReminders(db: Executor, now = new Date()): Promise<{ overdueActions: number; incompleteLearning: number }> {
+export async function sendDueReminders(db: Executor, now = new Date()): Promise<{ overdueActions: number; incompleteLearning: number; failed: number }> {
   let overdueActions = 0;
   let incompleteLearning = 0;
+  let failed = 0;
 
   const today = now.toISOString().slice(0, 10);
+  const stillEnrolled = sql`exists (select 1 from ${schema.enrollment} where ${schema.enrollment.organizationId} = ${schema.actionItem.organizationId} and ${inArray(schema.enrollment.status, [...REMINDED_ENROLMENT_STATUSES])})`;
   const overdue = await db
     .select()
     .from(schema.actionItem)
-    .where(and(lt(schema.actionItem.dueDate, today), notInArray(schema.actionItem.status, ["completed", "closed_without_completion", "cancelled"])));
+    .where(and(lt(schema.actionItem.dueDate, today), notInArray(schema.actionItem.status, ["completed", "closed_without_completion", "cancelled"]), stillEnrolled));
   for (const item of overdue) {
-    overdueActions += await notify(db, {
-      userIds: await organizationMemberIds(db, item.organizationId),
-      kind: "overdue_action",
-      title: "An action item is overdue",
-      body: `"${item.description.slice(0, 140)}" was due on ${item.dueDate}.`,
-      path: "/action-plan",
-      organizationId: item.organizationId,
-      dedupeKey: `overdue:${item.id}`,
-    });
+    try {
+      overdueActions += await notify(db, {
+        userIds: await organizationMemberIds(db, item.organizationId),
+        kind: "overdue_action",
+        title: "An action item is overdue",
+        body: `"${item.description.slice(0, 140)}" was due on ${item.dueDate}.`,
+        path: "/action-plan",
+        organizationId: item.organizationId,
+        dedupeKey: `overdue:${item.id}`,
+      });
+    } catch (error) {
+      failed++;
+      console.warn(`[trade:reminders] Could not remind about action item ${item.id}:`, error);
+    }
   }
 
   const cutoff = new Date(now.getTime() - STALE_LEARNING_DAYS * 86_400_000);
-  const week = `${now.getUTCFullYear()}-${Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 1)) / (7 * 86_400_000))}`;
+  const week = weekNumber(now);
   const stale = await db
     .select({ enrollmentId: schema.moduleProgress.enrollmentId, moduleId: schema.moduleProgress.moduleId, organizationId: schema.enrollment.organizationId })
     .from(schema.moduleProgress)
     .innerJoin(schema.enrollment, eq(schema.enrollment.id, schema.moduleProgress.enrollmentId))
     .where(and(inArray(schema.moduleProgress.status, ["in_progress", "needs_revision"]), lt(schema.moduleProgress.updatedAt, cutoff), eq(schema.enrollment.status, "active")));
   for (const row of stale) {
-    incompleteLearning += await notify(db, {
-      userIds: await organizationMemberIds(db, row.organizationId),
-      kind: "learning_incomplete",
-      title: `${row.moduleId} is waiting for you`,
-      body: `You started ${row.moduleId} but haven't done anything on it for a while. Pick it up where you left off.`,
-      path: `/modules/${row.moduleId}`,
-      organizationId: row.organizationId,
-      dedupeKey: `incomplete:${row.enrollmentId}:${row.moduleId}:${week}`,
-    });
+    try {
+      incompleteLearning += await notify(db, {
+        userIds: await organizationMemberIds(db, row.organizationId),
+        kind: "learning_incomplete",
+        title: `${row.moduleId} is waiting for you`,
+        body: `You started ${row.moduleId} but haven't done anything on it for a while. Pick it up where you left off.`,
+        path: `/modules/${row.moduleId}`,
+        organizationId: row.organizationId,
+        dedupeKey: `incomplete:${row.enrollmentId}:${row.moduleId}:w${week}`,
+      });
+    } catch (error) {
+      failed++;
+      console.warn(`[trade:reminders] Could not remind about ${row.moduleId} on enrolment ${row.enrollmentId}:`, error);
+    }
   }
-  return { overdueActions, incompleteLearning };
+  return { overdueActions, incompleteLearning, failed };
 }
