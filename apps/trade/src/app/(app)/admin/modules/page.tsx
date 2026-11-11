@@ -308,10 +308,10 @@ export default function AdminModulesPage() {
 
             <form onSubmit={handleCreateDraft} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                <label htmlFor="modules-page-1" className="block text-xs font-semibold text-neutral-700 mb-1">
                   Source Base Version
                 </label>
-                <select
+                <select id="modules-page-1"
                   value={sourceVersion}
                   onChange={(e) => setSourceVersion(e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none"
@@ -328,10 +328,10 @@ export default function AdminModulesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                <label htmlFor="modules-page-2" className="block text-xs font-semibold text-neutral-700 mb-1">
                   Target Version Number (Semver)
                 </label>
-                <input
+                <input id="modules-page-2"
                   type="text"
                   required
                   placeholder="e.g. 1.1.0 or 1.0.1"
@@ -346,10 +346,10 @@ export default function AdminModulesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                <label htmlFor="modules-page-3" className="block text-xs font-semibold text-neutral-700 mb-1">
                   Change Summary / Release Notes
                 </label>
-                <textarea
+                <textarea id="modules-page-3"
                   rows={3}
                   placeholder="Describe what is being changed (e.g. Clarified quiz question 2 explanation per #210, updated rubric threshold)..."
                   value={changeSummary}

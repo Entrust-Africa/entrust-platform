@@ -7,6 +7,7 @@ import { textInput } from "@/components/form-runner/styles";
 import { apiUrl, browserApi, errorText, ok } from "@/lib/summit-api";
 import { PAYMENT_LOOK, centsToInput, toCents, usd, when, type Payment } from "@/lib/commerce";
 import { Feedback, KeyValues, Labeled, Pill, TextBox, useRun } from "./ui";
+import { openInNewTab } from "@/lib/upload";
 
 export interface PaymentPanelProps {
   payment: Payment;
@@ -89,12 +90,15 @@ export function PaymentPanel({ payment, methods, entrustOrganizationId, isAdmin 
 
   async function open() {
     setLocalError(undefined);
-    try {
-      const link = await ok(browserApi().v1.summit.commerce.payments[":id"]["evidence-url"].$get({ param: { id: payment.id } }));
-      window.open(link.downloadUrl, "_blank", "noopener");
-    } catch (e) {
-      setLocalError(errorText(e));
-    }
+    const problem = await openInNewTab(async () => {
+      try {
+        const link = await ok(browserApi().v1.summit.commerce.payments[":id"]["evidence-url"].$get({ param: { id: payment.id } }));
+        return { url: link.downloadUrl };
+      } catch (e) {
+        return { error: errorText(e) };
+      }
+    });
+    if (problem) setLocalError(problem);
   }
 
   return (

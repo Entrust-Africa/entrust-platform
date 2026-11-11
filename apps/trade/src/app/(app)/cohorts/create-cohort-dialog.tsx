@@ -79,8 +79,8 @@ export function CreateCohortDialog({
                   No programs exist yet or you chose to create a new program. First define the program, then create cohorts within it.
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Programme name</label>
-                  <input
+                  <label htmlFor="cohorts-create-cohort-dialog-1" className="block text-xs font-semibold text-ink">Programme name</label>
+                  <input id="cohorts-create-cohort-dialog-1"
                     type="text"
                     name="name"
                     required
@@ -89,8 +89,8 @@ export function CreateCohortDialog({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Description (Optional)</label>
-                  <textarea
+                  <label htmlFor="cohorts-create-cohort-dialog-2" className="block text-xs font-semibold text-ink">Description (Optional)</label>
+                  <textarea id="cohorts-create-cohort-dialog-2"
                     name="description"
                     rows={3}
                     placeholder="Programme goals, target SME profile or curriculum details…"
@@ -117,7 +117,7 @@ export function CreateCohortDialog({
               <form onSubmit={handleCohortSubmit} className="mt-4 space-y-4">
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-semibold text-ink">Programme</label>
+                    <label htmlFor="cohorts-create-cohort-dialog-3" className="block text-xs font-semibold text-ink">Programme</label>
                     <button
                       type="button"
                       onClick={() => setShowNewProgram(true)}
@@ -126,7 +126,7 @@ export function CreateCohortDialog({
                       + New programme
                     </button>
                   </div>
-                  <select
+                  <select id="cohorts-create-cohort-dialog-3"
                     name="programId"
                     required
                     className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -140,8 +140,8 @@ export function CreateCohortDialog({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Cohort Name</label>
-                  <input
+                  <label htmlFor="cohorts-create-cohort-dialog-4" className="block text-xs font-semibold text-ink">Cohort Name</label>
+                  <input id="cohorts-create-cohort-dialog-4"
                     type="text"
                     name="name"
                     required
@@ -152,8 +152,8 @@ export function CreateCohortDialog({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-ink">Delivery Mode</label>
-                    <select
+                    <label htmlFor="cohorts-create-cohort-dialog-5" className="block text-xs font-semibold text-ink">Delivery Mode</label>
+                    <select id="cohorts-create-cohort-dialog-5"
                       name="deliveryMode"
                       defaultValue="self_paced"
                       className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -164,8 +164,8 @@ export function CreateCohortDialog({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-ink">Country</label>
-                    <input
+                    <label htmlFor="cohorts-create-cohort-dialog-6" className="block text-xs font-semibold text-ink">Country</label>
+                    <input id="cohorts-create-cohort-dialog-6"
                       type="text"
                       name="country"
                       defaultValue="ET"
@@ -177,16 +177,16 @@ export function CreateCohortDialog({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-ink">Start Date (Optional)</label>
-                    <input
+                    <label htmlFor="cohorts-create-cohort-dialog-7" className="block text-xs font-semibold text-ink">Start Date (Optional)</label>
+                    <input id="cohorts-create-cohort-dialog-7"
                       type="date"
                       name="startDate"
                       className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-ink">End Date (Optional)</label>
-                    <input
+                    <label htmlFor="cohorts-create-cohort-dialog-8" className="block text-xs font-semibold text-ink">End Date (Optional)</label>
+                    <input id="cohorts-create-cohort-dialog-8"
                       type="date"
                       name="endDate"
                       className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -195,8 +195,8 @@ export function CreateCohortDialog({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-ink">Sponsor Organisation (Optional)</label>
-                  <select
+                  <label htmlFor="cohorts-create-cohort-dialog-9" className="block text-xs font-semibold text-ink">Sponsor Organisation (Optional)</label>
+                  <select id="cohorts-create-cohort-dialog-9"
                     name="sponsorOrganizationId"
                     defaultValue=""
                     className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
