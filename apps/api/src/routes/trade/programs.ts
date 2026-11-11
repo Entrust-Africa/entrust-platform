@@ -110,11 +110,12 @@ export const tradePrograms = new Hono<AppEnv>()
       return c.json(program, 201);
     },
   )
+  // The Quality role reads every programme's and cohort's reports, so it lists them too, and changes nothing.
   .get("/programs", async (c) => {
     const user = requireUser(c);
     const db = getDb();
     const principal = await loadPrincipal(db, user.id);
-    if (!principal.staffRole) {
+    if (!principal.staffRole && !principal.quality) {
       throw new ServiceError("forbidden", "Only Entrust staff can view all programs.");
     }
 
@@ -164,7 +165,7 @@ export const tradePrograms = new Hono<AppEnv>()
     const user = requireUser(c);
     const db = getDb();
     const principal = await loadPrincipal(db, user.id);
-    if (!principal.staffRole) {
+    if (!principal.staffRole && !principal.quality) {
       throw new ServiceError("forbidden", "Only Entrust staff can view cohorts.");
     }
 

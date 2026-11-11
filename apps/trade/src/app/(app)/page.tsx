@@ -52,6 +52,8 @@ export default async function TradeHomePage({ searchParams }: TradeHomePageProps
   if (!me) redirect("/sign-in");
   // A member of the Summit's selection committee has no learning plan: their work is the committee's screens.
   if (me.summitCommittee && !me.staffRole) redirect("/summit/committee");
+  // The Quality role reads the programme's reports and nothing else, so that's its home, not a learner's plan.
+  if (me.quality && !me.staffRole) redirect("/reports");
 
   const { enrollmentId: queryEnrollmentId } = (await searchParams) ?? {};
 

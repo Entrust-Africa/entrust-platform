@@ -55,8 +55,19 @@ describe("Quality", () => {
     expect(types).not.toContain("sme_profile");
   });
 
+  it("lists the programmes and cohorts it can report on, so its reports page has something to offer", async () => {
+    const programs = await callV1(w.quality, "GET", "/trade/programs");
+    expect(programs.status).toBe(200);
+    expect(programs.body.programs.map((p: { id: string }) => p.id)).toContain(w.program);
+    const cohorts = await callV1(w.quality, "GET", "/trade/cohorts");
+    expect(cohorts.status).toBe(200);
+    expect(cohorts.body.cohorts.map((c: { id: string }) => c.id)).toContain(w.cohort);
+    // The cohort's own page, with its businesses, is staff's.
+    expect((await callV1(w.quality, "GET", `/trade/cohorts/${w.cohort}`)).status).toBe(403);
+  });
+
   it("can't do any of the work staff do", async () => {
-    for (const [method, path] of [["GET", "/trade/cohorts"], ["POST", "/trade/programs"], ["GET", "/trade/catalogue"], ["GET", "/trade/register"], ["POST", "/mfa/enrol"]] as const) {
+    for (const [method, path] of [["POST", "/trade/programs"], ["GET", "/trade/catalogue"], ["GET", "/trade/register"], ["POST", "/mfa/enrol"]] as const) {
       const res = await callV1(w.quality, method, path, method === "POST" ? { name: "Nope" } : undefined);
       expect([res.status, path], JSON.stringify(res.body).slice(0, 200)).toEqual([403, path]);
     }
