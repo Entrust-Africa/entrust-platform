@@ -129,7 +129,9 @@ export const auditRouter = new OpenAPIHono<AppEnv>({
     conditions.push(notInArray(schema.auditLog.entityType, ["sme_profile", "organization"]));
   } else if (limitedToAssignedCohorts(principal)) {
     const organizations = await assignedOrganizationIds(db, principal.userId);
-    const open = and(sql`${schema.auditLog.platform} is distinct from 'trade'`, notInArray(schema.auditLog.entityType, ["sme_profile", "organization"]));
+    // File entries name a business's documents, so they stay with the staff who work with that business, whatever their
+    // platform says (entries written before uploads carried one have none).
+    const open = and(sql`${schema.auditLog.platform} is distinct from 'trade'`, notInArray(schema.auditLog.entityType, ["sme_profile", "organization", "file"]));
     conditions.push(organizations.length ? or(open, inArray(schema.auditLog.organizationId, organizations))! : open!);
   }
   if (query.organizationId) conditions.push(eq(schema.auditLog.organizationId, query.organizationId));

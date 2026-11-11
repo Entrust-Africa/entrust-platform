@@ -469,6 +469,50 @@ describe("Files API", () => {
     });
   });
 
+  describe("a facilitator's or reviewer's reach", () => {
+    let reviewer: TestUser;
+    let fileA: string;
+    let fileB: string;
+
+    beforeAll(async () => {
+      reviewer = await signUp("files-reviewer");
+      await db.insert(schema.member).values({ id: randomUUID(), organizationId: w.entrust, userId: reviewer.id, role: "reviewer", createdAt: new Date() });
+      // The reviewer is on a cohort with business A only.
+      const [program] = await db.insert(schema.program).values({ name: "test-api-files-program" }).returning();
+      const [cohort] = await db.insert(schema.cohort).values({ programId: program!.id, name: "test-api-files-cohort" }).returning();
+      await db.insert(schema.enrollment).values({ cohortId: cohort!.id, organizationId: w.orgA, status: "active" });
+      await db.insert(schema.cohortStaff).values({ cohortId: cohort!.id, userId: reviewer.id });
+      fileA = await makeFile(w.orgA, w.ownerA.id, "a-financials.pdf");
+      fileB = await makeFile(w.orgB, w.ownerB.id, "b-financials.pdf");
+      await db.insert(schema.auditLog).values({ actorUserId: w.ownerB.id, organizationId: w.orgB, action: "file.uploaded", entityType: "file", entityId: fileB });
+    });
+
+    afterAll(async () => {
+      await db.delete(schema.program).where(eq(schema.program.name, "test-api-files-program"));
+    });
+
+    it("opens the files of a business on their cohort, and no other business's", async () => {
+      expect((await callV1(reviewer, "GET", `/files/${fileA}`)).status).toBe(200);
+      expect((await callV1(reviewer, "GET", `/files/${fileA}/download-url`)).status).toBe(200);
+      expect((await callV1(reviewer, "GET", `/files/${fileB}`)).status).toBe(404);
+      expect((await callV1(reviewer, "GET", `/files/${fileB}/download-url`)).status).toBe(404);
+      // An administrator reaches every business.
+      expect((await callV1(w.admin, "GET", `/files/${fileB}/download-url`)).status).toBe(200);
+    });
+
+    it("won't let them put files in a business they don't work with", async () => {
+      const body = { originalName: "planted.pdf", contentType: "application/pdf", sizeBytes: 1024, sha256: dummySha256 };
+      expect((await callV1(reviewer, "POST", "/files/upload-url", { ...body, organizationId: w.orgB })).status).toBe(403);
+      expect((await callV1(reviewer, "POST", "/files/upload-url", { ...body, organizationId: w.orgA })).status).toBe(200);
+    });
+
+    it("keeps other businesses' uploads out of their audit trail, so file ids can't be gathered there", async () => {
+      const res = await callV1(reviewer, "GET", "/audit?action=file.uploaded");
+      expect(res.status).toBe(200);
+      expect(res.body.items.map((i: { entityId: string }) => i.entityId)).not.toContain(fileB);
+    });
+  });
+
   describe.skipIf(!process.env.R2_ACCESS_KEY_ID)("Cloudflare R2 live integration", () => {
     it("verifies live R2 bucket connectivity when credentials are provided", async () => {
       expect(process.env.R2_ACCESS_KEY_ID).toBeDefined();

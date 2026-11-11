@@ -12,7 +12,10 @@ import {
   UploadUrlResponse,
 } from "../schemas/files";
 import { Problem } from "../schemas/problem";
-import { actorFor, loadPrincipal } from "../services/access";
+import { loadPrincipal, type Principal } from "../services/access";
+import type { Executor } from "../services/db";
+import { findApplication } from "../services/summit-access";
+import { canReachOrganization, limitedToAssignedCohorts } from "../services/trade-shared";
 import { ServiceError } from "../services/errors";
 import {
   formatContentDisposition,
@@ -49,6 +52,45 @@ function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
   const user = c.get("user");
   if (!user) throw new ServiceError("unauthenticated", "Not signed in.");
   return user;
+}
+
+/**
+ * Whether the caller may put files in an organisation: its members, an administrator, and a facilitator or reviewer for a
+ * business on one of their cohorts or for Entrust's own organisation (module resources, proof of payment).
+ */
+async function canUploadFor(db: Executor, principal: Principal, organizationId: string): Promise<boolean> {
+  if (principal.smeRoles.has(organizationId)) return true;
+  if (!principal.staffRole) return false;
+  if (!limitedToAssignedCohorts(principal)) return true;
+  if (organizationId === process.env.ENTRUST_ORG_ID) return true;
+  return canReachOrganization(db, principal, organizationId);
+}
+
+/**
+ * Whether the caller may see a file. Its organisation's members may, and an administrator. A facilitator or reviewer works
+ * with the businesses on their own cohorts, as every TRADE screen does, so they see those businesses' files, files attached
+ * to a Summit application they can open, Entrust's own files, and what they uploaded themselves. A file id can be learnt
+ * from the audit trail, so "staff" alone isn't enough.
+ */
+async function canSeeFile(db: Executor, principal: Principal, file: { id: string; organizationId: string; uploaderUserId: string | null }): Promise<boolean> {
+  if (principal.smeRoles.has(file.organizationId)) return true;
+  if (!principal.staffRole) return false;
+  if (!limitedToAssignedCohorts(principal)) return true;
+  if (file.uploaderUserId === principal.userId || file.organizationId === process.env.ENTRUST_ORG_ID) return true;
+  if (await canReachOrganization(db, principal, file.organizationId)) return true;
+  const documents = await db
+    .select({ applicationId: schema.applicationDocument.applicationId })
+    .from(schema.applicationDocument)
+    .where(eq(schema.applicationDocument.fileId, file.id));
+  for (const { applicationId } of documents) {
+    try {
+      await findApplication(db, principal, applicationId);
+      return true;
+    } catch {
+      // Not one of theirs; try the next.
+    }
+  }
+  return false;
 }
 
 const router = new OpenAPIHono<AppEnv>({
@@ -167,10 +209,9 @@ export const files = router
       throw new ServiceError("not_found", "Organisation not found.");
     }
 
-    // Check that caller belongs to the organisation or is Entrust staff
+    // Check that caller belongs to the organisation or is Entrust staff who work with it
     const principal = await loadPrincipal(db, user.id);
-    const actor = actorFor(principal, body.organizationId);
-    if (!actor) {
+    if (!(await canUploadFor(db, principal, body.organizationId))) {
       throw new ServiceError("forbidden", "You do not have permission to upload files for this organisation.");
     }
 
@@ -229,8 +270,7 @@ export const files = router
 
     // Verify caller still has access to the organisation
     const principal = await loadPrincipal(db, user.id);
-    const actor = actorFor(principal, payload.organizationId);
-    if (!actor) {
+    if (!(await canUploadFor(db, principal, payload.organizationId))) {
       throw new ServiceError("forbidden", "You do not have permission to finalise files for this organisation.");
     }
 
@@ -269,9 +309,12 @@ export const files = router
         throw new ServiceError("invalid_transition", "This file has already been finalised.");
       }
 
+      // Files are TRADE's and the Summit's (CLEAR has no uploads), so the entry is TRADE's: the audit trail then keeps it
+      // to the staff who work with the business, like the rest of its TRADE record.
       await tx.insert(schema.auditLog).values({
         actorUserId: user.id,
         organizationId: payload.organizationId,
+        platform: "trade",
         action: "file.uploaded",
         entityType: "file",
         entityId: payload.fileId,
@@ -315,8 +358,7 @@ export const files = router
     }
 
     const principal = await loadPrincipal(db, user.id);
-    const actor = actorFor(principal, row.organizationId);
-    if (!actor) {
+    if (!(await canSeeFile(db, principal, row))) {
       throw new ServiceError("not_found", "File not found.");
     }
 
@@ -349,8 +391,7 @@ export const files = router
     }
 
     const principal = await loadPrincipal(db, user.id);
-    const actor = actorFor(principal, row.organizationId);
-    if (!actor) {
+    if (!(await canSeeFile(db, principal, row))) {
       throw new ServiceError("not_found", "File not found.");
     }
 
