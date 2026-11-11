@@ -145,6 +145,17 @@ export async function evaluateAndSyncModuleCompletion(
     individualPlanSubmitted = !!submitted;
   }
 
+  // A module offered as a test-out (a strong placement score) still has to be shown: passing its knowledge check on its own
+  // is the test. A high score alone never exempts (the rules' TEST_OUT_OFFERED).
+  const [assignment] = activePlan
+    ? await tx
+        .select({ status: schema.moduleAssignment.status })
+        .from(schema.moduleAssignment)
+        .where(and(eq(schema.moduleAssignment.planId, activePlan.id), eq(schema.moduleAssignment.moduleId, moduleId)))
+        .limit(1)
+    : [];
+  const testedOut = assignment?.status === "optional" && knowledgeCheckPassed;
+
   const criteria = checkModuleCompletionCriteria({
     lessonsCount,
     completedLessonsCount: completedLessons,
@@ -154,7 +165,7 @@ export async function evaluateAndSyncModuleCompletion(
     isM01: moduleId === "M01",
     planAcknowledged,
     ...(individualPlanSubmitted === undefined ? {} : { individualPlanSubmitted }),
-    adminOverride: !!modProgress?.adminOverrideAt,
+    adminOverride: !!modProgress?.adminOverrideAt || testedOut,
   });
 
   let modulePassed = alreadyPassed;
@@ -170,10 +181,10 @@ export async function evaluateAndSyncModuleCompletion(
       .where(and(eq(schema.moduleProgress.enrollmentId, enrollmentId), eq(schema.moduleProgress.moduleId, moduleId)));
 
     await recordTradeChange(tx, ctx.principal.userId, {
-      action: "trade.module.completed",
+      action: testedOut && !modProgress?.adminOverrideAt ? "trade.module.tested_out" : "trade.module.completed",
       organizationId: enrollmentRow.enrollment.organizationId,
       entityId: modProgress?.id ?? `${enrollmentId}:${moduleId}`,
-      after: { moduleId, status: "passed", completedAt: ctx.now.toISOString() },
+      after: { moduleId, status: "passed", completedAt: ctx.now.toISOString(), ...(testedOut ? { testedOut: true } : {}) },
     });
     modulePassed = true;
   }
@@ -214,8 +225,9 @@ async function syncProgramme(
       .from(schema.moduleAssignment)
       .where(eq(schema.moduleAssignment.planId, activePlan.id));
 
-    // A module offered as an optional test-out doesn't hold the programme back.
-    const assignedModuleIds = assigned.filter((a) => a.status !== "optional").map((a) => a.moduleId);
+    // Every module in the plan counts, a test-out offer too: it's done by testing out (its knowledge check), not by the
+    // score that offered it.
+    const assignedModuleIds = assigned.map((a) => a.moduleId);
 
     // Get all passed or exempted modules for this enrollment
     const allProgress = await tx

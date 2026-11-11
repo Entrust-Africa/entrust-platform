@@ -16,7 +16,7 @@ export { assignPathwayFromDiagnostic, pathwayInputFromDiagnostic } from "./diagn
 export type { DiagnosticPathwayOptions } from "./diagnostic";
 export * from "./calculators";
 export * from "./worksheets";
-export { evaluatePlacement } from "./placement";
+export { evaluatePlacement, recordsVerifiedFrom } from "./placement";
 export type { PlacementInput, PlacementOutcome } from "./placement";
 export { MODULE_STATUS_LABELS, PATHWAY_NAMES, REVIEW_NOTES, buildPlacementReport } from "./report";
 export type { PlacementReport, ReportBaseline, ReportDomain, ReportInput, ReportModule, ReportObjectives, ReportReason } from "./report";

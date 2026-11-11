@@ -641,6 +641,8 @@ describe("a scored placement assessment", () => {
     const again = evaluatePlacement(rules, {
       answers,
       approvedNotApplicable: approved,
+      // The evidence staff accepted for the business's answers is part of the input: there is none here.
+      evidence: {},
       pathway: { rulesVersion: rules.version, pathway: avenue!.pathway, provisional: avenue!.status === "provisional", liveOrder: avenue!.liveOrder, reasonCodes: avenue!.reasonCodes as never },
     });
 

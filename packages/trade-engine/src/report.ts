@@ -26,7 +26,7 @@ export const MODULE_STATUS_LABELS: Readonly<Record<ModuleStatus, string>> = {
   priority_required: "Required first, because of your live order",
   required: "Required",
   assessment_needed: "More answers needed",
-  optional: "Optional: you can test out",
+  optional: "Test-out offered: pass its knowledge check to complete it without the lessons",
 };
 
 /** Why staff will look at a plan, in words the SME can read. */

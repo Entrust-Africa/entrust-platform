@@ -9,6 +9,7 @@ import {
   scoreDomains,
   visibleQuestions,
   type Answer,
+  type EvidenceConfidence,
   type Answers,
   type LearningPlan,
   type ModuleAssignmentSource,
@@ -95,6 +96,26 @@ export async function requireAvenue(tx: Executor, enrollmentId: string): Promise
 
 // ---- Scoring ----
 
+const CONFIDENCE_ORDER: readonly EvidenceConfidence[] = ["self_reported", "documented", "reviewed", "verified"];
+
+/**
+ * How well each answer is backed: the strongest evidence staff accepted for each question. It weighs the domains' evidence
+ * status, and with it whether the financial records count as verified (Priority Rule 1: records before finance).
+ */
+async function acceptedEvidence(tx: Executor, organizationId: string): Promise<Record<string, EvidenceConfidence>> {
+  const rows = await tx
+    .select({ questionId: schema.evidenceRecord.targetId, confidence: schema.evidenceRecord.confidence })
+    .from(schema.evidenceRecord)
+    .where(and(eq(schema.evidenceRecord.organizationId, organizationId), eq(schema.evidenceRecord.targetType, "assessment_question"), eq(schema.evidenceRecord.status, "accepted")));
+  const best: Record<string, EvidenceConfidence> = {};
+  for (const { questionId, confidence } of rows) {
+    if (!questionId) continue;
+    const current = best[questionId];
+    if (!current || CONFIDENCE_ORDER.indexOf(confidence) > CONFIDENCE_ORDER.indexOf(current)) best[questionId] = confidence;
+  }
+  return best;
+}
+
 export type ScoringTrigger = "submitted" | "approval" | "avenue";
 
 const scoreRow = (assessmentId: string, kind: "domain" | "group", r: ScoreResult) => ({
@@ -125,7 +146,8 @@ export async function scorePlacement(
   const avenue = await liveAvenue(tx, assessment.enrollmentId);
   if (!avenue) throw new ServiceError("precondition_failed", "This enrolment has no avenue yet, so there is nothing to build a plan on.");
   const { answers, approvedNotApplicable } = await inputsOf(tx, rules, assessment.id);
-  const outcome = evaluatePlacement(rules, { answers, pathway: assignmentOf(avenue, rules.version), approvedNotApplicable });
+  const evidence = await acceptedEvidence(tx, organizationId);
+  const outcome = evaluatePlacement(rules, { answers, pathway: assignmentOf(avenue, rules.version), approvedNotApplicable, evidence });
 
   await tx.delete(schema.capabilityScore).where(eq(schema.capabilityScore.assessmentId, assessment.id));
   await tx.insert(schema.capabilityScore).values([

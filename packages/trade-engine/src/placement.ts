@@ -48,7 +48,7 @@ export function evaluatePlacement(rules: TradeRules, input: PlacementInput): Pla
     ...(input.approvedNotApplicable ? { approvedNotApplicable: input.approvedNotApplicable } : {}),
     ...(input.evidence ? { evidence: input.evidence } : {}),
   });
-  const plan = buildLearningPlan(rules, { answers: input.answers, scores, pathway: input.pathway, recordsVerified: input.recordsVerified });
+  const plan = buildLearningPlan(rules, { answers: input.answers, scores, pathway: input.pathway, recordsVerified: input.recordsVerified ?? recordsVerifiedFrom(scores, input.evidence) });
   return {
     rulesVersion: rules.version,
     scores,
@@ -56,4 +56,18 @@ export function evaluatePlacement(rules: TradeRules, input: PlacementInput): Pla
     assessmentStatus: plan.requiresHumanReview ? "review_required" : "scored",
     planStatus: plan.requiresHumanReview ? "review_required" : "generated",
   };
+}
+
+/** Evidence staff have looked at. Self-reported and merely documented answers don't verify anything. */
+const VERIFIED: readonly EvidenceConfidence[] = ["reviewed", "verified"];
+
+/**
+ * Whether the financial records are verified, for Priority Rule 1 (RULE-01: records before finance), once the evidence
+ * behind the answers is known: the financial records domain's evidence, its weakest question's, has been reviewed or
+ * verified by staff. Without evidence it isn't known, and unknown is not a gap.
+ */
+export function recordsVerifiedFrom(scores: Scores, evidence: PlacementInput["evidence"]): boolean | undefined {
+  if (!evidence) return undefined;
+  const records = scores.domains.find((d) => d.id === "financial_records");
+  return records ? VERIFIED.includes(records.evidence) : undefined;
 }

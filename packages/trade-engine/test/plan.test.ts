@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignPathway, buildLearningPlan, scoreDomains } from "../src";
+import { assignPathway, buildLearningPlan, evaluatePlacement, scoreDomains } from "../src";
 import { answers, noShipment, order, planFor, rules, setAll } from "./helpers";
 
 const BUYER = ["B1", "B2", "B3", "B4", "B5"];
@@ -149,6 +149,21 @@ describe("buildLearningPlan", () => {
     expect(order(planFor(given, {}).plan)).not.toContain("M02");
     // No finance module, no prerequisite.
     expect(order(planFor(answers(), {}, { recordsVerified: false }).plan)).toEqual(["M01", "M11", "M12"]);
+  });
+
+  it("works out whether the records are verified from the evidence staff accepted, when placement is scored", () => {
+    const given = answers({ ...FINANCE_GAP });
+    const pathway = assignPathway(rules, noShipment);
+    const financial = rules.domains.find((d) => d.id === "financial_records")!.questions;
+    // No accepted evidence: the records aren't verified, so M02 comes before M03 (Priority Rule 1).
+    const unverified = evaluatePlacement(rules, { answers: given, pathway, evidence: {} });
+    expect(order(unverified.plan).indexOf("M02")).toBeLessThan(order(unverified.plan).indexOf("M03"));
+    expect(unverified.plan.modules.find((m) => m.module === "M03")!.reasonCodes).toContain("RECORDS_BEFORE_FINANCE");
+    // Staff verified the evidence behind every records answer: no prerequisite.
+    const verified = evaluatePlacement(rules, { answers: given, pathway, evidence: Object.fromEntries(financial.map((q) => [q, "verified" as const])) });
+    expect(order(verified.plan)).not.toContain("M02");
+    // Evidence not known at all: unknown is not a gap.
+    expect(order(evaluatePlacement(rules, { answers: given, pathway }).plan)).not.toContain("M02");
   });
 
   it("assigns M05 to an SME with no qualified buyer yet, but not once an inquiry is in", () => {
