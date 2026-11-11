@@ -1789,3 +1789,40 @@ export const learningResource = trade.table(
   },
   (t) => [index("trade_learning_resource_module_idx").on(t.moduleId)],
 );
+
+export const MODULE_CONTENT_STATUSES = ["draft", "in_review", "approved", "archived"] as const;
+export type ModuleContentStatus = (typeof MODULE_CONTENT_STATUSES)[number];
+
+// Versioned course content managed directly by authorized staff in TRADE (#212).
+// Approved versions are strictly immutable and never updated in place.
+export const moduleContentVersion = trade.table(
+  "module_content_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: text("module_id", { enum: MODULE_IDS }).notNull(),
+    version: text("version").notNull(),
+    status: text("status", { enum: MODULE_CONTENT_STATUSES }).notNull().default("draft"),
+    title: text("title").notNull(),
+    deliverable: text("deliverable").notNull(),
+    objectives: jsonb("objectives").$type<string[]>().notNull().default([]),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    contentHash: text("content_hash").notNull(),
+    changeSummary: text("change_summary"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    updatedByUserId: text("updated_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedByUserId: text("submitted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    approvedByUserId: text("approved_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("trade_module_content_version_uidx").on(t.moduleId, t.version),
+    index("trade_module_content_version_module_status_idx").on(t.moduleId, t.status),
+  ],
+);

@@ -393,6 +393,13 @@
       "when": 1794327389745,
       "tag": "0055_sme_passport_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1794330000000,
+      "tag": "0056_trade_module_content_version",
+      "breakpoints": true
     }
   ]
 }

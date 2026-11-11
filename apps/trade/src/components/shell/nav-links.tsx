@@ -29,7 +29,9 @@ import {
   User,
   Users,
   FileText,
-  BadgeCheck, Gavel, Percent, Sparkles, PackageCheck, Building2, Bell } from "lucide-react";
+  BadgeCheck,
+  FileEdit,
+  Gavel, Percent, Sparkles, PackageCheck, Building2, Bell } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { summitAccess } from "@/lib/summit";
@@ -97,13 +99,16 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
           // Staff read the course content here. The pages are read-only for staff; changing a module means publishing a new version.
           { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
+          { href: "/admin/modules", label: "Course studio", icon: FileEdit, match: (path) => path.startsWith("/admin/modules") },
           simulator,
         ],
       },
     ];
     // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
     if (user?.staffRole === "reviewer") {
-      groups[0]!.items = groups[0]!.items.filter((item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/passports");
+      groups[0]!.items = groups[0]!.items.filter(
+        (item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/passports" && item.href !== "/admin/modules",
+      );
     }
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
     // sponsors, delegates, the directory).

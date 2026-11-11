@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { learnerModuleSchema, moduleContentSchema } from "@entrust/trade-content";
 import { QUESTION_TYPES } from "@entrust/forms";
-import { MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
+import { MODULE_CONTENT_STATUSES, MODULE_SUBMISSION_STATUSES, RUBRIC_SCORE_OUTCOMES } from "@entrust/db";
 import {
   ASSESSMENT_STATUSES,
   COMMERCIAL_ACTIVITY_TYPES,
@@ -2067,4 +2067,90 @@ export const TransactionList = z
 
 export type CreateTransactionInput = z.infer<typeof CreateTransactionBody>;
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionBody>;
+
+// ---- Staff Course Content Studio (#212) ----
+
+export const ModuleVersionParam = z.object({
+  id: z.string().openapi({ example: "M01" }),
+  version: z.string().openapi({ example: "1.0.0" }),
+});
+
+export const AdminUserRef = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  email: z.string(),
+});
+
+export const AdminModuleVersionSummary = z
+  .object({
+    id: z.string(),
+    moduleId: z.enum(MODULE_IDS),
+    version: z.string(),
+    status: z.enum(MODULE_CONTENT_STATUSES),
+    title: z.string(),
+    deliverable: z.string(),
+    objectives: z.array(z.string()),
+    contentHash: z.string(),
+    changeSummary: z.string().nullable(),
+    createdByUserId: z.string().nullable(),
+    createdByUser: AdminUserRef.nullable().optional(),
+    updatedByUserId: z.string().nullable(),
+    submittedByUserId: z.string().nullable(),
+    submittedAt: z.string().nullable(),
+    approvedByUserId: z.string().nullable(),
+    approvedByUser: AdminUserRef.nullable().optional(),
+    approvedAt: z.string().nullable(),
+    archivedAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("TradeAdminModuleVersionSummary");
+
+export const AdminModuleSummary = z
+  .object({
+    id: z.enum(MODULE_IDS),
+    title: z.string(),
+    deliverable: z.string(),
+    objectives: z.array(z.string()),
+    latestApprovedVersion: z.string().nullable(),
+    activeDraftVersion: z.string().nullable(),
+    inReviewVersion: z.string().nullable(),
+    versions: z.array(AdminModuleVersionSummary),
+  })
+  .openapi("TradeAdminModuleSummary");
+
+export const AdminModuleList = z
+  .object({ items: z.array(AdminModuleSummary) })
+  .openapi("TradeAdminModuleList");
+
+export const AdminModuleVersionDetail = AdminModuleVersionSummary.extend({
+  content: z.record(z.string(), z.unknown()),
+  validationErrors: z.array(z.string()),
+}).openapi("TradeAdminModuleVersionDetail");
+
+export const CreateDraftVersionBody = z
+  .object({
+    sourceVersion: z.string().optional().openapi({ description: "Version to branch from. Defaults to latest approved.", example: "1.0.0" }),
+    targetVersion: z.string().regex(/^\d+\.\d+\.\d+$/, "Version must follow major.minor.patch (e.g. 1.1.0)").openapi({ example: "1.1.0" }),
+    changeSummary: z.string().trim().max(1000).optional().openapi({ example: "Update quiz questions and lesson 2 typos" }),
+  })
+  .openapi("TradeCreateDraftVersionBody");
+
+export const UpdateDraftVersionBody = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    deliverable: z.string().trim().min(1).max(500).optional(),
+    objectives: z.array(z.string().trim().min(1)).optional(),
+    content: z.record(z.string(), z.unknown()).optional().openapi({ description: "Full or updated ModuleContent payload" }),
+    changeSummary: z.string().trim().max(1000).optional(),
+    strictValidation: z.boolean().optional().default(true),
+  })
+  .openapi("TradeUpdateDraftVersionBody");
+
+export const ApproveVersionBody = z
+  .object({
+    notes: z.string().trim().max(1000).optional().openapi({ example: "Reviewed with trade advisors and approved for production." }),
+  })
+  .openapi("TradeApproveVersionBody");
+
 
