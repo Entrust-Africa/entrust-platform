@@ -47,21 +47,34 @@ const avenue = (x: { pathway: "A" | "B" | null; pathwayProvisional: boolean | nu
     <span className="text-ink-3">—</span>
   );
 
-/** The line under a person's name when they have more than one form: how many, and how many are in. */
-function formsSummary(person: PublicDiagnosticPerson): string {
-  const open = person.sessions.length - person.submittedCount;
-  const parts = [plural(person.sessions.length, "form")];
-  if (person.submittedCount > 0) parts.push(`${person.submittedCount} submitted`);
-  if (open > 0) parts.push(`${open} in progress`);
-  return parts.join(" · ");
+/**
+ * The forms worth showing for a person. People often start the form more than once (another device, a lost link), and
+ * the attempts they left behind only get in the way: once one form is submitted, only submitted forms show; until then,
+ * only the one that got furthest (the newest, on a tie). Every form is still stored, and each still opens by its address.
+ */
+export function shownSessions(person: PublicDiagnosticPerson): PublicDiagnosticSession[] {
+  const submitted = person.sessions.filter((s) => s.status === "submitted");
+  if (submitted.length > 0) return submitted;
+  // Sessions come newest first, so on a tie the first one met stays.
+  const furthest = person.sessions.reduce<PublicDiagnosticSession | null>((best, s) => (!best || (s.progress?.percent ?? 0) > (best.progress?.percent ?? 0) ? s : best), null);
+  return furthest ? [furthest] : [];
+}
+
+/** The line under a person's name when more than one of their forms shows: how many were submitted. */
+function formsSummary(shown: PublicDiagnosticSession[]): string {
+  return `${plural(shown.length, "form")} submitted`;
 }
 
 function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
   const [open, setOpen] = useState(false);
-  const many = person.sessions.length > 1;
-  const only = person.sessions[0]!;
-  // For a person who has not submitted, how far the furthest form got.
-  const furthest = person.status === "draft" ? person.sessions.reduce<PublicDiagnosticSession["progress"]>((best, s) => (s.progress && (!best || s.progress.percent > best.percent) ? s.progress : best), null) : null;
+  const shown = shownSessions(person);
+  const many = shown.length > 1;
+  const only = shown[0]!;
+  // For a person who has not submitted, how far their furthest form got, and whether that form's email was proven.
+  const furthest = person.status === "draft" ? only.progress : null;
+  const proven = person.status === "draft" ? only.emailVerified : person.emailVerified;
+  const latest = only.submittedAt ?? only.startedAt;
+  const name = (many ? person.businessName : only.businessName) ?? person.businessName ?? "No name yet";
   const regionId = `forms-${person.email}`;
 
   return (
@@ -78,15 +91,15 @@ function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
             >
               <ChevronRight aria-hidden="true" className={`mt-0.5 size-4 shrink-0 text-ink-3 transition-transform ${open ? "rotate-90" : ""}`} />
               <span>
-                <span className="block font-semibold text-ink">{person.businessName ?? "No name yet"}</span>
+                <span className="block font-semibold text-ink">{name}</span>
                 <span className="block text-xs text-ink-3">{person.email}</span>
                 {person.phone && <span className="block text-xs text-ink-3">{person.phone}</span>}
-                <span className="mt-0.5 block text-xs text-amber-700">{formsSummary(person)}</span>
+                <span className="mt-0.5 block text-xs text-amber-700">{formsSummary(shown)}</span>
               </span>
             </button>
           ) : (
             <>
-              <div className="font-semibold text-ink">{person.businessName ?? "No name yet"}</div>
+              <div className="font-semibold text-ink">{name}</div>
               <div className="text-xs text-ink-3">{person.email}</div>
               {person.phone && <div className="text-xs text-ink-3">{person.phone}</div>}
             </>
@@ -94,11 +107,11 @@ function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
         </td>
         <td className="px-4 py-3">
           {statusBadge(person.status)}
-          {!person.emailVerified && <StatusBadge tone="danger">Email not proven</StatusBadge>}
+          {!proven && <StatusBadge tone="danger">Email not proven</StatusBadge>}
           {furthest && <Meter progress={furthest} />}
         </td>
         <td className="px-4 py-3">{avenue(person)}</td>
-        <td className="whitespace-nowrap px-4 py-3 text-ink-2">{formatDate(person.latestAt)}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-ink-2">{formatDate(latest)}</td>
         <td className="px-4 py-3 text-ink-2">{person.organization ? person.organization.name : <span className="text-ink-3">Not yet</span>}</td>
         <td className="whitespace-nowrap px-4 py-3 text-right">
           {many ? (
@@ -120,7 +133,7 @@ function PersonRows({ person }: { person: PublicDiagnosticPerson }) {
       </tr>
       {many &&
         open &&
-        person.sessions.map((s, i) => (
+        shown.map((s, i) => (
           <tr key={s.id} id={i === 0 ? regionId : undefined} className="bg-canvas/60">
             <td className="border-l-2 border-line-strong py-2.5 pl-10 pr-4">
               <div className="text-sm font-medium text-ink">{s.businessName ?? "No name yet"}</div>

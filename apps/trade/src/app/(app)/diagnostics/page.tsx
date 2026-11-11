@@ -45,7 +45,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Onboarding diagnostics</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-2">
-            Everyone who started the diagnostic from the public link, one line for each email address. Open a line to see each form they started. Share the link as <span className="font-mono text-ink">/onboarding</span>. No account is needed to fill it in.
+            Everyone who started the diagnostic from the public link, one line for each email address. A line shows the person's submitted form, or, until they submit, the form they got furthest with. Forms they started again and left aren't shown, but they're kept. Share the link as <span className="font-mono text-ink">/onboarding</span>. No account is needed to fill it in.
           </p>
         </div>
         <a
