@@ -45,6 +45,9 @@ export async function evaluateAndSyncModuleCompletion(
     .where(eq(schema.enrollment.id, enrollmentId));
 
   if (!enrollmentRow) return { modulePassed: false, programCompleted: false };
+  // Completion paths that land together (a lesson tick and a score, say) take turns on the enrolment, so only one of them
+  // can find the programme newly complete and issue its certificate. A no-op outside a transaction.
+  await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId)).for("update");
 
   // 2. Fetch module progress
   const [modProgress] = await tx
@@ -69,20 +72,20 @@ export async function evaluateAndSyncModuleCompletion(
 
   const isExempt = !!exemption || modProgress?.status === "exempted";
 
-  // Check content lessons count
+  // The module is judged on the version the learner was pinned to when they started it, never one they name later.
   // Only lessons that are in the content count, so a made-up lesson ID can't stand in for a real one.
-  const content =
-    (await resolveTradeModuleContent(tx, moduleId, "learner", modProgress?.contentVersion ?? undefined)) ??
-    (await resolveTradeModuleContent(tx, moduleId, "learner"));
+  const pinned = modProgress?.contentVersion ?? (await currentLearnerVersion(tx, moduleId));
+  const content = pinned ? await resolveTradeModuleContent(tx, moduleId, "staff", pinned) : undefined;
   const lessonIds = content?.lessons.map((l) => l.id) ?? [];
   const lessonsCount = lessonIds.length;
   const recorded = (modProgress?.lessonProgress as { completedLessons?: unknown } | null)?.completedLessons;
   const completedLessons = Array.isArray(recorded) ? lessonIds.filter((id) => recorded.includes(id)).length : 0;
 
-  // Check knowledge check passed
+  // The knowledge check is passed at the content's own pass mark, on the pinned version.
+  const passMark = content?.knowledgeCheck.passMark ?? 100;
   const kcScore = modProgress?.knowledgeCheckScore ? Number(modProgress.knowledgeCheckScore) : 0;
-  let knowledgeCheckPassed = kcScore >= 80;
-  if (!knowledgeCheckPassed) {
+  let knowledgeCheckPassed = content !== undefined && kcScore >= passMark;
+  if (!knowledgeCheckPassed && pinned) {
     const [passedAttempt] = await tx
       .select()
       .from(schema.knowledgeCheckAttempt)
@@ -90,6 +93,7 @@ export async function evaluateAndSyncModuleCompletion(
         and(
           eq(schema.knowledgeCheckAttempt.enrollmentId, enrollmentId),
           eq(schema.knowledgeCheckAttempt.moduleId, moduleId),
+          eq(schema.knowledgeCheckAttempt.contentVersion, pinned),
           eq(schema.knowledgeCheckAttempt.passed, true)
         )
       )
@@ -154,7 +158,8 @@ export async function evaluateAndSyncModuleCompletion(
   });
 
   let modulePassed = alreadyPassed;
-  if (criteria.complete && !alreadyPassed) {
+  // An exempted module counts as it is: it isn't marked passed, because nothing was assessed.
+  if (criteria.complete && !alreadyPassed && modProgress?.status !== "exempted") {
     await tx
       .update(schema.moduleProgress)
       .set({
@@ -174,7 +179,31 @@ export async function evaluateAndSyncModuleCompletion(
   }
 
   // 3. Check Program Completion
-  // Program is complete when EVERY module in the active plan is passed or exempted
+  const { programCompleted, certificateId } = await syncProgramme(tx, ctx, enrollmentRow, activePlan, modulePassed ? moduleId : null);
+
+  return { modulePassed, programCompleted, certificateId };
+}
+
+type EnrollmentContext = {
+  enrollment: typeof schema.enrollment.$inferSelect;
+  cohort: typeof schema.cohort.$inferSelect;
+  program: typeof schema.program.$inferSelect;
+  org: typeof schema.organization.$inferSelect;
+};
+type PlanRow = typeof schema.learningPlan.$inferSelect;
+
+/**
+ * The programme is complete when every non-optional module in the plan is passed or exempted. Then the plan and the
+ * enrolment complete and the certificate is issued, once.
+ */
+async function syncProgramme(
+  tx: Executor,
+  ctx: Pick<Ctx, "principal" | "now">,
+  enrollmentRow: EnrollmentContext,
+  activePlan: PlanRow | undefined,
+  justPassed: ModuleId | null,
+): Promise<{ programCompleted: boolean; certificateId?: string }> {
+  const enrollmentId = enrollmentRow.enrollment.id;
   let programCompleted = false;
   let certificateId: string | undefined;
 
@@ -213,8 +242,8 @@ export async function evaluateAndSyncModuleCompletion(
     ]);
 
     // If current module just passed in this evaluation, add it:
-    if (modulePassed) {
-      completedOrExemptSet.add(moduleId);
+    if (justPassed) {
+      completedOrExemptSet.add(justPassed);
     }
 
     const isProgComplete = checkProgramCompletion({
@@ -280,6 +309,7 @@ export async function evaluateAndSyncModuleCompletion(
         const recipientName = owner?.name?.trim() || enrollmentRow.org.name;
         const certCode = generateCertificateCode(ctx.now.getUTCFullYear());
 
+        // The partial unique index on a live certificate per enrolment is the backstop: a second one is never inserted.
         const [createdCert] = await tx
           .insert(schema.certificate)
           .values({
@@ -292,6 +322,7 @@ export async function evaluateAndSyncModuleCompletion(
             pathway: activePlan.pathway,
             issuedAt: ctx.now,
           })
+          .onConflictDoNothing()
           .returning();
 
         if (createdCert) {
@@ -314,27 +345,68 @@ export async function evaluateAndSyncModuleCompletion(
     }
   }
 
-  return { modulePassed, programCompleted, certificateId };
+  return certificateId ? { programCompleted, certificateId } : { programCompleted };
+}
+
+/** The enrolment with its cohort, programme and business, and the plan the learner works from. */
+async function loadEnrollmentContext(tx: Executor, enrollmentId: string): Promise<{ row: EnrollmentContext | undefined; plan: PlanRow | undefined }> {
+  const [row] = await tx
+    .select({ enrollment: schema.enrollment, cohort: schema.cohort, program: schema.program, org: schema.organization })
+    .from(schema.enrollment)
+    .innerJoin(schema.cohort, eq(schema.enrollment.cohortId, schema.cohort.id))
+    .innerJoin(schema.program, eq(schema.cohort.programId, schema.program.id))
+    .innerJoin(schema.organization, eq(schema.enrollment.organizationId, schema.organization.id))
+    .where(eq(schema.enrollment.id, enrollmentId));
+  if (!row) return { row: undefined, plan: undefined };
+  const [plan] = await tx
+    .select()
+    .from(schema.learningPlan)
+    .where(and(eq(schema.learningPlan.enrollmentId, enrollmentId), inArray(schema.learningPlan.status, ["generated", "approved", "active", "completed"])))
+    .orderBy(desc(schema.learningPlan.createdAt))
+    .limit(1);
+  return { row, plan };
 }
 
 /**
- * An override turned a pass into a fail, so what that pass earned no longer stands: the certificate is
- * revoked, and a completed enrolment and plan go back to active. Attendance, progress and attempts stay.
+ * Re-checks the whole programme after a change that isn't about one module's work, such as a plan change: it completes
+ * if every module is now done, and is reopened if it was finished and no longer is.
  */
-export async function reopenAfterFailedOverride(
+export async function resyncProgramme(tx: Executor, ctx: Pick<Ctx, "principal" | "now">, enrollmentId: string, reason: string): Promise<{ programCompleted: boolean }> {
+  await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId)).for("update");
+  const { row, plan } = await loadEnrollmentContext(tx, enrollmentId);
+  if (!row) return { programCompleted: false };
+  const { programCompleted } = await syncProgramme(tx, ctx, row, plan, null);
+  if (programCompleted) return { programCompleted };
+  const [live] = await tx
+    .select({ id: schema.certificate.id })
+    .from(schema.certificate)
+    .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
+    .limit(1);
+  if (row.enrollment.status === "completed" || live) await reopenEnrolment(tx, ctx, enrollmentId, null, reason);
+  return { programCompleted: false };
+}
+
+/** What a certificate's public check says when Entrust withdraws it. The reason staff record stays internal. */
+export const PUBLIC_REVOCATION_REASON = "Entrust Africa withdrew this certificate.";
+
+/**
+ * Something the programme's completion rested on no longer stands (a score turned to a fail, a critical failure, an
+ * exemption taken back), so what it earned goes too: the certificate is revoked, and a completed enrolment and plan go
+ * back to active. Attendance, progress and attempts stay. `reason` is internal; the public check shows a plain sentence.
+ */
+export async function reopenEnrolment(
   tx: Executor,
   ctx: Pick<Ctx, "principal" | "now">,
   enrollmentId: string,
-  moduleId: ModuleId,
+  moduleId: ModuleId | null,
   reason: string,
 ): Promise<void> {
   const [enrollment] = await tx.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
   if (!enrollment) return;
 
-  const revocationReason = `Score for ${moduleId} overridden to a fail: ${reason}`;
   const revoked = await tx
     .update(schema.certificate)
-    .set({ revokedAt: ctx.now, revokedByUserId: ctx.principal.userId, revocationReason, updatedAt: ctx.now })
+    .set({ revokedAt: ctx.now, revokedByUserId: ctx.principal.userId, revocationReason: reason, publicRevocationReason: PUBLIC_REVOCATION_REASON, updatedAt: ctx.now })
     .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
     .returning();
   for (const cert of revoked) {
@@ -342,7 +414,7 @@ export async function reopenAfterFailedOverride(
       action: "trade.certificate.revoked",
       organizationId: enrollment.organizationId,
       entityId: cert.id,
-      after: { code: cert.code, revokedAt: ctx.now.toISOString(), revokedBy: ctx.principal.userId, reason: revocationReason },
+      after: { code: cert.code, revokedAt: ctx.now.toISOString(), revokedBy: ctx.principal.userId, reason },
     });
   }
 
@@ -360,9 +432,38 @@ export async function reopenAfterFailedOverride(
       action: "trade.program.reopened",
       organizationId: enrollment.organizationId,
       entityId: enrollmentId,
-      after: { moduleId, reason: revocationReason },
+      after: { moduleId, reason },
     });
   }
+}
+
+/**
+ * Re-checks a module and the programme after anything that can change whether they're complete: a score, an override,
+ * an exemption decision, a plan change. A module that now completes the programme issues the certificate; a programme
+ * that was finished, or holds a live certificate, and isn't any more is reopened.
+ */
+export async function resyncCompletion(
+  tx: Executor,
+  ctx: Pick<Ctx, "principal" | "now">,
+  enrollmentId: string,
+  moduleId: ModuleId,
+  reason: string,
+): Promise<{ programCompleted: boolean }> {
+  const result = await evaluateAndSyncModuleCompletion(tx, ctx, enrollmentId, moduleId);
+  if (result.programCompleted) return { programCompleted: true };
+  const [enrollment] = await tx.select({ status: schema.enrollment.status }).from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
+  const [live] = await tx
+    .select({ id: schema.certificate.id })
+    .from(schema.certificate)
+    .where(and(eq(schema.certificate.enrollmentId, enrollmentId), isNull(schema.certificate.revokedAt)))
+    .limit(1);
+  if (enrollment?.status === "completed" || live) await reopenEnrolment(tx, ctx, enrollmentId, moduleId, reason);
+  return { programCompleted: false };
+}
+
+/** The newest version of a module a learner can start now, which is the one a new learner is pinned to. */
+export async function currentLearnerVersion(db: Executor, moduleId: ModuleId): Promise<string | null> {
+  return (await resolveTradeModuleContent(db, moduleId, "learner"))?.version ?? null;
 }
 
 /**
@@ -445,10 +546,12 @@ export async function adminOverrideModuleCompletion(
         })
         .where(eq(schema.moduleProgress.id, existing.id));
     } else {
+      const version = await currentLearnerVersion(tx, moduleId);
+      if (!version) throw new ServiceError("invalid", `${moduleId} has no approved content yet.`);
       await tx.insert(schema.moduleProgress).values({
         enrollmentId,
         moduleId,
-        contentVersion: "0.1.0",
+        contentVersion: version,
         status: "passed",
         adminOverrideByUserId: ctx.principal.userId,
         adminOverrideReason: reason,
@@ -505,7 +608,8 @@ export async function getCertificateByCodePublic(
     isValid: !isRevoked,
     isRevoked,
     revokedAt: cert.revokedAt ? cert.revokedAt.toISOString() : null,
-    revocationReason: cert.revocationReason ?? null,
+    // Anyone can look a code up, so only the reason meant for the public: staff's own words stay internal.
+    revocationReason: isRevoked ? (cert.publicRevocationReason ?? PUBLIC_REVOCATION_REASON) : null,
   };
 }
 
@@ -566,6 +670,7 @@ export async function revokeCertificate(
   ctx: Ctx,
   certificateId: string,
   reason: string,
+  publicReason?: string,
 ): Promise<CertificateView> {
   if (ctx.principal.staffRole !== "admin") {
     throw new ServiceError("forbidden", "Only an Entrust administrator can revoke certificates.");
@@ -600,9 +705,10 @@ export async function revokeCertificate(
         revokedAt: ctx.now,
         revokedByUserId: ctx.principal.userId,
         revocationReason: trimmedReason,
+        publicRevocationReason: publicReason?.trim() || PUBLIC_REVOCATION_REASON,
         updatedAt: ctx.now,
       })
-      .where(eq(schema.certificate.id, certificateId))
+      .where(and(eq(schema.certificate.id, certificateId), isNull(schema.certificate.revokedAt)))
       .returning();
 
     await recordTradeChange(tx, ctx.principal.userId, {

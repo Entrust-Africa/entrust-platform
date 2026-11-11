@@ -556,7 +556,10 @@ export const certificate = trade.table(
     issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     revokedByUserId: text("revoked_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    /** Staff's reason. Internal: the audit trail and staff screens show it. */
     revocationReason: text("revocation_reason"),
+    /** What the public certificate check says about a revocation. */
+    publicRevocationReason: text("public_revocation_reason"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -567,6 +570,8 @@ export const certificate = trade.table(
   (t) => [
     index("trade_certificate_enrollment_idx").on(t.enrollmentId),
     uniqueIndex("trade_certificate_code_uidx").on(t.code),
+    // One live certificate per enrolment, so two completions landing together can't both issue one.
+    uniqueIndex("trade_certificate_live_uidx").on(t.enrollmentId).where(sql`${t.revokedAt} is null`),
   ],
 );
 

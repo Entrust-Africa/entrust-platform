@@ -282,6 +282,7 @@ describe("TRADE Module & Program Completion and Certification (#71)", () => {
     // Admin revokes
     const revokeRes = await callV1(w.admin, "POST", `/trade/certificates/${certId}/revoke`, {
       reason: "Fraudulent RPL submission detected upon audit",
+      publicReason: "Withdrawn after an audit.",
     });
     expect(revokeRes.status).toBe(200);
     const revokedData = revokeRes.body as any;
@@ -295,7 +296,9 @@ describe("TRADE Module & Program Completion and Certification (#71)", () => {
     const pubCert = publicRes.body as any;
     expect(pubCert.isValid).toBe(false);
     expect(pubCert.isRevoked).toBe(true);
-    expect(pubCert.revocationReason).toBe("Fraudulent RPL submission detected upon audit");
+    // Anyone can look the code up, so it shows the public reason, never staff's own words.
+    expect(pubCert.revocationReason).toBe("Withdrawn after an audit.");
+    expect(JSON.stringify(pubCert)).not.toContain("Fraudulent");
     expect(pubCert.revokedAt).not.toBeNull();
   });
 

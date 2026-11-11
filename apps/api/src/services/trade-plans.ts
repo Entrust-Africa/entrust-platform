@@ -12,7 +12,7 @@ import { latestTradeRules, type ModuleId, type Pathway } from "@entrust/trade-ru
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { assignedOrganizationIds, canReachOrganization, limitedToAssignedCohorts } from "./trade-shared";
-import { evaluateAndSyncModuleCompletion, hasUnresolvedCriticalFailure } from "./trade-completion";
+import { currentLearnerVersion, evaluateAndSyncModuleCompletion, hasUnresolvedCriticalFailure, resyncCompletion, resyncProgramme } from "./trade-completion";
 
 const isMandatoryModule = (moduleId: string): boolean => latestTradeRules().modules.some((m) => m.id === moduleId && m.requiredForAll);
 import type {
@@ -180,11 +180,13 @@ export async function approvePlan(
   planId: string,
   input: ApprovePlanInput
 ): Promise<LearningPlanRecord> {
-  const { principal, db, now } = ctx;
+  const { principal, now } = ctx;
 
-  if (!principal.staffRole) {
-    throw new ServiceError("forbidden", "Only Entrust staff can approve learning plans.");
+  // A reviewer (the Assessor role) reads plans and changes nothing.
+  if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+    throw new ServiceError("forbidden", "Only an Entrust administrator or facilitator can approve learning plans.");
   }
+  return ctx.db.transaction(async (db) => {
 
   const [existing] = await db
     .select({
@@ -203,6 +205,7 @@ export async function approvePlan(
   if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
+  refuseFinishedPlan(existing.status);
 
   await db
     .update(schema.learningPlan)
@@ -237,7 +240,17 @@ export async function approvePlan(
     organizationId: existing.organizationId,
   });
 
-  return getPlan(ctx, planId);
+  return getPlan({ ...ctx, db }, planId);
+  });
+}
+
+/**
+ * A superseded plan was replaced by a newer one, and a completed one ended with its programme. Approving or changing
+ * either would make it live again next to the plan the learner works from.
+ */
+function refuseFinishedPlan(status: string): void {
+  if (status === "superseded") throw new ServiceError("invalid_transition", "This learning plan was replaced by a newer one, so it can't be approved or changed.");
+  if (status === "completed") throw new ServiceError("invalid_transition", "This learning plan is completed, so it can't be approved or changed.");
 }
 
 /** The SME confirms it has read its plan, which M01 asks for (#71). Saying so twice changes nothing. */
@@ -274,6 +287,14 @@ export async function overridePlan(
   planId: string,
   input: OverridePlanInput
 ): Promise<LearningPlanRecord> {
+  return ctx.db.transaction((db) => applyPlanOverride({ ...ctx, db }, planId, input));
+}
+
+async function applyPlanOverride(
+  ctx: Ctx,
+  planId: string,
+  input: OverridePlanInput
+): Promise<LearningPlanRecord> {
   const { principal, db, now } = ctx;
 
   if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
@@ -304,6 +325,7 @@ export async function overridePlan(
   if (!existing || !(await canReachOrganization(db, principal, existing.organizationId))) {
     throw new ServiceError("not_found", "Learning plan not found.");
   }
+  refuseFinishedPlan(existing.status);
 
   const currentAssignments = await db
     .select()
@@ -396,6 +418,9 @@ export async function overridePlan(
     },
     reason: input.reason.trim(),
   });
+
+  // Dropping the last module left can finish the programme, and adding one to a finished programme reopens it.
+  await resyncProgramme(db, ctx, existing.enrollmentId, `Learning plan changed: ${input.reason.trim()}`);
 
   return getPlan(ctx, planId);
 }
@@ -609,6 +634,14 @@ export async function reviewExemption(
   exemptionId: string,
   input: ReviewExemptionInput
 ): Promise<ModuleExemptionView> {
+  return ctx.db.transaction((db) => applyExemptionReview({ ...ctx, db }, exemptionId, input));
+}
+
+async function applyExemptionReview(
+  ctx: Ctx,
+  exemptionId: string,
+  input: ReviewExemptionInput
+): Promise<ModuleExemptionView> {
   const { principal, db, now } = ctx;
 
   if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
@@ -684,15 +717,29 @@ export async function reviewExemption(
         })
         .where(eq(schema.moduleProgress.id, existingProgress.id));
     } else {
+      const version = await currentLearnerVersion(db, existing.moduleId as ModuleId);
+      if (!version) throw new ServiceError("invalid", `${existing.moduleId} has no approved content yet.`);
       await db.insert(schema.moduleProgress).values({
         enrollmentId: existing.enrollmentId,
         moduleId: existing.moduleId,
-        contentVersion: "1.0.0",
+        contentVersion: version,
         status: "exempted",
         completedAt: now,
         createdAt: now,
         updatedAt: now,
       });
+    }
+  } else if (existing.status === "approved") {
+    // Taking an exemption back puts the module back to work: it no longer counts towards the certificate.
+    const [progress] = await db
+      .select({ id: schema.moduleProgress.id, status: schema.moduleProgress.status, startedAt: schema.moduleProgress.startedAt })
+      .from(schema.moduleProgress)
+      .where(and(eq(schema.moduleProgress.enrollmentId, existing.enrollmentId), eq(schema.moduleProgress.moduleId, existing.moduleId)));
+    if (progress?.status === "exempted") {
+      await db
+        .update(schema.moduleProgress)
+        .set({ status: progress.startedAt ? "in_progress" : "not_started", completedAt: null, updatedAt: now })
+        .where(eq(schema.moduleProgress.id, progress.id));
     }
   }
 
@@ -710,6 +757,11 @@ export async function reviewExemption(
     },
     reason: input.comment?.trim() || null,
   });
+
+  // An approval can finish the programme; taking one back can reopen it.
+  if (existing.status !== input.status) {
+    await resyncCompletion(db, ctx, existing.enrollmentId, existing.moduleId as ModuleId, `Exemption for ${existing.moduleId} ${input.status}`);
+  }
 
   const list = await listExemptions(ctx, {
     enrollmentId: existing.enrollmentId,

@@ -1567,7 +1567,10 @@ export const PublicCertificateView = z
 
 export const RevokeCertificateBody = z
   .object({
-    reason: z.string().trim().min(3, "Revocation reason is required"),
+    /** Staff's own reason, kept in the audit trail and shown to staff. */
+    reason: z.string().trim().min(3, "Revocation reason is required").max(2000),
+    /** What the public check says. Without one it says Entrust withdrew the certificate, and nothing more. */
+    publicReason: z.string().trim().min(3).max(300).optional(),
   })
   .openapi("RevokeTradeCertificateBody");
 

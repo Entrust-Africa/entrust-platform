@@ -5,7 +5,7 @@ import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { canReachCohort, canReachOrganization, refuseNewWork } from "./trade-shared";
-import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { currentLearnerVersion, evaluateAndSyncModuleCompletion } from "./trade-completion";
 import { resolveTradeModuleContent } from "./trade-modules";
 import type {
   CohortKnowledgeCheckStats,
@@ -45,9 +45,20 @@ export async function submitKnowledgeCheckAttempt(
   }
   refuseNewWork(enrollment.status);
 
+  // Graded on the version the learner is pinned to, which is set when they start the module (the newest approved one
+  // then). Naming another version, such as a retired one with easier questions, isn't the learner's choice.
+  const [pinnedProgress] = await db
+    .select({ contentVersion: schema.moduleProgress.contentVersion })
+    .from(schema.moduleProgress)
+    .where(and(eq(schema.moduleProgress.enrollmentId, input.enrollmentId), eq(schema.moduleProgress.moduleId, moduleId)))
+    .limit(1);
+  const pinned = pinnedProgress?.contentVersion ?? (await currentLearnerVersion(db, moduleId));
+  if (!pinned) throw new ServiceError("not_found", `Module ${moduleId} has no approved content available.`);
+  if (input.contentVersion !== undefined && input.contentVersion !== pinned) {
+    throw new ServiceError("invalid", `You're working on version ${pinned} of ${moduleId}, so its knowledge check is the one you take.`);
+  }
   // Load the module content with answer keys (server-side grading).
-  // Learners can only take knowledge checks on approved content.
-  const content = await resolveTradeModuleContent(db, moduleId, "learner", input.contentVersion);
+  const content = await resolveTradeModuleContent(db, moduleId, "staff", pinned);
   if (!content) {
     throw new ServiceError("not_found", `Module ${moduleId} has no approved content available.`);
   }
@@ -178,7 +189,9 @@ export async function submitKnowledgeCheckAttempt(
     passed: attempt!.passed,
     totalQuestions: attempt!.totalQuestions,
     correctCount: attempt!.correctCount,
-    results: evaluation.results,
+    // Which answers were right is said on every attempt, but the key itself only once the learner has passed: with
+    // unlimited retakes, showing it after a failed attempt let anyone pass by copying it.
+    results: evaluation.passed ? evaluation.results : evaluation.results.map((r) => ({ ...r, correctAnswers: [] })),
     theoryCompletedAt: theoryCompletedAt?.toISOString() ?? null,
     createdAt: attempt!.createdAt.toISOString(),
   };

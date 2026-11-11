@@ -1,10 +1,11 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { evaluateRubric, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
+import { evaluateRubric, rubricScoreProblems, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
 import { type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
-import { clearCompletionAfterCriticalFailure, evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import type { Executor } from "./db";
+import { clearCompletionAfterCriticalFailure, resyncCompletion } from "./trade-completion";
 import { resolveTradeModuleContent } from "./trade-modules";
 import { notify, organizationMemberIds, staffForEnrollment } from "./trade-notifications";
 import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
@@ -204,7 +205,7 @@ export async function createModuleSubmission(
 
   // Determine submission attempt version
   const [latestSub] = await db
-    .select({ version: schema.moduleSubmission.version })
+    .select({ version: schema.moduleSubmission.version, status: schema.moduleSubmission.status })
     .from(schema.moduleSubmission)
     .where(
       and(
@@ -214,9 +215,18 @@ export async function createModuleSubmission(
     )
     .orderBy(desc(schema.moduleSubmission.version))
     .limit(1);
+  // One submission at a time: the assessor scores what's waiting before the next comes in.
+  if (latestSub?.status === "submitted") {
+    throw new ServiceError("conflict", "Your last submission is still waiting for its score. You can submit again once it has been scored.");
+  }
 
+  // The work is assessed on the version of the module the learner was pinned to when they started it. Naming another
+  // one, such as a newer draft, isn't the learner's choice.
+  const contentVersion = progress.contentVersion;
+  if (input.contentVersion !== undefined && input.contentVersion !== contentVersion) {
+    throw new ServiceError("invalid", `You're working on version ${contentVersion} of ${input.moduleId}, so it's assessed on that version.`);
+  }
   const nextVersion = (latestSub?.version ?? 0) + 1;
-  const contentVersion = input.contentVersion ?? progress.contentVersion ?? "0.1.0";
   const now = new Date();
 
   const [submission] = await db
@@ -578,6 +588,10 @@ async function applyScore(
   // A second assessor's reading is a check on the first, and changes nothing, so it can still come in afterwards.
   if (isFirstScore) refuseNewWork(row.enrollment.status);
 
+  // Every criterion scored, within its range, and only this rubric's critical failures: nothing is capped or zeroed quietly.
+  const problems = rubricScoreProblems(content.rubric, input.scores, input.confirmedCriticalFailures ?? [], { complete: true });
+  if (problems.length) throw new ServiceError("invalid", problems.join(" "));
+
   // Evaluate scores against rubric
   const evaluation = evaluateRubric(
     content.rubric,
@@ -608,11 +622,6 @@ async function applyScore(
 
   // If this is the first score, it counts for learner progress:
   if (isFirstScore) {
-    // What was approved before the work was scored can't stand over a confirmed critical failure.
-    if (evaluation.confirmedCriticalFailures.length) {
-      await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
-    }
-
     const submissionStatus = evaluation.passed ? "passed" : "revision_required";
     await db
       .update(schema.moduleSubmission)
@@ -623,25 +632,9 @@ async function applyScore(
       })
       .where(eq(schema.moduleSubmission.id, submissionId));
 
-    // Update module progress. A passing score is only one requirement: the evaluator below decides
-    // whether the module is passed, once its lessons, knowledge check and plan are done as well.
-    const progressStatus = evaluation.passed ? "in_progress" : "needs_revision";
-    await db
-      .update(schema.moduleProgress)
-      .set({
-        status: progressStatus,
-        completedAt: null,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(schema.moduleProgress.enrollmentId, sub.enrollmentId),
-          eq(schema.moduleProgress.moduleId, sub.moduleId)
-        )
-      );
-
-    if (evaluation.passed) {
-      await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
+    // Only the newest submission speaks for the module. An older one scored late changes its own record and nothing else.
+    if (await isNewestSubmission(db, sub)) {
+      await settleModule(ctx, { principal, now }, row.enrollment.organizationId, sub, evaluation, `${sub.moduleId} practical scored as ${evaluation.outcome}`);
     }
 
     // Sent after the score commits: the learner isn't told about a score that rolled back, and a problem with the message can't undo one.
@@ -754,6 +747,8 @@ async function applyScoreOverride(
     throw new ServiceError("invalid", "Module has no rubric.");
   }
 
+  const problems = rubricScoreProblems(content.rubric, input.scores ?? {}, input.confirmedCriticalFailures ?? [], { complete: false });
+  if (problems.length) throw new ServiceError("invalid", problems.join(" "));
   const mergedScores = {
     ...officialScore.scores,
     ...(input.scores ?? {}),
@@ -793,28 +788,9 @@ async function applyScoreOverride(
     })
     .where(eq(schema.moduleSubmission.id, submissionId));
 
-  const progressStatus = evaluation.passed ? "in_progress" : "needs_revision";
-  await db
-    .update(schema.moduleProgress)
-    .set({
-      status: progressStatus,
-      completedAt: null,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(schema.moduleProgress.enrollmentId, sub.enrollmentId),
-        eq(schema.moduleProgress.moduleId, sub.moduleId)
-      )
-    );
-
-  if (confirmedFailures.length) {
-    await clearCompletionAfterCriticalFailure(db, { principal, now }, row.enrollment.organizationId, sub.enrollmentId, sub.moduleId);
-  }
-  if (evaluation.passed) {
-    await evaluateAndSyncModuleCompletion(db, ctx, sub.enrollmentId, sub.moduleId as ModuleId);
-  } else if (officialScore.passed) {
-    await reopenAfterFailedOverride(db, { principal, now }, sub.enrollmentId, sub.moduleId as ModuleId, input.overrideReason);
+  // An override on an older submission corrects that record only: the newest submission is what the module stands on.
+  if (await isNewestSubmission(db, sub)) {
+    await settleModule(ctx, { principal, now }, row.enrollment.organizationId, sub, { passed: evaluation.passed, confirmedCriticalFailures: confirmedFailures }, `Score for ${sub.moduleId} overridden: ${input.overrideReason}`);
   }
 
   // Audit log with before and after details (M01 AT-15, M03 AT-15, M04 AT-11)
@@ -931,4 +907,46 @@ export async function listSubmissionScores(
     items: visibleScores.map(format),
     officialScore: official ? format(official) : null,
   };
+}
+
+/** Whether a submission is the newest for its module, the one the module's result rests on. */
+async function isNewestSubmission(db: Executor, sub: { enrollmentId: string; moduleId: string; version: number }): Promise<boolean> {
+  const [newest] = await db
+    .select({ version: schema.moduleSubmission.version })
+    .from(schema.moduleSubmission)
+    .where(and(eq(schema.moduleSubmission.enrollmentId, sub.enrollmentId), eq(schema.moduleSubmission.moduleId, sub.moduleId as ModuleId)))
+    .orderBy(desc(schema.moduleSubmission.version))
+    .limit(1);
+  return newest?.version === sub.version;
+}
+
+/**
+ * Brings the module and the programme into line with the newest submission's official score. A pass leaves the module
+ * in progress until its other requirements are met. A fail takes away what made it complete without one: a critical
+ * failure withdraws an exemption, and any fail clears an administrator's completion override, so the next lesson tick
+ * can't pass it again. Then completion is re-checked, which issues a certificate or takes one back.
+ */
+async function settleModule(
+  ctx: Ctx,
+  change: { principal: Ctx["principal"]; now: Date },
+  organizationId: string,
+  sub: { enrollmentId: string; moduleId: string },
+  evaluation: { passed: boolean; confirmedCriticalFailures: readonly string[] },
+  reason: string,
+): Promise<void> {
+  const { db } = ctx;
+  const progress = and(eq(schema.moduleProgress.enrollmentId, sub.enrollmentId), eq(schema.moduleProgress.moduleId, sub.moduleId as ModuleId));
+  if (evaluation.confirmedCriticalFailures.length) {
+    await clearCompletionAfterCriticalFailure(db, change, organizationId, sub.enrollmentId, sub.moduleId);
+  }
+  await db
+    .update(schema.moduleProgress)
+    .set({
+      status: evaluation.passed ? "in_progress" : "needs_revision",
+      completedAt: null,
+      updatedAt: change.now,
+      ...(evaluation.passed ? {} : { adminOverrideByUserId: null, adminOverrideReason: null, adminOverrideAt: null }),
+    })
+    .where(progress);
+  await resyncCompletion(db, change, sub.enrollmentId, sub.moduleId as ModuleId, reason);
 }

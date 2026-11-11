@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { shuffleQuestionOptions } from "@entrust/trade-engine";
 import {
   AlertCircle,
   BookOpen,
@@ -213,14 +214,21 @@ export function ModuleViewer({
     };
   }, [enrollmentId, module.module]);
 
+  // The options come in a fresh order each time, so where the right answer sits says nothing. Done after the first render,
+  // so the server's HTML and the browser's agree.
+  const shuffleOptions = () => {
+    const newMap: Record<string, Array<{ id: string; text: string }>> = {};
+    for (const q of shuffleQuestionOptions(module.knowledgeCheck.questions)) {
+      newMap[q.id] = [...q.options];
+    }
+    setShuffledOptions(newMap);
+  };
+  useEffect(shuffleOptions, [module.knowledgeCheck.questions]);
+
   const handleRetakeQuiz = () => {
     setQuizAnswers({});
     setQuizFeedback(null);
-    const newMap: Record<string, Array<{ id: string; text: string }>> = {};
-    for (const q of module.knowledgeCheck.questions) {
-      newMap[q.id] = [...q.options].sort(() => Math.random() - 0.5);
-    }
-    setShuffledOptions(newMap);
+    shuffleOptions();
   };
 
   const handleSubmitQuiz = async () => {

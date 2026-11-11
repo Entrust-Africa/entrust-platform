@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREFIX, callV1, cleanup, createOrganization, db, signUp, type TestUser } from "./support";
@@ -169,6 +169,19 @@ describe("TRADE staff course content studio (#212)", () => {
     expect(res.status).toBe(403);
   });
 
+  it("never lets a learner open a draft or a version waiting for review", async () => {
+    // 1.1.0 is in review now. Before approval it is staff-only, like a draft.
+    expect((await get(learner, "/modules/M01?version=1.1.0")).status).toBe(404);
+    expect((await get(admin, "/modules/M01?version=1.1.0")).status).toBe(200);
+    expect((await get(learner, "/modules/M01")).body.latestVersion).toBe("1.0.0");
+  });
+
+  it("pins a learner who starts now to 1.0.0, and they stay on it after 1.1.0 is approved", async () => {
+    const started = await post(learner, "/module-progress", { enrollmentId, moduleId: "M01", lessonId: "lesson-1" });
+    expect(started.status).toBe(200);
+    expect(started.body.contentVersion).toBe("1.0.0");
+  });
+
   it("allows Super Admin to approve version into production", async () => {
     const res = await post(admin, "/admin/modules/M01/versions/1.1.0/approve", {
       notes: "Approved after trade advisory board review",
@@ -223,14 +236,68 @@ describe("TRADE staff course content studio (#212)", () => {
     expect(baselineRes.body.content.version).toBe("1.0.0");
   });
 
-  it("grades a knowledge check on the version approved in the studio", async () => {
+  it("keeps grading the pinned learner on 1.0.0, whatever version they name", async () => {
+    // Still pinned after the approval.
+    const [progress] = await db.select().from(schema.moduleProgress).where(eq(schema.moduleProgress.enrollmentId, enrollmentId));
+    expect(progress!.contentVersion).toBe("1.0.0");
+    // Naming the newer version, or the retired one with five easy questions, is refused.
+    for (const contentVersion of ["1.1.0", "0.1.0"]) {
+      const res = await post(learner, "/modules/M01/knowledge-check/attempts", { enrollmentId, contentVersion, answers: {} });
+      expect(res.status, contentVersion).toBe(422);
+    }
+    expect((await post(learner, "/module-progress", { enrollmentId, moduleId: "M01", lessonId: "lesson-2", contentVersion: "0.1.0" })).status).toBe(422);
+    // Without naming one, the check is 1.0.0's ten questions.
+    const res = await post(learner, "/modules/M01/knowledge-check/attempts", { enrollmentId, answers: {} });
+    expect(res.status).toBe(200);
+    expect(res.body.contentVersion).toBe("1.0.0");
+    expect(res.body.totalQuestions).toBe(10);
+  });
+
+  it("doesn't show the answer key after a failed attempt", async () => {
+    const res = await post(learner, "/modules/M01/knowledge-check/attempts", { enrollmentId, answers: {} });
+    expect(res.body.passed).toBe(false);
+    expect(res.body.results.every((r: { correctAnswers: string[] }) => r.correctAnswers.length === 0)).toBe(true);
+  });
+
+  it("grades a learner who starts after the approval on the version approved in the studio", async () => {
+    const newcomer = await signUp("content-newcomer");
+    const org2 = await createOrganization("content-org-2", [[newcomer, "owner"]], { platform: "trade" });
+    const [cohort] = await db.select({ cohortId: schema.enrollment.cohortId }).from(schema.enrollment).where(eq(schema.enrollment.id, enrollmentId));
+    const [enrollment2] = await db.insert(schema.enrollment).values({ cohortId: cohort!.cohortId, organizationId: org2, status: "active" }).returning();
+
     const staffView = await get(admin, "/admin/modules/M01/versions/1.1.0");
     const questions = staffView.body.content.knowledgeCheck.questions as { id: string; correct: string[] }[];
     const answers = Object.fromEntries(questions.map((q) => [q.id, q.correct]));
 
-    const res = await post(learner, "/modules/M01/knowledge-check/attempts", { enrollmentId, contentVersion: "1.1.0", answers });
+    const res = await post(newcomer, "/modules/M01/knowledge-check/attempts", { enrollmentId: enrollment2!.id, contentVersion: "1.1.0", answers });
     expect(res.status).toBe(200);
     expect(res.body.score).toBe(100);
     expect(res.body.passed).toBe(true);
+    // A passing attempt shows the answers.
+    expect(res.body.results[0].correctAnswers.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the retired 0.1.0 versions from learners and stores them as archived", async () => {
+    for (const module of ["M01", "M03", "M04", "M07"]) {
+      expect((await get(learner, `/modules/${module}?version=0.1.0`)).status, module).toBe(404);
+      const [row] = await db.select().from(schema.moduleContentVersion).where(and(eq(schema.moduleContentVersion.moduleId, module as "M01"), eq(schema.moduleContentVersion.version, "0.1.0")));
+      expect(row!.status, module).toBe("archived");
+    }
+    expect((await get(admin, "/modules/M01?version=0.1.0")).status).toBe(200);
+  });
+
+  it("refuses a studio draft that takes a version number from the repo", async () => {
+    const res = await post(facilitator, "/admin/modules/M01/versions", { targetVersion: "0.1.0" });
+    expect(res.status).toBe(409);
+  });
+
+  it("won't send a draft that misses Entrust's standard for review", async () => {
+    const draft = await get(facilitator, "/admin/modules/M01/versions/1.2.0");
+    const content = draft.body.content;
+    content.knowledgeCheck.passMark = 60;
+    expect((await patch(facilitator, "/admin/modules/M01/versions/1.2.0", { content })).status).toBe(200);
+    const res = await post(facilitator, "/admin/modules/M01/versions/1.2.0/submit-review");
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("passes at 80%");
   });
 });

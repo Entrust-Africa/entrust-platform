@@ -5,7 +5,7 @@ import type { ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { canReachOrganization } from "./trade-shared";
-import { evaluateAndSyncModuleCompletion } from "./trade-completion";
+import { currentLearnerVersion, evaluateAndSyncModuleCompletion } from "./trade-completion";
 import type {
   ModuleProgressQueryInput,
   ModuleProgressView,
@@ -200,7 +200,13 @@ async function applyModuleProgress(
     completedAt = completedAt ?? now;
   }
 
-  const contentVersion = input.contentVersion ?? existing?.contentVersion ?? "1.0.0";
+  // The version is pinned when the learner starts and never moves: a newer version approved later doesn't change what
+  // they're working on or graded against, and naming another version isn't theirs to choose.
+  const contentVersion = existing?.contentVersion ?? (await currentLearnerVersion(db, input.moduleId as ModuleId));
+  if (!contentVersion) throw new ServiceError("not_found", `${input.moduleId} has no approved content yet.`);
+  if (input.contentVersion !== undefined && input.contentVersion !== contentVersion) {
+    throw new ServiceError("invalid", `You're working on version ${contentVersion} of ${input.moduleId}. Reload the module to carry on with it.`);
+  }
 
   let record: typeof schema.moduleProgress.$inferSelect;
 

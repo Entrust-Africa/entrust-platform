@@ -41,7 +41,7 @@ export function checkModuleCompletionCriteria(input: ModuleCompletionCheckInput)
   }
 
   if (!input.knowledgeCheckPassed) {
-    missing.push("Knowledge check not passed (minimum 80% required)");
+    missing.push("Knowledge check not passed");
   }
 
   if (!input.practicalDeliverablePassed) {
@@ -81,14 +81,16 @@ const CERT_CHARSET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 /**
  * Generates a unique, human-friendly certificate code in the format:
  * TRADE-YYYY-XXXX-XXXX
+ *
+ * The characters come from the platform's cryptographic random source, so a code can't be predicted from others.
+ * 32 characters divide 256 evenly, so taking a byte modulo 32 picks each one with the same chance.
  */
 export function generateCertificateCode(year: number = new Date().getUTCFullYear()): string {
   const segment = (len: number) => {
+    const bytes = new Uint8Array(len);
+    globalThis.crypto.getRandomValues(bytes);
     let s = "";
-    for (let i = 0; i < len; i++) {
-      const idx = Math.floor(Math.random() * CERT_CHARSET.length);
-      s += CERT_CHARSET[idx];
-    }
+    for (const byte of bytes) s += CERT_CHARSET[byte % CERT_CHARSET.length];
     return s;
   };
   return `TRADE-${year}-${segment(4)}-${segment(4)}`;

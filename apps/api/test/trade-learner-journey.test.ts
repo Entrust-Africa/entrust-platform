@@ -203,7 +203,10 @@ describe("a learner's journey from enrolment to certificate", () => {
 
     const publicCheck = ok(await get(null, `/certificates/${before.code}/public`));
     expect(publicCheck).toMatchObject({ isValid: false, isRevoked: true });
-    expect(publicCheck.revocationReason).toContain("Evidence was fabricated");
+    // The admin's reason is internal: the public check says only that Entrust withdrew it. Staff still see why.
+    expect(publicCheck.revocationReason).toBe("Entrust Africa withdrew this certificate.");
+    expect(JSON.stringify(publicCheck)).not.toContain("fabricated");
+    expect(ok(await get(w.admin, `/enrollments/${w.enrollment}/certificate`)).revocationReason).toContain("Evidence was fabricated");
     expect(ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`)).items[0].status).toBe("needs_revision");
     expect(ok(await get(w.learner, `/plans/${w.planId}`)).status).toBe("active");
     const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, w.enrollment));
