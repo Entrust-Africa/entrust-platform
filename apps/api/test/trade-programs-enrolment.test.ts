@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -61,8 +61,18 @@ beforeAll(async () => {
   w.smeId = smeRes.body.smeId;
 });
 
+/** Organisations made through the API get random ids, so cleanup() can't find them by prefix: they're listed here. */
+const madeByApi: string[] = [];
+
 afterAll(async () => {
   delete process.env.ENTRUST_ORG_ID;
+  const sponsors = await db.select({ id: schema.organization.id }).from(schema.organization).where(like(schema.organization.slug, "test-api-%"));
+  const ids = [...madeByApi, w.smeOrgId, ...sponsors.map((o) => o.id)].filter(Boolean);
+  if (ids.length) {
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
+    await db.delete(schema.platformAccess).where(inArray(schema.platformAccess.organizationId, ids));
+    await db.delete(schema.organization).where(inArray(schema.organization.id, ids));
+  }
   await cleanup();
 });
 
@@ -241,27 +251,6 @@ describe("TRADE Enrolment API", () => {
     expect((audit?.after as any)?.smeId).toBe(w.smeId);
   });
 
-  it("an SME enrolled in two cohorts has two enrolments and one SME ID (pilot criterion 2)", async () => {
-    // Enrol into Cohort Beta
-    const enrol2Res = await callV1(w.admin, "POST", "/trade/enrollments", {
-      cohortId: cohort2Id,
-      organizationId: w.smeOrgId,
-    });
-    expect(enrol2Res.status).toBe(201);
-    expect(enrol2Res.body.id).not.toBe(enrollment1Id);
-
-    // Query enrolments for this organisation
-    const listRes = await callV1(w.smeOwner, "GET", `/trade/enrollments?organizationId=${w.smeOrgId}`);
-    expect(listRes.status).toBe(200);
-    expect(listRes.body.enrollments.length).toBe(2);
-
-    // Both enrolments share the exact same SME ID
-    for (const enr of listRes.body.enrollments) {
-      expect(enr.smeId).toBe(w.smeId);
-      expect(enr.organizationId).toBe(w.smeOrgId);
-    }
-  });
-
   it("refuses enrolling the same SME in the same cohort twice with 409 conflict", async () => {
     const dupRes = await callV1(w.admin, "POST", "/trade/enrollments", {
       cohortId: cohort1Id,
@@ -312,6 +301,139 @@ describe("TRADE Enrolment API", () => {
     const [enrRow] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enrollment1Id));
     expect(enrRow?.status).not.toBe("completed");
   });
+
+  it("keeps a business in one running cohort at a time", async () => {
+    // Alpha is paused, which is still running: the business can't start Beta as well.
+    const res = await callV1(w.admin, "POST", "/trade/enrollments", { cohortId: cohort2Id, organizationId: w.smeOrgId });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("Cohort Alpha");
+  });
+
+  it("moves an enrolment only along the allowed transitions", async () => {
+    // Paused can't go back to invited.
+    const back = await callV1(w.facilitator, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, { status: "invited" });
+    expect(back.status).toBe(409);
+    const same = await callV1(w.facilitator, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, { status: "paused", reason: "Again" });
+    expect(same.status).toBe(409);
+    const withdrawn = await callV1(w.facilitator, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, { status: "withdrawn", reason: "The business closed its export line." });
+    expect(withdrawn.status).toBe(200);
+    // Only an administrator brings a withdrawn business back.
+    const facilitatorBack = await callV1(w.facilitator, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, { status: "active", reason: "It reopened" });
+    expect(facilitatorBack.status).toBe(403);
+  });
+
+  it("an SME enrolled in two cohorts, one after the other, has two enrolments and one SME ID (pilot criterion 2)", async () => {
+    // Withdrawn from Alpha, it can join Beta.
+    const enrol2Res = await callV1(w.admin, "POST", "/trade/enrollments", {
+      cohortId: cohort2Id,
+      organizationId: w.smeOrgId,
+    });
+    expect(enrol2Res.status).toBe(201);
+    expect(enrol2Res.body.id).not.toBe(enrollment1Id);
+
+    // Query enrolments for this organisation
+    const listRes = await callV1(w.smeOwner, "GET", `/trade/enrollments?organizationId=${w.smeOrgId}`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.enrollments.length).toBe(2);
+
+    // Both enrolments share the exact same SME ID
+    for (const enr of listRes.body.enrollments) {
+      expect(enr.smeId).toBe(w.smeId);
+      expect(enr.organizationId).toBe(w.smeOrgId);
+    }
+  });
+
+  it("won't bring the business back to Alpha while it is running in Beta", async () => {
+    const res = await callV1(w.admin, "PATCH", `/trade/enrollments/${enrollment1Id}/status`, { status: "active", reason: "Back to Alpha" });
+    expect(res.status).toBe(409);
+  });
+
+  it("lets an administrator bring a withdrawn business back, with a reason, and clears the withdrawal", async () => {
+    const owner = await signUp("tr-returning-owner");
+    const org = await createOrganization(`returning-${randomUUID().slice(0, 6)}`, [[owner, "owner"]], { platform: "trade" });
+    const [enr] = await db.insert(schema.enrollment).values({ cohortId: cohort1Id, organizationId: org, status: "withdrawn", withdrawnAt: new Date() }).returning();
+    expect((await callV1(w.admin, "PATCH", `/trade/enrollments/${enr!.id}/status`, { status: "active" })).status).toBe(422);
+    const res = await callV1(w.admin, "PATCH", `/trade/enrollments/${enr!.id}/status`, { status: "active", reason: "Funding came through, the business is back." });
+    expect(res.status).toBe(200);
+    const [row] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enr!.id));
+    expect(row).toMatchObject({ status: "active", withdrawnAt: null });
+  });
+
+  it("never moves a finished programme by hand", async () => {
+    const owner = await signUp("tr-graduate-owner");
+    const org = await createOrganization(`graduate-${randomUUID().slice(0, 6)}`, [[owner, "owner"]], { platform: "trade" });
+    const [enr] = await db.insert(schema.enrollment).values({ cohortId: cohort1Id, organizationId: org, status: "completed", completedAt: new Date() }).returning();
+    for (const status of ["active", "invited", "withdrawn"]) {
+      const res = await callV1(w.admin, "PATCH", `/trade/enrollments/${enr!.id}/status`, { status, reason: "Trying" });
+      expect(res.status, status).toBe(409);
+    }
+    const [row] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, enr!.id));
+    expect(row!.status).toBe("completed");
+  });
+});
+
+describe("Cohort details, dates and sponsors", () => {
+  let programId: string;
+  let cohortId: string;
+  let sponsorId: string;
+  let businessId: string;
+
+  beforeAll(async () => {
+    programId = (await callV1(w.admin, "POST", "/trade/programs", { name: `Dates Program ${randomUUID().slice(0, 6)}` })).body.id;
+    const sponsor = await callV1(w.admin, "POST", "/trade/sponsors", { name: "Dates Bank", slug: `test-api-dates-bank-${randomUUID().slice(0, 6)}` });
+    expect(sponsor.status).toBe(201);
+    sponsorId = sponsor.body.id;
+    const owner = await signUp("tr-dates-owner");
+    businessId = await createOrganization(`dates-sme-${randomUUID().slice(0, 6)}`, [[owner, "owner"]], { platform: "trade" });
+  });
+
+  it("only names a real sponsor organisation as a cohort's sponsor", async () => {
+    const bad = await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Sponsored by a business", sponsorOrganizationId: businessId });
+    expect(bad.status).toBe(404);
+    const good = await callV1(w.facilitator, "POST", "/trade/cohorts", { programId, name: "Dates cohort", sponsorOrganizationId: sponsorId, startDate: "2026-01-01", endDate: "2026-06-30" });
+    expect(good.status).toBe(201);
+    cohortId = good.body.id;
+    expect((await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Backwards", startDate: "2026-06-30", endDate: "2026-01-01" })).status).toBe(422);
+  });
+
+  it("lets a facilitator on the cohort correct it, and only an administrator change its sponsor", async () => {
+    const renamed = await callV1(w.facilitator, "PATCH", `/trade/cohorts/${cohortId}`, { name: "Dates cohort (Addis)" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe("Dates cohort (Addis)");
+    expect((await callV1(w.facilitator, "PATCH", `/trade/cohorts/${cohortId}`, { sponsorOrganizationId: null })).status).toBe(403);
+    expect((await callV1(w.reviewer, "PATCH", `/trade/cohorts/${cohortId}`, { name: "Reviewer rename" })).status).toBe(403);
+    expect((await callV1(w.admin, "PATCH", `/trade/cohorts/${cohortId}`, { endDate: "2025-12-01" })).status).toBe(422);
+    const cleared = await callV1(w.admin, "PATCH", `/trade/cohorts/${cohortId}`, { sponsorOrganizationId: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.sponsorOrganizationId).toBeNull();
+    const [log] = await db.select().from(schema.auditLog).where(and(eq(schema.auditLog.action, "trade.cohort.updated"), eq(schema.auditLog.entityId, cohortId)));
+    expect(log).toBeDefined();
+  });
+
+  it("takes no new businesses once a cohort has ended", async () => {
+    // The cohort ran January to June 2026, which is over.
+    const res = await callV1(w.admin, "POST", "/trade/enrollments", { cohortId, organizationId: businessId });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain("ended on 2026-06-30");
+  });
+
+  it("won't let a facilitator enrol a business that has been in a cohort they aren't on", async () => {
+    const other = (await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Admin's cohort" })).body.id;
+    const mine = (await callV1(w.facilitator, "POST", "/trade/cohorts", { programId, name: "Facilitator's cohort" })).body.id;
+    const [enr] = await db.insert(schema.enrollment).values({ cohortId: other, organizationId: businessId, status: "withdrawn", withdrawnAt: new Date() }).returning();
+    const res = await callV1(w.facilitator, "POST", "/trade/enrollments", { cohortId: mine, organizationId: businessId });
+    expect(res.status).toBe(403);
+    // An administrator can.
+    expect((await callV1(w.admin, "POST", "/trade/enrollments", { cohortId: mine, organizationId: businessId })).status).toBe(201);
+    void enr;
+  });
+
+  it("refuses a sponsor or Entrust organisation from self-registration", async () => {
+    for (const kind of ["sponsor", "entrust"]) {
+      const res = await callV1(w.otherSmeOwner, "POST", "/organizations", { name: `Fake ${kind}`, slug: `fake-${kind}-${randomUUID().slice(0, 8)}`, legalName: `Fake ${kind}`, country: "ET", kind });
+      expect(res.status, kind).toBe(400);
+    }
+  });
 });
 
 describe("Owner invitations by Entrust staff", () => {
@@ -325,6 +447,7 @@ describe("Owner invitations by Entrust staff", () => {
       country: "ET",
     });
     newOrgId = createRes.body.id;
+    madeByApi.push(newOrgId);
   });
 
   it("allows Entrust staff to send an owner invitation", async () => {
@@ -365,14 +488,11 @@ describe("Businesses waiting to be enrolled", () => {
     });
     expect(created.status).toBe(201);
     waitingOrgId = created.body.id;
+    madeByApi.push(waitingOrgId);
 
-    const sponsor = await callV1(w.admin, "POST", "/organizations", {
+    const sponsor = await callV1(w.admin, "POST", "/trade/sponsors", {
       name: `Waiting Sponsor ${randomUUID().slice(0, 6)}`,
-      slug: `waiting-sponsor-${randomUUID().slice(0, 8)}`,
-      legalName: `Waiting Sponsor ${randomUUID().slice(0, 6)} Bank`,
-      country: "ET",
-      platform: "trade",
-      kind: "sponsor",
+      slug: `test-api-waiting-sponsor-${randomUUID().slice(0, 8)}`,
     });
     expect(sponsor.status).toBe(201);
     sponsorOrgId = sponsor.body.id;

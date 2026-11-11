@@ -5,25 +5,40 @@ import { Button } from "@entrust/ui";
 import type { EnrollmentStatus } from "@/lib/types";
 import { updateStatusAction, type ActionState } from "../actions";
 
-const STATUS_OPTIONS: { value: EnrollmentStatus; label: string }[] = [
-  { value: "invited", label: "Invited" },
-  { value: "registered", label: "Registered" },
-  { value: "active", label: "Active" },
-  { value: "paused", label: "Paused" },
-  { value: "withdrawn", label: "Withdrawn" },
-];
+const LABELS: Record<EnrollmentStatus, string> = {
+  invited: "Invited",
+  registered: "Registered",
+  active: "Active",
+  paused: "Paused",
+  completed: "Completed",
+  withdrawn: "Withdrawn",
+};
+
+// The moves the API allows by hand. A finished programme only reopens when a module's result changes, and only an
+// administrator brings a withdrawn business back.
+const NEXT: Record<EnrollmentStatus, EnrollmentStatus[]> = {
+  invited: ["registered", "active", "withdrawn"],
+  registered: ["active", "paused", "withdrawn"],
+  active: ["paused", "withdrawn"],
+  paused: ["active", "withdrawn"],
+  completed: [],
+  withdrawn: ["active"],
+};
 
 export function StatusUpdater({
   enrollmentId,
   cohortId,
   currentStatus,
+  isAdmin,
 }: {
   enrollmentId: string;
   cohortId: string;
   currentStatus: EnrollmentStatus;
+  isAdmin: boolean;
 }) {
+  const options = NEXT[currentStatus].filter((s) => currentStatus !== "withdrawn" || isAdmin);
+  const [status, setStatus] = useState<EnrollmentStatus | "">(options[0] ?? "");
   const [isOpen, setIsOpen] = useState(false);
-  const [status, setStatus] = useState<EnrollmentStatus>(currentStatus);
   const [state, setState] = useState<ActionState>({ error: null });
   const [pending, setPending] = useState(false);
 
@@ -43,6 +58,11 @@ export function StatusUpdater({
       setState({ error: null });
     }
   }
+
+  if (options.length === 0) {
+    return <span className="text-[11px] text-ink-3">{currentStatus === "completed" ? "Finished" : "No change available"}</span>;
+  }
+  const needsReason = status === "paused" || status === "withdrawn" || currentStatus === "withdrawn";
 
   return (
     <>
@@ -75,28 +95,34 @@ export function StatusUpdater({
             )}
 
             <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+              <p className="text-xs text-ink-2">Now: {LABELS[currentStatus]}</p>
               <div>
-                <label className="block text-xs font-semibold text-ink">Status</label>
+                <label htmlFor={`status-${enrollmentId}`} className="block text-xs font-semibold text-ink">Change to</label>
                 <select
+                  id={`status-${enrollmentId}`}
                   name="status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as EnrollmentStatus)}
                   className="mt-1 w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {options.map((value) => (
+                    <option key={value} value={value}>
+                      {LABELS[value]}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-ink">Reason / Notes (Optional)</label>
+                <label htmlFor={`reason-${enrollmentId}`} className="block text-xs font-semibold text-ink">
+                  {needsReason ? "Reason (required)" : "Reason or notes (optional)"}
+                </label>
                 <textarea
+                  id={`reason-${enrollmentId}`}
                   name="reason"
                   rows={2}
-                  placeholder="Reason for graduation, withdrawal, or milestone update..."
+                  required={needsReason}
+                  placeholder={currentStatus === "withdrawn" ? "Why this business is coming back" : "Why the status is changing"}
                   className="mt-1 w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>

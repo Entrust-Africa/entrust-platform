@@ -18,7 +18,9 @@ import {
   listEnrollments,
   listPrograms,
   listWaitingSmes,
+  refuseEnrolmentOutsideReach,
   removeCohortStaff,
+  updateCohort,
   updateEnrollmentStatus,
 } from "../../services/trade-cohorts";
 import { assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "../../services/trade-shared";
@@ -43,6 +45,7 @@ function requireTrustedOrigin(c: { req: { header: (name: string) => string | und
 }
 
 // Schemas
+const isoDateTop = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date, YYYY-MM-DD.");
 const createProgramSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(1000).optional(),
@@ -55,9 +58,22 @@ const createCohortSchema = z.object({
   country: z.string().trim().length(2).default("ET"),
   language: z.string().trim().default("en"),
   sponsorOrganizationId: z.string().optional().nullable(),
-  startDate: z.string().optional().nullable(),
-  endDate: z.string().optional().nullable(),
+  startDate: isoDateTop.optional().nullable(),
+  endDate: isoDateTop.optional().nullable(),
 });
+
+const isoDate = isoDateTop;
+const updateCohortSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    deliveryMode: z.enum(DELIVERY_MODES).optional(),
+    country: z.string().trim().length(2).optional(),
+    language: z.string().trim().min(2).max(10).optional(),
+    sponsorOrganizationId: z.string().trim().min(1).nullable().optional(),
+    startDate: isoDate.nullable().optional(),
+    endDate: isoDate.nullable().optional(),
+  })
+  .strict();
 
 const enrolSmeSchema = z.object({
   cohortId: z.string().uuid(),
@@ -174,6 +190,36 @@ export const tradePrograms = new Hono<AppEnv>()
     return c.json(cohort);
   })
 
+  // Correcting a cohort: an administrator, or a facilitator on it. Only an administrator changes its sponsor, which
+  // decides who reads the cohort's reports.
+  .patch(
+    "/cohorts/:id",
+    zValidator("json", updateCohortSchema, (result, c) => {
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const message = issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.";
+        return c.json({ error: message, code: "invalid" }, 400);
+      }
+    }),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const db = getDb();
+      const principal = await loadPrincipal(db, user.id);
+      if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
+        throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can change a cohort.");
+      }
+      const id = c.req.param("id");
+      if (!(await canReachCohort(db, principal, id))) throw new ServiceError("not_found", "Cohort not found.");
+      const body = c.req.valid("json");
+      if (body.sponsorOrganizationId !== undefined && principal.staffRole !== "admin") {
+        throw new ServiceError("forbidden", "Only an Entrust administrator can change a cohort's sponsor.");
+      }
+      await db.transaction((tx) => updateCohort(tx, user.id, id, body));
+      return c.json(await getCohort(db, id));
+    },
+  )
+
   // The facilitators and reviewers on a cohort. An administrator assigns them.
   .get("/cohorts/:id/staff", async (c) => {
     const user = requireUser(c);
@@ -228,6 +274,7 @@ export const tradePrograms = new Hono<AppEnv>()
 
       const body = c.req.valid("json");
       if (!(await canReachCohort(db, principal, body.cohortId))) throw new ServiceError("not_found", "Cohort not found.");
+      await refuseEnrolmentOutsideReach(db, principal, body.organizationId);
       const enr = await db.transaction((tx) => enrolSme(tx, user.id, body));
       return c.json(enr, 201);
     },
@@ -302,7 +349,7 @@ export const tradePrograms = new Hono<AppEnv>()
 
       const current = await getEnrollment(db, id);
       if (!(await canReachCohort(db, principal, current.cohortId))) throw new ServiceError("not_found", "Enrolment not found.");
-      const result = await updateEnrollmentStatus(db, user.id, id, body.status, body.reason);
+      const result = await db.transaction((tx) => updateEnrollmentStatus(tx, { userId: user.id, staffRole: principal.staffRole }, id, body.status, body.reason));
       return c.json(result);
     },
   );

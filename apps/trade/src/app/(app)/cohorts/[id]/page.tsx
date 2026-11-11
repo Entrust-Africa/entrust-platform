@@ -144,7 +144,7 @@ export default async function CohortDetailPage(props: {
             <h1 className="mt-1 font-display text-2xl font-bold text-ink">{cohort.name}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ScheduleSessionDialog cohortId={cohort.id} />
+            {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
             {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
@@ -197,7 +197,7 @@ export default async function CohortDetailPage(props: {
               Interactive sessions scheduled for this cohort, with facilitator preparation and attendance sheets.
             </p>
           </div>
-          <ScheduleSessionDialog cohortId={cohort.id} />
+          {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
         </div>
 
         {sessions.length === 0 ? (
@@ -334,11 +334,14 @@ export default async function CohortDetailPage(props: {
                         <PlanAndPathway enrollmentId={enr.enrollmentId} plan={enr.plan} pathway={enr.pathway} canConfirmPathway={me.staffRole !== "reviewer"} review={reviewOf.get(enr.enrollmentId) ?? null} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <StatusUpdater
-                          enrollmentId={enr.enrollmentId}
-                          cohortId={cohort.id}
-                          currentStatus={enr.status}
-                        />
+                        {canEnrol ? (
+                          <StatusUpdater
+                            enrollmentId={enr.enrollmentId}
+                            cohortId={cohort.id}
+                            currentStatus={enr.status}
+                            isAdmin={me.staffRole === "admin"}
+                          />
+                        ) : null}
                       </td>
                     </tr>
                   ))}

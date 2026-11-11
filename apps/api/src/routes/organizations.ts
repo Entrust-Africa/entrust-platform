@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema, REGISTRATION_STATUSES, BUSINESS_STATUSES } from "@entrust/db";
 import { auth, trustedOrigins } from "@entrust/auth";
-import { ENTRUST_ROLES, ORGANIZATION_KINDS, PLATFORMS, QUALITY_ROLE, SME_ROLES } from "@entrust/roles";
+import { ENTRUST_ROLES, PLATFORMS, QUALITY_ROLE, SME_ROLES } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import { ServiceError } from "../services/errors";
 import { getUserOrganizations } from "../services/access";
@@ -82,7 +82,9 @@ const createOrganization = z.object({
   country: z.string().trim().length(2).default("ET"),
   // The platform the new organisation gets first. A Summit applicant gets `summit` alone, so TRADE's learner screens stay out of their way.
   platform: z.enum(["clear", "trade", "summit"]).optional(),
-  kind: z.enum(ORGANIZATION_KINDS).default("sme"),
+  // Anyone signed in can register a business, so only a business: a sponsor bank is made by Entrust (/v1/trade/sponsors),
+  // and the Entrust organisation is set by ENTRUST_ORG_ID. A self-declared sponsor would otherwise show in staff's lists.
+  kind: z.literal("sme", { error: "Only a business can be registered here. Entrust sets up sponsor organisations." }).default("sme"),
   confirmDuplicateName: z.boolean().default(false),
 });
 // Better Auth's configured organization roles are member/admin/owner. Staff roles
