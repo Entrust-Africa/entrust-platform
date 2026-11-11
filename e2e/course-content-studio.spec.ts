@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@entrust/db";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -34,8 +34,13 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   const entrustOrgId = process.env.ENTRUST_ORG_ID || "org-entrust-hq";
   const learnerOrgId = `org-sme-${timestamp}`;
 
-  // Clean up any existing 1.1.0 version for clean test run
-  await db.delete(schema.moduleContentVersion).where(eq(schema.moduleContentVersion.version, "1.1.0"));
+  // This test removes M01 1.1.0 so it can make it again, so it runs only against a database on this machine: never
+  // whatever a stray .env points at, such as production.
+  const databaseUrl = process.env.DATABASE_URL ?? "";
+  if (!/^postgres(ql)?:\/\/[^@]*@(localhost|127\.0\.0\.1)(:\d+)?\//.test(databaseUrl)) {
+    throw new Error("The course studio test changes content versions, so it runs only against a local database (DATABASE_URL on localhost).");
+  }
+  await db.delete(schema.moduleContentVersion).where(and(eq(schema.moduleContentVersion.moduleId, "M01"), eq(schema.moduleContentVersion.version, "1.1.0")));
 
   // 1. Ensure Entrust organization exists in DB
   await db
@@ -169,7 +174,7 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   // ----------------------------------------------------
   // STEP 4: Correct Validation & Edit Quiz Explanation (Fixes #210)
   // ----------------------------------------------------
-  await passMarkInput.fill("85"); // Valid pass mark
+  await passMarkInput.fill("80"); // Entrust's standard: a version can't go for review at any other pass mark
 
   // Edit first question explanation
   const explanationTextarea = page.locator("textarea").first();
