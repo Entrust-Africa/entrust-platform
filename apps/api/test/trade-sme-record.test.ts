@@ -46,8 +46,16 @@ describe("completed shipments", () => {
     expect((await get(w.admin, "/pathway-reviews")).body.items).toEqual([]);
   });
 
+  it("records nothing when a deal that never shipped is closed", async () => {
+    const lost = await transaction("Lost coffee deal");
+    ok(await patch(w.owner, `/transactions/${lost.id}`, { stage: "quoted" }));
+    ok(await patch(w.owner, `/transactions/${lost.id}`, { stage: "closed" }));
+    expect((await get(w.owner, `/export-history?organizationId=${w.org}`)).body.items).toEqual([]);
+  });
+
   it("records a shipment, self-reported, when a real transaction is closed out, and only once", async () => {
     const tx = await transaction("Washed coffee");
+    ok(await patch(w.owner, `/transactions/${tx.id}`, { stage: "shipped" }));
     ok(await patch(w.owner, `/transactions/${tx.id}`, { stage: "closed", buyerName: "Roaster GmbH" }));
     ok(await patch(w.owner, `/transactions/${tx.id}`, { stage: "closed", closeout: "Paid in full" }));
     const items = (await get(w.owner, `/export-history?organizationId=${w.org}`)).body.items;

@@ -123,6 +123,7 @@ describe("telling people", () => {
 describe("what sets them off", () => {
   it("tells the cohort's assessors when a business records its first completed shipment", async () => {
     const tx = (await post(w.owner, "/transactions", { organizationId: w.org, product: "Coffee" })).body;
+    await callV1(w.owner, "PATCH", `/trade/transactions/${tx.id}`, { stage: "shipped" });
     await callV1(w.owner, "PATCH", `/trade/transactions/${tx.id}`, { stage: "closed" });
     const items = (await get(w.assessor, "/notifications")).body.items;
     expect(items).toHaveLength(1);

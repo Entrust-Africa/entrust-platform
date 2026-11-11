@@ -143,9 +143,16 @@ export async function createOpportunity(
   const { db, principal } = ctx;
   const { organizationId, access } = await resolveOrganization(db, ctx, input);
   if (!access.write) throw new ServiceError("forbidden", "Write access required.");
+  // A business adds a lead as it finds it. How far a buyer is verified is Entrust staff's call, and a lead moves along the
+  // pipeline through dated activity: a new lead set straight to "verified" or a late stage would skip both, and reports
+  // and the M05 deliverable would count it as verified.
+  if (!access.staff) {
+    if (input.verificationStatus && input.verificationStatus !== "unverified") throw new ServiceError("forbidden", "Only Entrust staff can say how far a buyer has been verified.");
+    if (input.stage && input.stage !== "lead_discovered") throw new ServiceError("invalid", "A new lead starts at lead discovered. It moves on as you record dated activity with the buyer.");
+  }
 
   // The opportunity points at the business's one record of this buyer, made if it isn't there yet.
-  const buyer = await ensureBuyer(db, organizationId, { name: input.companyName, country: input.country, website: input.website, verificationStatus: input.verificationStatus });
+  const buyer = await ensureBuyer(db, organizationId, { name: input.companyName, country: input.country, website: input.website, ...(access.staff ? { verificationStatus: input.verificationStatus } : {}) });
 
   const [created] = await db
     .insert(schema.commercialOpportunity)
@@ -280,13 +287,13 @@ export async function recordOpportunityActivity(
 
   if (!activity) throw new ServiceError("invalid", "Failed to record activity");
 
-  // If activity is logged and verificationStatus is unverified, advance to identity_checked or qualified_opportunity
+  // Activity Entrust staff record moves the buyer up the verification ladder: any dated contact checks its identity, a
+  // request for quotation qualifies it. What a business logs about its own buyer is its own account, so it moves nothing:
+  // staff set the buyer's status (updateBuyer), and it carries to the buyer's opportunities.
   let nextVerification = opp.verificationStatus;
-  if (opp.verificationStatus === "unverified") {
-    nextVerification = "identity_checked";
-  }
-  if (input.type === "rfq") {
-    nextVerification = "qualified_opportunity";
+  if (access.staff) {
+    if (opp.verificationStatus === "unverified") nextVerification = "identity_checked";
+    if (input.type === "rfq") nextVerification = "qualified_opportunity";
   }
 
   await db

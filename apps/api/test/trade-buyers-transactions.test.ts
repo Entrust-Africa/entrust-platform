@@ -45,9 +45,20 @@ describe("the buyer record", () => {
     expect(row!.buyerId).toBe(buyers[0].id);
   });
 
-  it("moves up when a pipeline activity moves the opportunity up, and never down that way", async () => {
+  it("stays one buyer when a transaction names it before the pipeline does", async () => {
+    const tx = ok(await post(w.owner, "/transactions", { organizationId: w.org, product: "Sesame" }));
+    ok(await patch(w.owner, `/transactions/${tx.id}`, { buyerName: "Lagos Mills" }));
+    ok(await post(w.owner, "/pipeline", { organizationId: w.org, title: "Lagos order", companyName: "Lagos Mills", country: "NG" }));
+    const lagos = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items.filter((b: Json) => b.name === "Lagos Mills");
+    expect(lagos.map((b: Json) => [b.country, b.opportunities, b.transactions])).toEqual([["NG", 1, 1]]);
+  });
+
+  it("moves up when staff record activity that moves the opportunity up, and not on the business's own say-so", async () => {
     const [first] = ok(await get(w.owner, `/pipeline?organizationId=${w.org}`)).items.filter((o: Json) => o.title === "Hamburg order");
-    ok(await post(w.owner, `/pipeline/${first.id}/activities`, { type: "email", summary: "Introduced ourselves", occurredAt: new Date().toISOString() }));
+    ok(await post(w.owner, `/pipeline/${first.id}/activities`, { type: "rfq", summary: "They asked for a quote", occurredAt: new Date().toISOString() }));
+    const unchanged = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items.find((b: Json) => b.country === "DE");
+    expect(unchanged.verificationStatus).toBe("unverified");
+    ok(await post(w.admin, `/pipeline/${first.id}/activities`, { type: "email", summary: "Introduced ourselves", occurredAt: new Date().toISOString() }));
     const buyer = ok(await get(w.owner, `/buyers?organizationId=${w.org}`)).items.find((b: Json) => b.country === "DE");
     expect(buyer.verificationStatus).toBe("identity_checked");
   });
