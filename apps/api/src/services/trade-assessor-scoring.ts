@@ -1,11 +1,11 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { evaluateRubric, WORKSHEET_DEFINITIONS } from "@entrust/trade-engine";
-import { findVersion } from "@entrust/trade-content";
 import { type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { ServiceError } from "./errors";
 import { clearCompletionAfterCriticalFailure, evaluateAndSyncModuleCompletion, reopenAfterFailedOverride } from "./trade-completion";
+import { resolveTradeModuleContent } from "./trade-modules";
 import { notify, organizationMemberIds, staffForEnrollment } from "./trade-notifications";
 import { accessTo, assignedCohortIds, canReachCohort, limitedToAssignedCohorts, refuseNewWork } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
@@ -557,7 +557,7 @@ async function applyScore(
   const sub = row.submission;
 
   // Load rubric definition from module content
-  const content = findVersion(sub.moduleId as ModuleId, "staff", sub.contentVersion);
+  const content = await resolveTradeModuleContent(db, sub.moduleId as ModuleId, "staff", sub.contentVersion);
   if (!content?.rubric) {
     throw new ServiceError("invalid", `Module ${sub.moduleId} has no rubric configured.`);
   }
@@ -749,7 +749,7 @@ async function applyScoreOverride(
   }
 
   const sub = row.submission;
-  const content = findVersion(sub.moduleId as ModuleId, "staff", sub.contentVersion);
+  const content = await resolveTradeModuleContent(db, sub.moduleId as ModuleId, "staff", sub.contentVersion);
   if (!content?.rubric) {
     throw new ServiceError("invalid", "Module has no rubric.");
   }

@@ -1,11 +1,10 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { aiAssistantEnabled, callClaude, type AiProvider } from "./ai-provider";
 import { ServiceError } from "./errors";
-import { audienceFor } from "./trade-modules";
+import { audienceFor, resolveTradeModuleContent } from "./trade-modules";
 
 // The AI assistant for module exercises (#76). It fills a module's prompt in with the SME's product, market and buyer and
 // returns the answer labelled as a suggestion. It writes nothing but its own log: the text becomes part of a worksheet only
@@ -57,7 +56,7 @@ function organizationFor(ctx: Ctx, asked: string | undefined): string | null {
 export async function runAiPrompt(ctx: Ctx, moduleId: string, promptId: string, input: RunAiPromptInput, provider: AiProvider = callClaude) {
   const audience = await audienceFor(ctx);
   const module = MODULE_IDS.find((m) => m === moduleId) as ModuleId | undefined;
-  const content = module ? findVersion(module, audience) : undefined;
+  const content = module ? await resolveTradeModuleContent(ctx.db, module, audience) : undefined;
   const prompt = content?.aiPrompts.find((p) => p.id === promptId);
   if (!module || !content || !prompt) throw new ServiceError("not_found", "That prompt doesn't exist.");
   const organizationId = organizationFor(ctx, input.organizationId);

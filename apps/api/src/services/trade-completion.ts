@@ -1,7 +1,6 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { findTradeRules, type ModuleId } from "@entrust/trade-rules";
-import { findVersion } from "@entrust/trade-content";
 import {
   checkModuleCompletionCriteria,
   checkProgramCompletion,
@@ -16,6 +15,7 @@ import type {
 import type { Ctx, Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { resolveTradeModuleContent } from "./trade-modules";
 import { accessTo, recordTradeChange } from "./trade-shared";
 import { isLearningPlan, moduleContentWorksheets } from "./trade-worksheet-definitions";
 
@@ -72,7 +72,8 @@ export async function evaluateAndSyncModuleCompletion(
   // Check content lessons count
   // Only lessons that are in the content count, so a made-up lesson ID can't stand in for a real one.
   const content =
-    findVersion(moduleId, "learner", modProgress?.contentVersion ?? undefined) ?? findVersion(moduleId, "learner");
+    (await resolveTradeModuleContent(tx, moduleId, "learner", modProgress?.contentVersion ?? undefined)) ??
+    (await resolveTradeModuleContent(tx, moduleId, "learner"));
   const lessonIds = content?.lessons.map((l) => l.id) ?? [];
   const lessonsCount = lessonIds.length;
   const recorded = (modProgress?.lessonProgress as { completedLessons?: unknown } | null)?.completedLessons;

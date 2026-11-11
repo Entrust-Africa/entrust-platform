@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { schema } from "@entrust/db";
-import { findVersion } from "@entrust/trade-content";
 import { MODULE_IDS, type ModuleId } from "@entrust/trade-rules";
 import type { Ctx } from "./access";
 import { hasTradeAccess } from "./access";
@@ -8,6 +7,7 @@ import { ServiceError } from "./errors";
 import { getStorageProvider } from "./storage";
 import { notify, organizationMemberIds } from "./trade-notifications";
 import { accessTo, recordTradeChange } from "./trade-shared";
+import { resolveTradeModuleContent } from "./trade-modules";
 import { findWorksheetDefinition } from "./trade-worksheet-definitions";
 
 // What sits around a business's outputs (spec 7.5, 9.1, 9.2 and 11.3): documents attached to an output version, staff's review
@@ -164,7 +164,7 @@ const isModule = (id: string): id is ModuleId => (MODULE_IDS as readonly string[
 
 /** A learner can use a module's resources once they can see the module itself, and has TRADE access. */
 async function requireLearnerAccess(ctx: Ctx, moduleId: ModuleId): Promise<void> {
-  if (!findVersion(moduleId, "learner")) throw new ServiceError("not_found", "Module not found.");
+  if (!(await resolveTradeModuleContent(ctx.db, moduleId, "learner"))) throw new ServiceError("not_found", "Module not found.");
   for (const organizationId of ctx.principal.smeRoles.keys()) if (await hasTradeAccess(ctx.db, organizationId)) return;
   throw new ServiceError("not_found", "Module not found.");
 }
