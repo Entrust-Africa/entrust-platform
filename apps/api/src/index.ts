@@ -1,40 +1,12 @@
 import { serve } from "@hono/node-server";
 import { getBoss, stopBoss } from "@entrust/jobs";
 import { app } from "./app";
+import { checkProductionConfig, isProduction } from "./config-check";
 
 const port = Number(process.env.API_PORT ?? 4000);
 
-if (process.env.NODE_ENV === "production" || process.env.EMAIL_MODE === "send") {
-  const from = process.env.EMAIL_FROM?.trim();
-  if (!from || from.includes("onboarding@resend.dev")) {
-    console.warn(
-      "[notify:warning] EMAIL_FROM is unset or using onboarding@resend.dev. In send mode, Resend will reject delivery to any recipient other than the Resend account owner.",
-    );
-  }
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[notify:warning] RESEND_API_KEY is not configured.");
-  }
-  if (
-    process.env.NODE_ENV === "production" &&
-    (!process.env.CLEAR_APP_URL ||
-      process.env.CLEAR_APP_URL.includes("localhost") ||
-      process.env.CLEAR_APP_URL.includes("127.0.0.1"))
-  ) {
-    console.warn(
-      "[auth:warning] CLEAR_APP_URL is not set or points to localhost in production. Member invitations will fail.",
-    );
-  }
-  if (
-    process.env.NODE_ENV === "production" &&
-    (!process.env.TRADE_APP_URL ||
-      process.env.TRADE_APP_URL.includes("localhost") ||
-      process.env.TRADE_APP_URL.includes("127.0.0.1"))
-  ) {
-    console.warn(
-      "[auth:warning] TRADE_APP_URL is not set or points to localhost in production. TRADE invitations will fail.",
-    );
-  }
-}
+// The same check the Worker runs (worker.ts), so a missing setting is logged wherever the API starts.
+if (isProduction() || process.env.EMAIL_MODE === "send") checkProductionConfig();
 
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Entrust API on http://localhost:${info.port} (docs at /docs)`);

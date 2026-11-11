@@ -1,0 +1,79 @@
+name: Roll back production
+
+# The way back when a release goes wrong, for example when a Railway build fails and the previous TRADE app is left
+# running against a new API. The API Worker goes back to the version before its current one, and each chosen Railway
+# service to the build it ran before its current one. Database migrations are not undone: they only add, so the previous
+# code runs on the newer schema. Run "Deploy to production" on main again to go forward once the fix is merged.
+on:
+  workflow_dispatch:
+    inputs:
+      api:
+        description: Roll the API Worker back to its previous version
+        type: boolean
+        default: true
+      services:
+        description: Railway services to roll back, separated by spaces (leave empty for none)
+        type: string
+        default: entrust-trade entrust-clear entrust-summit entrust-worker
+
+# Never at the same time as a deploy.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    name: Roll back production
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        if: ${{ inputs.api }}
+        run: pnpm install --frozen-lockfile --filter @entrust/api...
+      - name: Roll the API Worker back
+        if: ${{ inputs.api }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @entrust/api exec wrangler rollback --message "Rolled back by ${{ github.actor }} (run ${{ github.run_id }})" --yes
+
+      # Railway keeps the builds a newer one replaced (status REMOVED). The newest of them it can still run is the one
+      # before the current build.
+      - name: Roll the Railway services back
+        if: ${{ inputs.services != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICES: ${{ inputs.services }}
+        run: |
+          test -n "$RAILWAY_TOKEN" || { echo "::error::The RAILWAY_TOKEN secret is not set."; exit 1; }
+          npm install --global @railway/cli@5.71.0
+          failed=0
+          for service in $SERVICES; do
+            candidates=$(railway deployment list --service "$service" --environment production --json |
+              python3 -c "import sys,json; l=json.load(sys.stdin); i=next((n for n,x in enumerate(l) if x['status']=='SUCCESS'), None); print(' '.join(x['id'] for x in (l[i+1:] if i is not None else []) if x['status']=='REMOVED'))")
+            target=""
+            for id in $candidates; do
+              ok=$(railway api 'query($id: String!) { deployment(id: $id) { canRollback } }' --raw-var "id=$id" |
+                python3 -c "import sys,json; print(json.load(sys.stdin)['data']['deployment']['canRollback'])")
+              if [ "$ok" = "True" ]; then target="$id"; break; fi
+            done
+            if [ -z "$target" ]; then
+              echo "::error::$service has no earlier build to go back to."
+              failed=1
+              continue
+            fi
+            railway api 'mutation($id: String!) { deploymentRollback(id: $id) }' --raw-var "id=$target" > /dev/null
+            echo "$service: rolling back to deployment $target"
+          done
+          exit $failed

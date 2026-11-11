@@ -13,15 +13,55 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# Nothing here needs to write to the repository.
+permissions:
+  contents: read
+
 jobs:
+  # Decides whether this run may deploy, and which commit. Every other job waits for it and checks out its commit.
+  #
+  # A `workflow_run` filter on `branches: [main]` matches the head branch *name* of the CI run, and a fork's pull request
+  # can name its branch main. So the run has to come from a push to main in this repository, not just carry the name.
+  # "Run workflow" deploys main only, and only a commit CI has passed on, so an unmerged branch never reaches production.
+  gate:
+    name: Check what may deploy
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        (github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_branch == 'main'
+          && github.event.workflow_run.head_repository.full_name == github.repository)
+        || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      }}
+    permissions:
+      actions: read
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - id: commit
+        name: Pick the commit and check CI passed on it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&branch=main&status=success" --jq '.total_count')
+          if [ "${passed:-0}" -lt 1 ]; then
+            echo "::error::CI hasn't passed on a push of $SHA to main, so it can't be deployed."
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
   migrate-db:
     name: Apply Production Database Migrations
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: gate
+    environment: production
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -54,13 +94,13 @@ jobs:
 
   deploy-api:
     name: Deploy API Worker
-    needs: migrate-db
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: [gate, migrate-db]
+    environment: production
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -68,21 +108,24 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      # The commit goes in as a plain variable, so /v1/health says which build is answering and the smoke test can wait
+      # for this one. Every other setting is a secret, which `wrangler deploy` keeps.
       - name: Deploy apps/api to Cloudflare
         env:
           CI: "true"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter @entrust/api run deploy
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: pnpm --filter @entrust/api exec wrangler deploy --var "GIT_COMMIT:$SHA" --message "Deploy $SHA"
 
   # CLEAR, TRADE, the Summit page and the email worker run on Railway. Railway cannot watch the repository (nobody in the
   # project has GitHub access), so this job uploads the commit with a project token. It runs only after CI has passed and
   # the migrations and the API are live, so an app never deploys before the API it needs.
   deploy-railway:
     name: Deploy ${{ matrix.service }} (Railway)
-    needs: deploy-api
+    needs: [gate, deploy-api]
+    environment: production
     timeout-minutes: 30
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,7 +134,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -120,7 +163,9 @@ jobs:
                 SUCCESS) exit 0 ;;
                 SKIPPED) echo "Nothing this service uses changed, so Railway skipped the build."; exit 0 ;;
                 REMOVED) echo "A newer deployment replaced this one."; exit 0 ;;
-                FAILED|CRASHED) echo "::error::$SERVICE deployment $status. See: railway logs --build --service $SERVICE"; exit 1 ;;
+                FAILED|CRASHED)
+                  echo "::error::$SERVICE deployment $status, so its previous build is still running against the new API and schema. See: railway logs --build --service $SERVICE. To go back to the previous release, run the \"Roll back production\" workflow."
+                  exit 1 ;;
               esac
             fi
             sleep 10
@@ -130,13 +175,13 @@ jobs:
 
   deploy-website:
     name: Deploy Website (OpenNext)
-    needs: migrate-db
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: [gate, migrate-db]
+    environment: production
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -153,13 +198,37 @@ jobs:
 
   smoke-test:
     name: Post-Deployment Smoke Verification
-    needs: [deploy-api, deploy-railway, deploy-website]
+    needs: [gate, deploy-api, deploy-railway, deploy-website]
+    environment: production
     timeout-minutes: 30
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       # The addresses people use, not the copies on workers.dev. A new Railway build takes a minute or two to start
       # answering, so each check retries for up to five minutes.
+      # The API has to be the build this run deployed, not the one before it, and it has to reach the database.
+      - name: Verify the new API is the one answering
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: |
+          for _ in $(seq 1 30); do
+            health=$(curl -s --max-time 15 https://api.entrust-africa.com/v1/health || true)
+            commit=$(printf '%s' "$health" | python3 -c "import sys,json; print(json.load(sys.stdin).get('commit') or '')" 2>/dev/null || true)
+            if [ "$commit" = "$SHA" ]; then
+              echo "API is on $SHA"
+              configured=$(printf '%s' "$health" | python3 -c "import sys,json; print(json.load(sys.stdin).get('configured'))")
+              [ "$configured" = "True" ] || echo "::warning::The API says a production setting is missing. Its logs say which ([config:error])."
+              break
+            fi
+            sleep 10
+          done
+          [ "$commit" = "$SHA" ] || { echo "::error::The API still answers with ${commit:-no commit}, not $SHA."; exit 1; }
+          # A certificate code that can't exist: the answer has to come from the database, as a 404 with the API's error body.
+          status=$(curl -s -o /tmp/certificate.json -w "%{http_code}" --max-time 15 https://api.entrust-africa.com/v1/trade/certificates/SMOKE-0000-NONE/public || true)
+          if [ "$status" != "404" ] || ! grep -q '"not_found"' /tmp/certificate.json; then
+            echo "::error::The API couldn't look up a certificate (HTTP $status): $(cat /tmp/certificate.json)"
+            exit 1
+          fi
+
       - name: Verify the live sites answer
         run: |
           check() {
