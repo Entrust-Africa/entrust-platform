@@ -624,6 +624,12 @@ importers:
       '@entrust/gate-engine':
         specifier: workspace:*
         version: link:../gate-engine
+      '@entrust/mizan-engine':
+        specifier: workspace:*
+        version: link:../mizan-engine
+      '@entrust/mizan-rules':
+        specifier: workspace:*
+        version: link:../mizan-rules
       '@entrust/rules':
         specifier: workspace:*
         version: link:../rules
