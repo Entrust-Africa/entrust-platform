@@ -3,7 +3,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { getDb, type Database } from "@entrust/db";
 import type { AppEnv } from "../../app";
 import { Problem } from "../../schemas/problem";
-import { hasClearAccess, hasTradeAccess, loadPrincipal, type Ctx, type PracticeScope, type Principal } from "../../services/access";
+import { hasClearAccess, hasPlatformAccess, hasTradeAccess, loadPrincipal, type Ctx, type PracticeScope, type Principal } from "../../services/access";
 import { ServiceError } from "../../services/errors";
 
 // What the CLEAR route files share: the error responses every endpoint documents, the router that
@@ -35,7 +35,7 @@ async function principalFor(db: Database, userId: string): Promise<Principal> {
 }
 
 /** A router whose endpoints all need a signed-in user, and checks platform access (#50). */
-export function clearRouter(platform?: "clear" | "trade") {
+export function clearRouter(platform?: "clear" | "trade" | "mizan") {
   const router = new OpenAPIHono<AppEnv>({
     defaultHook: (result, c) => {
       if (result.success) return;
@@ -51,7 +51,8 @@ export function clearRouter(platform?: "clear" | "trade") {
     if (platform) {
       const db = getDb();
       const principal = await principalFor(db, user.id);
-      if (!principal.staffRole) {
+      // Quality reads MIZAN from the Entrust organisation, which holds no grant of its own; MIZAN's services limit it to reading.
+      if (!principal.staffRole && !(platform === "mizan" && principal.quality)) {
         const session = c.get("session");
         const queryOrg = c.req.query("organizationId");
         const targetOrgId = queryOrg ?? session?.activeOrganizationId;
@@ -59,7 +60,9 @@ export function clearRouter(platform?: "clear" | "trade") {
           const hasAccess =
             platform === "trade"
               ? await hasTradeAccess(db, targetOrgId)
-              : await hasClearAccess(db, targetOrgId);
+              : platform === "clear"
+                ? await hasClearAccess(db, targetOrgId)
+                : await hasPlatformAccess(db, targetOrgId, platform);
           if (!hasAccess) {
             throw new ServiceError("not_found", `This organisation does not have access to ${platform.toUpperCase()}.`);
           }

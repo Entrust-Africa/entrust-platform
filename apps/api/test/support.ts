@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { auth } from "@entrust/auth";
 import { getDb, schema } from "@entrust/db";
 import { EVIDENCE_TYPES, STEPS, type StepId } from "@entrust/rules";
@@ -60,7 +60,7 @@ export async function signIn(name: string): Promise<TestUser> {
 export async function createOrganization(
   name: string,
   members: readonly (readonly [TestUser, string])[],
-  { smeProfile = true, platform = "clear" as "clear" | "trade" | null } = {},
+  { smeProfile = true, platform = "clear" as "clear" | "trade" | "mizan" | null } = {},
 ): Promise<string> {
   const id = `${PREFIX}${RUN}-${name}`;
   await db.insert(schema.organization).values({
@@ -111,6 +111,14 @@ export async function cleanup() {
     // Audit rows would otherwise outlive the organisation with their link set to null.
     await db.delete(schema.auditLog).where(inArray(schema.auditLog.organizationId, ids));
     await db.delete(schema.platformAccess).where(inArray(schema.platformAccess.organizationId, ids));
+    // Approved MIZAN assessments are frozen by a trigger; tests are what its escape hatch is for. One statement, so assessments
+    // that point at each other go together.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local mizan.allow_frozen_delete = 'on'`);
+      await tx.delete(schema.mizanReview).where(inArray(schema.mizanReview.assessmentId, tx.select({ id: schema.mizanAssessment.id }).from(schema.mizanAssessment).where(inArray(schema.mizanAssessment.organizationId, ids))));
+      await tx.delete(schema.mizanDocument).where(inArray(schema.mizanDocument.organizationId, ids));
+      await tx.delete(schema.mizanAssessment).where(inArray(schema.mizanAssessment.organizationId, ids));
+    });
     await db.delete(schema.evidenceRecord).where(inArray(schema.evidenceRecord.organizationId, ids));
     await db.delete(schema.file).where(inArray(schema.file.organizationId, ids));
     await db.delete(schema.exportCase).where(inArray(schema.exportCase.organizationId, ids));

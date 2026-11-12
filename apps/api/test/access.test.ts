@@ -334,6 +334,7 @@ describe("API documentation", () => {
         "/v1/jobs/test-fail",
         "/v1/jobs/{queue}/{jobId}",
         "/v1/me",
+        "/v1/mizan/access",
         "/v1/trade/readiness-profiles",
         "/v1/trade/reports/cohorts/{id}/export",
         "/v1/trade/reports/programs/{id}/export",
