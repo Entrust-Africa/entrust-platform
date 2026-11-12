@@ -14,7 +14,7 @@ on:
       services:
         description: Railway services to roll back, separated by spaces (leave empty for none)
         type: string
-        default: entrust-trade entrust-clear entrust-summit entrust-worker
+        default: entrust-trade entrust-clear entrust-summit entrust-website entrust-worker
 
 # Never at the same time as a deploy.
 concurrency:

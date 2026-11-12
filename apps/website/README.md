@@ -97,11 +97,8 @@ public/images/                 assets exported from the Sketch file
 Old routes (`/andinet`, `/entrust/*` sub-pages, and the retired `/afri-bridge`) redirect to their new homes in
 `next.config.js`.
 
-##  Deployment
+## Deployment
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which builds the site, uploads it to cPanel
-over SCP and restarts the Passenger app. The repository needs these GitHub Actions secrets:
-`CPANEL_HOST`, `CPANEL_USER`, `CPANEL_PASS`.
-
-On the server, the Node.js app must run **Node 20 or newer**, and the real `.env` values live on
-the server itself (they are not stored in git).
+The site runs as the Railway service `entrust-website` (`next start`). Merging to `main` deploys it
+together with the other apps, once CI has passed; see `docs/hosting.md` at the repo root. Its
+settings (the Resend key for the forms, the sender address) are Railway service variables.
