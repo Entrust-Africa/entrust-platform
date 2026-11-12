@@ -129,6 +129,18 @@ describe("the second step", () => {
     expect(locked.body.error).toContain("Try again");
   });
 
+  it("refuses a reset from an administrator's session that hasn't passed the second step", async () => {
+    const unverified = await signIn("mfa-admin");
+    const adminId = (await callV1(unverified, "GET", "/me")).body.id;
+    const reviewerId = (await callV1(w.reviewer, "GET", "/me")).body.id;
+    for (const id of [adminId, reviewerId]) {
+      const refused = await callV1(unverified, "DELETE", `/mfa/${id}`);
+      expect(refused.status).toBe(403);
+      expect(refused.body.code).toBe("mfa_required");
+    }
+    expect((await callV1(w.admin, "GET", "/mfa")).body.enrolled).toBe(true);
+  });
+
   it("lets only an administrator reset someone, who then sets up again", async () => {
     const reviewerId = (await callV1(w.reviewer, "GET", "/me")).body.id;
     expect((await callV1(w.reviewer, "DELETE", `/mfa/${reviewerId}`)).status).toBe(403);

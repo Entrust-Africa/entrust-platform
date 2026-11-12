@@ -243,6 +243,13 @@ describe("TRADE financing and export outcomes API (#69)", () => {
     expect(noted.body.evidenceTier).toBe("formal_bank_decision");
     expect(noted.body.amountApproved).toBe(40000);
 
+    // The business swaps the evidence: staff confirmed the old document, not this one.
+    const swapped = await patch(owner, `/outcomes/financing/${id}/status`, { status: "approved", evidenceUrl: "https://example.test/another-letter.pdf" });
+    expect(swapped.status).toBe(200);
+    expect(swapped.body.evidenceTier).toBe("self_reported");
+    // Staff confirm it again, then the next change.
+    expect((await patch(admin, `/outcomes/financing/${id}/status`, { status: "approved", evidenceTier: "formal_bank_decision" })).body.evidenceTier).toBe("formal_bank_decision");
+
     // The business raises the approved amount: it's what the business reports now, not what staff confirmed.
     const raised = await patch(owner, `/outcomes/financing/${id}/status`, { status: "approved", amountApproved: 90000, evidenceTier: "formal_bank_decision" });
     expect(raised.status).toBe(200);

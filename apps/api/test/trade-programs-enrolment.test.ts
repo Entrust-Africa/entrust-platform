@@ -390,9 +390,13 @@ describe("Cohort details, dates and sponsors", () => {
   it("only names a real sponsor organisation as a cohort's sponsor", async () => {
     const bad = await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Sponsored by a business", sponsorOrganizationId: businessId });
     expect(bad.status).toBe(404);
-    const good = await callV1(w.facilitator, "POST", "/trade/cohorts", { programId, name: "Dates cohort", sponsorOrganizationId: sponsorId, startDate: "2026-01-01", endDate: "2026-06-30" });
+    // The sponsor decides which bank reads the cohort's reports, so a facilitator can't pick one on creating it either.
+    const facilitators = await callV1(w.facilitator, "POST", "/trade/cohorts", { programId, name: "Facilitator's sponsored cohort", sponsorOrganizationId: sponsorId });
+    expect(facilitators.status).toBe(403);
+    const good = await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Dates cohort", sponsorOrganizationId: sponsorId, startDate: "2026-01-01", endDate: "2026-06-30" });
     expect(good.status).toBe(201);
     cohortId = good.body.id;
+    await db.insert(schema.cohortStaff).values({ cohortId, userId: w.facilitator.id, assignedByUserId: w.admin.id });
     expect((await callV1(w.admin, "POST", "/trade/cohorts", { programId, name: "Backwards", startDate: "2026-06-30", endDate: "2026-01-01" })).status).toBe(422);
   });
 

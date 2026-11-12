@@ -113,7 +113,8 @@ function confirmationLost(
   if (principal.staffRole || !STAFF_CONFIRMED_TIERS.includes(outcome.evidenceTier)) return false;
   const same = (a: unknown, b: unknown) => (a instanceof Date || b instanceof Date ? new Date(a as Date).getTime() === new Date(b as Date).getTime() : (a ?? null) === (b ?? null) || Number(a) === Number(b));
   return Object.entries(changes).some(([key, value]) => {
-    if (key === "updatedAt" || key === "notes" || key === "evidenceTier" || key === "evidenceUrl") return false;
+    // The evidence is what staff confirmed, so swapping it drops the confirmation like a changed figure does.
+    if (key === "updatedAt" || key === "notes" || key === "evidenceTier") return false;
     const current = outcome[key as keyof typeof outcome];
     if (value === null || current === null) return (value ?? null) !== (current ?? null);
     return !same(value, current);

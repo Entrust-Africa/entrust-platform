@@ -961,7 +961,9 @@ export function ModuleViewer({
                   {module.knowledgeCheck.questions.map((q, qIndex) => {
                     const selected = quizAnswers[q.id] ?? [];
                     const options = shuffledOptions[q.id] ?? q.options;
-                    const qResult = quizFeedback?.results.find((r) => r.questionId === q.id);
+                    // A failed attempt doesn't say which answers were right, so there's nothing to mark.
+                    const found = quizFeedback?.results.find((r) => r.questionId === q.id);
+                    const qResult = found?.isCorrect === undefined ? undefined : found;
 
                     return (
                       <div key={q.id} className="space-y-3 rounded-lg border border-line/80 p-4 bg-canvas/40">

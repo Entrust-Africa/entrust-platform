@@ -94,8 +94,14 @@ export const mfa = new OpenAPIHono<AppEnv>()
     return c.json(await mfaStatus(getDb(), user.id, session.id), 200);
   })
   .openapi(reset, async (c) => {
-    const { principal } = await staffCaller(c);
+    const { user, session, principal } = await staffCaller(c);
     if (principal.staffRole !== "admin") throw new ServiceError("forbidden", "Only an administrator can reset two-step sign-in.");
+    // A reset removes the second step, so it can't be done from a session that hasn't passed it: otherwise a password alone
+    // would be enough to reset an administrator's own step and enrol a new authenticator. (The gate checks this too.)
+    const step = await mfaStatus(getDb(), user.id, session.id);
+    if (step.required && !step.verified) {
+      throw new ServiceError("forbidden", "Enter the code from your authenticator app before resetting two-step sign-in.");
+    }
     const { userId } = c.req.valid("param");
     await resetMfa(getDb(), userId);
     forgetMfaCaches(userId);

@@ -226,8 +226,11 @@ async function syncProgramme(
       .where(eq(schema.moduleAssignment.planId, activePlan.id));
 
     // Every module in the plan counts, a test-out offer too: it's done by testing out (its knowledge check), not by the
-    // score that offered it.
-    const assignedModuleIds = assigned.map((a) => a.moduleId);
+    // score that offered it. A plan already completed is the exception: before 11 Nov 2026 (#218) a test-out offer
+    // didn't count, and a re-check (a score override, an exemption) must not reopen a finished programme and withdraw
+    // its certificate under a rule it wasn't held to. Plans completed since then have every offer passed anyway.
+    const counted = activePlan.status === "completed" ? assigned.filter((a) => a.status !== "optional") : assigned;
+    const assignedModuleIds = counted.map((a) => a.moduleId);
 
     // Get all passed or exempted modules for this enrollment
     const allProgress = await tx
@@ -670,7 +673,8 @@ export async function getCertificateForEnrollment(
     isValid: !isRevoked,
     isRevoked,
     revokedAt: cert.revokedAt ? cert.revokedAt.toISOString() : null,
-    revocationReason: cert.revocationReason ?? null,
+    // Staff's own reason is internal: the business sees what the public check says.
+    revocationReason: isRevoked ? (ctx.principal.staffRole ? (cert.revocationReason ?? null) : (cert.publicRevocationReason ?? PUBLIC_REVOCATION_REASON)) : null,
     verificationUrl: `/verify/${cert.code}`,
   };
 }
