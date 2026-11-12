@@ -124,6 +124,17 @@ export const auth = betterAuth({
     organization({
       // An SME's training, assessment and certificate records hang off its organisation, so an owner can't delete it.
       disableOrganizationDeletion: true,
+      // Organisations are made by the API (/v1/organizations for a business, /v1/trade/sponsors for a sponsor), which sets
+      // their kind. Better Auth's own endpoints would let anyone make one with any metadata, a self-declared sponsor
+      // among them, so creating is off and an update can't touch the metadata.
+      allowUserToCreateOrganization: false,
+      organizationHooks: {
+        beforeUpdateOrganization: async ({ organization }) => {
+          if (organization.metadata !== undefined) {
+            throw new BetterAuthAPIError("FORBIDDEN", { message: "An organisation's details are changed through Entrust." });
+          }
+        },
+      },
       schema: {
         invitation: {
           additionalFields: {
