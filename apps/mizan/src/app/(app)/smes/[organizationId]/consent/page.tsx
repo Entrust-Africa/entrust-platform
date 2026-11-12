@@ -6,11 +6,12 @@ import { OpenFile, RecordAcceptance, RecordWithdrawal, SmeDecision } from "./con
 export const metadata = { title: "Consent" };
 
 const KIND_LABELS = {
-  assessment_notice: { title: "Assessment notice", need: "Required before an assessment can start, be submitted or be approved." },
-  platform_data: { title: "TRADE and CLEAR data", need: "Optional. Needed before an assessor uses the SME's TRADE or CLEAR records." },
+  assessment_notice: { title: "Assessment notice", inHistory: "the assessment notice", need: "Required before an assessment can start, be submitted or be approved." },
+  platform_data: { title: "TRADE and CLEAR data", inHistory: "the TRADE and CLEAR data permission", need: "Optional. Needed before an assessor uses the SME's TRADE or CLEAR records." },
 } as const;
 
 const METHOD_LABELS = { in_platform: "In MIZAN", paper: "On paper", trade: "In TRADE" } as const;
+const METHOD_PHRASES = { in_platform: "in MIZAN", paper: "on paper", trade: "in TRADE" } as const;
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
@@ -50,7 +51,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ organi
             {latest && (
               <p className="text-sm text-ink-2">
                 {latest.accepted ? "Accepted" : "Withdrawn"} by <span className="font-semibold text-ink">{latest.signatoryName}</span>
-                {latest.signatoryRole ? ` (${latest.signatoryRole})` : ""} {METHOD_LABELS[latest.method].toLowerCase()} on {date(latest.givenAt)}, notice
+                {latest.signatoryRole ? ` (${latest.signatoryRole})` : ""} {METHOD_PHRASES[latest.method]} on {date(latest.givenAt)}, notice
                 version {latest.noticeVersion}
                 {latest.sourceRef ? `, TRADE reference ${latest.sourceRef}` : ""}.
               </p>
@@ -104,7 +105,7 @@ export default async function ConsentPage({ params }: { params: Promise<{ organi
                   <tr key={h.id} className="align-top">
                     <td className="px-4 py-3 whitespace-nowrap text-ink-2">{date(h.givenAt)}</td>
                     <td className="px-4 py-3 text-ink">
-                      {h.accepted ? "Accepted" : "Withdrew"} {KIND_LABELS[h.kind].title.toLowerCase()}
+                      {h.accepted ? "Accepted" : "Withdrew"} {KIND_LABELS[h.kind].inHistory}
                       <span className="block text-xs text-ink-3">Version {h.noticeVersion}</span>
                     </td>
                     <td className="px-4 py-3 text-ink-2">
