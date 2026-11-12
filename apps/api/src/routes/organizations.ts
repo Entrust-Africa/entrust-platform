@@ -92,7 +92,7 @@ const createOrganization = z.object({
 const invite = z.object({
   email: z.email(),
   role: z.enum(["member", "owner"]).default("member"),
-  platform: z.enum(["clear", "trade"]).optional(),
+  platform: z.enum(["clear", "trade", "mizan"]).optional(),
 });
 const role = z.object({ role: z.union([SmeRoles, EntrustRoles]) });
 const profile = z.object({

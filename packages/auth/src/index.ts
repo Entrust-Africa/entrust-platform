@@ -15,25 +15,28 @@ import {
 import {
   detectPlatformFromUrl,
   getClearAppUrl,
+  getMizanAppUrl,
   getPlatformAppUrl,
   getTradeAppUrl,
+  platformDisplayName,
   type AuthPlatform,
 } from "./url";
 
-// Origins allowed to call the API with cookies, e.g. the CLEAR and TRADE apps and the website.
-const defaultDevOrigins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:6001"];
+// Origins allowed to call the API with cookies, e.g. the CLEAR, TRADE and MIZAN apps and the website.
+const defaultDevOrigins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3003", "http://localhost:6001"];
 const envOrigins = (process.env.CORS_ORIGINS ?? "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
 
-// The origins the API answers with credentials: the dev ports, `CORS_ORIGINS`, and the CLEAR and TRADE app URLs.
+// The origins the API answers with credentials: the dev ports, `CORS_ORIGINS`, and the CLEAR, TRADE and MIZAN app URLs.
 export const trustedOrigins = Array.from(
   new Set([
     ...defaultDevOrigins,
     ...envOrigins,
     ...(process.env.CLEAR_APP_URL ? [process.env.CLEAR_APP_URL.trim().replace(/\/+$/, "")] : []),
     ...(process.env.TRADE_APP_URL ? [process.env.TRADE_APP_URL.trim().replace(/\/+$/, "")] : []),
+    ...(process.env.MIZAN_APP_URL ? [process.env.MIZAN_APP_URL.trim().replace(/\/+$/, "")] : []),
   ]),
 );
 
@@ -96,8 +99,7 @@ export const auth = betterAuth({
     // password. Existing passwords keep working until they are retired.
     disableSignUp: Boolean(afriConnect),
     sendResetPassword: async ({ user, url }) => {
-      const platform = detectPlatformFromUrl(url);
-      const platformName = platform === "trade" ? "TRADE" : "CLEAR";
+      const platformName = platformDisplayName(detectPlatformFromUrl(url));
       await sendEmail({
         to: user.email,
         subject: `Reset your ${platformName} password`,
@@ -109,8 +111,7 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      const platform = detectPlatformFromUrl(url);
-      const platformName = platform === "trade" ? "TRADE" : "CLEAR";
+      const platformName = platformDisplayName(detectPlatformFromUrl(url));
       await sendEmail({
         to: user.email,
         subject: `Verify your ${platformName} email`,
@@ -136,9 +137,9 @@ export const auth = betterAuth({
       },
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
         const inviteRecord = invitation as typeof invitation & { platform?: string };
-        const platform = inviteRecord.platform === "trade" ? "trade" : "clear";
-        const appUrl = platform === "trade" ? getTradeAppUrl() : getClearAppUrl();
-        const platformName = platform === "trade" ? "TRADE" : "CLEAR";
+        const platform: AuthPlatform = inviteRecord.platform === "trade" || inviteRecord.platform === "mizan" ? inviteRecord.platform : "clear";
+        const appUrl = getPlatformAppUrl(platform);
+        const platformName = platformDisplayName(platform);
         await sendEmail({
           to: invitation.email,
           subject: `Invitation to join ${organization.name} on ${platformName}`,
@@ -233,8 +234,10 @@ export { APIError } from "better-auth";
 export {
   detectPlatformFromUrl,
   getClearAppUrl,
+  getMizanAppUrl,
   getPlatformAppUrl,
   getTradeAppUrl,
+  platformDisplayName,
   type AuthPlatform,
 };
 export * from "./roles";

@@ -102,6 +102,24 @@ describe("getClearAppUrl and getTradeAppUrl", () => {
       expect(detectPlatformFromUrl(resetUrl)).toBe("trade");
     });
 
+    it("detects mizan from its subdomain or its dev port", () => {
+      const resetUrl = "http://localhost:4000/reset-password/tok123?callbackURL=https%3A%2F%2Fmizan.entrust-africa.com%2Freset-password";
+      expect(detectPlatformFromUrl(resetUrl)).toBe("mizan");
+      expect(detectPlatformFromUrl("http://localhost:4000/verify?callbackURL=http%3A%2F%2Flocalhost%3A3003%2F")).toBe("mizan");
+    });
+
+    it("still detects trade in production when MIZAN_APP_URL isn't set", () => {
+      const saved = { NODE_ENV: process.env.NODE_ENV, MIZAN_APP_URL: process.env.MIZAN_APP_URL, TRADE_APP_URL: process.env.TRADE_APP_URL };
+      Object.assign(process.env, { NODE_ENV: "production", TRADE_APP_URL: "https://trade.entrust-africa.com" });
+      delete process.env.MIZAN_APP_URL;
+      try {
+        const resetUrl = "https://api.entrust-africa.com/reset-password/t?callbackURL=https%3A%2F%2Ftrade.entrust-africa.com%2Freset-password";
+        expect(detectPlatformFromUrl(resetUrl)).toBe("trade");
+      } finally {
+        for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      }
+    });
+
     it("falls back to clear for unrecognized URLs", () => {
       expect(detectPlatformFromUrl("invalid-url")).toBe("clear");
     });

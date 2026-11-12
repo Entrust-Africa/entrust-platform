@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import "@entrust/ui/styles.css";
+@source "../../../../packages/account/src";
+
+/* MIZAN's product accent: the gold of its scales. 600 is dark enough to carry text on white. */
+@theme {
+  --color-product: oklch(74% 0.12 82);
+  --color-product-600: oklch(50% 0.095 75);
+  --color-product-50: oklch(96.5% 0.03 85);
+}
+
+html {
+  scroll-padding-top: 5rem;
+}

@@ -15,6 +15,7 @@
     "EMAIL_MODE",
     "CLEAR_APP_URL",
     "TRADE_APP_URL",
+    "MIZAN_APP_URL",
     "SUMMIT_APP_URL",
     "CONTACT_FROM_EMAIL",
     "ADMIN_EMAIL"
