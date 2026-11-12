@@ -4,6 +4,7 @@ import { Card } from "@entrust/ui";
 import { AssessmentResult, type ResultView } from "@/components/assessment/assessment-result";
 import { PublicDiagnosticRunner } from "@/components/onboarding/public-diagnostic-runner";
 import { afriConnectSignInShown } from "@entrust/auth/africonnect";
+import { AmountsAgain } from "@/components/onboarding/amounts-again";
 import { ConfirmEmail } from "@/components/onboarding/confirm-email";
 import { tradeGet } from "@/lib/trade-api";
 
@@ -14,6 +15,8 @@ interface View extends ResultView {
   businessName: string | null;
   answers: Record<string, unknown>;
   variables: Record<string, string>;
+  amountsRequestedAt: string | null;
+  amountsCorrectedAt: string | null;
 }
 
 /** A draft's own page, reached by its private link: the form while it is a draft, the result once it is submitted. */
@@ -48,12 +51,35 @@ export default async function PublicDiagnosticPage({
   }
 
   if (view.status === "submitted") {
-    return (
+    const result = (
       <AssessmentResult
         hideBackLink
         view={{ kind: "diagnostic", status: view.status, submittedAt: view.submittedAt, filledInByStaff: null, pathway: view.pathway }}
       />
     );
+    // Entrust asked for the money amounts again (the amount boxes hid what was typed until 12 November 2026).
+    if (view.amountsRequestedAt && !view.amountsCorrectedAt) {
+      const asked = await tradeGet<{ form: FormDefinition }>(`/public/diagnostic/${encodeURIComponent(token)}/template`);
+      if (asked.data) {
+        return (
+          <div className="mx-auto max-w-3xl space-y-4">
+            <h1 className="font-display text-2xl font-bold text-ink">Onboarding diagnostic</h1>
+            <AmountsAgain token={token} definition={asked.data.form} answers={view.answers} variables={view.variables} />
+          </div>
+        );
+      }
+    }
+    if (view.amountsCorrectedAt) {
+      return (
+        <div className="space-y-4">
+          <p className="mx-auto max-w-xl rounded-md bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900" role="status">
+            Thank you. We have your amounts.
+          </p>
+          {result}
+        </div>
+      );
+    }
+    return result;
   }
 
   const template = await tradeGet<{ form: FormDefinition }>(`/public/diagnostic/${encodeURIComponent(token)}/template`);

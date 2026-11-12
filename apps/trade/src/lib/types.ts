@@ -163,6 +163,9 @@ export interface PublicDiagnosticDetail {
   sections: { id: string; title: string; items: { id: string; text: string; answer: string }[] }[];
   emailVerified: boolean;
   linkedEnrollmentId: string | null;
+  /** Staff asked the business to type its money amounts in again, and when it did. */
+  amountsRequestedAt: string | null;
+  amountsCorrectedAt: string | null;
 }
 
 export interface SessionMaterial {

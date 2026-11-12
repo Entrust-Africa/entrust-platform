@@ -4,6 +4,7 @@ import { Card, StatusBadge } from "@entrust/ui";
 import { getMe } from "@/lib/api";
 import { tradeGet } from "@/lib/trade-api";
 import type { PublicDiagnosticDetail } from "@/lib/types";
+import { AskForAmounts } from "./ask-for-amounts";
 import { LinkToEnrolment } from "./link-to-enrolment";
 
 export const metadata = { title: "Onboarding diagnostic" };
@@ -67,6 +68,10 @@ export default async function DiagnosticDetailPage({ params }: { params: Promise
 
       {d.status === "submitted" && (me.staffRole === "admin" || me.staffRole === "facilitator") && (
         <LinkToEnrolment diagnosticId={d.id} linkedEnrollmentId={d.linkedEnrollmentId} emailVerified={d.emailVerified} enrollments={enrollments} />
+      )}
+
+      {d.status === "submitted" && (me.staffRole === "admin" || me.staffRole === "facilitator") && (
+        <AskForAmounts diagnosticId={d.id} email={d.email} requestedAt={d.amountsRequestedAt} correctedAt={d.amountsCorrectedAt} />
       )}
 
       {d.pathway && (
