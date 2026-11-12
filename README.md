@@ -10,6 +10,7 @@ apps/
   clear        CLEAR Export frontend (Next.js 16); talks to apps/api
   trade        TRADE frontend (Next.js 16); talks to apps/api
   summit       Summit landing page (Next.js 16) for its own domain; reads the public /v1/summit/period
+  mizan        MIZAN frontend (Next.js 16): assessors, reviewers and the SME's own reports; talks to apps/api
 packages/
   ui           design system: tokens (Tailwind 4) and shared components
   db           Postgres + Drizzle: schema "core" (shared) and one schema per platform
@@ -48,7 +49,7 @@ sudo -u postgres createdb -O entrust entrust_platform
 cp .env.example .env            # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm install
 pnpm db:migrate
-pnpm dev                        # API on :4000, CLEAR on :3000, TRADE on :3001, Summit landing on :3002, website on :6001
+pnpm dev                        # API on :4000, CLEAR on :3000, TRADE on :3001, Summit landing on :3002, MIZAN on :3003, website on :6001
 ```
 
 - API docs: http://localhost:4000/docs (OpenAPI JSON at `/openapi.json`).
