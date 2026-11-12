@@ -8,8 +8,12 @@ import { mfaRequired } from "./staff-mfa";
 // SME registry and organisations hold TRADE's data too. The exceptions are what a session needs to take the second step
 // (/v1/mfa, and /v1/me to learn that it has to) and CLEAR's own routes, which have their own sign-in rules and must not lock
 // staff out. Sign-in itself (/api/auth) isn't under /v1.
-const EXEMPT = ["/v1/mfa", "/v1/me", "/v1/clear", "/v1/health"];
-const isExempt = (path: string): boolean => EXEMPT.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+// Under /v1/mfa only the steps themselves are exempt: resetting someone's second step (DELETE /v1/mfa/{userId}) is an
+// administrator's action like any other, so it needs a session that has passed it.
+const EXEMPT = ["/v1/me", "/v1/clear", "/v1/health"];
+const MFA_STEPS = ["/v1/mfa", "/v1/mfa/enrol", "/v1/mfa/confirm", "/v1/mfa/verify"];
+const isExempt = (path: string): boolean =>
+  MFA_STEPS.includes(path.replace(/\/+$/, "")) || EXEMPT.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 
 const STAFF_TTL_MS = 60_000;
 const staffCache = new Map<string, { staff: boolean; at: number }>();
