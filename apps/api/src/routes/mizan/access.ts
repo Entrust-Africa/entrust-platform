@@ -27,7 +27,7 @@ const accessRoute = createRoute({
   tags,
   summary: "What the caller can do in MIZAN",
   description:
-    "Entrust staff get the actions their role allows (Super Admin everything; Assessor everything but support relationships and the audit trail; Quality reading only; Cohort Manager nothing). An SME member gets the SME organisations whose approved reports they can open. Everyone else gets nothing.",
+    "Entrust staff get the actions their role allows (Super Admin everything; Assessor everything but support relationships, the notice wording and the audit trail; Quality reading only; Cohort Manager nothing). An SME member gets the SME organisations whose approved reports they can open. Everyone else gets nothing.",
   responses: { 200: { description: "The caller's MIZAN access", content: json(MizanAccess) }, 401: problem("Not signed in") },
 });
 

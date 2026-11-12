@@ -22,6 +22,8 @@
     "@entrust/forms": "workspace:*",
     "@entrust/gate-engine": "workspace:*",
     "@entrust/jobs": "workspace:*",
+    "@entrust/mizan-engine": "workspace:*",
+    "@entrust/mizan-rules": "workspace:*",
     "@entrust/notify": "workspace:*",
     "@entrust/roles": "workspace:*",
     "@entrust/rules": "workspace:*",

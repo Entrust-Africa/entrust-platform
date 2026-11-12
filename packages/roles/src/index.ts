@@ -54,7 +54,7 @@ export type Platform = (typeof PLATFORMS)[number];
 
 /**
  * What Entrust staff can do in MIZAN (#223). MIZAN uses the staff roles that exist, with no role of its own:
- * - admin (Super Admin): everything, and the only one who records who supported an SME.
+ * - admin (Super Admin): everything, and the only one who records who supported an SME or rewords the data notices.
  * - reviewer (Assessor): registers SMEs, records the notice, assesses, and approves or returns other people's assessments.
  * - facilitator (Cohort Manager): nothing. Cohort managers train the SMEs MIZAN assesses, so they stay out of it entirely.
  * - quality: reads reports, the dashboard and the audit trail, and changes nothing.
@@ -65,6 +65,7 @@ export const MIZAN_ACTIONS = [
   "read_smes",
   "manage_smes",
   "manage_support",
+  "manage_notices",
   "assess",
   "review",
   "read_reports",
@@ -77,6 +78,7 @@ const MIZAN_MATRIX: Readonly<Record<MizanAction, { staff: readonly EntrustRole[]
   read_smes: { staff: ["admin", "reviewer"], quality: true },
   manage_smes: { staff: ["admin", "reviewer"], quality: false },
   manage_support: { staff: ["admin"], quality: false },
+  manage_notices: { staff: ["admin"], quality: false },
   assess: { staff: ["admin", "reviewer"], quality: false },
   review: { staff: ["admin", "reviewer"], quality: false },
   read_reports: { staff: ["admin", "reviewer"], quality: true },

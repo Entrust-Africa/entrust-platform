@@ -8,6 +8,7 @@ const ACTION_LABELS: Record<MizanAction, string> = {
   read_smes: "See the SMEs in MIZAN",
   manage_smes: "Register SMEs, their owners and their data notice",
   manage_support: "Record who trained, advised or onboarded an SME",
+  manage_notices: "Reword the data collection notice and the TRADE and CLEAR data permission",
   assess: "Assess an SME",
   review: "Approve or return someone else's assessment",
   read_reports: "Read approved reports",

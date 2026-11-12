@@ -414,6 +414,13 @@
       "when": 1794498415722,
       "tag": "0058_mizan_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1794523048131,
+      "tag": "0059_mizan_notices",
+      "breakpoints": true
     }
   ]
 }
