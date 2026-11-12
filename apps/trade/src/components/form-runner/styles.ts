@@ -1,15 +1,17 @@
 // Class names the form inputs share, so the runner's controls look alike and are easy to tap on a phone.
 
+// No width here: `cn` doesn't merge Tailwind classes, so a `w-full` here would beat a narrower width given beside it
+// (the currency picker's `w-28`), and the picker would squeeze the amount box beside it to nothing.
 export const inputBase =
-  "w-full rounded-md border bg-surface px-3 text-base text-ink placeholder:text-ink-3 transition-colors duration-150 " +
+  "rounded-md border bg-surface px-3 text-base text-ink placeholder:text-ink-3 transition-colors duration-150 " +
   "focus-visible:border-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25 " +
   "disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3";
 
 export const inputBorder = (invalid: boolean) => (invalid ? "border-danger" : "border-line-strong hover:border-ink-3");
 
-export const textInput = (invalid: boolean) => `${inputBase} h-12 ${inputBorder(invalid)}`;
+export const textInput = (invalid: boolean) => `${inputBase} w-full h-12 ${inputBorder(invalid)}`;
 
-export const textArea = (invalid: boolean) => `${inputBase} min-h-32 py-3 leading-relaxed ${inputBorder(invalid)}`;
+export const textArea = (invalid: boolean) => `${inputBase} w-full min-h-32 py-3 leading-relaxed ${inputBorder(invalid)}`;
 
 /** A tappable choice row: at least 48px tall. */
 export const choiceRow = (selected: boolean, disabled: boolean) =>
