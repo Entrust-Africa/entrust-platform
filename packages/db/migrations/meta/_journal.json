@@ -421,6 +421,13 @@
       "when": 1794523048131,
       "tag": "0059_mizan_notices",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1794524428181,
+      "tag": "0060_mizan_assessment_pinned",
+      "breakpoints": true
     }
   ]
 }
