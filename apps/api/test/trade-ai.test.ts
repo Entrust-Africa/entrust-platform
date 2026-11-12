@@ -23,7 +23,7 @@ const clearLog = async () => {
 };
 
 beforeAll(async () => {
-  process.env.ANTHROPIC_API_KEY = "test-key-never-sent";
+  process.env.MORPH_API_KEY = "test-key-never-sent";
   await cleanup();
   const [learner, other, stranger, admin, reviewer] = (await Promise.all(["ai-learner", "ai-other", "ai-stranger", "ai-admin", "ai-reviewer"].map(signUp))) as [TestUser, TestUser, TestUser, TestUser, TestUser];
   Object.assign(w, { learner, other, stranger, admin, reviewer });
@@ -36,14 +36,14 @@ beforeAll(async () => {
 beforeEach(async () => {
   provider.call.mockReset();
   provider.call.mockResolvedValue(answer());
-  process.env.ANTHROPIC_API_KEY = "test-key-never-sent";
+  process.env.MORPH_API_KEY = "test-key-never-sent";
   delete process.env.AI_MONTHLY_CAP_USD;
   await clearLog();
 });
 
 afterAll(async () => {
   await clearLog();
-  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.MORPH_API_KEY;
   await cleanup();
 });
 
@@ -101,13 +101,13 @@ describe("who can run a prompt", () => {
   });
 
   it("says so when the assistant isn't switched on, and the module says so too", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.MORPH_API_KEY;
     const res = await callV1(w.learner, "POST", RUN, BODY);
     expect(res.status).toBe(422);
     expect(res.body.error).toContain("isn't switched on");
     expect(provider.call).not.toHaveBeenCalled();
     expect((await callV1(w.learner, "GET", "/trade/modules/M09")).body.aiAssistantEnabled).toBe(false);
-    process.env.ANTHROPIC_API_KEY = "test-key-never-sent";
+    process.env.MORPH_API_KEY = "test-key-never-sent";
     expect((await callV1(w.learner, "GET", "/trade/modules/M09")).body.aiAssistantEnabled).toBe(true);
   });
 });
