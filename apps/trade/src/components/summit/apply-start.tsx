@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient, continueWithAfriConnect } from "@entrust/account";
-import { Button } from "@entrust/ui";
+import { Button, PasswordInput } from "@entrust/ui";
 import { countryName } from "@/lib/summit";
 import { rememberBusiness } from "@/lib/summit-business";
 import { signInHref } from "@/lib/next-path";
@@ -115,10 +115,9 @@ export function ApplyStart({ countries, afriConnect = false }: { countries: read
             <label htmlFor="apply-password" className={label}>
               Password
             </label>
-            <input
+            <PasswordInput
               id="apply-password"
               name="password"
-              type="password"
               required
               minLength={8}
               autoComplete="new-password"

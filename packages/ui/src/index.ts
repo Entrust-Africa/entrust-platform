@@ -1,6 +1,7 @@
 export { cn } from "./cn";
 export { Button, type ButtonProps } from "./button";
 export { Field, type FieldProps } from "./field";
+export { PasswordInput, type PasswordInputProps } from "./password-input";
 export {
   UploadField,
   uploadFile,
