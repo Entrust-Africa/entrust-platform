@@ -407,6 +407,13 @@
       "when": 1794411968839,
       "tag": "0057_trade_audit_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1794498415722,
+      "tag": "0058_mizan_schema",
+      "breakpoints": true
     }
   ]
 }

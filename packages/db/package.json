@@ -16,6 +16,8 @@
   "dependencies": {
     "@entrust/forms": "workspace:*",
     "@entrust/gate-engine": "workspace:*",
+    "@entrust/mizan-engine": "workspace:*",
+    "@entrust/mizan-rules": "workspace:*",
     "@entrust/rules": "workspace:*",
     "@entrust/summit-engine": "workspace:*",
     "@entrust/trade-engine": "workspace:*",
