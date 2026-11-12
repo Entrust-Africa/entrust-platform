@@ -20,6 +20,7 @@ packages/
   trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
   trade-engine TRADE's pure functions: validate answers, score domains, assign a pathway, build a learning plan
   mizan-rules  MIZAN's scoring configurations (pillars, dimensions, criteria and anchors, weights, gates, levels), versioned and never edited once published
+  mizan-engine MIZAN's pure functions: financial ratios and checks, scoring, suggested ratings, diagnostics; and the status lists its tables use
 ```
 
 Rules that keep it extensible:
