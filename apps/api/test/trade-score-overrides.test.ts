@@ -136,6 +136,26 @@ describe("changing a score after the programme finished", () => {
     const [old] = await db.select().from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, first));
     expect(old!.status).toBe("revision_required");
   });
+
+  it("keeps a programme finished before test-out offers counted when a score is re-checked", async () => {
+    const b = await business("legacy-test-out", { lessonsDone: false });
+    const submission = await submit(b);
+    await firstScore(submission, 5);
+    ok(await post(b.learner, "/module-progress", { enrollmentId: b.enrollment, moduleId: "M01", lessonId: LESSONS.at(-1), completed: true }));
+    expect((await enrollmentOf(b)).status).toBe("completed");
+    const cert = await liveCertificate(b);
+    expect(cert).toBeDefined();
+
+    // Before #218 a test-out offer didn't hold the programme back, so a plan could finish with one never taken.
+    const [plan] = await db.select().from(schema.learningPlan).where(eq(schema.learningPlan.enrollmentId, b.enrollment));
+    expect(plan!.status).toBe("completed");
+    await db.insert(schema.moduleAssignment).values({ planId: plan!.id, moduleId: "M02", status: "optional", sequence: 2, reasonCodes: ["test_out_offered"], source: "engine" });
+
+    // A correction that still passes re-checks completion. The finished programme and its certificate stand.
+    ok(await patch(w.admin, `/module-submissions/${submission}/score`, { scores: score(5), overrideReason: "Correcting the feedback record" }));
+    expect((await liveCertificate(b))?.id).toBe(cert!.id);
+    expect((await enrollmentOf(b)).status).toBe("completed");
+  });
 });
 
 describe("submitting while a submission waits", () => {
