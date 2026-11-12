@@ -1,38 +1,20 @@
 # App Router Conventions
 
-This project uses Next.js App Router, where each route segment must include a `page.tsx` file.
+- `app/**/page.tsx` is the route entry and owns the metadata (built with `buildMetadata` from
+  `app/lib/seo.ts`). Keep it thin and re-export the page UI:
 
-## Why `page.tsx` exists
+  ```tsx
+  import type { Metadata } from "next";
+  import { buildMetadata } from "../lib/seo";
+  export const metadata: Metadata = buildMetadata({ title: "…", description: "…", path: "/about" });
+  export { default } from "../features/about/AboutPage";
+  ```
 
-- `page.tsx` is the required route entrypoint in App Router.
-- You cannot replace route entry with arbitrary filenames like `EntrustAbout.tsx`.
-- To keep code readable, route entries should stay thin and delegate UI to named files.
-
-## Recommended pattern
-
-- Keep route metadata in `page.tsx`.
-- Export page UI from a clearly named component file.
-- Use one-line default re-exports in route files where possible.
-
-## Package-style structure
-
-- `app/shared/ui/*` for shared reusable UI entrypoints
-  - `CommonContact`, `EcosystemNav`, `Footer`, `OurPartners`
-- `app/features/<domain>/*` for feature/page view entrypoints
-  - `features/entrust/*`
-  - `features/andinet/*`
-  - `features/afri-bridge/*`
-- `app/**/page.tsx` stays as route entry and metadata owner
-
-Example:
-
-```tsx
-import type { Metadata } from "next";
-export const metadata: Metadata = { ... };
-export { default } from "../EntrustAbout";
-```
-
-## Naming
-
-- Prefer clear names like `EntrustHome.tsx`, `AndinetEvents.tsx`, `AfriBridgeHowItWorks.tsx`.
-- Avoid typos in filenames to reduce onboarding confusion.
+- Page UI lives in `app/features/<page>/`, named `<Name>Page.tsx`, with any page-only pieces next to it.
+- Shared pieces: `app/components/site` (header, menu, footer, decor), `app/components/motion`
+  (animation primitives), `app/components/ui` (buttons, links, icons), `app/lib/site.ts` (links,
+  contact details, platform colours, shared images).
+- Server components by default; add `"use client"` only to the interactive or animated piece.
+- Wrap every section in `.shell` for the page gutter and max width.
+- Don't put `hidden` on a `ButtonLink`; wrap it (`<div className="hidden lg:block">`), because the
+  button's own `inline-flex` wins.

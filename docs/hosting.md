@@ -8,20 +8,20 @@
 | Summit page (`apps/summit`) | Railway service `entrust-summit` | adtis.entrust-africa.com |
 | MIZAN (`apps/mizan`) | Railway service `entrust-mizan` | mizan.entrust-africa.com |
 | Email worker (`apps/worker`) | Railway service `entrust-worker` | none (no web address) |
-| Website (`apps/website`) | Cloudflare Worker `entrust-website` | entrust-africa.com |
+| Website (`apps/website`) | Railway service `entrust-website` | entrust-africa.com |
 
 ## How a change goes live
 
 1. A pull request merges to `main` and CI runs.
-2. `.github/workflows/deploy.yml` then runs. Its first job, "Check what may deploy", lets only a push to `main` in this repository through: a fork's pull request whose branch happens to be called `main` doesn't count. Then, in this order: the database migrations, the API Worker, then the four Railway services and the website together, then the smoke checks. Every job runs in the GitHub environment `production`, which allows the `main` branch only.
-3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit`, `entrust-mizan` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
+2. `.github/workflows/deploy.yml` then runs. Its first job, "Check what may deploy", lets only a push to `main` in this repository through: a fork's pull request whose branch happens to be called `main` doesn't count. Then, in this order: the database migrations, the API Worker, then the Railway services together, then the smoke checks. Every job runs in the GitHub environment `production`, which allows the `main` branch only.
+3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit`, `entrust-mizan`, `entrust-website` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
 4. The smoke checks first wait until `https://api.entrust-africa.com/v1/health` reports the commit being deployed (the deploy stamps it on the Worker as `GIT_COMMIT`) and look a certificate up, which needs the database. They warn when health says a production setting is missing (`configured: false`; the Worker's logs say which, as `[config:error]`). Then they open the addresses people really use (not the `workers.dev` copies), retrying for up to five minutes while a new build starts, and confirm the worker's newest deployment is running.
 
 So an app never deploys before CI has passed and the API is live. "Run workflow" on "Deploy to production" deploys `main` only, and only a commit CI has passed on. Nothing is deployed by hand any more; if the workflow is down, run `railway up --service <name> --environment production --ci` from a clean checkout of `main`.
 
 **Rolling back.** Run the "Roll back production" workflow on `main`. It puts the API Worker back on its previous version (`wrangler rollback`) and each chosen Railway service on the build it ran before its current one. Migrations aren't undone: they only add, so the previous code runs on the newer schema. A failed Railway build fails the deploy run with a message saying so: the previous build of that service keeps running against the new API until it is fixed or everything is rolled back.
 
-CLEAR, TRADE and the Summit page used to be built into Cloudflare Workers as well (`entrust-clear`, `entrust-trade`, `entrust-summit`). The workflow no longer deploys them, so whatever is still on those workers is an old, unused copy.
+CLEAR, TRADE, the Summit page and the website used to be built into Cloudflare Workers as well (`entrust-clear`, `entrust-trade`, `entrust-summit`, `entrust-website`). The workflow no longer deploys them, so whatever is still on those workers is an old, unused copy.
 
 ## Railway
 
@@ -41,6 +41,11 @@ MIZAN (`entrust-mizan`) was set up by hand on 12 November 2026, before the first
 2. `railway domain mizan.entrust-africa.com --service entrust-mizan`, and add both records it prints to Cloudflare DNS (DNS only, not proxied): the `mizan` CNAME and the `_railway-verify.mizan` TXT. Without the TXT record the certificate never leaves "validating ownership".
 3. On the API Worker, set `MIZAN_APP_URL=https://mizan.entrust-africa.com`, so the API accepts MIZAN's requests and MIZAN's emails link back to it. TRADE and CLEAR can then set `NEXT_PUBLIC_MIZAN_APP_URL` for their platform switcher, though the default (the same address with `mizan.` in front) already works.
 4. The deploy's live check opens `https://mizan.entrust-africa.com/sign-in` and fails if it doesn't answer, like the other sites.
+
+The website (`entrust-website`) was set up by hand on 13 November 2026, moving it off the Cloudflare Worker of the same name:
+
+1. `railway add --service entrust-website` with `RAILPACK_NODE_VERSION=24`, `RAILPACK_BUILD_CMD=pnpm exec turbo run build --filter=@entrust/website`, `RAILPACK_START_CMD=cd apps/website && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}`, `NODE_ENV=production`, `NEXT_TELEMETRY_DISABLED=1`, `CONTACT_FROM_EMAIL=no-reply@entrust-africa.com` and `RESEND_API_KEY=${{entrust-worker.RESEND_API_KEY}}` (a reference to the worker's key, for the contact, newsletter and event forms; `ADMIN_EMAIL` is optional and defaults to info@entrustafrica.com). Then `railway service scale --service entrust-website europe-west4-drams3a=0 us-east4-eqdc4a=1`.
+2. `railway domain entrust-africa.com --service entrust-website` (and `www.entrust-africa.com`), then in Cloudflare DNS remove the Worker's custom domain and add the records Railway prints (DNS only, not proxied), including the `_railway-verify` TXT.
 
 With the Railway CLI: `railway service status --service entrust-trade`, `railway logs --build --service entrust-trade`, `railway service redeploy --service entrust-trade`.
 
@@ -90,7 +95,7 @@ The values live in each service's own settings and can't be read back: Cloudflar
 - **Worker `entrust-worker` (Railway):** `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM` (`Entrust Africa <no-reply@entrust-africa.com>`), `EMAIL_MODE=send`, `NODE_ENV=production`, and the `RAILPACK_*` build variables. The Resend key is the same one the API uses (the domain `entrust-africa.com` is verified in that Resend account).
 - **TRADE and CLEAR (Railway):** `API_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SIMULATOR_URL`, `AFRICONNECT_SIGN_IN`, `AFRICONNECT_BUYERS_URL` (optional).
 - **Summit page (Railway):** `API_URL`, `SUMMIT_APP_URL`.
-- **GitHub Actions secrets:** `DATABASE_URL` (migrations and the queue check), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY` (the website's forms), `RAILWAY_TOKEN` (a project token for the production environment, made in the Railway dashboard under the project's Settings, Tokens), and for the nightly backup `BACKUP_DATABASE_URL` (a direct connection string for the read-only login `backup_reader`), `R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY` (an R2 token limited to the one backup bucket).
+- **GitHub Actions secrets:** `DATABASE_URL` (migrations and the queue check), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `BETTER_AUTH_SECRET`, `RAILWAY_TOKEN` (a project token for the production environment, made in the Railway dashboard under the project's Settings, Tokens), and for the nightly backup `BACKUP_DATABASE_URL` (a direct connection string for the read-only login `backup_reader`), `R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY` (an R2 token limited to the one backup bucket).
 
 ## DNS
 

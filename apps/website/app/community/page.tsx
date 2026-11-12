@@ -1,14 +1,11 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "../lib/seo";
-import { CommunityPageContent } from "../components/CommunityPageContent";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Community — Join Entrust Africa",
+  title: "Join the Entrust Africa community",
   description:
-    "Join the Entrust Africa community: events, diaspora networks, and collaboration across the continent.",
+    "Stay connected to African professionals, entrepreneurs and diaspora communities: event updates, partnership opportunities and ways to collaborate.",
   path: "/community",
 });
 
-export default function CommunityPage() {
-  return <CommunityPageContent />;
-}
+export { default } from "../features/community/CommunityPage";

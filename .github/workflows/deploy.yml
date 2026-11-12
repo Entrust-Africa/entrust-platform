@@ -130,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [entrust-trade, entrust-clear, entrust-summit, entrust-mizan, entrust-worker]
+        service: [entrust-trade, entrust-clear, entrust-summit, entrust-mizan, entrust-website, entrust-worker]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -173,32 +173,9 @@ jobs:
           echo "::error::$SERVICE did not finish deploying within 20 minutes."
           exit 1
 
-  deploy-website:
-    name: Deploy Website (OpenNext)
-    needs: [gate, migrate-db]
-    environment: production
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build & Deploy apps/website
-        env:
-          CI: "true"
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter @entrust/website run deploy
-
   smoke-test:
     name: Post-Deployment Smoke Verification
-    needs: [gate, deploy-api, deploy-railway, deploy-website]
+    needs: [gate, deploy-api, deploy-railway]
     environment: production
     timeout-minutes: 30
     runs-on: ubuntu-latest
