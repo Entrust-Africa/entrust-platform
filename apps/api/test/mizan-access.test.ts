@@ -47,8 +47,8 @@ describe("MIZAN access and roles (#223)", () => {
   };
 
   describe("GET /v1/mizan/access", () => {
-    it("gives a Super Admin everything and an Assessor everything but support relationships and the audit trail", async () => {
-      expect((await access(w.admin)).actions).toEqual(["read_smes", "manage_smes", "manage_support", "assess", "review", "read_reports", "read_dashboard", "read_audit"]);
+    it("gives a Super Admin everything and an Assessor everything but support relationships, notices and the audit trail", async () => {
+      expect((await access(w.admin)).actions).toEqual(["read_smes", "manage_smes", "manage_support", "manage_notices", "assess", "review", "read_reports", "read_dashboard", "read_audit"]);
       expect(await access(w.assessor)).toMatchObject({ staff: true, staffRole: "reviewer", actions: ["read_smes", "manage_smes", "assess", "review", "read_reports", "read_dashboard"] });
     });
 

@@ -208,6 +208,12 @@ importers:
       '@entrust/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@entrust/mizan-engine':
+        specifier: workspace:*
+        version: link:../../packages/mizan-engine
+      '@entrust/mizan-rules':
+        specifier: workspace:*
+        version: link:../../packages/mizan-rules
       '@entrust/notify':
         specifier: workspace:*
         version: link:../../packages/notify

@@ -111,6 +111,23 @@ export const mizanSupportLink = mizan.table(
   ],
 );
 
+// The wording of the data collection notice and of the permission to use TRADE and CLEAR data (#227), as data so it can be
+// reworded without a release. A new wording is a new version; the latest published version of a kind is the one shown, and
+// every consent records the version it was given under. Versions are never edited or deleted.
+export const mizanNotice = mizan.table(
+  "notice",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind", { enum: CONSENT_KINDS }).notNull(),
+    version: text("version").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    publishedBy: by("published_by"),
+    publishedAt: now("published_at"),
+  },
+  (t) => [uniqueIndex("mizan_notice_kind_version_uidx").on(t.kind, t.version), index("mizan_notice_kind_published_idx").on(t.kind, t.publishedAt)],
+);
+
 // The data collection notice (required to start an assessment) and the permission to use TRADE and CLEAR data (#227). Every
 // acceptance and withdrawal is kept: the latest row for a kind is the one in force.
 export const mizanConsent = mizan.table(

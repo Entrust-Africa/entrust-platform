@@ -156,6 +156,13 @@ export async function cleanup() {
     await db.delete(schema.delegateRegistration).where(inArray(schema.delegateRegistration.editionId, editionIds));
     await db.delete(schema.commerceEdition).where(inArray(schema.commerceEdition.id, editionIds));
   }
+  // MIZAN notice wordings belong to no organisation, so the tests' own go by their version.
+  const notices = await db.select({ id: schema.mizanNotice.id }).from(schema.mizanNotice).where(like(schema.mizanNotice.version, `${PREFIX}%`));
+  if (notices.length) {
+    const noticeIds = notices.map((n) => n.id);
+    await db.delete(schema.auditLog).where(inArray(schema.auditLog.entityId, noticeIds));
+    await db.delete(schema.mizanNotice).where(inArray(schema.mizanNotice.id, noticeIds));
+  }
   // Summit registrations come from a public form and belong to no organisation, so the tests' own go by their address.
   await db.delete(schema.registration).where(like(schema.registration.email, `${PREFIX}%`));
   // Summit periods belong to no organisation. An organisation's applications go with it, so the periods are free to go.

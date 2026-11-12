@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@entrust/db";
+import { mizanCan } from "@entrust/roles";
 import type { AppEnv } from "../app";
 import {
   DownloadUrlResponse,
@@ -14,6 +15,7 @@ import {
 import { Problem } from "../schemas/problem";
 import { loadPrincipal, type Principal } from "../services/access";
 import type { Executor } from "../services/db";
+import { mizanFileAllowed, mizanUploadAllowed } from "../services/mizan-files";
 import { findApplication } from "../services/summit-access";
 import { canReachOrganization, limitedToAssignedCohorts } from "../services/trade-shared";
 import { ServiceError } from "../services/errors";
@@ -56,10 +58,12 @@ function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
 
 /**
  * Whether the caller may put files in an organisation: its members, an administrator, and a facilitator or reviewer for a
- * business on one of their cohorts or for Entrust's own organisation (module resources, proof of payment).
+ * business on one of their cohorts or for Entrust's own organisation (module resources, proof of payment). A MIZAN Assessor
+ * assesses any SME in MIZAN, not only their cohorts', so they may put files in those.
  */
 async function canUploadFor(db: Executor, principal: Principal, organizationId: string): Promise<boolean> {
   if (principal.smeRoles.has(organizationId)) return true;
+  if (mizanCan(principal, "manage_smes") && (await mizanUploadAllowed(db, organizationId))) return true;
   if (!principal.staffRole) return false;
   if (!limitedToAssignedCohorts(principal)) return true;
   if (organizationId === process.env.ENTRUST_ORG_ID) return true;
@@ -70,10 +74,12 @@ async function canUploadFor(db: Executor, principal: Principal, organizationId: 
  * Whether the caller may see a file. Its organisation's members may, and an administrator. A facilitator or reviewer works
  * with the businesses on their own cohorts, as every TRADE screen does, so they see those businesses' files, files attached
  * to a Summit application they can open, Entrust's own files, and what they uploaded themselves. A file id can be learnt
- * from the audit trail, so "staff" alone isn't enough.
+ * from the audit trail, so "staff" alone isn't enough. MIZAN staff (Quality too) see the files MIZAN holds as evidence: a
+ * signed notice or an assessment document.
  */
 async function canSeeFile(db: Executor, principal: Principal, file: { id: string; organizationId: string; uploaderUserId: string | null }): Promise<boolean> {
   if (principal.smeRoles.has(file.organizationId)) return true;
+  if (mizanCan(principal, "read_smes") && (await mizanFileAllowed(db, file.id))) return true;
   if (!principal.staffRole) return false;
   if (!limitedToAssignedCohorts(principal)) return true;
   if (file.uploaderUserId === principal.userId || file.organizationId === process.env.ENTRUST_ORG_ID) return true;
