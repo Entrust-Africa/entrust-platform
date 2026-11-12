@@ -155,6 +155,10 @@ export const tradePrograms = new Hono<AppEnv>()
       }
 
       const body = c.req.valid("json");
+      // The sponsor decides which bank reads the cohort's reports, so only an administrator picks it, here as on PATCH.
+      if (body.sponsorOrganizationId && principal.staffRole !== "admin") {
+        throw new ServiceError("forbidden", "Only an Entrust administrator can set a cohort's sponsor.");
+      }
       const cohort = await createCohort(db, body);
       // A facilitator who creates a cohort is on it, or they couldn't reach it.
       if (limitedToAssignedCohorts(principal)) await db.insert(schema.cohortStaff).values({ cohortId: cohort.id, userId: user.id, assignedByUserId: user.id });
