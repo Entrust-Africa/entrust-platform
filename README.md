@@ -1,7 +1,7 @@
 # Entrust platform
 
-One codebase for Entrust Africa's platforms. CLEAR Export is the first; TRADE and
-MIZAN come later and have no UI yet.
+One codebase for Entrust Africa's platforms: CLEAR Export, TRADE, the Summit and MIZAN
+(the SME Financial Readiness Standard, being built: see #219).
 
 ```
 apps/
@@ -19,6 +19,7 @@ packages/
   gate-engine  the GATE engine: pure functions that evaluate a case and check status changes
   trade-rules  TRADE's placement assessment, domains, trigger groups, module catalogue and reason codes, as versioned data
   trade-engine TRADE's pure functions: validate answers, score domains, assign a pathway, build a learning plan
+  mizan-rules  MIZAN's scoring configurations (pillars, dimensions, criteria and anchors, weights, gates, levels), versioned and never edited once published
 ```
 
 Rules that keep it extensible:
