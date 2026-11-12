@@ -181,17 +181,14 @@ describe("TRADE Knowledge Checks API (#63)", () => {
 
     // Results feedback check
     expect(res.body.results).toHaveLength(10);
-    const q1Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q1");
-    expect(q1Res.isCorrect).toBe(true);
-    // Entrust's M01 gives no explanations, so feedback says which were wrong and links the lesson to read. The key itself
-    // waits for a pass: with unlimited retakes, showing it now would let the next attempt copy it.
-    expect(q1Res.lessonId).toBe("introduction");
-
-    const q2Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q2");
-    expect(q2Res.isCorrect).toBe(true);
-    const q4Res = res.body.results.find((r: { questionId: string }) => r.questionId === "q4");
-    expect(q4Res.isCorrect).toBe(false);
-    expect(res.body.results.every((r: { correctAnswers: string[] }) => r.correctAnswers.length === 0)).toBe(true);
+    // A failed attempt says the score and nothing per question: with unlimited retakes, the key or even which answers were
+    // right would let the next attempt pass by changing only the wrong ones.
+    for (const r of res.body.results as Array<Record<string, unknown>>) {
+      expect(r.correctAnswers).toEqual([]);
+      expect(r).not.toHaveProperty("isCorrect");
+      expect(r).not.toHaveProperty("lessonId");
+      expect(r).not.toHaveProperty("explanation");
+    }
 
     // Check module progress in DB
     const [progress] = await db

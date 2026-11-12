@@ -189,9 +189,11 @@ export async function submitKnowledgeCheckAttempt(
     passed: attempt!.passed,
     totalQuestions: attempt!.totalQuestions,
     correctCount: attempt!.correctCount,
-    // Which answers were right is said on every attempt, but the key itself only once the learner has passed: with
-    // unlimited retakes, showing it after a failed attempt let anyone pass by copying it.
-    results: evaluation.passed ? evaluation.results : evaluation.results.map((r) => ({ ...r, correctAnswers: [] })),
+    // A failed attempt gives the score only. Retakes are unlimited, so the key, or even which questions were right, would let
+    // anyone pass by changing only the wrong answers (four options each: four tries at most). A pass shows everything.
+    results: evaluation.passed
+      ? evaluation.results
+      : evaluation.results.map((r) => ({ questionId: r.questionId, questionText: r.questionText, submittedAnswers: r.submittedAnswers, correctAnswers: [] })),
     theoryCompletedAt: theoryCompletedAt?.toISOString() ?? null,
     createdAt: attempt!.createdAt.toISOString(),
   };

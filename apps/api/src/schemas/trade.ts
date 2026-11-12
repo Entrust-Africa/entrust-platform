@@ -1344,7 +1344,8 @@ export const QuestionGradingResultSchema = z
     questionText: z.string(),
     submittedAnswers: z.array(z.string()),
     correctAnswers: z.array(z.string()),
-    isCorrect: z.boolean(),
+    /** Left out on a failed attempt, with the key: only a pass says which answers were right. */
+    isCorrect: z.boolean().optional(),
     explanation: z.string().optional(),
     lessonId: z.string().optional(),
   })
