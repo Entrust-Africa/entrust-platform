@@ -207,6 +207,8 @@ describe("a learner's journey from enrolment to certificate", () => {
     expect(publicCheck.revocationReason).toBe("Entrust Africa withdrew this certificate.");
     expect(JSON.stringify(publicCheck)).not.toContain("fabricated");
     expect(ok(await get(w.admin, `/enrollments/${w.enrollment}/certificate`)).revocationReason).toContain("Evidence was fabricated");
+    // The business sees the public wording too.
+    expect(ok(await get(w.learner, `/enrollments/${w.enrollment}/certificate`)).revocationReason).toBe("Entrust Africa withdrew this certificate.");
     expect(ok(await get(w.learner, `/module-progress?enrollmentId=${w.enrollment}&moduleId=${moduleId}`)).items[0].status).toBe("needs_revision");
     expect(ok(await get(w.learner, `/plans/${w.planId}`)).status).toBe("active");
     const [enrollment] = await db.select().from(schema.enrollment).where(eq(schema.enrollment.id, w.enrollment));

@@ -673,7 +673,8 @@ export async function getCertificateForEnrollment(
     isValid: !isRevoked,
     isRevoked,
     revokedAt: cert.revokedAt ? cert.revokedAt.toISOString() : null,
-    revocationReason: cert.revocationReason ?? null,
+    // Staff's own reason is internal: the business sees what the public check says.
+    revocationReason: isRevoked ? (ctx.principal.staffRole ? (cert.revocationReason ?? null) : (cert.publicRevocationReason ?? PUBLIC_REVOCATION_REASON)) : null,
     verificationUrl: `/verify/${cert.code}`,
   };
 }
