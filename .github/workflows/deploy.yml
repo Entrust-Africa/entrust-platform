@@ -246,9 +246,7 @@ jobs:
           check "CLEAR sign-in" "https://clear.entrust-africa.com/sign-in" || failed=1
           check "TRADE sign-in" "https://trade.entrust-africa.com/sign-in" || failed=1
           check "Summit page" "https://adtis.entrust-africa.com" || failed=1
-          # A warning, not a failure, until mizan.entrust-africa.com points at Railway (the CNAME is added by hand). Make it
-          # `|| failed=1` like the others once it answers.
-          check "MIZAN sign-in" "https://mizan.entrust-africa.com/sign-in" || echo "::warning::MIZAN isn't answering at mizan.entrust-africa.com yet. Has its CNAME been added?"
+          check "MIZAN sign-in" "https://mizan.entrust-africa.com/sign-in" || failed=1
           check "Website" "https://entrust-africa.com" || failed=1
           exit $failed
 
