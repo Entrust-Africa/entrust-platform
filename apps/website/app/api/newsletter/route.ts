@@ -57,8 +57,8 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      return Response.json({ error: text || "Email delivery failed." }, { status: 502 });
+      console.error("Newsletter email error:", await res.text());
+      return Response.json({ error: "Could not subscribe right now. Please try again later." }, { status: 502 });
     }
 
     return Response.json({

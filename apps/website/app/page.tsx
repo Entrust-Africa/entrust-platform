@@ -1,14 +1,11 @@
 import type { Metadata } from "next";
-import Gateway from "./features/gateway/GatewayPage";
 import { buildMetadata } from "./lib/seo";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Entrust Africa — Your Entry Point to African Trade",
+  title: "Entrust Africa: take your business across African borders",
   description:
-    "Choose your platform: Entrust, Andinet, or Afri-bridge—building businesses and trade across Africa.",
+    "Entrust Africa helps SMEs prepare for export, stay compliant, find buyers and close cross-border deals.",
   path: "/",
 });
 
-export default function Page() {
-  return <Gateway />;
-}
+export { default } from "./features/home/HomePage";

@@ -73,8 +73,8 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      return Response.json({ error: text || "Could not send RSVP." }, { status: 502 });
+      console.error("Event RSVP email error:", await res.text());
+      return Response.json({ error: "Could not send your registration right now. Please try again later." }, { status: 502 });
     }
 
     return Response.json({

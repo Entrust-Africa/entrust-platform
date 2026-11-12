@@ -8,6 +8,9 @@ type ContactPayload = {
   message?: string;
 };
 
+const UNAVAILABLE_MESSAGE =
+  "We couldn't send your message just now. Please try again later or email info@entrustafrica.com.";
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -74,10 +77,12 @@ export async function POST(request: Request) {
         });
       }
 
+      console.error("Contact form: RESEND_API_KEY is missing or a placeholder; message not delivered.");
       return Response.json(
         {
-          error:
-            "Email not sent. Add a real RESEND_API_KEY (not placeholder) and restart the server.",
+          error: isDev
+            ? "Email not sent. Add a real RESEND_API_KEY (not placeholder) and restart the server."
+            : UNAVAILABLE_MESSAGE,
         },
         { status: 503 },
       );
@@ -127,9 +132,9 @@ export async function POST(request: Request) {
       console.error("Contact API email error:", providerMessage || "Email provider error");
       return Response.json(
         {
-          error: providerMessage
-            ? `Email delivery failed: ${providerMessage}`
-            : "We could not deliver your message. Check API key, sender verification, and restart server.",
+          error: isDev
+            ? `Email delivery failed: ${providerMessage || "check the API key and sender verification"}`
+            : UNAVAILABLE_MESSAGE,
         },
         { status: 502 },
       );

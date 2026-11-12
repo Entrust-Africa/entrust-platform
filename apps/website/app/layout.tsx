@@ -1,109 +1,88 @@
-import AnalyticsWrapper from "./AnalyticsWrapper";
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Open_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
+import AnalyticsWrapper from "./AnalyticsWrapper";
+import { MOTION_FALLBACK_SCRIPT } from "./components/motion/fallbackScript";
+import { MotionProvider } from "./components/motion/MotionProvider";
+import { SiteFooter } from "./components/site/SiteFooter";
+import { SiteHeader } from "./components/site/SiteHeader";
+import { CONTACT } from "./lib/site";
 import "./globals.css";
-import OurPartners from "./shared/ui/OurPartners";
-import Footer from "./shared/ui/Footer";
-import EcosystemNav from "./shared/ui/EcosystemNav";
-import { SiteAssistant } from "./components/SiteAssistant";
 
 const SITE_URL = "https://entrustafrica.com";
-const SHARE_IMAGE = "/src/assets/entrust-africa-logo.jpeg";
 
-const montserrat = Montserrat({
-  variable: "--font-heading",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  display: "swap",
-});
-
-const openSans = Open_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Entrust Africa",
-  description: "...",
+  title: {
+    default: "Entrust Africa: take your business across African borders",
+    template: "%s · Entrust Africa",
+  },
+  description:
+    "Entrust Africa helps SMEs prepare for export, stay compliant, find buyers and close cross-border deals.",
   openGraph: {
-    title: "Entrust Africa",
-    description: "...",
-    images: [
-      {
-        url: SHARE_IMAGE,
-        width: 1200,
-        height: 630,
-      },
-    ],
+    siteName: "Entrust Africa",
+    type: "website",
   },
-  twitter: {
-    card: "summary_large_image",
-    images: [SHARE_IMAGE],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  icons: {
-    icon: [
-      { url: "/logo.png", sizes: "any" },
-    ],
-    shortcut: "/logo.png",
-    apple: "/logo.png",
-  },
+  twitter: { card: "summary_large_image" },
+  robots: { index: true, follow: true },
+  icons: { icon: [{ url: "/logo.png", sizes: "any" }], shortcut: "/logo.png", apple: "/logo.png" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#f5f8f6",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const organizationSchema = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: "Entrust Africa",
-    url: "https://entrustafrica.com",
-    logo: "https://entrustafrica.com/src/assets/entrust-africa-logo.jpeg",
-    contactPoint: [
-      {
-        "@type": "ContactPoint",
-        contactType: "customer support",
-        email: "thomas@entrustafrica.com",
-        availableLanguage: ["English"],
-      },
-    ],
-    sameAs: [
-      "https://www.linkedin.com/company/entrust-plc/",
-      "https://www.linkedin.com/company/andinet-umoja-connecting-african-businesses/",
-    ],
-  };
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Entrust Africa",
+  url: SITE_URL,
+  logo: `${SITE_URL}/logo.png`,
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: CONTACT.email,
+      telephone: CONTACT.phone,
+      availableLanguage: ["English"],
+    },
+  ],
+  sameAs: [CONTACT.linkedIn],
+};
 
-  // Hide EcosystemNav on GatewayHome ("/GatwayHome")
-  const isGatewayHome = typeof window !== 'undefined' && window.location.pathname === '/GatwayHome';
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={`${montserrat.variable} ${openSans.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-white font-[family-name:var(--font-body)] text-[color:var(--foreground)] text-base leading-relaxed antialiased">
+    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} antialiased`}>
+      <head>
+        <noscript>
+          <style>{`main [style*="opacity"],main [style*="transform"],main [style*="clip-path"]{opacity:1!important;transform:none!important;clip-path:none!important}`}</style>
+        </noscript>
+        <script dangerouslySetInnerHTML={{ __html: MOTION_FALLBACK_SCRIPT }} />
+      </head>
+      <body className="flex min-h-dvh flex-col bg-page text-ink">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
-        {!isGatewayHome && <EcosystemNav />}
-        <div className="flex-1">{children}</div>
-        <OurPartners />
-        <Footer />
-        {/* Google Analytics - replace G-XXXXXXXXXX with your Measurement ID */}
+        <a
+          href="#main"
+          className="fixed left-4 top-4 z-[60] -translate-y-24 rounded-md bg-brand px-4 py-2 font-semibold text-white transition-transform focus:translate-y-0"
+        >
+          Skip to content
+        </a>
+        <MotionProvider>
+          <SiteHeader />
+          <main id="main" className="flex-1 pt-14 md:pt-16">
+            {children}
+          </main>
+          <SiteFooter />
+        </MotionProvider>
         {process.env.NODE_ENV === "production" && <AnalyticsWrapper />}
-        {/* <SiteAssistant /> */}
       </body>
     </html>
   );
