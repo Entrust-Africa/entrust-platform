@@ -696,7 +696,16 @@ export async function overrideRubricScore(
   submissionId: string,
   input: OverrideScoreInput
 ): Promise<RubricAssessmentView> {
-  return ctx.db.transaction((tx) => applyScoreOverride({ ...ctx, db: tx }, submissionId, input));
+  if (ctx.principal.staffRole !== "admin") {
+    throw new ServiceError("forbidden", "Only Entrust administrators can override a score.");
+  }
+  return ctx.db.transaction(async (tx) => {
+    // The submission, then the enrolment, then (while settling) the module's progress: the order scoring and a lesson save
+    // take them in. Without this an override locked the progress row first and could deadlock with a learner's save.
+    const [locked] = await tx.select({ enrollmentId: schema.moduleSubmission.enrollmentId }).from(schema.moduleSubmission).where(eq(schema.moduleSubmission.id, submissionId)).for("update");
+    if (locked) await tx.select({ id: schema.enrollment.id }).from(schema.enrollment).where(eq(schema.enrollment.id, locked.enrollmentId)).for("update");
+    return applyScoreOverride({ ...ctx, db: tx }, submissionId, input);
+  });
 }
 
 async function applyScoreOverride(
