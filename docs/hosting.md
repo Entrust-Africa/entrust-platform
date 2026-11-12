@@ -6,6 +6,7 @@
 | CLEAR (`apps/clear`) | Railway service `entrust-clear` | clear.entrust-africa.com |
 | TRADE (`apps/trade`) | Railway service `entrust-trade` | trade.entrust-africa.com |
 | Summit page (`apps/summit`) | Railway service `entrust-summit` | adtis.entrust-africa.com |
+| MIZAN (`apps/mizan`) | Railway service `entrust-mizan` | mizan.entrust-africa.com |
 | Email worker (`apps/worker`) | Railway service `entrust-worker` | none (no web address) |
 | Website (`apps/website`) | Cloudflare Worker `entrust-website` | entrust-africa.com |
 
@@ -13,7 +14,7 @@
 
 1. A pull request merges to `main` and CI runs.
 2. `.github/workflows/deploy.yml` then runs. Its first job, "Check what may deploy", lets only a push to `main` in this repository through: a fork's pull request whose branch happens to be called `main` doesn't count. Then, in this order: the database migrations, the API Worker, then the four Railway services and the website together, then the smoke checks. Every job runs in the GitHub environment `production`, which allows the `main` branch only.
-3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
+3. The Railway job uploads the commit with a project token (the GitHub secret `RAILWAY_TOKEN`) and runs `railway up` for `entrust-trade`, `entrust-clear`, `entrust-summit`, `entrust-mizan` and `entrust-worker`. Railway cannot watch the repository itself, because nobody in the project has GitHub access, so nothing deploys from a branch.
 4. The smoke checks first wait until `https://api.entrust-africa.com/v1/health` reports the commit being deployed (the deploy stamps it on the Worker as `GIT_COMMIT`) and look a certificate up, which needs the database. They warn when health says a production setting is missing (`configured: false`; the Worker's logs say which, as `[config:error]`). Then they open the addresses people really use (not the `workers.dev` copies), retrying for up to five minutes while a new build starts, and confirm the worker's newest deployment is running.
 
 So an app never deploys before CI has passed and the API is live. "Run workflow" on "Deploy to production" deploys `main` only, and only a commit CI has passed on. Nothing is deployed by hand any more; if the workflow is down, run `railway up --service <name> --environment production --ci` from a clean checkout of `main`.
@@ -31,8 +32,15 @@ Each service is built by Railpack and configured with service variables, not fil
 - `RAILPACK_NODE_VERSION=24`
 - `RAILPACK_BUILD_CMD=pnpm exec turbo run build --filter=@entrust/<app>`
 - `RAILPACK_START_CMD=cd apps/<app> && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}` (the three web apps), or `cd apps/worker && node dist/index.mjs` (the worker)
-- `API_URL` and `NEXT_PUBLIC_API_URL` (CLEAR and TRADE), or `API_URL` and `SUMMIT_APP_URL` (Summit page): `https://api.entrust-africa.com`, and `https://trade.entrust-africa.com` for `SUMMIT_APP_URL`. TRADE also needs `TRADE_APP_URL` (`https://trade.entrust-africa.com`): the passport QR codes hold that address, never the request's host. `NEXT_PUBLIC_` values are baked in at build time, so changing one needs a redeploy.
+- `API_URL` and `NEXT_PUBLIC_API_URL` (CLEAR, TRADE and MIZAN), or `API_URL` and `SUMMIT_APP_URL` (Summit page): `https://api.entrust-africa.com`, and `https://trade.entrust-africa.com` for `SUMMIT_APP_URL`. TRADE also needs `TRADE_APP_URL` (`https://trade.entrust-africa.com`): the passport QR codes hold that address, never the request's host. `NEXT_PUBLIC_` values are baked in at build time, so changing one needs a redeploy.
 - The worker's own variables are listed under "Settings" below.
+
+MIZAN (`entrust-mizan`) is set up once, by hand, before the first deploy that includes it:
+
+1. `railway add --service entrust-mizan` in the `entrust-platform` project, then set its variables: `RAILPACK_NODE_VERSION=24`, `RAILPACK_BUILD_CMD=pnpm exec turbo run build --filter=@entrust/mizan`, `RAILPACK_START_CMD=cd apps/mizan && ./node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}`, `API_URL` and `NEXT_PUBLIC_API_URL` (`https://api.entrust-africa.com`), and `NEXT_PUBLIC_TRADE_APP_URL` (`https://trade.entrust-africa.com`, where MIZAN sends people for organisation settings).
+2. Add the custom domain `mizan.entrust-africa.com` to the service and the CNAME Railway gives to DNS.
+3. On the API Worker, set `MIZAN_APP_URL=https://mizan.entrust-africa.com`, so the API accepts MIZAN's requests and MIZAN's emails link back to it. TRADE and CLEAR can then set `NEXT_PUBLIC_MIZAN_APP_URL` for their platform switcher, though the default (the same address with `mizan.` in front) already works.
+4. Until the domain answers, the deploy's live check only warns about MIZAN. Make it fail like the others once it does (`deploy.yml`, "Verify the live sites answer").
 
 With the Railway CLI: `railway service status --service entrust-trade`, `railway logs --build --service entrust-trade`, `railway service redeploy --service entrust-trade`.
 
