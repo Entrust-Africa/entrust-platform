@@ -1,0 +1,2 @@
+ALTER TABLE "trade"."public_diagnostic" ADD COLUMN "amounts_requested_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "trade"."public_diagnostic" ADD COLUMN "amounts_corrected_at" timestamp with time zone;

@@ -11,7 +11,9 @@ import {
   linkPublicDiagnostic,
   listPublicDiagnostics,
   publicTemplate,
+  requestPublicDiagnosticAmounts,
   savePublicDiagnostic,
+  savePublicDiagnosticAmounts,
   startPublicDiagnostic,
   submitPublicDiagnostic,
   templateForToken,
@@ -79,6 +81,10 @@ export const tradePublicDiagnostic = new Hono<AppEnv>()
     c.json(await verifyPublicDiagnosticEmail({ db: getDb(), now: now() }, c.req.param("token"), c.req.valid("json").proof)),
   )
   .post("/public/diagnostic/:token/submit", async (c) => c.json(await submitPublicDiagnostic({ db: getDb(), now: now() }, c.req.param("token"))))
+  // A submitted form's money amounts, typed in again after staff asked for them.
+  .put("/public/diagnostic/:token/amounts", zValidator("json", saveBody, invalid), async (c) =>
+    c.json(await savePublicDiagnosticAmounts({ db: getDb(), now: now() }, c.req.param("token"), c.req.valid("json"))),
+  )
 
   // ---- Entrust staff ----
   .get("/public-diagnostics", zValidator("query", listQuery, invalid), async (c) => c.json(await listPublicDiagnostics(await contextFor(c.get("user")), c.req.valid("query"))))
@@ -89,6 +95,8 @@ export const tradePublicDiagnostic = new Hono<AppEnv>()
     return c.body("﻿" + csv);
   })
   .get("/public-diagnostics/:id", async (c) => c.json(await getPublicDiagnosticForStaff(await contextFor(c.get("user")), c.req.param("id"))))
+  // Emails the business a new private link to type its money amounts in again.
+  .post("/public-diagnostics/:id/request-amounts", async (c) => c.json(await requestPublicDiagnosticAmounts(await contextFor(c.get("user")), c.req.param("id"))))
   // Matches a proven submission to a business's enrolment, which takes the avenue it assigned (so placement can start).
   .post("/public-diagnostics/:id/link", zValidator("json", z.object({ enrollmentId: z.string().uuid() }), invalid), async (c) =>
     c.json(await linkPublicDiagnostic(await contextFor(c.get("user")), c.req.param("id"), c.req.valid("json").enrollmentId)),

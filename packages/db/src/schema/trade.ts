@@ -1208,6 +1208,10 @@ export const publicDiagnostic = trade.table(
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     // The enrolment staff matched this submission to. Linking gives the enrolment the avenue the form assigned.
     linkedEnrollmentId: uuid("linked_enrollment_id").references(() => enrollment.id, { onDelete: "set null" }),
+    // Staff asked the business to type its money amounts in again (the amount boxes were too narrow to show what was typed
+    // until 12 November 2026), and when it did. Only the amounts change; the rest of a submission stays locked.
+    amountsRequestedAt: timestamp("amounts_requested_at", { withTimezone: true }),
+    amountsCorrectedAt: timestamp("amounts_corrected_at", { withTimezone: true }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

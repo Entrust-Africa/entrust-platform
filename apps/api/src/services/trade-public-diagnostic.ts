@@ -2,7 +2,7 @@ import { and, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { ensureAfriConnectAccount, type EnsureAccountResult } from "@entrust/auth";
 import { schema } from "@entrust/db";
 import { enqueue, JOB_NAMES } from "@entrust/jobs";
-import { NOT_KNOWN, checkAnswers, isNotKnown, type FormDefinition, type FormQuestion } from "@entrust/forms";
+import { NOT_KNOWN, checkAnswers, isNotKnown, visibleQuestions, type FormDefinition, type FormQuestion } from "@entrust/forms";
 import { PATHWAY_NAMES, assignPathwayFromDiagnostic, tradeToday } from "@entrust/trade-engine";
 import { findDiagnosticTemplate, findTradeRules, latestDiagnosticTemplate, latestTradeRules } from "@entrust/trade-rules";
 import type { Executor } from "./db";
@@ -195,6 +195,9 @@ export interface PublicDiagnosticView {
   errors: string[];
   incomplete: string[];
   pathway: ReturnType<typeof pathwayOf>;
+  /** Staff asked for the money amounts again, and when the business sent them. See `requestPublicDiagnosticAmounts`. */
+  amountsRequestedAt: string | null;
+  amountsCorrectedAt: string | null;
 }
 
 function pathwayOf(row: Row) {
@@ -230,6 +233,8 @@ function viewOf(row: Row, now: Date): PublicDiagnosticView {
     errors: check.errors.map((e) => e.message),
     incomplete: check.incomplete.map((e) => e.message),
     pathway: pathwayOf(row),
+    amountsRequestedAt: row.amountsRequestedAt?.toISOString() ?? null,
+    amountsCorrectedAt: row.amountsCorrectedAt?.toISOString() ?? null,
   };
 }
 
@@ -429,6 +434,127 @@ export async function submitPublicDiagnostic(ctx: Writer, token: string): Promis
     console.error("[trade] The diagnostic confirmation could not be queued", error);
   }
   return view;
+}
+
+// ---- Amounts typed in again ----
+
+// Until 12 November 2026 the boxes for money amounts were too narrow to show what was typed, so a submission can hold
+// amounts typed blind (some run to 30 digits) or "I don't know" given because the box seemed broken. Nobody but the
+// business knows the real figures, so staff can ask for them: the business gets a new private link that opens just the
+// amount questions. Nothing else in the submission changes, and neither does its avenue: the pathway rule reads only
+// the export questions (Q135, Q137, Q132 and Q139), never an amount.
+
+/** The money questions a form shows for these answers. */
+const amountQuestions = (template: FormDefinition, answers: Record<string, never>): FormQuestion[] =>
+  visibleQuestions(template, answers).filter((q) => q.type === "money");
+
+/** The answers to the given questions, for the audit log. */
+const answersTo = (questions: readonly FormQuestion[], answers: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(questions.map((q) => [q.id, answers[q.id] ?? null]));
+
+/**
+ * Staff ask a business to type its money amounts in again. The submission gets a new private link, which is emailed to
+ * the address it was submitted from; the old link stops working, as it does when an email is confirmed. Asking again
+ * sends a newer link. Only a submitted form: a draft's owner can already change its amounts from their own link.
+ */
+export async function requestPublicDiagnosticAmounts(ctx: Ctx, id: string): Promise<PublicDiagnosticView & { id: string }> {
+  requireStaff(ctx.principal);
+  if (!/^[0-9a-f-]{36}$/.test(id)) throw new ServiceError("not_found", "Diagnostic not found.");
+  const token = newToken();
+  const row = await ctx.db.transaction(async (tx) => {
+    const [current] = await tx.select().from(schema.publicDiagnostic).where(eq(schema.publicDiagnostic.id, id)).for("update");
+    if (!current) throw new ServiceError("not_found", "Diagnostic not found.");
+    if (current.status !== "submitted") {
+      throw new ServiceError("precondition_failed", "This form hasn't been submitted, so the business can still change its amounts from its own link.");
+    }
+    const template = templateOf(current);
+    if (amountQuestions(template, answersOf(current)).length === 0) throw new ServiceError("precondition_failed", "This form asks for no amounts.");
+    const [saved] = await tx
+      .update(schema.publicDiagnostic)
+      .set({ tokenHash: await hashToken(token), amountsRequestedAt: ctx.now, amountsCorrectedAt: null })
+      .where(eq(schema.publicDiagnostic.id, id))
+      .returning();
+    await tx.insert(schema.auditLog).values({
+      actorUserId: ctx.principal.userId,
+      platform: "trade",
+      action: "trade.public_diagnostic.amounts_requested",
+      entityType: "public_diagnostic",
+      entityId: id,
+      before: { amountsRequestedAt: current.amountsRequestedAt?.toISOString() ?? null, amountsCorrectedAt: current.amountsCorrectedAt?.toISOString() ?? null },
+      after: { amountsRequestedAt: ctx.now.toISOString(), emailedTo: current.email },
+    });
+    return saved ?? current;
+  });
+
+  // The new link exists only in this email, so staff hear about a failure and can ask again (which makes a newer one).
+  try {
+    await enqueue(JOB_NAMES.SEND_EMAIL, {
+      to: row.email,
+      subject: "Please enter your amounts again: TRADE onboarding diagnostic",
+      template: "summit-notice",
+      props: {
+        heading: "Please enter your amounts again",
+        greeting: row.emailVerifiedAt && row.businessName ? `Hello ${row.businessName},` : "Hello,",
+        paragraphs: [
+          "Thank you for completing the Entrust TRADE onboarding diagnostic. Our form had a fault: the boxes for money amounts were too narrow to show what was typed in them, so the amounts we received from you may be wrong or missing. The fault is fixed now, and we are sorry for the trouble.",
+          "Please open the link below and enter the amounts again. It only asks for the amounts; the rest of your answers and your learning path stay as they are.",
+          "This is your private link from now on, and the earlier one no longer works. Please don't forward it: anyone with the link can see your answers.",
+        ],
+        action: { label: "Enter the amounts", url: linkOf(token) },
+      },
+    });
+  } catch (error) {
+    console.error(`[trade] The amounts request for diagnostic ${row.id} could not be queued`, error);
+    throw new ServiceError("precondition_failed", "The email couldn't be sent. Try again in a minute.");
+  }
+  return { ...viewOf(row, ctx.now), id: row.id };
+}
+
+/**
+ * The business sends its amounts again, from the link staff had emailed. Every amount question the form shows must be
+ * answered (an amount, or "I don't know"), and nothing else can be changed. They are sent once: after that the
+ * submission is locked again.
+ */
+export async function savePublicDiagnosticAmounts(ctx: Writer, token: string, input: SaveInput): Promise<PublicDiagnosticView> {
+  const entries = Object.entries(input.answers);
+  if (entries.length > MAX_ANSWERS_PER_SAVE) throw new ServiceError("invalid", "Too many answers in one save.");
+  return ctx.db.transaction(async (tx) => {
+    const row = await byToken(tx, token, { lock: true });
+    if (row.status !== "submitted" || !row.amountsRequestedAt) throw new ServiceError("invalid_transition", "This diagnostic's amounts can't be changed.");
+    if (row.amountsCorrectedAt) throw new ServiceError("invalid_transition", "We already have your amounts. Thank you.");
+    const template = templateOf(row);
+    const asked = amountQuestions(template, answersOf(row));
+    const askedIds = new Set(asked.map((q) => q.id));
+
+    // The amounts sent replace every old one, since any of those may have been typed blind: one left out counts as unanswered.
+    const next: Record<string, unknown> = { ...(row.answers ?? {}) };
+    for (const id of askedIds) delete next[id];
+    for (const [id, wire] of entries) {
+      if (!askedIds.has(id)) throw new ServiceError("invalid", `${id}: only the amounts can be changed now`);
+      if (wire === null) delete next[id];
+      else if (isNotKnown(wire as never)) next[id] = NOT_KNOWN;
+      else next[id] = wire;
+    }
+    const check = checkAnswers(template, next as never, { today: todayOf(ctx.now) });
+    const problems = [...check.errors, ...check.incomplete].filter((p) => askedIds.has(p.question));
+    if (problems.length) throw new ServiceError("invalid", problemsText(problems.map((p) => p.message)));
+
+    const [saved] = await tx
+      .update(schema.publicDiagnostic)
+      .set({ answers: next, amountsCorrectedAt: ctx.now })
+      .where(eq(schema.publicDiagnostic.id, row.id))
+      .returning();
+    await tx.insert(schema.auditLog).values({
+      actorUserId: row.userId,
+      platform: "trade",
+      action: "trade.public_diagnostic.amounts_corrected",
+      entityType: "public_diagnostic",
+      entityId: row.id,
+      before: answersTo(asked, row.answers ?? {}),
+      after: answersTo(asked, next),
+    });
+    return viewOf(saved ?? row, ctx.now);
+  });
 }
 
 // ---- Staff ----
