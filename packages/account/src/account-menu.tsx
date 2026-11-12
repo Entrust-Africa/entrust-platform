@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { cn } from "@entrust/ui";
-import { PLATFORMS, type Platform } from "@entrust/roles";
+import { PLATFORMS, mizanActionsFor } from "@entrust/roles";
 import type { UserProfile } from "./types";
-import { platformUrl } from "./platform-url";
+import { platformUrl, type PlatformId } from "./platform-url";
 import { useSignOut } from "./use-sign-out";
 
 export interface AccountMenuProps {
@@ -15,10 +15,11 @@ export interface AccountMenuProps {
   accountHref?: string;
   organizationsHref?: string;
   signOutRedirect?: string;
-  currentPlatform?: "clear" | "trade";
+  currentPlatform?: PlatformId;
   platforms?: string[];
   clearAppUrl?: string;
   tradeAppUrl?: string;
+  mizanAppUrl?: string;
   /**
    * Where the menu sits. "bottom" (the default) is a compact button in a header with the menu hanging under it; "top" is a
    * full-width button at the foot of a sidebar, always showing the name, with the menu opening upward.
@@ -50,6 +51,7 @@ export function AccountMenu({
   platforms,
   clearAppUrl,
   tradeAppUrl,
+  mizanAppUrl,
   placement = "bottom",
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,8 +60,11 @@ export function AccountMenu({
 
   const activeOrg =
     user.organizations?.find((o) => o.id === user.activeOrganizationId) ?? user.organizations?.[0];
-  const activePlatforms =
-    platforms ?? user.platforms ?? (user.staffRole ? ["clear", "trade"] : activeOrg?.platforms ?? []);
+  // Staff see CLEAR and TRADE; MIZAN only for the staff it lets in (not cohort managers), Quality included. Everyone else sees
+  // what their organisation has been given.
+  const mizanStaff = mizanActionsFor({ staffRole: user.staffRole ?? null, quality: user.quality ?? false }).length > 0;
+  const fromRole = user.staffRole ? ["clear", "trade"] : (activeOrg?.platforms ?? []);
+  const activePlatforms = platforms ?? user.platforms ?? [...new Set([...fromRole, ...(mizanStaff ? ["mizan"] : [])])];
   const availablePlatforms = activePlatforms.filter((p: string) => (PLATFORMS as readonly string[]).includes(p));
 
   // The address of each platform comes from the app, then the deployment's setting, then the page's own address.
@@ -78,6 +83,20 @@ export function AccountMenu({
     configured: process.env.NEXT_PUBLIC_TRADE_APP_URL,
     location: here,
   });
+  const mizanUrl = platformUrl({
+    platform: "mizan",
+    current: currentPlatform,
+    explicit: mizanAppUrl,
+    configured: process.env.NEXT_PUBLIC_MIZAN_APP_URL,
+    location: here,
+  });
+  const switcher = (
+    [
+      { id: "clear", label: "CLEAR", href: clearUrl },
+      { id: "trade", label: "TRADE", href: tradeUrl },
+      { id: "mizan", label: "MIZAN", href: mizanUrl },
+    ] as const
+  ).filter((p) => availablePlatforms.includes(p.id));
 
   const { signOut, signingOut, signOutError } = useSignOut(signOutRedirect);
 
@@ -158,44 +177,27 @@ export function AccountMenu({
             <p className="truncate text-[11px] text-ink-3">{user.email}</p>
           </div>
 
-          {availablePlatforms.length > 0 && (
+          {switcher.length > 0 && (
             <div className="border-b border-line py-1">
               <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-3">
                 Platforms
               </p>
               <div className="flex flex-col gap-0.5 px-1">
-                {availablePlatforms.includes("clear") && (
+                {switcher.map((p) => (
                   <a
-                    href={clearUrl}
+                    key={p.id}
+                    href={p.href}
                     className={cn(
                       "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      currentPlatform === "clear"
+                      currentPlatform === p.id
                         ? "bg-brand-50 text-brand-700 font-semibold"
                         : "text-ink-2 hover:bg-canvas hover:text-ink",
                     )}
                   >
-                    <span>CLEAR</span>
-                    {currentPlatform === "clear" && (
-                      <span className="size-1.5 rounded-full bg-brand-600" aria-hidden="true" />
-                    )}
+                    <span>{p.label}</span>
+                    {currentPlatform === p.id && <span className="size-1.5 rounded-full bg-brand-600" aria-hidden="true" />}
                   </a>
-                )}
-                {availablePlatforms.includes("trade") && (
-                  <a
-                    href={tradeUrl}
-                    className={cn(
-                      "flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      currentPlatform === "trade"
-                        ? "bg-brand-50 text-brand-700 font-semibold"
-                        : "text-ink-2 hover:bg-canvas hover:text-ink",
-                    )}
-                  >
-                    <span>TRADE</span>
-                    {currentPlatform === "trade" && (
-                      <span className="size-1.5 rounded-full bg-brand-600" aria-hidden="true" />
-                    )}
-                  </a>
-                )}
+                ))}
               </div>
             </div>
           )}

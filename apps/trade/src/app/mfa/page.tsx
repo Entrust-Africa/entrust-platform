@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getMe } from "@/lib/api";
-import { MfaView } from "@/components/mfa/mfa-view";
+import { MfaView } from "@entrust/account";
 
 export const metadata = { title: "Two-step sign-in" };
 

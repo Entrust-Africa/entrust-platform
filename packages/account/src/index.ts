@@ -15,3 +15,4 @@ export {
 export { AccountView, type AccountViewProps } from "./account-view";
 export { AccountMenu, type AccountMenuProps } from "./account-menu";
 export { OrgSwitcher, type OrgSwitcherProps } from "./org-switcher";
+export { MfaView } from "./mfa-view";

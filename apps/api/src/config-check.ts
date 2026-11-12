@@ -12,6 +12,7 @@ export function productionConfigReport(env: Env = process.env): { problems: stri
   if (!env.BETTER_AUTH_SECRET) problems.push("BETTER_AUTH_SECRET is not set, so nobody can sign in.");
   if (local(env.TRADE_APP_URL)) problems.push("TRADE_APP_URL is not set or points to localhost: onboarding links lead to localhost and notices go out with no link.");
   if (local(env.CLEAR_APP_URL)) warnings.push("CLEAR_APP_URL is not set or points to localhost, so CLEAR invitations will fail.");
+  if (local(env.MIZAN_APP_URL)) warnings.push("MIZAN_APP_URL is not set or points to localhost, so MIZAN sign-in emails name the wrong platform and the MIZAN app can't sign in through the API.");
   if (!env.MFA_ENCRYPTION_KEY) {
     // Changing the key would make every stored authenticator secret unreadable, so this stays a warning: set it only
     // together with re-enrolling staff.
