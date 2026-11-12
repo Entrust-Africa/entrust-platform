@@ -51,3 +51,46 @@ export type Actor = Role | "system";
 /** Platforms that run on the shared core (#50). */
 export const PLATFORMS = ["clear", "trade", "summit", "mizan"] as const;
 export type Platform = (typeof PLATFORMS)[number];
+
+/**
+ * What Entrust staff can do in MIZAN (#223). MIZAN uses the staff roles that exist, with no role of its own:
+ * - admin (Super Admin): everything, and the only one who records who supported an SME.
+ * - reviewer (Assessor): registers SMEs, records the notice, assesses, and approves or returns other people's assessments.
+ * - facilitator (Cohort Manager): nothing. Cohort managers train the SMEs MIZAN assesses, so they stay out of it entirely.
+ * - quality: reads reports, the dashboard and the audit trail, and changes nothing.
+ * Approving also needs the approver not to be the assessor and to have no support relationship with the SME: the API checks
+ * that per assessment. An SME's own members see only their organisation's approved reports, which the API checks separately.
+ */
+export const MIZAN_ACTIONS = [
+  "read_smes",
+  "manage_smes",
+  "manage_support",
+  "assess",
+  "review",
+  "read_reports",
+  "read_dashboard",
+  "read_audit",
+] as const;
+export type MizanAction = (typeof MIZAN_ACTIONS)[number];
+
+const MIZAN_MATRIX: Readonly<Record<MizanAction, { staff: readonly EntrustRole[]; quality: boolean }>> = {
+  read_smes: { staff: ["admin", "reviewer"], quality: true },
+  manage_smes: { staff: ["admin", "reviewer"], quality: false },
+  manage_support: { staff: ["admin"], quality: false },
+  assess: { staff: ["admin", "reviewer"], quality: false },
+  review: { staff: ["admin", "reviewer"], quality: false },
+  read_reports: { staff: ["admin", "reviewer"], quality: true },
+  read_dashboard: { staff: ["admin", "reviewer"], quality: true },
+  read_audit: { staff: ["admin"], quality: true },
+};
+
+/** Whether a member of the Entrust organisation may do this in MIZAN. Everyone else (SME members, sponsors) may do none of it. */
+export function mizanCan(who: { staffRole: string | null; quality: boolean }, action: MizanAction): boolean {
+  const rule = MIZAN_MATRIX[action];
+  return (who.staffRole !== null && (rule.staff as readonly string[]).includes(who.staffRole)) || (who.quality && rule.quality);
+}
+
+/** Everything a member of the Entrust organisation may do in MIZAN, for screens deciding what to show. */
+export function mizanActionsFor(who: { staffRole: string | null; quality: boolean }): MizanAction[] {
+  return MIZAN_ACTIONS.filter((a) => mizanCan(who, a));
+}
