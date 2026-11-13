@@ -4,7 +4,7 @@ import { cn } from "@entrust/ui";
 import type { Step } from "./view";
 
 /** A step's status as an icon, next to the label that carries the meaning. */
-export function StepIcon({ step, className }: { step: Step; className?: string }) {
+export function StepIcon({ step, className }: { step: Pick<Step, "status" | "derived" | "heldBy">; className?: string }) {
   const props = { "aria-hidden": true, className: cn("size-5 shrink-0", className) };
   switch (step.status) {
     case "completed":

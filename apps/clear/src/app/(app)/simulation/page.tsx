@@ -1,17 +1,22 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { getMe } from "@/lib/api";
-import { SimulationView } from "./simulation-view";
+import { Simulator } from "./simulator";
 
 export const metadata = {
-  title: "Export Process Simulation — CLEAR Export",
-  description: "End-to-end simulation of Purchase Order US-2026-0048 through the 7-phase CLEAR export protocol.",
+  title: "Simulator",
+  description: "One export order played through CLEAR's steps, from the purchase order to the closed case.",
 };
 
 export default async function SimulationPage() {
   const me = await getMe();
-  if (!me) {
-    redirect("/sign-in");
-  }
+  if (!me) redirect("/sign-in");
+  // For Entrust staff until the simulated corridor has a rule pack: see the note under the page.
+  if (!me.staffRole) redirect("/");
 
-  return <SimulationView />;
+  return (
+    <Suspense>
+      <Simulator />
+    </Suspense>
+  );
 }
