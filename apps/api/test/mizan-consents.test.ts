@@ -148,6 +148,42 @@ describe("MIZAN data notice and data permission (#227)", () => {
     expect((await callV1(w.assessor, "GET", `/files/${unrelated}/download-url`)).status).toBe(404);
   });
 
+  it("doesn't open an SME's other files to MIZAN through a notice that points at them", async () => {
+    // Someone else's upload can't be attached, for an acceptance or a withdrawal.
+    const theirs = await makeFile(w.sme, w.owner.id, "statements.pdf");
+    const paper = { kind: "platform_data", method: "paper", signatoryName: "Hana Bekele", givenOn: today(), fileId: theirs };
+    expect((await accept(w.assessor, paper)).body.error).toContain("Attach a file you uploaded here");
+    expect((await withdraw(w.assessor, "assessment_notice", { signatoryName: "Hana Bekele", fileId: theirs })).body.error).toContain("Attach a file you uploaded here");
+
+    // A record that points at it anyway, as one saved before that rule, doesn't make it MIZAN evidence.
+    await db.insert(schema.mizanConsent).values({
+      organizationId: w.sme,
+      kind: "platform_data",
+      accepted: true,
+      signatoryName: "Hana Bekele",
+      method: "paper",
+      noticeVersion: "1.0",
+      givenAt: new Date(Date.now() - 86_400_000 * 30),
+      fileId: theirs,
+      capturedBy: w.assessor.id,
+    });
+    expect((await callV1(w.quality, "GET", `/files/${theirs}/download-url`)).status).toBe(404);
+    expect((await callV1(w.assessor, "GET", `/files/${theirs}/download-url`)).status).toBe(404);
+  });
+
+  it("keeps staff to SMEs in MIZAN, so an Assessor can't record a notice for any business at all", async () => {
+    const tradeOnly = await createOrganization("mizan-consent-trade-only", [], { platform: "trade" });
+    expect((await consents(w.assessor, tradeOnly)).status).toBe(404);
+    const scan = await makeFile(tradeOnly, w.assessor.id, "notice.pdf");
+    expect((await accept(w.assessor, { kind: "assessment_notice", method: "paper", signatoryName: "A", givenOn: today(), fileId: scan }, tradeOnly)).status).toBe(404);
+  });
+
+  it("records a member's acceptance under their membership, not a title they type", async () => {
+    const res = await accept(w.owner, { kind: "platform_data", method: "in_platform", signatoryRole: "Managing Director" });
+    expect(res.status).toBe(200);
+    expect(res.body.history.find((h: { kind: string }) => h.kind === "platform_data")).toMatchObject({ method: "in_platform", signatoryRole: "Owner" });
+  });
+
   it("doesn't show an SME member another organisation's records, nor a Cohort Manager anyone's", async () => {
     expect((await consents(w.outsider)).status).toBe(404);
     expect((await accept(w.outsider, { kind: "assessment_notice", method: "in_platform" })).status).toBe(404);
