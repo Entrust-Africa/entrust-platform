@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { schema } from "@entrust/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadPrincipal } from "../src/services/access";
@@ -79,7 +80,7 @@ describe("MIZAN access and roles (#223)", () => {
     });
 
     it("needs a second person to review: not the assessor, not a supporter, not Quality", async () => {
-      const file = { organizationId: w.sme, assessorUserId: w.assessor.id };
+      const file = { id: randomUUID(), organizationId: w.sme, assessorUserId: w.assessor.id };
       expect(await reviewBlockers(db, await principal(w.admin), file)).toEqual([]);
       expect(await reviewBlockers(db, await principal(w.assessor), file)).toEqual(["You assessed this SME, so someone else must review it."]);
       expect(await reviewBlockers(db, await principal(w.assessor2), file)).toEqual([

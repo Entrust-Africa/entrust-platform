@@ -3,6 +3,8 @@ import { schema } from "@entrust/db";
 import { analyseYears, FINANCIAL_FIELDS, suggestRating, type FinancialYear } from "@entrust/mizan-engine";
 import { configFingerprint, findCriterion, type MizanConfig } from "@entrust/mizan-rules";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { loadPrincipal } from "../src/services/access";
+import { reviewBlockers } from "../src/services/mizan-access";
 import { callV1, cleanup, createOrganization, db, signUp, type TestUser } from "./support";
 
 // Lets a test publish a newer configuration, as a release would, without touching the real list.
@@ -235,6 +237,27 @@ describe("MIZAN assessment lifecycle (#229)", () => {
       const res = await callV1(w.admin, "PATCH", `/mizan/assessments/${assessmentId}`, { monthsOperating: 30, topCustomerShare: 0.25 });
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ monthsOperating: 30, topCustomerShare: 0.25, canEdit: true });
+    });
+
+    it("keeps anyone who worked on it from reviewing it, not only its assessor", async () => {
+      const [a] = await db.select().from(schema.mizanAssessment).where(eq(schema.mizanAssessment.id, assessmentId));
+      // The Super Admin changed it above, so they aren't a second person for it; another Assessor is.
+      expect(await reviewBlockers(db, await loadPrincipal(db, w.admin.id), a!)).toEqual(["You worked on this assessment, so someone else must review it."]);
+      expect(await reviewBlockers(db, await loadPrincipal(db, w.assessor2.id), a!)).toEqual([]);
+    });
+
+    it("checks the assessor's own support relationships when a Super Admin submits their work", async () => {
+      const [link] = await db
+        .insert(schema.mizanSupportLink)
+        .values({ organizationId: w.sme, userId: w.assessor.id, type: "advisory", recordedBy: w.admin.id })
+        .returning({ id: schema.mizanSupportLink.id });
+      try {
+        const res = await submit(w.admin);
+        expect(res.status).toBe(403);
+        expect(res.body.error).toContain("Its assessor is recorded as having supported this SME");
+      } finally {
+        await db.delete(schema.mizanSupportLink).where(eq(schema.mizanSupportLink.id, link!.id));
+      }
     });
   });
 

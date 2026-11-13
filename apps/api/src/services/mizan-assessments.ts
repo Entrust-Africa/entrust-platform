@@ -22,8 +22,8 @@ import { mizanCan } from "@entrust/roles";
 import type { Ctx, Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
-import { assessBlockers } from "./mizan-access";
-import { requireAssessmentNotice } from "./mizan-consents";
+import { assessBlockers, hasSupportRelationship } from "./mizan-access";
+import { lockSme, requireAssessmentNotice } from "./mizan-consents";
 
 // An assessment's life (#229): created under the configuration in use that day, which it keeps for good; worked on while it is a
 // draft or returned; submitted for review once nothing is missing; locked while in review; frozen once approved (#230).
@@ -97,6 +97,8 @@ export async function createAssessment(ctx: Ctx, input: CreateInput): Promise<As
   for (let attempt = 0; ; attempt++) {
     try {
       const id = await ctx.db.transaction(async (tx) => {
+        // Before the notice check, so a withdrawal can't commit between it and the insert.
+        await lockSme(tx, input.organizationId);
         const [sme] = await tx
           .select({
             smeId: schema.smeProfile.smeId,
@@ -418,10 +420,17 @@ export async function updateAssessment(ctx: Ctx, id: string, input: ContextInput
  */
 export async function submitAssessment(ctx: Ctx, id: string): Promise<AssessmentView> {
   await ctx.db.transaction(async (tx) => {
+    // The SME first, as a withdrawal takes it, so one can't commit between the notice check and the status change.
+    const [target] = await tx.select({ organizationId: schema.mizanAssessment.organizationId }).from(schema.mizanAssessment).where(eq(schema.mizanAssessment.id, id));
+    if (target) await lockSme(tx, target.organizationId);
     const a = await loadEditable(tx, ctx.principal, id);
     await requireAssessmentNotice(tx, a.organizationId, "submit it for review");
+    // Both the person submitting and the assessor of record: a Super Admin may submit someone else's work.
     const independence = await assessBlockers(tx, ctx.principal, a.organizationId);
     if (independence.length) throw new ServiceError("forbidden", independence.join(" "));
+    if (a.assessorUserId !== ctx.principal.userId && (await hasSupportRelationship(tx, a.assessorUserId, a.organizationId))) {
+      throw new ServiceError("forbidden", "Its assessor is recorded as having supported this SME, so someone else must assess it (control C-1).");
+    }
     const live = await computeLive(tx, a);
     const blockers = submissionBlockers(getMizanConfig(a.configVersion), live);
     if (blockers.length) throw new ServiceError("precondition_failed", `${a.assessmentNo} can't be submitted yet. ${blockers.join(" ")}`);
