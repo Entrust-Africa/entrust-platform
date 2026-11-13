@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "./site";
 
-const SITE_URL = "https://entrustafrica.com";
 const DEFAULT_OG_IMAGE = "/og-image.jpeg";
 
 type BuildMetadataInput = {

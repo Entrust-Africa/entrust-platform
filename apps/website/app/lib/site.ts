@@ -1,5 +1,8 @@
 /** Site-wide links and contact details, shared by the header menu, footer and pages. */
 
+/** The website's own address: canonical links, the sitemap and sharing previews use it. */
+export const SITE_URL = "https://entrust-africa.com";
+
 export const PLATFORM_URLS = {
   trade: "https://trade.entrust-africa.com",
   clear: "https://clear.entrust-africa.com",

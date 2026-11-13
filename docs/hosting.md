@@ -8,7 +8,7 @@
 | Summit page (`apps/summit`) | Railway service `entrust-summit` | adtis.entrust-africa.com |
 | MIZAN (`apps/mizan`) | Railway service `entrust-mizan` | mizan.entrust-africa.com |
 | Email worker (`apps/worker`) | Railway service `entrust-worker` | none (no web address) |
-| Website (`apps/website`) | Railway service `entrust-website` | entrust-africa.com |
+| Website (`apps/website`) | Railway service `entrust-website` | entrust-africa.com, www.entrust-africa.com |
 
 ## How a change goes live
 
