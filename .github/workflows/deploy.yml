@@ -116,7 +116,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SHA: ${{ needs.gate.outputs.sha }}
+          # Cloudflare's errors are often just "unknown error"; the debug log has the request and response behind them.
+          WRANGLER_LOG: debug
         run: pnpm --filter @entrust/api exec wrangler deploy --var "GIT_COMMIT:$SHA" --message "Deploy $SHA"
+      # The runner is thrown away after the job, so print wrangler's log file here. Printed, not uploaded as an artifact:
+      # GitHub masks secret values in job output but not in artifacts.
+      - name: Show wrangler's log
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in ~/.config/.wrangler/logs/*.log; do echo "::group::$f"; cat "$f"; echo "::endgroup::"; done
 
   # CLEAR, TRADE, the Summit page and the email worker run on Railway. Railway cannot watch the repository (nobody in the
   # project has GitHub access), so this job uploads the commit with a project token. It runs only after CI has passed and
