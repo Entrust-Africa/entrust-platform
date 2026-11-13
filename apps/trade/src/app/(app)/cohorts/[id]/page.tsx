@@ -224,7 +224,7 @@ export default async function CohortDetailPage(props: {
         </div>
 
         {sessions.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-ink-2 max-w-lg mx-auto">
+          <Card className="p-6 text-center text-sm text-ink-2">
             No live workshops scheduled for this cohort yet. Click &quot;Schedule Session&quot; to plan a session.
           </Card>
         ) : (
@@ -296,7 +296,7 @@ export default async function CohortDetailPage(props: {
         </div>
 
         {cohort.enrolments.length === 0 ? (
-          <Card className="p-8 text-center max-w-xl mx-auto">
+          <Card className="p-8 text-center">
             <h3 className="font-display font-bold text-ink">No SMEs enrolled yet</h3>
             <p className="mt-1 text-sm text-ink-2">
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
