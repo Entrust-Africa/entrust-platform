@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Building2, ExternalLink, FlaskConical, ShieldCheck, User } from "lucide-react";
+import { Briefcase, Building2, ExternalLink, FlaskConical, PlayCircle, ShieldCheck, User } from "lucide-react";
 import { cn } from "@entrust/ui";
 import type { UserProfile } from "@/lib/types";
 import { SIMULATOR_URL } from "@/lib/simulator";
@@ -20,10 +20,10 @@ export function NavLinks({ orientation = "horizontal", onNavigate, className, us
   const navItems: { href: string; label: string; icon: typeof Briefcase; match: (path: string) => boolean; external?: boolean }[] = [
     { href: "/", label: "Cases", icon: Briefcase, match: (path: string) => path === "/" || path.startsWith("/cases") },
     { href: "/organizations", label: "Organisation", icon: Building2, match: (path: string) => path.startsWith("/organizations") },
+    { href: "/simulation", label: "Simulator", icon: FlaskConical, match: (path: string) => path.startsWith("/simulation") },
     ...(user?.staffRole
       ? [{ href: "/audit", label: "Audit", icon: ShieldCheck, match: (path: string) => path.startsWith("/audit") }]
       : []),
-    { href: SIMULATOR_URL, label: "Simulator", icon: FlaskConical, match: () => false, external: true },
     { href: "/account", label: "Account", icon: User, match: (path: string) => path.startsWith("/account") },
   ];
 
