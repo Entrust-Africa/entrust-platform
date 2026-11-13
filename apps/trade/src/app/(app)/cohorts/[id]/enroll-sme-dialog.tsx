@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@entrust/ui";
 import { countryName } from "@/lib/summit";
-import type { RegistrySme, WaitingSme } from "@/lib/types";
-import { enrolManyAction, searchSmesAction } from "../actions";
+import type { RegistrySme, WaitingDiagnostic, WaitingSme } from "@/lib/types";
+import { enrolFromDiagnosticsAction, enrolManyAction, searchSmesAction } from "../actions";
 
 interface Candidate {
   organizationId: string;
@@ -24,21 +24,28 @@ const fromRegistry = (s: RegistrySme): Candidate => ({
   detail: [s.smeId, countryName(s.country), s.tradingName ? `t/a ${s.tradingName}` : null].filter(Boolean).join(" · "),
 });
 
+const submittedOn = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Addis_Ababa" });
+
 /**
- * Staff enrol businesses in a cohort: the ones that have signed up and are waiting come first, and the SME registry
- * search finds any other (one already on CLEAR, say). Several can be enrolled at once.
+ * Staff enrol businesses in a cohort: the ones that have signed up and are waiting come first, then the people who only
+ * filled in the public diagnostic (enrolling one makes their business from the form), and the SME registry search finds
+ * any other (one already on CLEAR, say). Several can be enrolled at once.
  */
 export function EnrollSmeDialog({
   cohortId,
   waiting,
+  diagnostics,
   enrolledOrganizationIds,
 }: {
   cohortId: string;
   waiting: WaitingSme[];
+  diagnostics: WaitingDiagnostic[];
   enrolledOrganizationIds: string[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<Map<string, Candidate>>(new Map());
+  // Submitted diagnostics to make a business from, by form id.
+  const [forms, setForms] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Candidate[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -84,23 +91,50 @@ export function EnrollSmeDialog({
     });
   }
 
+  function toggleForm(id: string) {
+    setForms((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function enrol() {
     setPending(true);
     setMessage(null);
-    const result = await enrolManyAction(cohortId, [...selected.keys()]);
+    const businesses = selected.size > 0 ? await enrolManyAction(cohortId, [...selected.keys()]) : { enrolled: 0, failed: [] };
+    const fromForms =
+      forms.size > 0
+        ? await enrolFromDiagnosticsAction(
+            cohortId,
+            [...forms].map((id) => ({ publicDiagnosticId: id, confirmDuplicateName: Boolean(diagnostics.find((d) => d.publicDiagnosticId === id)?.similarSme) })),
+          )
+        : { enrolled: 0, invited: 0, failed: [] };
     setPending(false);
-    if (result.failed.length === 0) {
+    if (businesses.failed.length === 0 && fromForms.failed.length === 0) {
       setSelected(new Map());
+      setForms(new Set());
       setQuery("");
       setIsOpen(false);
       return;
     }
-    const failedIds = new Set(result.failed.map((f) => f.organizationId));
+    const failedIds = new Set(businesses.failed.map((f) => f.organizationId));
     setSelected((previous) => new Map([...previous].filter(([id]) => failedIds.has(id))));
-    const lines = result.failed.map((f) => `${selected.get(f.organizationId)?.name ?? f.organizationId}: ${f.error}`);
+    const failedForms = new Set(fromForms.failed.map((f) => f.publicDiagnosticId));
+    setForms((previous) => new Set([...previous].filter((id) => failedForms.has(id))));
+    const nameOfForm = (id: string) => {
+      const form = diagnostics.find((d) => d.publicDiagnosticId === id);
+      return form?.businessName ?? form?.email ?? id;
+    };
+    const lines = [
+      ...businesses.failed.map((f) => `${selected.get(f.organizationId)?.name ?? f.organizationId}: ${f.error}`),
+      ...fromForms.failed.map((f) => `${nameOfForm(f.publicDiagnosticId)}: ${f.error}`),
+    ];
+    const enrolled = businesses.enrolled + fromForms.enrolled;
     setMessage({
       tone: "error",
-      text: `${result.enrolled > 0 ? `Enrolled ${result.enrolled}. ` : ""}These weren't enrolled. ${lines.join(" ")}`,
+      text: `${enrolled > 0 ? `Enrolled ${enrolled}. ` : ""}These weren't enrolled. ${lines.join(" ")}`,
     });
   }
 
@@ -168,6 +202,62 @@ export function EnrollSmeDialog({
                 )}
               </section>
 
+              <section aria-labelledby="forms-heading">
+                <div className="flex items-center justify-between">
+                  <h3 id="forms-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-3">
+                    Filled in the diagnostic, no business yet ({diagnostics.length})
+                  </h3>
+                  {diagnostics.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setForms(new Set(diagnostics.filter((d) => d.businessName && !d.similarSme).map((d) => d.publicDiagnosticId)))}
+                      className="text-xs font-semibold text-brand-600 hover:underline"
+                    >
+                      Select all
+                    </button>
+                  )}
+                </div>
+                {diagnostics.length === 0 ? (
+                  <p className="mt-2 text-sm text-ink-2">Everyone who submitted the onboarding diagnostic has a business on TRADE already.</p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs text-ink-2">
+                      Enrolling one makes their business from the form, with a new SME ID, and gives the enrolment the form&apos;s avenue. Someone who confirmed their
+                      email owns it straight away; anyone else gets an email inviting them to own it.
+                    </p>
+                    <ul className="mt-2 max-h-64 divide-y divide-line overflow-y-auto rounded-md border border-line">
+                      {diagnostics.map((d) => (
+                        <li key={d.publicDiagnosticId}>
+                          <label className={`flex items-start gap-3 px-3 py-2.5 ${d.businessName ? "cursor-pointer hover:bg-canvas" : "opacity-50"}`}>
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              disabled={!d.businessName}
+                              checked={forms.has(d.publicDiagnosticId)}
+                              onChange={() => toggleForm(d.publicDiagnosticId)}
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-ink">{d.businessName ?? "No business name on the form"}</span>
+                              <span className="block truncate text-xs text-ink-3">
+                                {[d.email, d.pathway ? `Avenue ${d.pathway}` : null, `submitted ${submittedOn(d.submittedAt)}`, d.emailVerified ? "email confirmed" : "email not confirmed"]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
+                              {d.similarSme && (
+                                <span className="mt-0.5 block text-xs text-warn">
+                                  Close to {d.similarSme.legalName} ({d.similarSme.smeId}), already registered. Tick only if it&apos;s a different business; if it&apos;s the same,
+                                  enrol that one from the search below.
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </section>
+
               <section aria-labelledby="find-heading">
                 <h3 id="find-heading" className="text-xs font-semibold uppercase tracking-wide text-ink-3">
                   Or find a business in the SME registry
@@ -197,13 +287,13 @@ export function EnrollSmeDialog({
             </div>
 
             <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-              <span className="text-xs text-ink-3">{selected.size} selected</span>
+              <span className="text-xs text-ink-3">{selected.size + forms.size} selected</span>
               <div className="flex gap-2">
                 <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} disabled={pending}>
                   Cancel
                 </Button>
-                <Button type="button" variant="primary" onClick={() => void enrol()} disabled={pending || selected.size === 0}>
-                  {pending ? "Enrolling…" : `Enrol ${selected.size || ""}`.trim()}
+                <Button type="button" variant="primary" onClick={() => void enrol()} disabled={pending || selected.size + forms.size === 0}>
+                  {pending ? "Enrolling…" : `Enrol ${selected.size + forms.size || ""}`.trim()}
                 </Button>
               </div>
             </div>

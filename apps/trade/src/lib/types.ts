@@ -81,6 +81,18 @@ export interface WaitingSme {
   createdAt: string;
 }
 
+/** Someone who submitted the public onboarding diagnostic and has no business on Entrust yet (Entrust staff only). */
+export interface WaitingDiagnostic {
+  publicDiagnosticId: string;
+  businessName: string | null;
+  email: string;
+  phone: string | null;
+  submittedAt: string;
+  pathway: string | null;
+  emailVerified: boolean;
+  similarSme: { smeId: string; legalName: string } | null;
+}
+
 /** A business found in the SME registry, for staff picking whom to enrol. */
 export interface RegistrySme {
   organizationId: string;
