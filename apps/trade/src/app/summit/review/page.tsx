@@ -59,7 +59,7 @@ export default async function ReviewQueuePage({ searchParams }: { searchParams: 
         <form className="flex flex-wrap items-end gap-3" action="/summit/review">
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
             Status
-            <select name="status" defaultValue={status ?? ""} className="h-10 rounded-md border border-line-strong bg-surface px-2 text-sm font-normal">
+            <select name="status" defaultValue={status ?? ""} className="h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-normal">
               <option value="">All</option>
               {STATUS_FILTERS.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -70,7 +70,7 @@ export default async function ReviewQueuePage({ searchParams }: { searchParams: 
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
             Opportunity
-            <select name="pathway" defaultValue={pathway ?? ""} className="h-10 rounded-md border border-line-strong bg-surface px-2 text-sm font-normal">
+            <select name="pathway" defaultValue={pathway ?? ""} className="h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-normal">
               <option value="">All</option>
               {PATHWAYS.map((p) => (
                 <option key={p.id} value={p.id}>

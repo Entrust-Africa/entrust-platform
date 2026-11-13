@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ExternalLink, Paperclip } from "lucide-react";
 import { Button, Card, uploadFile } from "@entrust/ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 import { apiUrl, browserApi, errorText, ok } from "@/lib/summit-api";
 import { PAYMENT_LOOK, centsToInput, toCents, usd, when, type Payment } from "@/lib/commerce";
 import { Feedback, KeyValues, Labeled, Pill, TextBox, useRun } from "./ui";
@@ -119,7 +119,7 @@ export function PaymentPanel({ payment, methods, entrustOrganizationId, isAdmin 
         <div className="grid gap-4 sm:grid-cols-2">
           <TextBox id={`pay-ref-${payment.id}`} label="Payment reference" hint="The bank or transaction reference the payer gave." value={reference} onChange={setReference} />
           <Labeled label="Payment method" htmlFor={`pay-method-${payment.id}`}>
-            <select id={`pay-method-${payment.id}`} value={method} onChange={(e) => setMethod(e.target.value)} className={textInput(false)}>
+            <select id={`pay-method-${payment.id}`} value={method} onChange={(e) => setMethod(e.target.value)} className={staffInput(false)}>
               <option value="">Not recorded</option>
               {methods.map((m) => (
                 <option key={m.id} value={m.id}>

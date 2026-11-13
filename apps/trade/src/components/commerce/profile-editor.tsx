@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Card } from "@entrust/ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 import { browserApi, ok } from "@/lib/summit-api";
 import { PROFILE_LOOK, when, type ProfileDetail } from "@/lib/commerce";
 import { AreaBox, Feedback, Labeled, Pill, TextBox, useRun } from "./ui";
@@ -91,7 +91,7 @@ export function ProfileEditor({ profile }: { profile: ProfileDetail }) {
           </Labeled>
           <TextBox id="p-investment" label="Investment requirements" hint="Shown when the business seeks investment." value={f.investment} onChange={set("investment")} />
           <Labeled label="Verification shown on the page" htmlFor="p-verification">
-            <select id="p-verification" value={f.verification} onChange={(e) => set("verification")(e.target.value as typeof f.verification)} className={textInput(false)}>
+            <select id="p-verification" value={f.verification} onChange={(e) => set("verification")(e.target.value as typeof f.verification)} className={staffInput(false)}>
               <option value="pending">Verification in progress</option>
               <option value="verified">Business registration verified</option>
             </select>

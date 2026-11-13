@@ -80,7 +80,7 @@ export function ApplicationsImportPanel({ programs, hasRecords }: { programs: st
             list="application-programs"
             maxLength={200}
             placeholder="Agro-Processing SME Training Program"
-            className="h-10 w-full rounded-md border border-line bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus-visible:border-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25"
+            className="h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus-visible:border-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25"
           />
           <datalist id="application-programs">
             {programs.map((p) => (

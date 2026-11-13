@@ -688,7 +688,7 @@ export function PipelineDashboard({
                   placeholder="e.g. Kaffee Welt GmbH"
                   value={addForm.companyName}
                   onChange={(e) => setAddForm({ ...addForm, companyName: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -701,7 +701,7 @@ export function PipelineDashboard({
                     placeholder="e.g. 2026 Arabica Contract"
                     value={addForm.title}
                     onChange={(e) => setAddForm({ ...addForm, title: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -713,7 +713,7 @@ export function PipelineDashboard({
                     placeholder="e.g. DE, KE, US"
                     value={addForm.country}
                     onChange={(e) => setAddForm({ ...addForm, country: e.target.value.toUpperCase() })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -726,7 +726,7 @@ export function PipelineDashboard({
                     placeholder="e.g. Hans Gruber"
                     value={addForm.buyerName}
                     onChange={(e) => setAddForm({ ...addForm, buyerName: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -736,7 +736,7 @@ export function PipelineDashboard({
                     placeholder="e.g. Procurement Lead"
                     value={addForm.decisionMakerRole}
                     onChange={(e) => setAddForm({ ...addForm, decisionMakerRole: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -748,7 +748,7 @@ export function PipelineDashboard({
                   placeholder="https://example.com"
                   value={addForm.website}
                   onChange={(e) => setAddForm({ ...addForm, website: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -772,7 +772,7 @@ export function PipelineDashboard({
                     placeholder="e.g. 50000"
                     value={addForm.estimatedValue}
                     onChange={(e) => setAddForm({ ...addForm, estimatedValue: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -780,7 +780,7 @@ export function PipelineDashboard({
                   <select id="pipeline-pipeline-dashboard-9"
                     value={addForm.currency}
                     onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -846,7 +846,7 @@ export function PipelineDashboard({
                   <select id="pipeline-pipeline-dashboard-11"
                     value={activityForm.type}
                     onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="email">Email</option>
                     <option value="call">Phone or video call</option>
@@ -864,7 +864,7 @@ export function PipelineDashboard({
                     type="datetime-local"
                     value={activityForm.occurredAt}
                     onChange={(e) => setActivityForm({ ...activityForm, occurredAt: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -919,7 +919,7 @@ export function PipelineDashboard({
                   type="datetime-local"
                   value={activityForm.followUpDate}
                   onChange={(e) => setActivityForm({ ...activityForm, followUpDate: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -930,7 +930,7 @@ export function PipelineDashboard({
                   placeholder="https://..."
                   value={activityForm.evidenceUrl}
                   onChange={(e) => setActivityForm({ ...activityForm, evidenceUrl: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 

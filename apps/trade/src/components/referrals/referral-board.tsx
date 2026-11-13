@@ -6,7 +6,7 @@ import { Button, Card, Field, StatusBadge } from "@entrust/ui";
 import { tradeFetch } from "@/lib/trade-client";
 import { CONSENT_LABEL, DESTINATION_LABEL, KIND_LABEL, type Referral } from "./referral-types";
 
-const select = "h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink";
+const select = "h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
 
 /** Staff: refer a business to a bank, insurer or service provider, ask for its consent, release what it agreed to, and follow the outcome. */
 export function ReferralBoard({ initial, canWrite, forBusiness }: { initial: Referral[]; canWrite: boolean; forBusiness: { id: string; name: string } | null }) {

@@ -178,7 +178,7 @@ export function EnrollSmeDialog({
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Name, SME ID, TIN or registration number"
                   aria-label="Search the SME registry"
-                  className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="mt-2 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
                 {searchError && <p className="mt-2 text-sm text-danger">{searchError}</p>}
                 {found.length > 0 && (
