@@ -5,10 +5,9 @@ import { MOTION_FALLBACK_SCRIPT } from "./components/motion/fallbackScript";
 import { MotionProvider } from "./components/motion/MotionProvider";
 import { SiteFooter } from "./components/site/SiteFooter";
 import { SiteHeader } from "./components/site/SiteHeader";
-import { CONTACT } from "./lib/site";
+import { CONTACT, SITE_URL } from "./lib/site";
 import "./globals.css";
 
-const SITE_URL = "https://entrustafrica.com";
 
 const inter = Inter({
   variable: "--font-inter",
