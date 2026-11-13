@@ -238,10 +238,10 @@ export function EnrollSmeDialog({
                             />
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-semibold text-ink">{d.businessName ?? "No business name on the form"}</span>
-                              <span className="block truncate text-xs text-ink-3">
-                                {[d.email, d.pathway ? `Avenue ${d.pathway}` : null, `submitted ${submittedOn(d.submittedAt)}`, d.emailVerified ? "email confirmed" : "email not confirmed"]
-                                  .filter(Boolean)
-                                  .join(" · ")}
+                              <span className="block truncate text-xs text-ink-3">{[d.email, d.phone].filter(Boolean).join(" · ")}</span>
+                              <span className="block text-xs text-ink-3">
+                                {[d.pathway ? `Avenue ${d.pathway}` : null, `submitted ${submittedOn(d.submittedAt)}`].filter(Boolean).join(" · ")} ·{" "}
+                                <span className={d.emailVerified ? "text-ok" : "text-warn"}>{d.emailVerified ? "email confirmed" : "email not confirmed, will be invited"}</span>
                               </span>
                               {d.similarSme && (
                                 <span className="mt-0.5 block text-xs text-warn">
