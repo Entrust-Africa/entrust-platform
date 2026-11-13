@@ -119,8 +119,8 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
 
   // Navigate to Course Studio catalog
   await page.goto("http://localhost:3001/admin/modules");
-  await expect(page.getByRole("heading", { name: "Course Content Studio" })).toBeVisible();
-  await expect(page.getByText("Curriculum Modules")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Course studio" })).toBeVisible();
+  await expect(page.getByText("Drafts being written")).toBeVisible();
   await page.waitForTimeout(1000);
 
   await maybeScreenshot(page, "51_course_studio_catalog.png");
@@ -128,27 +128,22 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   // ----------------------------------------------------
   // STEP 2: Create a new draft version for M01
   // ----------------------------------------------------
-  // Find M01 card and click New Draft Version
-  const m01Card = page.locator("div").filter({ hasText: /^M01/ }).first();
-  await page.getByRole("button", { name: "New Draft Version" }).first().click();
+  // M01's card comes first: start a new draft from it
+  await page.getByRole("button", { name: "Start a new draft" }).first().click();
 
-  // Modal opens
-  await expect(page.getByRole("heading", { name: /New Draft Version for M01/ })).toBeVisible();
-  const targetVersionInput = page.locator('input[placeholder*="1.1.0"]');
-  await targetVersionInput.fill("1.1.0");
-
-  const notesTextarea = page.locator('textarea[placeholder*="Describe what is being changed"]');
-  await notesTextarea.fill("Clarified quiz question explanations per #210 and improved lesson guidance");
+  // The dialog opens with the next free version number filled in
+  await expect(page.getByRole("heading", { name: "Start a new draft of M01" })).toBeVisible();
+  await page.getByLabel("New version number").fill("1.1.0");
+  await page.getByLabel("What you're changing (optional)").fill("Clarified quiz question explanations per #210 and improved lesson guidance");
 
   await maybeScreenshot(page, "52_course_studio_create_draft_modal.png");
 
-  await page.getByRole("button", { name: "Create Draft" }).click();
-  await page.waitForTimeout(1500);
-
-  // Navigate to the editor for the new 1.1.0 draft
-  await page.goto("http://localhost:3001/admin/modules/M01/editor?version=1.1.0");
+  // Starting it opens the new draft in the editor, which says it's a draft and that learners keep the live version
+  await page.getByRole("button", { name: "Start draft", exact: true }).click();
+  await page.waitForURL(/\/admin\/modules\/M01\/editor\?version=1\.1\.0/);
   await expect(page.getByRole("heading", { name: /Diagnostic and Deal Selection/ })).toBeVisible();
-  await expect(page.getByText(/v1.1.0 \(DRAFT\)/)).toBeVisible();
+  await expect(page.getByText("You are editing draft v1.1.0.")).toBeVisible();
+  await expect(page.getByText("Draft v1.1.0 started.", { exact: false })).toBeVisible();
 
   await maybeScreenshot(page, "53_course_studio_draft_editor.png");
 
@@ -161,12 +156,12 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   const passMarkInput = page.locator('input[type="number"]').first();
   await passMarkInput.fill("150"); // Invalid! Must be <= 100
 
-  // Click Save Draft
-  await page.getByRole("button", { name: "Save Draft" }).click();
+  // Click Save draft
+  await page.getByRole("button", { name: "Save draft" }).click();
   await page.waitForTimeout(1000);
 
-  // Verify Validation Error banner appears
-  await expect(page.getByText("Validation Error")).toBeVisible();
+  // Verify the error banner appears
+  await expect(page.getByText("That didn't work")).toBeVisible();
   await expect(page.getByText(/passMark/)).toBeVisible();
 
   await maybeScreenshot(page, "54_course_studio_validation_error.png");
@@ -180,18 +175,18 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   const explanationTextarea = page.locator("textarea").first();
   await explanationTextarea.fill("Export readiness requires formal governance, documented trade processes, and international compliance per ICC guidelines.");
 
-  await page.getByRole("button", { name: "Save Draft" }).click();
+  await page.getByRole("button", { name: "Save draft" }).click();
   await page.waitForTimeout(1000);
 
   // Verify success banner appears
-  await expect(page.getByText("Draft saved successfully.")).toBeVisible();
+  await expect(page.getByText("Draft saved.", { exact: true })).toBeVisible();
 
   await maybeScreenshot(page, "55_course_studio_quiz_question_edited.png");
 
   // ----------------------------------------------------
   // STEP 5: Preview as Learner (Simulator)
   // ----------------------------------------------------
-  await page.getByRole("button", { name: "Preview as Learner" }).click();
+  await page.getByRole("button", { name: "Preview as learner" }).click();
   await expect(page.getByRole("heading", { name: "Learner View Simulator" })).toBeVisible();
   await expect(page.getByText(/Answer keys hidden/)).toBeVisible();
   await page.waitForTimeout(1000);
@@ -205,11 +200,11 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   // ----------------------------------------------------
   // STEP 6: Submit Draft for Review
   // ----------------------------------------------------
-  await page.getByRole("button", { name: "Submit for Review" }).click();
+  await page.getByRole("button", { name: "Send for review" }).click();
   await page.waitForTimeout(1500);
 
-  await expect(page.getByText(/v1.1.0 \(IN_REVIEW\)/)).toBeVisible();
-  await expect(page.getByText("Draft successfully submitted for review!")).toBeVisible();
+  await expect(page.getByText("v1.1.0 is waiting for an administrator's approval.")).toBeVisible();
+  await expect(page.getByText(/^Sent for review\./)).toBeVisible();
 
   await maybeScreenshot(page, "57_course_studio_submitted_for_review.png");
 
@@ -224,10 +219,10 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   await page.waitForURL("http://localhost:3001/");
 
   await page.goto("http://localhost:3001/admin/modules/M01/editor?version=1.1.0");
-  await expect(page.getByText(/v1.1.0 \(IN_REVIEW\)/)).toBeVisible();
+  await expect(page.getByText("v1.1.0 is waiting for an administrator's approval.")).toBeVisible();
 
-  // Click Approve Version
-  await page.getByRole("button", { name: "Approve Version" }).click();
+  // Click Approve
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Approve Version 1.1.0/ })).toBeVisible();
 
   const approveNotesTextarea = page.locator('textarea[placeholder*="Reviewed with trade advisory board"]');
@@ -236,10 +231,9 @@ test("Staff course content studio full lifecycle: draft, validate, preview, revi
   await page.getByRole("button", { name: "Confirm & Approve" }).click();
   await page.waitForTimeout(2000);
 
-  // Verify status is APPROVED and immutability notice is shown
-  await expect(page.getByText(/v1.1.0 \(APPROVED\)/)).toBeVisible();
-  await expect(page.getByText("Approved Version is Frozen & Immutable")).toBeVisible();
-  await expect(page.getByText("Branch New Draft")).toBeVisible();
+  // Verify it is live, can't be edited, and offers a new draft
+  await expect(page.getByText("v1.1.0 is live: this is what learners see.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start a new draft" })).toBeVisible();
 
   await maybeScreenshot(page, "58_course_studio_approved_immutable.png");
 
