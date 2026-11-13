@@ -5,6 +5,7 @@ import { CONSENT_KINDS, type ConsentKind, type ConsentMethod } from "@entrust/mi
 import { hasPlatformAccess, type Ctx, type Principal } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
+import { mizanUploadAllowed } from "./mizan-files";
 
 // The data collection notice and the permission to use TRADE and CLEAR data (#227). The notice must be accepted before an
 // assessment starts; the permission before an assessor uses the SME's TRADE or CLEAR records. Every acceptance and withdrawal is
@@ -120,8 +121,9 @@ interface SmeAccess {
 }
 
 /**
- * Staff who read SMEs, or a member of the SME while its organisation has MIZAN access. Anything else, and an organisation that
- * isn't an SME, is not found: nobody learns whether another organisation exists.
+ * Staff who read SMEs, for an SME that is in MIZAN, or a member of the SME while its organisation has MIZAN access. Anything
+ * else, and an organisation that isn't an SME, is not found: nobody learns whether another organisation exists. Staff are kept
+ * to SMEs in MIZAN because an Assessor is a TRADE reviewer, who otherwise works only with their own cohorts' businesses.
  */
 async function smeAccess(db: Executor, principal: Principal, organizationId: string): Promise<SmeAccess> {
   const [sme] = await db
@@ -131,7 +133,10 @@ async function smeAccess(db: Executor, principal: Principal, organizationId: str
     .limit(1);
   const notFound = new ServiceError("not_found", "No such SME.");
   if (!sme) throw notFound;
-  if (mizanCan(principal, "read_smes")) return { sme, staff: mizanCan(principal, "manage_smes"), smeRole: null };
+  if (mizanCan(principal, "read_smes")) {
+    if (!(await mizanUploadAllowed(db, organizationId))) throw notFound;
+    return { sme, staff: mizanCan(principal, "manage_smes"), smeRole: null };
+  }
   const role = principal.smeRoles.get(organizationId);
   if (role && (await hasPlatformAccess(db, organizationId, "mizan"))) return { sme, staff: false, smeRole: role };
   throw notFound;
@@ -241,7 +246,8 @@ export async function acceptConsent(ctx: Ctx, organizationId: string, input: Acc
         kind: input.kind,
         accepted: true,
         signatoryName: me?.name ?? "Unknown",
-        signatoryRole: input.signatoryRole?.trim() || (access.smeRole === "owner" ? "Owner" : "Member"),
+        // From their membership, as a withdrawal does: a member can't give themselves a title on the permanent record.
+        signatoryRole: access.smeRole === "owner" ? "Owner" : "Member",
         method: "in_platform",
         // What they read on the screen: always the current wording.
         noticeVersion: notices[input.kind].version,
@@ -257,7 +263,7 @@ export async function acceptConsent(ctx: Ctx, organizationId: string, input: Acc
       let noticeVersion: string;
       if (input.method === "paper") {
         if (!input.fileId) throw new ServiceError("invalid", "Attach the scan of the signed notice.");
-        await requireOwnFile(tx, organizationId, input.fileId);
+        await requireOwnFile(tx, ctx.principal, organizationId, input.fileId);
         noticeVersion = input.noticeVersion?.trim() || notices[input.kind].version;
         const [known] = await tx
           .select({ id: schema.mizanNotice.id })
@@ -365,7 +371,7 @@ export async function withdrawConsent(ctx: Ctx, organizationId: string, input: W
         givenAt = input.givenAt;
       }
     }
-    if (input.fileId) await requireOwnFile(tx, organizationId, input.fileId);
+    if (input.fileId) await requireOwnFile(tx, ctx.principal, organizationId, input.fileId);
 
     const [created] = await tx
       .insert(schema.mizanConsent)
@@ -400,18 +406,26 @@ export async function withdrawConsent(ctx: Ctx, organizationId: string, input: W
   });
 }
 
-// Two people recording for the same SME at once would otherwise both read the same record as the latest.
-async function lockSme(tx: Executor, organizationId: string) {
+/**
+ * Two people recording for the same SME at once would otherwise both read the same record as the latest. Starting or submitting
+ * an assessment takes it too, so a withdrawal can't commit between their notice check and their write.
+ */
+export async function lockSme(tx: Executor, organizationId: string) {
   await tx.select({ id: schema.smeProfile.id }).from(schema.smeProfile).where(eq(schema.smeProfile.organizationId, organizationId)).for("update");
 }
 
-async function requireOwnFile(tx: Executor, organizationId: string, fileId: string) {
+/**
+ * The scan or letter must be the SME's, and uploaded by the person recording it. Attaching a file makes it MIZAN evidence that
+ * every MIZAN staff member can open (mizanFileAllowed), so any other file of the SME's would otherwise be one record away.
+ */
+async function requireOwnFile(tx: Executor, principal: Principal, organizationId: string, fileId: string) {
   const [f] = await tx
-    .select({ organizationId: schema.file.organizationId, scanStatus: schema.file.scanStatus })
+    .select({ organizationId: schema.file.organizationId, uploaderUserId: schema.file.uploaderUserId, scanStatus: schema.file.scanStatus })
     .from(schema.file)
     .where(eq(schema.file.id, fileId))
     .limit(1);
   if (!f || f.organizationId !== organizationId) throw new ServiceError("invalid", "That file isn't one of this SME's uploads.");
+  if (f.uploaderUserId !== principal.userId) throw new ServiceError("invalid", "Attach a file you uploaded here, not one already in the SME's files.");
   if (f.scanStatus === "infected") throw new ServiceError("invalid", "That file failed the virus check. Upload a clean copy.");
 }
 

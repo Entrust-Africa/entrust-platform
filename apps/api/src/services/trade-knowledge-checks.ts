@@ -123,7 +123,10 @@ export async function submitKnowledgeCheckAttempt(
   const currentScore = existingProgress?.knowledgeCheckScore
     ? Number(existingProgress.knowledgeCheckScore)
     : null;
-  const bestScore = currentScore !== null ? Math.max(currentScore, evaluation.score) : evaluation.score;
+  // The best passing score. A failed one isn't kept: the progress screens show this, and a best score that rose after a failed
+  // retake would say which changed answer was right, as the attempt's own score would.
+  const passingScore = evaluation.passed ? evaluation.score : null;
+  const bestScore = currentScore !== null && passingScore !== null ? Math.max(currentScore, passingScore) : (passingScore ?? currentScore);
 
   if (evaluation.passed && !theoryCompletedAt) {
     theoryCompletedAt = now;
@@ -140,7 +143,7 @@ export async function submitKnowledgeCheckAttempt(
       .set({
         status,
         theoryCompletedAt,
-        knowledgeCheckScore: String(bestScore),
+        knowledgeCheckScore: bestScore === null ? null : String(bestScore),
         updatedAt: now,
       })
       .where(eq(schema.moduleProgress.id, existingProgress.id));
@@ -152,7 +155,7 @@ export async function submitKnowledgeCheckAttempt(
       status,
       startedAt: now,
       theoryCompletedAt,
-      knowledgeCheckScore: String(bestScore),
+      knowledgeCheckScore: bestScore === null ? null : String(bestScore),
       lessonProgress: {},
     });
   }
@@ -185,12 +188,13 @@ export async function submitKnowledgeCheckAttempt(
     moduleId,
     contentVersion: attempt!.contentVersion,
     attemptNumber: attempt!.attemptNumber,
-    score: Number(attempt!.score),
+    // A failed attempt says only that it failed. Retakes are unlimited, so the key, which questions were right, or even the
+    // score would let anyone pass: change one answer, retake, and the score going up or down says whether it was right (four
+    // options each: three extra tries at most). A pass shows everything.
+    score: evaluation.passed ? Number(attempt!.score) : null,
     passed: attempt!.passed,
     totalQuestions: attempt!.totalQuestions,
-    correctCount: attempt!.correctCount,
-    // A failed attempt gives the score only. Retakes are unlimited, so the key, or even which questions were right, would let
-    // anyone pass by changing only the wrong answers (four options each: four tries at most). A pass shows everything.
+    correctCount: evaluation.passed ? attempt!.correctCount : null,
     results: evaluation.passed
       ? evaluation.results
       : evaluation.results.map((r) => ({ questionId: r.questionId, questionText: r.questionText, submittedAnswers: r.submittedAnswers, correctAnswers: [] })),
@@ -237,10 +241,16 @@ export async function listKnowledgeCheckAttempts(
     )
     .orderBy(desc(schema.knowledgeCheckAttempt.attemptNumber));
 
+  // The SME's own members see a failed attempt's outcome only, as when they took it (see submitKnowledgeCheckAttempt). Staff see
+  // every score.
+  const showFailedScores = principal.staffRole !== null && !principal.smeRoles.has(enrollment.organizationId);
+  const shown = (row: (typeof rows)[number]) => row.passed || showFailedScores;
+
   let bestScore: number | null = null;
   let hasPassed = false;
 
   for (const row of rows) {
+    if (!shown(row)) continue;
     const num = Number(row.score);
     if (bestScore === null || num > bestScore) {
       bestScore = num;
@@ -254,10 +264,10 @@ export async function listKnowledgeCheckAttempts(
     items: rows.map((r) => ({
       id: r.id,
       attemptNumber: r.attemptNumber,
-      score: Number(r.score),
+      score: shown(r) ? Number(r.score) : null,
       passed: r.passed,
       totalQuestions: r.totalQuestions,
-      correctCount: r.correctCount,
+      correctCount: shown(r) ? r.correctCount : null,
       contentVersion: r.contentVersion,
       createdAt: r.createdAt.toISOString(),
     })),

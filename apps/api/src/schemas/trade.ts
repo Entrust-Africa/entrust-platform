@@ -1358,10 +1358,10 @@ export const KnowledgeCheckAttemptResult = z
     moduleId: z.enum(MODULE_IDS),
     contentVersion: z.string(),
     attemptNumber: z.number().int(),
-    score: z.number(),
+    score: z.number().nullable().openapi({ description: "Null on a failed attempt: it says only that it failed." }),
     passed: z.boolean(),
     totalQuestions: z.number().int(),
-    correctCount: z.number().int(),
+    correctCount: z.number().int().nullable().openapi({ description: "Null on a failed attempt." }),
     results: z.array(QuestionGradingResultSchema),
     theoryCompletedAt: z.string().nullable().optional(),
     createdAt: z.string(),
@@ -1372,10 +1372,10 @@ export const KnowledgeCheckHistoryItem = z
   .object({
     id: z.uuid(),
     attemptNumber: z.number().int(),
-    score: z.number(),
+    score: z.number().nullable().openapi({ description: "Null on a failed attempt when the SME's own member asks; staff see it." }),
     passed: z.boolean(),
     totalQuestions: z.number().int(),
-    correctCount: z.number().int(),
+    correctCount: z.number().int().nullable(),
     contentVersion: z.string(),
     createdAt: z.string(),
   })
@@ -1384,7 +1384,7 @@ export const KnowledgeCheckHistoryItem = z
 export const KnowledgeCheckHistoryList = z
   .object({
     items: z.array(KnowledgeCheckHistoryItem),
-    bestScore: z.number().nullable(),
+    bestScore: z.number().nullable().openapi({ description: "The best score shown in items, so a learner's best passing score." }),
     hasPassed: z.boolean(),
   })
   .openapi("TradeKnowledgeCheckHistoryList");

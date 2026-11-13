@@ -172,17 +172,18 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.score).toBe(30);
+    // A failed attempt says only that it failed: with unlimited retakes, even the score going up or down after one changed
+    // answer would say whether that answer was right.
+    expect(res.body.score).toBeNull();
     expect(res.body.passed).toBe(false);
     expect(res.body.attemptNumber).toBe(1);
     expect(res.body.totalQuestions).toBe(10);
-    expect(res.body.correctCount).toBe(3);
+    expect(res.body.correctCount).toBeNull();
     expect(res.body.theoryCompletedAt).toBeNull();
 
     // Results feedback check
     expect(res.body.results).toHaveLength(10);
-    // A failed attempt says the score and nothing per question: with unlimited retakes, the key or even which answers were
-    // right would let the next attempt pass by changing only the wrong ones.
+    // Nothing per question either.
     for (const r of res.body.results as Array<Record<string, unknown>>) {
       expect(r.correctAnswers).toEqual([]);
       expect(r).not.toHaveProperty("isCorrect");
@@ -204,7 +205,8 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     expect(progress).toBeDefined();
     expect(progress!.status).toBe("in_progress");
     expect(progress!.theoryCompletedAt).toBeNull();
-    expect(Number(progress!.knowledgeCheckScore)).toBe(30);
+    // Progress keeps the best passing score only, as the progress screens show it.
+    expect(progress!.knowledgeCheckScore).toBeNull();
   });
 
   it("grades a passing retake (>= 80%), increments to attempt #2, sets theoryCompletedAt", async () => {
@@ -256,6 +258,8 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     expect(res.body.hasPassed).toBe(true);
     expect(res.body.items[0].attemptNumber).toBe(2);
     expect(res.body.items[1].attemptNumber).toBe(1);
+    // The learner sees the failed attempt's outcome, not its score.
+    expect(res.body.items[1]).toMatchObject({ passed: false, score: null, correctCount: null });
 
     // Staff can also view learner's attempts read-only
     const staffRes = await callV1(
@@ -265,6 +269,7 @@ describe("TRADE Knowledge Checks API (#63)", () => {
     );
     expect(staffRes.status).toBe(200);
     expect(staffRes.body.items).toHaveLength(2);
+    expect(staffRes.body.items[1]).toMatchObject({ passed: false, score: 30, correctCount: 3 });
   });
 
   it("provides cohort knowledge check statistics for staff", async () => {

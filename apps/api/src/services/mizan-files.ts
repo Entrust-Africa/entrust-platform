@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { hasPlatformAccess } from "./access";
 import type { Executor } from "./db";
@@ -15,9 +15,18 @@ export async function mizanUploadAllowed(db: Executor, organizationId: string): 
   return sme !== undefined || (await hasPlatformAccess(db, organizationId, "mizan"));
 }
 
-/** MIZAN staff may open a file MIZAN holds as evidence: a signed notice or an assessment document. Nothing else. */
+/**
+ * MIZAN staff may open a file MIZAN holds as evidence: a signed notice or an assessment document. Nothing else. A notice's file
+ * counts only when the person who recorded the notice uploaded it, as recording one requires: pointing a record at another of
+ * the SME's files doesn't open that file to MIZAN.
+ */
 export async function mizanFileAllowed(db: Executor, fileId: string): Promise<boolean> {
-  const [consent] = await db.select({ id: schema.mizanConsent.id }).from(schema.mizanConsent).where(eq(schema.mizanConsent.fileId, fileId)).limit(1);
+  const [consent] = await db
+    .select({ id: schema.mizanConsent.id })
+    .from(schema.mizanConsent)
+    .innerJoin(schema.file, eq(schema.file.id, schema.mizanConsent.fileId))
+    .where(and(eq(schema.mizanConsent.fileId, fileId), eq(schema.file.uploaderUserId, schema.mizanConsent.capturedBy)))
+    .limit(1);
   if (consent) return true;
   const [document] = await db.select({ id: schema.mizanDocument.id }).from(schema.mizanDocument).where(eq(schema.mizanDocument.fileId, fileId)).limit(1);
   return document !== undefined;

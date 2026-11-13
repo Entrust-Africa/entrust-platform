@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { schema } from "@entrust/db";
 import { mizanActionsFor, mizanCan, type MizanAction } from "@entrust/roles";
 import { hasPlatformAccess, type Ctx, type Principal } from "./access";
@@ -37,16 +37,18 @@ export async function assessBlockers(db: Executor, principal: Principal, organiz
 
 /**
  * Why the caller can't approve or return this assessment, or an empty list when they can. A second person: an Assessor or
- * Super Admin who is not the assessor and has never supported the SME. The approval itself also needs their declaration.
+ * Super Admin who is not the assessor, never changed or submitted the assessment (a Super Admin may work on anyone's), and
+ * has never supported the SME. The approval itself also needs their declaration.
  */
 export async function reviewBlockers(
   db: Executor,
   principal: Principal,
-  assessment: { organizationId: string; assessorUserId: string },
+  assessment: { id: string; organizationId: string; assessorUserId: string },
 ): Promise<string[]> {
   const blockers: string[] = [];
   if (!mizanCan(principal, "review")) blockers.push("Only an Assessor or Super Admin can review an assessment.");
   if (principal.userId === assessment.assessorUserId) blockers.push("You assessed this SME, so someone else must review it.");
+  else if (await workedOn(db, principal.userId, assessment.id)) blockers.push("You worked on this assessment, so someone else must review it.");
   if (await hasSupportRelationship(db, principal.userId, assessment.organizationId)) {
     blockers.push("You are recorded as having supported this SME, so someone else must review it (control C-1).");
   }
@@ -84,3 +86,22 @@ export async function mizanAccess(ctx: Ctx) {
     reportOrganizations,
   };
 }
+
+/** Whether the person recorded any change to the assessment, other than reviewing it: editing its inputs or submitting it. */
+async function workedOn(db: Executor, userId: string, assessmentId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.mizanAssessmentEvent.id })
+    .from(schema.mizanAssessmentEvent)
+    .where(
+      and(
+        eq(schema.mizanAssessmentEvent.assessmentId, assessmentId),
+        eq(schema.mizanAssessmentEvent.actorUserId, userId),
+        notInArray(schema.mizanAssessmentEvent.type, REVIEW_EVENTS),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+// What a reviewer records themselves. Returning an assessment and then approving its resubmission is still a second look.
+const REVIEW_EVENTS = ["returned", "approved"];
