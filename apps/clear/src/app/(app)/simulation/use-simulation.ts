@@ -39,6 +39,8 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "tick":
     case "step": {
+      // A tick that was already on its way when the run was paused changes nothing.
+      if (action.type === "tick" && !state.playing) return state;
       const { run: moved, move } = advance(SCENARIO, run);
       // A question, a wait for answers and the end all stop the run.
       const goesOn = action.type === "tick" && state.playing && move.kind === "step";
