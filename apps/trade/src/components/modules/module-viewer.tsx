@@ -936,12 +936,12 @@ export function ModuleViewer({
                       )}
                       <div>
                         <div className="text-sm font-bold">
-                          {quizFeedback.passed ? "Knowledge Check Passed!" : `Score: ${quizFeedback.score}%`}
+                          {quizFeedback.passed ? "Knowledge Check Passed!" : "Not passed yet"}
                         </div>
                         <div className="text-xs opacity-90 mt-0.5">
                           {quizFeedback.passed
                             ? `You scored ${quizFeedback.score}% (${quizFeedback.correctCount} of ${quizFeedback.totalQuestions} correct). Theory requirement completed.`
-                            : `You scored ${quizFeedback.score}% (${quizFeedback.correctCount} of ${quizFeedback.totalQuestions} correct). You need ${module.knowledgeCheck.passMark}% to pass. Retakes are unlimited.`}
+                            : `You need ${module.knowledgeCheck.passMark}% to pass. Go back over the module and try again: retakes are unlimited, and your score shows once you pass.`}
                         </div>
                       </div>
                     </div>
