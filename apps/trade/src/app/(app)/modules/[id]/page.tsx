@@ -46,6 +46,8 @@ export default async function ModuleDetailPage({
   if (!me) redirect("/sign-in");
 
   const isStaff = Boolean(me.staffRole);
+  // Administrators and facilitators reach this page from the course studio: it is how a module looks to a learner.
+  const canEdit = me.staffRole === "admin" || me.staffRole === "facilitator";
   const activeOrg =
     me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
 
@@ -89,13 +91,21 @@ export default async function ModuleDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
-          href="/modules"
+          href={canEdit ? "/admin/modules" : "/modules"}
           className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline"
         >
-          <ArrowLeft className="size-3.5" /> All modules
+          <ArrowLeft className="size-3.5" /> {canEdit ? "Course studio" : "All modules"}
         </Link>
+        {canEdit && (
+          <Link
+            href={`/admin/modules/${id}/editor?version=${encodeURIComponent(moduleDetail.content?.version ?? moduleDetail.latestVersion ?? "")}`}
+            className="inline-flex h-8 items-center rounded-md border border-line-strong bg-surface px-3 text-sm font-semibold text-ink hover:bg-surface-2"
+          >
+            Open in course studio
+          </Link>
+        )}
       </div>
 
       {id === "M08" && (
