@@ -5,7 +5,7 @@ import { Button, Card } from "@entrust/ui";
 import { browserApi, ok } from "@/lib/summit-api";
 import type { BookingDetail } from "@/lib/commerce";
 import { AreaBox, Feedback, Labeled, TextBox, useRun } from "./ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 
 /** What can be done to an exhibitor application, in the order it is done: approve, give a booth, confirm. */
 export function BookingActions({ booking, zones }: { booking: BookingDetail; zones: string[] }) {
@@ -48,7 +48,7 @@ export function BookingActions({ booking, zones }: { booking: BookingDetail; zon
             <TextBox id="booth-number" label="Booth number" value={booth} onChange={setBooth} placeholder="A-12" />
             {zones.length > 0 ? (
               <Labeled label="Zone" htmlFor="booth-zone">
-                <select id="booth-zone" value={zone} onChange={(e) => setZone(e.target.value)} className={textInput(false)}>
+                <select id="booth-zone" value={zone} onChange={(e) => setZone(e.target.value)} className={staffInput(false)}>
                   <option value="">No zone</option>
                   {zones.map((z) => (
                     <option key={z} value={z}>

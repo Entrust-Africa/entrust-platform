@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 import { browserApi, errorText, ok } from "@/lib/summit-api";
 import { countryName, formatDateTime, type SummitPeriod } from "@/lib/summit";
 
@@ -70,20 +70,20 @@ function PeriodForm({ period, onDone }: { period?: SummitPeriod; onDone: () => v
         <label htmlFor={`p-name-${id}`} className="block text-base font-semibold text-ink">
           Name
         </label>
-        <input id={`p-name-${id}`} value={name} onChange={(e) => setName(e.target.value)} required maxLength={160} placeholder="ADTIS 2027 applications" className={textInput(false)} />
+        <input id={`p-name-${id}`} value={name} onChange={(e) => setName(e.target.value)} required maxLength={160} placeholder="ADTIS 2027 applications" className={staffInput(false)} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label htmlFor={`p-open-${id}`} className="block text-base font-semibold text-ink">
             Opens
           </label>
-          <input id={`p-open-${id}`} type="datetime-local" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} required className={textInput(false)} />
+          <input id={`p-open-${id}`} type="datetime-local" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} required className={staffInput(false)} />
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`p-close-${id}`} className="block text-base font-semibold text-ink">
             Closes
           </label>
-          <input id={`p-close-${id}`} type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} required className={textInput(false)} />
+          <input id={`p-close-${id}`} type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} required className={staffInput(false)} />
         </div>
       </div>
       <p className="text-sm text-ink-3">Times are in your device's time zone.</p>
@@ -98,7 +98,7 @@ function PeriodForm({ period, onDone }: { period?: SummitPeriod; onDone: () => v
           required
           placeholder="ET, KE, GH"
           aria-describedby={`p-countries-hint-${id}`}
-          className={textInput(parsed.bad.length > 0)}
+          className={staffInput(parsed.bad.length > 0)}
         />
         <p id={`p-countries-hint-${id}`} className="text-sm text-ink-3">
           {parsed.codes.length > 0 ? parsed.codes.map(countryName).join(", ") : "Two-letter codes, separated by commas."}

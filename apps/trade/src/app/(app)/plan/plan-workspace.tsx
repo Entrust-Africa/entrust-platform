@@ -216,7 +216,7 @@ function AddModule({ missing, busy, onAdd }: { missing: string[]; busy: boolean;
   const [moduleId, setModuleId] = useState(missing[0] ?? "");
   const [status, setStatus] = useState("required");
   const [reason, setReason] = useState("");
-  const select = "mt-1 block h-10 rounded-md border border-line bg-surface px-2 text-sm text-ink";
+  const select = "mt-1 block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
   return (
     <form
       className="flex flex-wrap items-end gap-3 border-t border-line pt-4"
@@ -288,7 +288,7 @@ function AskExemption({ modules, evidence, busy, onAsk }: { modules: string[]; e
   const [evidenceId, setEvidenceId] = useState(evidence[0]?.id ?? "");
   const [reason, setReason] = useState("");
   if (modules.length === 0) return null;
-  const select = "mt-1 block h-10 w-full rounded-md border border-line bg-surface px-2 text-sm text-ink";
+  const select = "mt-1 block h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
   return (
     <form
       className="grid gap-3 border-t border-line pt-4 sm:grid-cols-2"

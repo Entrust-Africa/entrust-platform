@@ -100,7 +100,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                 defaultValue={q}
                 aria-label="Search by business, email or phone"
                 placeholder="Search business, email or phone"
-                className="h-10 w-60 rounded-md border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="h-10 w-60 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <button type="submit" className="h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-semibold text-ink hover:bg-surface-2">
                 Search

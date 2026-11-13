@@ -63,7 +63,7 @@ export function ScheduleSessionDialog({
                   name="title"
                   required
                   placeholder="e.g. Workshop 1: Value Proposition & Export Readiness"
-                  className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -85,7 +85,7 @@ export function ScheduleSessionDialog({
                   type="text"
                   name="moduleCodes"
                   placeholder="e.g. M01, M02"
-                  className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500 uppercase font-mono"
+                  className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500 uppercase font-mono"
                 />
                 <p className="mt-0.5 text-[11px] text-ink-3">
                   The facilitator preparation view will link enrolled SMEs' progress in these modules.
@@ -100,7 +100,7 @@ export function ScheduleSessionDialog({
                     type="datetime-local"
                     name="startTime"
                     required
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -110,7 +110,7 @@ export function ScheduleSessionDialog({
                     type="datetime-local"
                     name="endTime"
                     required
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -121,7 +121,7 @@ export function ScheduleSessionDialog({
                   type="text"
                   name="venue"
                   placeholder="e.g. https://meet.google.com/xyz or Room 402, Addis Ababa"
-                  className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -131,7 +131,7 @@ export function ScheduleSessionDialog({
                   type="url"
                   name="recordingUrl"
                   placeholder="https://..."
-                  className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 

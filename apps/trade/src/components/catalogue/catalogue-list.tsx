@@ -102,7 +102,7 @@ export function CatalogueList({ smes, cohortNames }: { smes: CatalogueSme[]; coh
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Name, contact, place, product or bank"
-          className="h-10 w-full rounded-md border border-line bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus-visible:border-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25"
+          className="h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus-visible:border-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/25"
         />
       </label>
       {needle && (

@@ -26,7 +26,7 @@ const SORTS = [
   { id: "country", label: "Country" },
 ];
 
-const field = "h-10 rounded-md border border-line-strong bg-surface px-2 text-sm font-normal";
+const field = "h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-normal";
 
 /** /summit/committee: the applicants in committee stages, to compare and filter, and the final list. */
 export default async function CommitteePage({ searchParams }: { searchParams: Promise<Params> }) {

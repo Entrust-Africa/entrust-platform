@@ -17,7 +17,7 @@ interface Resource {
 }
 
 const TYPES = ["template", "guide", "worksheet", "checklist", "video", "other"];
-const select = "h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink";
+const select = "h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
 
 /**
  * A module's downloadable resources. A learner sees the learner resources. A Super Admin or Cohort Manager can add one by uploading

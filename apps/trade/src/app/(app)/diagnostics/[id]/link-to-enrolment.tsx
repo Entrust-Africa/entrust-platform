@@ -58,7 +58,7 @@ export function LinkToEnrolment({
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm font-semibold text-ink">
             Enrolment
-            <select value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)} className="mt-1 block h-10 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+            <select value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)} className="mt-1 block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink">
               {enrollments.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.organizationName} ({e.cohortName})

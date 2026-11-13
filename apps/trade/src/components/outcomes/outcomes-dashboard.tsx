@@ -710,7 +710,7 @@ export function OutcomesDashboard({
                   placeholder="e.g. Equity Bank Kenya, Ecobank, Afreximbank"
                   value={financingForm.lenderName}
                   onChange={(e) => setFinancingForm({ ...financingForm, lenderName: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -720,7 +720,7 @@ export function OutcomesDashboard({
                   <select id="outcomes-outcomes-dashboard-2"
                     value={financingForm.financingType}
                     onChange={(e) => setFinancingForm({ ...financingForm, financingType: e.target.value as any })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {FINANCING_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -734,7 +734,7 @@ export function OutcomesDashboard({
                   <select id="outcomes-outcomes-dashboard-3"
                     value={financingForm.evidenceTier}
                     onChange={(e) => setFinancingForm({ ...financingForm, evidenceTier: e.target.value as any })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {tierChoices().map((tier) => (
                       <option key={tier} value={tier}>
@@ -755,7 +755,7 @@ export function OutcomesDashboard({
                     placeholder="e.g. 100000"
                     value={financingForm.amountRequested}
                     onChange={(e) => setFinancingForm({ ...financingForm, amountRequested: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -763,7 +763,7 @@ export function OutcomesDashboard({
                   <select id="outcomes-outcomes-dashboard-5"
                     value={financingForm.currency}
                     onChange={(e) => setFinancingForm({ ...financingForm, currency: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -829,7 +829,7 @@ export function OutcomesDashboard({
                     placeholder="e.g. Kaffee Welt GmbH"
                     value={exportForm.buyerName}
                     onChange={(e) => setExportForm({ ...exportForm, buyerName: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -841,7 +841,7 @@ export function OutcomesDashboard({
                     placeholder="e.g. DE, US, AE"
                     value={exportForm.destinationCountry}
                     onChange={(e) => setExportForm({ ...exportForm, destinationCountry: e.target.value.toUpperCase() })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -854,7 +854,7 @@ export function OutcomesDashboard({
                   placeholder="e.g. Grade 1 Washed Coffee Beans (1 Container)"
                   value={exportForm.productDescription}
                   onChange={(e) => setExportForm({ ...exportForm, productDescription: e.target.value })}
-                  className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
 
@@ -867,7 +867,7 @@ export function OutcomesDashboard({
                     placeholder="e.g. 60000"
                     value={exportForm.valuePlanned}
                     onChange={(e) => setExportForm({ ...exportForm, valuePlanned: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -875,7 +875,7 @@ export function OutcomesDashboard({
                   <select id="outcomes-outcomes-dashboard-11"
                     value={exportForm.currency}
                     onChange={(e) => setExportForm({ ...exportForm, currency: e.target.value })}
-                    className="w-full h-11 rounded-md border border-line bg-surface px-2 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -947,7 +947,7 @@ export function OutcomesDashboard({
                       <select id="outcomes-outcomes-dashboard-13"
                         value={updateFinancingForm.status}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, status: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {FINANCING_OUTCOME_STATUSES.map((st) => (
                           <option key={st} value={st}>
@@ -961,7 +961,7 @@ export function OutcomesDashboard({
                       <select id="outcomes-outcomes-dashboard-14"
                         value={updateFinancingForm.evidenceTier}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, evidenceTier: e.target.value as any })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {tierChoices(updateFinancingForm.evidenceTier).map((tier) => (
                           <option key={tier} value={tier}>
@@ -989,7 +989,7 @@ export function OutcomesDashboard({
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountApproved}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, amountApproved: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
@@ -998,7 +998,7 @@ export function OutcomesDashboard({
                         type="datetime-local"
                         value={updateFinancingForm.approvalDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, approvalDate: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
@@ -1011,7 +1011,7 @@ export function OutcomesDashboard({
                         placeholder="e.g. 85000"
                         value={updateFinancingForm.amountDisbursed}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, amountDisbursed: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
@@ -1020,7 +1020,7 @@ export function OutcomesDashboard({
                         type="datetime-local"
                         value={updateFinancingForm.disbursementDate}
                         onChange={(e) => setUpdateFinancingForm({ ...updateFinancingForm, disbursementDate: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
@@ -1044,7 +1044,7 @@ export function OutcomesDashboard({
                       <select id="outcomes-outcomes-dashboard-20"
                         value={updateExportForm.status}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, status: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {EXPORT_OUTCOME_STATUSES.map((st) => (
                           <option key={st} value={st}>
@@ -1058,7 +1058,7 @@ export function OutcomesDashboard({
                       <select id="outcomes-outcomes-dashboard-21"
                         value={updateExportForm.evidenceTier}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, evidenceTier: e.target.value as any })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         {tierChoices(updateExportForm.evidenceTier).map((tier) => (
                           <option key={tier} value={tier}>
@@ -1089,7 +1089,7 @@ export function OutcomesDashboard({
                         required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.valueShipped}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valueShipped: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
@@ -1100,7 +1100,7 @@ export function OutcomesDashboard({
                         required={shippedStatus(updateExportForm.status)}
                         value={updateExportForm.shipmentDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, shipmentDate: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
@@ -1112,7 +1112,7 @@ export function OutcomesDashboard({
                         type="datetime-local"
                         value={updateExportForm.deliveryDate}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, deliveryDate: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                     <div>
@@ -1122,7 +1122,7 @@ export function OutcomesDashboard({
                         placeholder="e.g. 60000"
                         value={updateExportForm.valuePaid}
                         onChange={(e) => setUpdateExportForm({ ...updateExportForm, valuePaid: e.target.value })}
-                        className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                       />
                     </div>
                   </div>
@@ -1133,7 +1133,7 @@ export function OutcomesDashboard({
                       type="datetime-local"
                       value={updateExportForm.paymentDate}
                       onChange={(e) => setUpdateExportForm({ ...updateExportForm, paymentDate: e.target.value })}
-                      className="w-full h-11 rounded-md border border-line bg-surface px-3 text-base sm:h-9 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full h-11 rounded-md border border-line-strong bg-surface px-3 text-base sm:h-10 sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
 

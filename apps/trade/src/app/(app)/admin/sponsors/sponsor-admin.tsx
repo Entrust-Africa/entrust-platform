@@ -47,11 +47,13 @@ export function SponsorAdmin({ initial }: { initial: Sponsor[] }) {
         <h2 className="font-display text-lg font-bold text-ink">Add a sponsor bank</h2>
         <form onSubmit={create} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <Field label="Bank name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={160} />
-          <Field label="First administrator's email (optional)" type="email" hint="They need an account already." value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
+          <Field label="First administrator's email (optional)" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
           <Button type="submit" loading={busy} disabled={!name.trim()}>
             Add bank
           </Button>
         </form>
+        {/* Under the row, not under the email box: a hint there pushed that box higher than the bank name beside it. */}
+        <p className="mt-2 text-sm text-ink-3">The administrator needs a TRADE account already. You can add people to the bank later too.</p>
         {error && (
           <p role="alert" className="mt-3 text-sm text-danger">
             {error}
@@ -124,9 +126,9 @@ function SponsorCard({ sponsor, onChange }: { sponsor: Sponsor; onChange: (next:
         }}
       >
         <Field label="Add a person by email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <label className="text-sm font-semibold text-ink">
+        <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
           Role
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block h-10 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+          <select value={role} onChange={(e) => setRole(e.target.value)} className="block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm font-normal text-ink">
             <option value="sponsor_viewer">Viewer (reads reports)</option>
             <option value="sponsor_admin">Administrator (also manages people)</option>
           </select>

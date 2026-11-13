@@ -57,7 +57,7 @@ export function CohortStaffPanel({ cohortId, staff }: { cohortId: string; staff:
             id="cohort-staff"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
-            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink"
+            className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink"
           >
             <option value="">Choose someone to add</option>
             {staff.available.map((person) => (

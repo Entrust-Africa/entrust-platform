@@ -103,7 +103,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {canSplit && (
                 <label className="text-xs font-semibold text-ink-3">
                   Pathway
-                  <select name="pathway" defaultValue={filters.get("pathway") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                  <select name="pathway" defaultValue={filters.get("pathway") ?? ""} className="mt-1 block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink">
                     <option value="">Both</option>
                     <option value="A">Pathway A</option>
                     <option value="B">Pathway B</option>
@@ -112,7 +112,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               )}
               <label className="text-xs font-semibold text-ink-3">
                 Module
-                <select name="moduleId" defaultValue={filters.get("moduleId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                <select name="moduleId" defaultValue={filters.get("moduleId") ?? ""} className="mt-1 block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink">
                   <option value="">All modules</option>
                   {Array.from({ length: 12 }, (_, i) => `M${String(i + 1).padStart(2, "0")}`).map((id) => (
                     <option key={id} value={id}>{id}</option>
@@ -122,7 +122,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {canSplit && cohortsOfProgramme.length > 0 && (
                 <label className="text-xs font-semibold text-ink-3">
                   Cohort
-                  <select name="cohortId" defaultValue={filters.get("cohortId") ?? ""} className="mt-1 block h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+                  <select name="cohortId" defaultValue={filters.get("cohortId") ?? ""} className="mt-1 block h-10 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink">
                     <option value="">All cohorts</option>
                     {cohortsOfProgramme.map((c) => (
                       <option key={c.id} value={c.id}>{c.label}</option>
@@ -130,7 +130,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   </select>
                 </label>
               )}
-              <button type="submit" className="inline-flex h-9 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500">Apply</button>
+              <button type="submit" className="inline-flex h-10 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500">Apply</button>
               {filters.size > 0 && <Link href={`/reports?${selected.kind}=${encodeURIComponent(selected.id)}`} className="text-xs font-semibold text-brand-600 underline-offset-4 hover:underline">Clear filters</Link>}
             </form>
           )}
