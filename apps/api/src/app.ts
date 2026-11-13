@@ -21,6 +21,7 @@ import { tradeApplications } from "./routes/trade/applications";
 import { tradeAssessments } from "./routes/trade/assessments";
 import { tradeCatalogue } from "./routes/trade/catalogue";
 import { mizanAccessRoutes } from "./routes/mizan/access";
+import { mizanAssessmentRoutes } from "./routes/mizan/assessments";
 import { mizanConsentRoutes } from "./routes/mizan/consents";
 import { tradeEvidence } from "./routes/trade/evidence";
 import { tradeModules } from "./routes/trade/modules";
@@ -147,6 +148,7 @@ export const app = base
   .route("/v1/trade", tradeCatalogue)
   .route("/v1/mizan", mizanAccessRoutes)
   .route("/v1/mizan", mizanConsentRoutes)
+  .route("/v1/mizan", mizanAssessmentRoutes)
   .route("/v1/trade", tradeSmeRecord)
   .route("/v1/trade", tradeBuyers)
   .route("/v1/trade", tradeNotifications)
