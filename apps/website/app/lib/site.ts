@@ -125,7 +125,7 @@ export const IMG = {
   logoLight: "/images/8deb8519659c2978.png",
   afriConnectMark: "/images/5b029d0920f467dd.png",
   thomas: "/images/df59960924007225.jpg",
-  mikias: "/images/6c340dc86f182d5e.jpg",
+  mikias: "/images/bce9695e6f3e00c3.jpg",
   remmogoSpeaker: "/images/d17f93e36799b59d.jpg",
   remmogoPanel: "/images/421c979b4a60ca4e.jpg",
   forumAudience: "/images/245f90ed6f022aa1.jpg",

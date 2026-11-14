@@ -16,7 +16,7 @@ const LEADERS = [
     photo: IMG.thomas,
   },
   {
-    name: "Mikias Melak Birhanie",
+    name: "Mikias Melak",
     role: "Managing Director, Advisory & Transactions",
     bio: "Licensed attorney and legal consultant, leading investment structuring, regulatory compliance and cross-border deal execution.",
     photo: IMG.mikias,

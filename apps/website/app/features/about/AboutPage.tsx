@@ -17,11 +17,11 @@ const LEADERS = [
     framed: false,
   },
   {
-    name: "Mikias Melak Birhanie",
+    name: "Mikias Melak",
     role: "Managing Director, Advisory & Transactions",
     bio: "Licensed attorney leading investment structuring, regulatory compliance and cross-border deal execution.",
     photo: IMG.mikias,
-    framed: true,
+    framed: false,
   },
   {
     name: "Fekadu Welde",
@@ -31,11 +31,11 @@ const LEADERS = [
     framed: true,
   },
   {
-    name: "Thomas Seyoum Kassaye",
+    name: "Thomas Seyoum",
     role: "Digital Governance Advisor",
     bio: "Over 20 years across international organizations including UNHCR, UNICEF and UNECA, in digital transformation and information governance.",
-    photo: "/images/9069efdfc77d0dd9.jpg",
-    framed: false,
+    photo: "/images/fb580da41d6d2f0e.jpg",
+    framed: true,
   },
 ];
 
