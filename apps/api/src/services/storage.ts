@@ -190,6 +190,11 @@ class R2StorageProvider implements StorageProvider {
     this.s3 = new S3Client({
       region: "auto",
       endpoint: resolvedEndpoint,
+      // Check a response's checksum only when a request asks for it. By default the SDK checks every GetObject it can,
+      // and R2 sends the whole object's checksum with a range read, so reading a file's first bytes in finalise always
+      // failed with "Checksum mismatch" and no upload could be finalised. The upload itself is still checked: the
+      // presigned PUT carries the SHA-256, and finalise compares HeadObject's checksum with the one declared.
+      responseChecksumValidation: "WHEN_REQUIRED",
       credentials: {
         accessKeyId: accessKeyId ?? "",
         secretAccessKey: secretAccessKey ?? "",
