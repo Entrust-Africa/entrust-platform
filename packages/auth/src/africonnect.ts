@@ -198,6 +198,20 @@ export function afriConnectBuyersUrl(env: Record<string, string | undefined> = p
   return `${site.origin}/marketplace`;
 }
 
+/**
+ * AfriConnect's public product search, open to visitors who aren't signed in, with the search filled in. The passport page
+ * uses it for a business whose store on AfriConnect staff haven't linked yet.
+ */
+export function afriConnectSearchUrl(search: string, env: Record<string, string | undefined> = process.env): string {
+  let site: URL;
+  try {
+    site = new URL(env.AFRICONNECT_ISSUER?.trim() ?? "");
+  } catch {
+    site = new URL(DEFAULT_ISSUER);
+  }
+  return `${site.origin}/explore?${new URLSearchParams({ q: search.trim() })}`;
+}
+
 /** AfriConnect's Market Intelligence, with Ethiopia chosen as the exporter. It's a trade analysis: the businesses are on the Marketplace. */
 export function afriConnectMarketIntelligenceUrl(env: Record<string, string | undefined> = process.env): string {
   let site: URL;

@@ -23,6 +23,24 @@ const longText = z.string().trim().max(4000);
 const optional = (s: z.ZodString) => s.nullable().transform((v) => (v ? v : null));
 const list = (item: z.ZodString) => z.array(item.min(1)).max(30);
 
+// A link to the business's store or a product on AfriConnect, where buyers order from it. Only AfriConnect's own address is taken:
+// the public page sends visitors there in place of the business's contact details.
+const AFRICONNECT_HOSTS = new Set(["africonnect.africa.com", "www.africonnect.africa.com"]);
+const africonnectLink = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && AFRICONNECT_HOSTS.has(url.hostname) && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  }, "Use an https://www.africonnect.africa.com/… link")
+  .nullable()
+  .transform((v) => (v ? v : null));
+
 const Standing = z.enum(["active", "expired", "suspended", "revoked"]);
 
 const PassportContent = z
@@ -45,7 +63,9 @@ const PassportContent = z
     founder: optional(line),
     headline: optional(line),
     overview: optional(longText),
-    products: z.array(z.object({ name: line.min(1), detail: optional(line), code: optional(z.string().trim().max(40)) })).max(20),
+    products: z
+      .array(z.object({ name: line.min(1), detail: optional(line), code: optional(z.string().trim().max(40)), africonnectUrl: africonnectLink.optional().transform((v) => v ?? null) }))
+      .max(20),
     womenInTrade: list(line),
     targetMarkets: z.array(z.object({ label: line.min(1), places: list(line) })).max(10),
     seeking: optional(line),
@@ -54,11 +74,13 @@ const PassportContent = z
     email: optional(line),
     phones: list(line),
     address: optional(line),
+    africonnectUrl: africonnectLink,
   })
   .openapi("TradePassport");
 
 const SaveBody = PassportContent.omit({ passportId: true })
   .extend({
+    africonnectUrl: africonnectLink.optional().transform((v) => v ?? null),
     statusReason: z.string().trim().max(500).nullable().optional().transform((v) => v ?? null),
     smeId: z.string().trim().min(1).max(40).optional(),
     applicationId: z.uuid().optional(),
@@ -73,7 +95,19 @@ const PublicPassport = z
     tier: z.enum(PASSPORT_TIERS),
     verifiedOn: z.string(),
     validUntil: z.string(),
-    details: PassportContent.omit({ passportId: true, tier: true, status: true, statusReason: true, verifiedOn: true, validUntil: true, displayName: true }).nullable(),
+    details: PassportContent.omit({
+      passportId: true,
+      tier: true,
+      status: true,
+      statusReason: true,
+      verifiedOn: true,
+      validUntil: true,
+      displayName: true,
+      website: true,
+      email: true,
+      phones: true,
+      address: true,
+    }).nullable(),
   })
   .openapi("TradePublicPassport");
 
@@ -107,7 +141,7 @@ const publicRoute = createRoute({
   tags,
   summary: "Check an Entrust Africa Verified SME Passport",
   description:
-    "What the QR code on a passport opens. It needs no sign-in. It holds only the lines Entrust staff published on the passport (never a score, a finance figure or an answer from the diagnostic). A suspended or revoked passport returns its standing and no details.",
+    "What the QR code on a passport opens. It needs no sign-in. It holds only the lines Entrust staff published on the passport (never a score, a finance figure or an answer from the diagnostic), and none of the business's contact details: it links to the business's store and products on AfriConnect instead. A suspended or revoked passport returns its standing and no details.",
   request: { params: z.object({ passportId: z.string().min(1).max(40) }) },
   responses: { 200: { description: "The passport", content: json(PublicPassport) }, 404: problem("No such passport") },
 });

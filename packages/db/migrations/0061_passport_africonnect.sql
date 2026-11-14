@@ -1,0 +1,1 @@
+ALTER TABLE "trade"."sme_passport" ADD COLUMN "africonnect_url" text;

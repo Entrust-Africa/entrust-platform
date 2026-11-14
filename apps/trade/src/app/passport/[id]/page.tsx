@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft, BadgeCheck, CheckCircle2, ShieldAlert, Star } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BadgeCheck, CheckCircle2, ShieldAlert, ShoppingBag, Star } from "lucide-react";
+import { afriConnectSearchUrl } from "@entrust/auth/africonnect";
 import { Card, StatusBadge } from "@entrust/ui";
 import { Qr } from "@/components/passport/qr";
 import { getMe } from "@/lib/api";
 import { STANDING_LABEL, TIERS, countryName, passportAddress, passportDate, type PublicPassport } from "@/lib/passport";
 
 // What the QR code on an Entrust Africa Verified SME Passport opens. Public: no sign-in. It shows only what staff published on the
-// passport, and says plainly when a passport has lapsed or been withdrawn.
+// passport, and says plainly when a passport has lapsed or been withdrawn. It shows none of the business's contact details: buyers
+// are sent to the business's store and products on AfriConnect.
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Verified SME Passport", robots: { index: false } };
@@ -35,8 +37,6 @@ async function signedIn(): Promise<boolean> {
   }
 }
 
-const withProtocol = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
-const telHref = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
 
 function Heading({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-700">{children}</h2>;
@@ -100,6 +100,7 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
   const tier = TIERS[p.tier];
   const d = p.details;
   const live = p.standing === "active";
+  const store = d?.africonnectUrl ?? null;
 
   return (
     <>
@@ -125,6 +126,18 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
               ID <span className="font-mono font-bold text-ink">{p.passportId}</span>
             </span>
           </div>
+          {live && d && (
+            <a
+              href={store ?? afriConnectSearchUrl(p.displayName)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center gap-2 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
+            >
+              <ShoppingBag className="size-4" aria-hidden />
+              Buy on AfriConnect
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          )}
           </div>
         </div>
         <div
@@ -194,7 +207,21 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
                         <p className="text-sm font-semibold text-ink">{item.name}</p>
                         {item.detail && <p className="text-sm text-ink-2">{item.detail}</p>}
                       </div>
-                      {item.code && <span className="shrink-0 text-xs text-ink-3">{item.code}</span>}
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        {item.code && <span className="text-xs text-ink-3">{item.code}</span>}
+                        {live && (item.africonnectUrl ?? store) && (
+                          <a
+                            href={item.africonnectUrl ?? store!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 underline-offset-4 hover:underline"
+                          >
+                            Buy on AfriConnect
+                            <ArrowUpRight className="size-3.5" aria-hidden />
+                            <span className="sr-only">: {item.name} (opens in a new tab)</span>
+                          </a>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -262,41 +289,25 @@ function PassportView({ passport: p, address }: { passport: PublicPassport; addr
               <Qr value={address} label={`QR code that opens this page, passport ${p.passportId}`} />
               <p className="break-all text-xs text-ink-3">{address}</p>
             </Card>
-            {(d.website || d.email || d.phones.length > 0 || d.address) && (
-              <Card className="space-y-3 p-5 text-sm">
-                <Heading>Contact</Heading>
-                {d.website && (
-                  <p>
-                    <span className="block text-xs text-ink-3">Website</span>
-                    <a href={withProtocol(d.website)} rel="noopener noreferrer" className="font-semibold text-brand-700 underline-offset-4 hover:underline">
-                      {d.website}
-                    </a>
-                  </p>
-                )}
-                {d.email && (
-                  <p>
-                    <span className="block text-xs text-ink-3">Email</span>
-                    <a href={`mailto:${d.email}`} className="font-semibold text-ink underline-offset-4 hover:underline">
-                      {d.email}
-                    </a>
-                  </p>
-                )}
-                {d.phones.length > 0 && (
-                  <p>
-                    <span className="block text-xs text-ink-3">Telephone</span>
-                    {d.phones.map((phone) => (
-                      <a key={phone} href={telHref(phone)} className="block font-semibold text-ink">
-                        {phone}
-                      </a>
-                    ))}
-                  </p>
-                )}
-                {d.address && (
-                  <p>
-                    <span className="block text-xs text-ink-3">Address</span>
-                    <span className="font-semibold text-ink">{d.address}</span>
-                  </p>
-                )}
+            {live && (
+              <Card className="flex flex-col gap-3 border-brand-100 bg-brand-50/40 p-5">
+                <Heading>Buy from {p.displayName}</Heading>
+                <ShoppingBag className="size-8 text-brand-700" aria-hidden />
+                <p className="text-sm leading-relaxed text-ink-2">
+                  {store
+                    ? `${p.displayName} sells on AfriConnect, the African trade marketplace. See its products, prices and minimum orders, and order there.`
+                    : `Find ${p.displayName}'s products on AfriConnect, the African trade marketplace, and order there.`}
+                </p>
+                <a
+                  href={store ?? afriConnectSearchUrl(p.displayName)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-auto inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
+                >
+                  {store ? "Visit the store on AfriConnect" : "Find it on AfriConnect"}
+                  <ArrowUpRight className="size-4" aria-hidden />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
               </Card>
             )}
           </div>

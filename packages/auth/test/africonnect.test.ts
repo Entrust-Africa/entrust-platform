@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   afriConnectBuyersUrl,
   afriConnectMarketIntelligenceUrl,
+  afriConnectSearchUrl,
   afriConnectOAuthConfig,
   afriConnectSettings,
   fetchAfriConnectUser,
@@ -113,6 +114,11 @@ describe("the Meet buyers address", () => {
     expect(afriConnectMarketIntelligenceUrl({})).toBe("https://www.africonnect.africa.com/export-potential?exporter=ETH");
     expect(afriConnectMarketIntelligenceUrl({ AFRICONNECT_ISSUER: "https://afri.example/api/auth" })).toBe("https://afri.example/export-potential?exporter=ETH");
     expect(afriConnectMarketIntelligenceUrl({ AFRICONNECT_ISSUER: "not a url" })).toBe("https://www.africonnect.africa.com/export-potential?exporter=ETH");
+  });
+
+  it("searches AfriConnect's public product list for a business", () => {
+    expect(afriConnectSearchUrl(" Gofer Coffee ", {})).toBe("https://www.africonnect.africa.com/explore?q=Gofer+Coffee");
+    expect(afriConnectSearchUrl("A&B", { AFRICONNECT_ISSUER: "https://afri.example/api/auth" })).toBe("https://afri.example/explore?q=A%26B");
   });
 
   it("is AfriConnect's marketplace on the production site by default", () => {
