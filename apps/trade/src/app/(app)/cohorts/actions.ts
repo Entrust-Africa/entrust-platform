@@ -158,6 +158,35 @@ export async function enrolManyAction(cohortId: string, organizationIds: string[
   return result;
 }
 
+export type EnrolFromDiagnosticsResult = { enrolled: number; invited: number; failed: { publicDiagnosticId: string; error: string }[] };
+
+/**
+ * Makes a business from each submitted public diagnostic and enrols it. `confirmDuplicateName` is set for the forms whose
+ * similar registered business staff were shown. One that fails doesn't stop the rest.
+ */
+export async function enrolFromDiagnosticsAction(
+  cohortId: string,
+  forms: { publicDiagnosticId: string; confirmDuplicateName: boolean }[],
+): Promise<EnrolFromDiagnosticsResult> {
+  const api = await serverApi();
+  const result: EnrolFromDiagnosticsResult = { enrolled: 0, invited: 0, failed: [] };
+  for (const form of forms) {
+    const res = await api.v1.trade.enrollments["from-diagnostic"].$post({ json: { cohortId, ...form } });
+    if (res.ok) {
+      const data = (await res.json()) as { owner: "owner" | "invited" };
+      result.enrolled += 1;
+      if (data.owner === "invited") result.invited += 1;
+    } else {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      result.failed.push({ publicDiagnosticId: form.publicDiagnosticId, error: data?.error ?? `Failed (${res.status}).` });
+    }
+  }
+  revalidatePath(`/cohorts/${cohortId}`);
+  revalidatePath("/cohorts");
+  revalidatePath("/diagnostics");
+  return result;
+}
+
 export async function assignCohortStaffAction(cohortId: string, userId: string): Promise<ActionState> {
   const api = await serverApi();
   const res = await api.v1.trade.cohorts[":id"].staff.$post({ param: { id: cohortId }, json: { userId } });

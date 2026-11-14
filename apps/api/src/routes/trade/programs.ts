@@ -24,6 +24,8 @@ import {
   updateEnrollmentStatus,
 } from "../../services/trade-cohorts";
 import { assignedCohortIds, canReachCohort, limitedToAssignedCohorts } from "../../services/trade-shared";
+import { enrolFromPublicDiagnostic, listWaitingDiagnostics } from "../../services/trade-enrol-from-diagnostic";
+import { contextFor } from "../clear/shared";
 
 function requireUser(c: { get: (key: "user") => AppEnv["Variables"]["user"] }) {
   const user = c.get("user");
@@ -291,8 +293,32 @@ export const tradePrograms = new Hono<AppEnv>()
     if (principal.staffRole !== "admin" && principal.staffRole !== "facilitator") {
       throw new ServiceError("forbidden", "Only Entrust administrators and facilitators can see the businesses waiting to be enrolled.");
     }
-    return c.json({ smes: await listWaitingSmes(db) });
+    // Businesses that signed up and added themselves, then people who only filled in the public diagnostic.
+    const [smes, diagnostics] = await Promise.all([listWaitingSmes(db), listWaitingDiagnostics(await contextFor(user))]);
+    return c.json({ smes, diagnostics });
   })
+  // Makes the business a submitted public diagnostic describes and enrols it, with the avenue the form assigned.
+  .post(
+    "/enrollments/from-diagnostic",
+    zValidator(
+      "json",
+      z.object({ cohortId: z.string().uuid(), publicDiagnosticId: z.string().uuid(), confirmDuplicateName: z.boolean().optional() }),
+      (result, c) => {
+        if (!result.success) {
+          const issue = result.error.issues[0];
+          return c.json({ error: issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid input.", code: "invalid" }, 400);
+        }
+      },
+    ),
+    async (c) => {
+      const user = requireUser(c);
+      requireTrustedOrigin(c);
+      const ctx = await contextFor(user);
+      const body = c.req.valid("json");
+      if (!(await canReachCohort(ctx.db, ctx.principal, body.cohortId))) throw new ServiceError("not_found", "Cohort not found.");
+      return c.json(await enrolFromPublicDiagnostic(ctx, body), 201);
+    },
+  )
   .get("/enrollments", async (c) => {
     const user = requireUser(c);
     const db = getDb();

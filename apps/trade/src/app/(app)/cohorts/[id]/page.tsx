@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeGet } from "@/lib/trade-api";
-import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingForEnrolment } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
@@ -124,7 +124,7 @@ export default async function CohortDetailPage(props: {
   const sponsors = me.staffRole === "admin" ? await listSponsors() : [];
   const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
-    listWaitingSmes(),
+    listWaitingForEnrolment(),
     listDiagnostics(id),
     listPlacements(id),
     listSessions(id),
@@ -168,7 +168,7 @@ export default async function CohortDetailPage(props: {
           <div className="flex items-center gap-2">
             {canEnrol && <EditCohortDialog cohort={cohort} sponsors={sponsors} isAdmin={me.staffRole === "admin"} />}
             {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
-            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
+            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting.smes} diagnostics={waiting.diagnostics} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
       </div>
@@ -302,7 +302,7 @@ export default async function CohortDetailPage(props: {
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
             </p>
             <div className="mt-4">
-              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
+              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting.smes} diagnostics={waiting.diagnostics} enrolledOrganizationIds={enrolledOrganizationIds} />}
             </div>
           </Card>
         ) : (
