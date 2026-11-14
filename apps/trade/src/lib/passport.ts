@@ -19,7 +19,7 @@ export interface PassportContent {
   headline: string | null;
   logoUrl: string | null;
   overview: string | null;
-  products: { name: string; detail: string | null; code: string | null }[];
+  products: { name: string; detail: string | null; code: string | null; africonnectUrl: string | null }[];
   womenInTrade: string[];
   targetMarkets: { label: string; places: string[] }[];
   seeking: string | null;
@@ -28,7 +28,12 @@ export interface PassportContent {
   email: string | null;
   phones: string[];
   address: string | null;
+  /** The business's store on AfriConnect, where the public page sends buyers. */
+  africonnectUrl: string | null;
 }
+
+/** Contact lines only staff see. The public page sends buyers to AfriConnect instead. */
+type PrivateLine = "website" | "email" | "phones" | "address";
 
 export interface PublicPassport {
   passportId: string;
@@ -37,7 +42,7 @@ export interface PublicPassport {
   tier: PassportTier;
   verifiedOn: string;
   validUntil: string;
-  details: Omit<PassportContent, "passportId" | "tier" | "status" | "statusReason" | "verifiedOn" | "validUntil" | "displayName"> | null;
+  details: Omit<PassportContent, PrivateLine | "passportId" | "tier" | "status" | "statusReason" | "verifiedOn" | "validUntil" | "displayName"> | null;
 }
 
 export interface PassportSource {

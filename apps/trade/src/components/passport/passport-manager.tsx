@@ -35,6 +35,7 @@ interface Form {
   email: string;
   phones: string;
   address: string;
+  africonnectUrl: string;
 }
 
 /** What a new passport is made from: a business on the platform or an application in the register. */
@@ -70,7 +71,7 @@ function formFrom(p: PassportContent | null, s: PassportSuggestion): Form {
     founder: p?.founder ?? s.founder ?? "",
     headline: p?.headline ?? "",
     overview: p?.overview ?? "",
-    products: (p?.products ?? []).map((x) => [x.name, x.detail ?? "", x.code ?? ""].join(" | ").replace(/( \| )+$/, "")).join("\n"),
+    products: (p?.products ?? []).map((x) => [x.name, x.detail ?? "", x.code ?? "", x.africonnectUrl ?? ""].join(" | ").replace(/( \| )+$/, "")).join("\n"),
     womenInTrade: (p?.womenInTrade ?? []).join("\n"),
     targetMarkets: (p?.targetMarkets ?? []).map((m) => `${m.label}: ${m.places.join(", ")}`).join("\n"),
     seeking: p?.seeking ?? "",
@@ -80,6 +81,7 @@ function formFrom(p: PassportContent | null, s: PassportSuggestion): Form {
     email: p?.email ?? s.email ?? "",
     phones: (p?.phones ?? s.phones).join("\n"),
     address: p?.address ?? s.address ?? "",
+    africonnectUrl: p?.africonnectUrl ?? "",
   };
 }
 
@@ -103,8 +105,8 @@ function bodyFrom(f: Form, link: Link | null) {
     headline: orNull(f.headline),
     overview: orNull(f.overview),
     products: lines(f.products).map((line) => {
-      const [name = "", detail = "", code = ""] = line.split("|").map((x) => x.trim());
-      return { name, detail: detail || null, code: code || null };
+      const [name = "", detail = "", code = "", africonnectUrl = ""] = line.split("|").map((x) => x.trim());
+      return { name, detail: detail || null, code: code || null, africonnectUrl: africonnectUrl || null };
     }),
     womenInTrade: lines(f.womenInTrade),
     targetMarkets: lines(f.targetMarkets).map((line) => {
@@ -118,6 +120,7 @@ function bodyFrom(f: Form, link: Link | null) {
     email: orNull(f.email),
     phones: lines(f.phones),
     address: orNull(f.address),
+    africonnectUrl: orNull(f.africonnectUrl),
   };
 }
 
@@ -290,7 +293,10 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="pp-products" className="text-sm font-semibold text-ink">What it sells</label>
                 <textarea id="pp-products" className={area} disabled={!canIssue} value={form.products} onChange={(e) => set("products", e.target.value)} />
-                <p className="text-sm text-ink-3">One per line: name | detail | HS code. For example: Green coffee | Specialty Arabica · Sidama | HS 0901.11</p>
+                <p className="text-sm text-ink-3">
+                  One per line: name | detail | HS code | AfriConnect link. For example: Roasted coffee | Roasted &amp; bagged in Addis Ababa | HS 0901.21 | https://www.africonnect.africa.com/explore/…
+                  Leave the link off and the product links to the store.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="pp-women" className="text-sm font-semibold text-ink">Women in trade</label>
@@ -319,8 +325,16 @@ export function PassportManager({ items: initial, canIssue, checks, loadError }:
           </fieldset>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {text("website", "Website")}
+            {text("africonnectUrl", "Store on AfriConnect", "The business's page, like https://www.africonnect.africa.com/businesses/… The public page sends buyers here.")}
             {text("logoUrl", "Logo", "A path like /passports/EA-ETH-0001.png, or an https link")}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-ink">Contact details (staff only)</p>
+            <p className="text-sm text-ink-3">Kept for Entrust staff. The public page never shows them; buyers go through AfriConnect.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {text("website", "Website")}
             {text("email", "Email")}
             {text("address", "Address")}
             <div className="flex flex-col gap-1.5">
