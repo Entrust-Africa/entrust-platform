@@ -25,7 +25,7 @@ jobs:
   # "Run workflow" deploys main only, and only a commit CI has passed on, so an unmerged branch never reaches production.
   gate:
     name: Check what may deploy
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: >-
       ${{
         (github.event_name == 'workflow_run'
@@ -57,7 +57,7 @@ jobs:
     name: Apply Production Database Migrations
     needs: gate
     environment: production
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
         with:
@@ -96,7 +96,7 @@ jobs:
     name: Deploy API Worker
     needs: [gate, migrate-db]
     environment: production
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
         with:
@@ -135,7 +135,7 @@ jobs:
     needs: [gate, deploy-api]
     environment: production
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
       matrix:
@@ -187,7 +187,7 @@ jobs:
     needs: [gate, deploy-api, deploy-railway]
     environment: production
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       # The addresses people use, not the copies on workers.dev. A new Railway build takes a minute or two to start
       # answering, so each check retries for up to five minutes.

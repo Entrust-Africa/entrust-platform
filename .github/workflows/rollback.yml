@@ -29,7 +29,7 @@ jobs:
     name: Roll back production
     if: ${{ github.ref == 'refs/heads/main' }}
     environment: production
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
