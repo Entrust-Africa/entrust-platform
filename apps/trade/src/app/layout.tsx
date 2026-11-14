@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Montserrat, Noto_Sans_Ethiopic, Open_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const montserrat = Montserrat({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-montserrat" });
-const openSans = Open_Sans({ subsets: ["latin"], variable: "--font-open-sans" });
-const ethiopic = Noto_Sans_Ethiopic({ subsets: ["ethiopic"], variable: "--font-ethiopic" });
-const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains-mono" });
+// The font files are in the repo (packages/ui/fonts), not fetched from Google at build time: that fetch failed builds.
+const montserrat = localFont({ src: "../../../../packages/ui/fonts/montserrat-latin-wght-normal.woff2", weight: "100 900", variable: "--font-montserrat" });
+const openSans = localFont({ src: "../../../../packages/ui/fonts/open-sans-latin-wght-normal.woff2", weight: "300 800", variable: "--font-open-sans" });
+const ethiopic = localFont({ src: "../../../../packages/ui/fonts/noto-sans-ethiopic-ethiopic-wght-normal.woff2", weight: "100 900", variable: "--font-ethiopic" });
+const mono = localFont({ src: "../../../../packages/ui/fonts/jetbrains-mono-latin-wght-normal.woff2", weight: "100 800", variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
   title: { default: "TRADE", template: "%s · TRADE" },
