@@ -44,6 +44,29 @@ export function normalizeLegalName(name: string): string {
   return normalized.replace(/\s+/g, " ").trim();
 }
 
+export interface LegalNameMatch {
+  smeId: string;
+  legalName: string;
+  organizationId: string;
+}
+
+/**
+ * Every active (not merged) SME in a country, keyed by its normalised legal name, from one query. For checking many names
+ * at once: calling checkSmeDuplicates for each would read the whole registry once per name.
+ */
+export async function legalNameIndex(db: Executor, country: string): Promise<Map<string, LegalNameMatch>> {
+  const rows = await db
+    .select({ smeId: schema.smeProfile.smeId, legalName: schema.smeProfile.legalName, organizationId: schema.smeProfile.organizationId })
+    .from(schema.smeProfile)
+    .where(and(eq(schema.smeProfile.country, country), sql`${schema.smeProfile.mergedIntoSmeId} is null`));
+  const index = new Map<string, LegalNameMatch>();
+  for (const row of rows) {
+    const key = normalizeLegalName(row.legalName);
+    if (key && !index.has(key)) index.set(key, row);
+  }
+  return index;
+}
+
 export interface CheckDuplicatesInput {
   legalName: string;
   registrationNumber?: string | null | undefined;
