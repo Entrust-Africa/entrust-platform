@@ -1,784 +1,1011 @@
-import { STEPS, PHASES } from "@entrust/rules";
-import type { PurchaseOrderData, SimulationGap, SimulationStepDefinition, SimulationLogEntry } from "./types";
+import type { Answers, Ask, OpenItem, PurchaseOrder, Scenario, StoryStep } from "./types";
 
-export const SIMULATION_PO: PurchaseOrderData = {
-  poNumber: "US-2026-0048",
-  poDate: "12 November 2026",
-  orderType: "International Purchase Order",
+// One order, told step by step: 2,000 bags of roasted coffee from Addis Ababa to Miami by air.
+//
+// The story is written against CLEAR's own steps, one entry per step that applies, and the test
+// plays it through the GATE engine to prove every step is ready when its turn comes. Steps that do
+// not apply have no entry: the engine rules them out from the facts.
+//
+// CLEAR has no rule pack for roasted coffee to the US yet, so the regulatory detail here is
+// illustrative. Every reference that starts with SIM- is invented, and banks, carriers and
+// forwarders are named by role only.
+
+const EXPORTER = "Momentous Trading PLC";
+const BUYER = "Atlantic Specialty Foods LLC";
+const ENTRUST = "Entrust facilitator";
+const REVIEWER = "Entrust reviewer";
+const CLEAR = "CLEAR";
+const EXPORTER_BANK = "Exporter's bank";
+const BUYER_BANK = "Buyer's bank (collecting bank)";
+
+export const ORDER: PurchaseOrder = {
+  number: "US-2026-0048",
+  date: "2026-11-12",
   currency: "USD",
   buyer: {
-    company: "Atlantic Specialty Foods LLC",
+    company: BUYER,
     address: "1250 NW 23rd Avenue, Miami, Florida 33125, USA",
     country: "United States",
-    contactPerson: "Daniel Morgan",
+    contact: "Daniel Morgan",
     email: "procurement@atlanticspecialtyfoods.example",
     telephone: "+1 305 555 0184",
   },
   seller: {
-    company: "Momentous Trading PLC (YAD Coffee)",
+    company: `${EXPORTER} (YAD Coffee)`,
     country: "Ethiopia",
-    businessAddress: "Addis Ababa, Ethiopia",
-    contactPerson: "Export Sales Manager",
+    address: "Addis Ababa, Ethiopia",
+    contact: "Export Sales Manager",
     email: "export@yadcoffee.example",
   },
   product: {
-    name: "Ethiopian Roasted Coffee",
+    name: "Ethiopian roasted coffee",
     origin: "Ethiopia",
-    productForm: "Roasted whole coffee beans",
+    form: "Roasted whole coffee beans",
     roast: "Medium roast",
-    packaging: "250 g sealed retail bags (nitrogen flushed, degassing valve)",
+    packaging: "250 g sealed retail bags",
     quantity: "2,000 bags",
-    totalNetWeight: "500 kg",
+    netWeight: "500 kg",
     intendedUse: "Retail sale",
-    hsCode: "To be confirmed by exporter and customs authority", // Deliberately unconfirmed in initial PO
+    hsCode: "To be confirmed by exporter and customs authority",
   },
-  orderValue: {
-    quantity: 2000,
-    unitPrice: 3.5,
-    totalAmount: 7000.0,
-    currency: "USD",
-  },
-  deliveryTerms: {
+  value: { units: 2000, unitPrice: 3.5, total: 7000 },
+  delivery: {
     incoterm: "FCA",
-    namedPlace: "Exporter's designated handover location, Addis Ababa, Ethiopia", // Deliberately unconfirmed
-    incotermsVersion: "2020",
-    handoverNote: "The parties must confirm the precise handover location before shipment.",
+    incotermsVersion: "Incoterms 2020",
+    namedPlace: "Exporter's designated handover location, Addis Ababa, Ethiopia",
+    note: "The parties must confirm the precise handover location before shipment.",
   },
   paymentTerms: [
-    "30% advance payment upon order confirmation ($2,100.00 USD).",
-    "70% balance against agreed shipping documents ($4,900.00 USD).",
-    "Payment by international bank transfer (T/T / CAD).",
+    "30% advance payment upon order confirmation (USD 2,100).",
+    "70% balance against agreed shipping documents (USD 4,900).",
+    "Payment by international bank transfer.",
     "Seller to confirm applicable Ethiopian banking and foreign-exchange procedures before accepting payment.",
   ],
   packagingAndMarking: [
-    "Each 250 g bag must be food-grade and hermetically sealed.",
-    "Display product name, origin (Ethiopia), roast level, and net weight.",
-    "Include batch / lot identification and harvest year.",
-    "Include production and best-before dates (12 months from packing).",
-    "Carry FDA-compliant US nutrition & ingredient labeling.",
+    "Each 250 g bag must be food-grade and sealed.",
+    "Show the product name, origin (Ethiopia), roast level and net weight.",
+    "Include batch or lot identification.",
+    "Include production and best-before dates.",
     "Final labeling requirements must be confirmed before production and dispatch.",
   ],
   qualityRequirements: [
-    "Product must be roasted coffee beans of Ethiopian origin (Single Origin Arabica).",
-    "No visible foreign matter, insect damage, or contamination.",
-    "Consistent medium roast profile (Agtron 55-60).",
+    "Roasted coffee beans of Ethiopian origin.",
+    "No visible foreign matter, insect damage or contamination.",
+    "Consistent medium roast.",
     "Packaging must protect the product during international transport.",
     "Buyer may request a pre-shipment product sample.",
-    "Compliance with Ethiopian MoA plant health & US FDA food safety requirements.",
   ],
-  deliverySchedule: {
-    confirmation: "Within 3 business days from receipt of PO.",
-    production: "Within 21 calendar days after advance payment receipt.",
-    targetDispatch: "Within 30 calendar days after order confirmation.",
-    finalDelivery: "To be agreed after freight arrangements.",
-  },
+  schedule: [
+    { label: "Order confirmation", value: "Within 3 business days from receipt of the order" },
+    { label: "Production", value: "Within 21 calendar days after the advance payment is received" },
+    { label: "Target dispatch", value: "Within 30 calendar days after order confirmation" },
+    { label: "Final delivery", value: "To be agreed after freight arrangements" },
+  ],
   requiredDocuments: [
-    "Commercial Invoice (showing 30% advance credited, 70% balance payable).",
-    "Packing List (2,000 bags across 50 master export cartons, 500 kg net, 540 kg gross).",
-    "Export Customs Declaration and Release Evidence (Ethiopian Customs Commission).",
-    "Certificate of Origin (Ethiopian Chamber of Commerce / MoTRI).",
-    "Applicable food safety & phytosanitary release documentation.",
-    "Air Waybill (AWB) issued by carrier / freight forwarder.",
+    { label: "Commercial invoice", evidence: ["final_commercial_invoice"] },
+    { label: "Packing list", evidence: ["final_packing_list"] },
+    { label: "Export customs declaration and release evidence", evidence: ["customs_declaration", "customs_release_note"] },
+    { label: "Certificate of origin", evidence: ["certificate_of_origin"] },
+    { label: "Applicable food safety and phytosanitary release documentation", evidence: [], openItem: "certificates" },
+    { label: "Air waybill issued by the carrier or freight forwarder", evidence: ["transport_document"] },
   ],
 };
 
-export const SIMULATION_GAPS: Record<string, SimulationGap> = {
-  "gap-hs-code": {
-    id: "gap-hs-code",
-    stepId: "STEP-008",
-    title: "HS Tariff Code Unconfirmed in Purchase Order",
-    triggerCondition: "PO US-2026-0048 specifies HS Code: 'To be confirmed by exporter and customs authority'",
-    impact:
-      "Halts Phase 1 customs schedule lookup (STEP-009), official ECC tariff sign-off (STEP-010), and US FDA admissibility pre-checks (STEP-017).",
-    policyReason:
-      "CLEAR Non-Assumption Policy: The product is roasted coffee beans (retail-packed), distinct from raw/green coffee (0901.11). CLEAR refuses to assume classification without formal exporter designation, preventing misdeclaration penalties under US 19 CFR §148 and Ethiopian Customs tariff schedule discrepancies.",
-    noticeHeading: "CLEAR Compliance Notice — Classification Gap Detected",
-    noticeMessage:
-      "Purchase Order US-2026-0048 leaves the HS Tariff Code unconfirmed. CLEAR identified that the product is roasted whole coffee beans (not raw/green coffee beans). To ensure proper tariff assignment and US FDA prior admissibility verification, the SME must confirm the 6-digit HS code (0901.21) and Ethiopian 8-digit tariff code (0901.21.00).",
-    resolutionLabel: "Resolve Gap: SME Confirms HS Code 0901.21.00 (Roasted Coffee)",
-    resolvedMessage:
-      "Momentous Trading PLC confirmed HS Code 0901.21.00 (Coffee, roasted, not decaffeinated). Ethiopian Customs Tariff schedule matched with 0% export tariff. Gate unlocked.",
-  },
-  "gap-handover-location": {
-    id: "gap-handover-location",
+// ---- The two points where the run stops and asks ----
+
+export const HS_CODE: Ask = {
+  id: "hs-code",
+  stepId: "STEP-008",
+  title: "Which HS code does the exporter propose?",
+  context:
+    "The order leaves the HS code “to be confirmed by exporter and customs authority”. CLEAR has the product on file as roasted, whole-bean coffee that is not decaffeinated, in 250 g retail bags.",
+  why: "The HS code goes on the export declaration and decides the tariff line and the rules at destination. A wrong code is a misdeclaration at both ends, so CLEAR does not pick one for the exporter. It checks the code the exporter proposes.",
+  from: EXPORTER,
+  options: [
+    {
+      id: "0901.21",
+      label: "0901.21",
+      hint: "Coffee, roasted, not decaffeinated",
+      accepted: true,
+      response: "Recorded. The heading matches the product on file: roasted, not decaffeinated. The national tariff line is 0901.21.00. CLEAR checks it against the customs tariff next, and Entrust signs it off at STEP-010.",
+      recorded: "0901.21.00, proposed by the exporter",
+    },
+    {
+      id: "0901.11",
+      label: "0901.11",
+      hint: "Coffee, not roasted, not decaffeinated",
+      accepted: false,
+      response: "0901.11 is for coffee that has not been roasted. The composition statement at STEP-006 says this coffee is roasted, so the tariff lookup would not match. The question stays open.",
+    },
+    {
+      id: "0901.22",
+      label: "0901.22",
+      hint: "Coffee, roasted, decaffeinated",
+      accepted: false,
+      response: "0901.22 is for decaffeinated roasted coffee. The composition statement at STEP-006 says this coffee is not decaffeinated. The question stays open.",
+    },
+    {
+      id: "2101.11",
+      label: "2101.11",
+      hint: "Extracts, essences and concentrates of coffee",
+      accepted: false,
+      response: "2101.11 covers instant coffee and coffee extracts. The product on file is whole roasted beans. The question stays open.",
+    },
+  ],
+};
+
+export const HANDOVER: Ask = {
+  id: "handover",
+  stepId: "STEP-022",
+  title: "Where exactly are the goods handed over under FCA?",
+  context:
+    "The order says FCA “Exporter's designated handover location, Addis Ababa” and that “the parties must confirm the precise handover location before shipment”. Entrust's audit of the Incoterm cannot pass with a place that open.",
+  why: "Under FCA the named place decides when risk passes to the buyer and who loads or unloads. CLEAR does not assume it is the roastery, the airport or a forwarder's warehouse. The exporter agrees it with the buyer and records it.",
+  from: `${EXPORTER}, agreed with the buyer`,
+  options: [
+    {
+      id: "roastery",
+      label: "The exporter's roastery in Addis Ababa",
+      hint: "The exporter loads the buyer's carrier's truck there",
+      accepted: true,
+      response: "Recorded, with the buyer's written agreement. Delivery is complete, and risk passes, when the goods are loaded on the truck the buyer's carrier sends to the roastery.",
+      recorded: "FCA Momentous roastery, Addis Ababa (address on the facility profile)",
+    },
+    {
+      id: "airport",
+      label: "The buyer's forwarder's warehouse at the Bole airport cargo terminal",
+      hint: "The exporter trucks the goods there",
+      accepted: true,
+      response: "Recorded, with the buyer's written agreement. Delivery is complete, and risk passes, when the exporter's truck arrives at the warehouse with the goods ready for unloading.",
+      recorded: "FCA buyer's forwarder's warehouse, Bole airport cargo terminal, Addis Ababa",
+    },
+    {
+      id: "city",
+      label: "Addis Ababa, as the order has it",
+      hint: "Leave the place unnamed",
+      accepted: false,
+      response: "A city does not say where the goods change hands, so it cannot fix when risk passes. Incoterms 2020 asks for the point to be named as precisely as possible, and the order itself asks the parties to confirm it. The question stays open.",
+    },
+  ],
+};
+
+const atRoastery = (answers: Answers) => answers[HANDOVER.id] !== "airport";
+const place = (answers: Answers) =>
+  atRoastery(answers) ? "the Momentous roastery in Addis Ababa" : "the buyer's forwarder's warehouse at the Bole airport cargo terminal";
+
+// ---- What the order leaves open ----
+
+export const OPEN_ITEMS: readonly OpenItem[] = [
+  { id: "hs-code", label: "HS code", orderSays: "To be confirmed by exporter and customs authority.", stepId: "STEP-008", askId: HS_CODE.id },
+  {
+    id: "handover",
+    label: "Handover location",
+    orderSays: "The parties must confirm the precise handover location before shipment.",
     stepId: "STEP-022",
-    title: "Indeterminate Handover Location under Incoterms 2020 FCA",
-    triggerCondition:
-      "PO US-2026-0048 specifies FCA Addis Ababa with 'Exporter's designated handover location... The parties must confirm the precise handover location before shipment.'",
-    impact:
-      "Blocks Commercial Readiness Milestone (STEP-035), carrier booking approval (STEP-074), and equipment receipt (STEP-077).",
-    policyReason:
-      "Under Incoterms 2020 FCA (Free Carrier), risk of loss transfers at the exact moment goods are placed at the disposal of the buyer's carrier at the named point. An ambiguous location ('Exporter's designated handover location') creates legal liability gaps, insurance ambiguities, and carrier delivery disputes.",
-    noticeHeading: "CLEAR Contract Audit — Handover Location Ambiguity",
-    noticeMessage:
-      "Delivery term is agreed as Incoterms 2020 FCA Addis Ababa, but the precise named place is unconfirmed in PO US-2026-0048. CLEAR identified this gap. Rather than assuming the exporter's registered address, airport cargo terminal, or inland dry port, CLEAR requires the SME and buyer to specify the exact facility address for carrier custody transfer.",
-    resolutionLabel: "Resolve Gap: Confirm Handover Location (Momentous Roastery, Bole Lemi Industrial Zone)",
-    resolvedMessage:
-      "Handover location confirmed: Momentous Trading Roastery & Export Facility, Plot 14, Bole Lemi Industrial Zone, Addis Ababa. Carrier handover designated to Ethiopian Airlines Cargo (ET Cargo). Incoterms audit passed.",
+    askId: HANDOVER.id,
   },
+  {
+    id: "fx-procedure",
+    label: "Banking and foreign-exchange procedure",
+    orderSays: "Seller to confirm applicable Ethiopian banking and foreign-exchange procedures before accepting payment.",
+    stepId: "STEP-025",
+    settled: "The exporter's bank confirmed that an advance by transfer and a balance against documents are both permitted, and how each is recorded against the export permit.",
+  },
+  {
+    id: "documents",
+    label: "Documents for the 70% balance",
+    orderSays: "70% balance against agreed shipping documents.",
+    stepId: "STEP-027",
+    settled: "Buyer and exporter agreed the set in writing: commercial invoice, packing list, air waybill, certificate of origin and quality certificate.",
+  },
+  {
+    id: "collecting-bank",
+    label: "The buyer's bank",
+    orderSays: "Payment by international bank transfer. No bank is named.",
+    stepId: "STEP-027",
+    settled: "The buyer named its bank in Miami as the collecting bank.",
+  },
+  {
+    id: "sample",
+    label: "Pre-shipment sample",
+    orderSays: "Buyer may request a pre-shipment product sample.",
+    stepId: "STEP-031",
+    settled: "The buyer replied that it does not need a sample and will rely on the quality certificate and the packaging photographs.",
+  },
+  {
+    id: "certificates",
+    label: "Food safety and phytosanitary documents",
+    orderSays: "Applicable food safety and phytosanitary release documentation.",
+    stepId: "STEP-042",
+    settled: "None applies. The buyer confirmed in writing that it needs no phytosanitary or health certificate for roasted coffee.",
+  },
+  {
+    id: "labelling",
+    label: "Final labelling",
+    orderSays: "Final labeling requirements must be confirmed before production and dispatch.",
+    stepId: "STEP-043",
+    settled: "The buyer approved the final bag artwork before production started.",
+  },
+  {
+    id: "delivery",
+    label: "Final delivery date",
+    orderSays: "To be agreed after freight arrangements.",
+    stepId: "STEP-074",
+    settled: "Delivery to the buyer's Miami warehouse was agreed for the week of 21 December, once the bank releases the cargo.",
+  },
+];
+
+// ---- The story, in the order it plays ----
+
+const STORY: readonly StoryStep[] = [
+  // Phase 1: exporter onboarding and product identity
+  {
+    id: "STEP-001",
+    at: "2026-11-12",
+    actor: EXPORTER,
+    summary: "Momentous registered on CLEAR and opened a case for the order.",
+    detail: "The export sales manager created the company's account the day the order arrived and opened a case for it.",
+  },
+  {
+    id: "STEP-002",
+    at: "2026-11-12",
+    actor: REVIEWER,
+    summary: "Business registration and TIN checked against the certificates.",
+    detail: "The reviewer compared the company name and TIN on the certificates with the account. They match.",
+    references: { business_registration: "SIM-REG-0048" },
+  },
+  {
+    id: "STEP-003",
+    at: "2026-11-12",
+    actor: REVIEWER,
+    summary: "Export trade licence is current.",
+    detail: "The licence covers the export of coffee and has not lapsed.",
+    references: { export_trade_licence: "SIM-ETL-0048" },
+  },
+  {
+    id: "STEP-004",
+    at: "2026-11-13",
+    actor: REVIEWER,
+    summary: "ECTA competence certificate for roasting and export is current.",
+    detail: "The certificate of competence from the Ethiopian Coffee and Tea Authority covers roasting coffee for export.",
+    references: { competence_certificate: "SIM-COC-0048" },
+  },
+  {
+    id: "STEP-005",
+    at: "2026-11-13",
+    actor: EXPORTER,
+    summary: "Product recorded: roasted Arabica coffee, whole bean, medium roast.",
+    detail: "The specification sheet names the product as Ethiopian roasted coffee, Coffea arabica, whole bean, medium roast, sold in 250 g bags.",
+  },
+  {
+    id: "STEP-006",
+    at: "2026-11-13",
+    actor: EXPORTER,
+    summary: "Composition recorded: 100% roasted coffee, not decaffeinated.",
+    detail: "The statement says the bags hold roasted coffee beans only, with nothing added, and that the coffee is not decaffeinated. The HS code depends on these two facts.",
+  },
+  {
+    id: "STEP-007",
+    at: "2026-11-13",
+    actor: EXPORTER,
+    summary: "Packaging recorded: 250 g valve bags, 40 to a carton.",
+    detail: "Primary pack: a 250 g sealed bag with a one-way valve. Secondary: a carton of 40 bags. Tertiary: cartons on a pallet.",
+  },
+  {
+    id: "STEP-008",
+    at: "2026-11-13",
+    actor: EXPORTER,
+    summary: "The exporter proposed HS code 0901.21 (national line 0901.21.00).",
+    detail: "The order left the code open. CLEAR stopped and asked, and the exporter proposed 0901.21: coffee, roasted, not decaffeinated.",
+  },
+  {
+    id: "STEP-009",
+    at: "2026-11-13",
+    actor: CLEAR,
+    summary: "Tariff lookup matched 0901.21.00 to the product on file.",
+    detail: "CLEAR looked the proposed code up in the customs tariff. The heading reads “Coffee, roasted, not decaffeinated”, which agrees with the composition statement.",
+  },
+  {
+    id: "STEP-010",
+    at: "2026-11-16",
+    actor: REVIEWER,
+    summary: "HS code 0901.21.00 verified and signed off.",
+    detail: "The reviewer confirmed the six-digit code and the eight-digit national line and put the classification record on file.",
+    references: { hs_classification: "SIM-HS-0048" },
+  },
+  {
+    id: "STEP-011",
+    at: "2026-11-16",
+    actor: EXPORTER,
+    summary: "Roastery profile recorded.",
+    detail: "The profile gives the roastery's address in Addis Ababa, its roasting and packing lines and its monthly capacity.",
+  },
+  {
+    id: "STEP-012",
+    at: "2026-11-16",
+    actor: REVIEWER,
+    summary: "Food safety and quality system reviewed.",
+    detail: "The reviewer read the roastery's food safety plan and cleaning and storage procedures.",
+  },
+  {
+    id: "STEP-013",
+    at: "2026-11-16",
+    actor: REVIEWER,
+    summary: "Batch coding traces each bag back to the green coffee lot.",
+    detail: "The lot code printed on a bag leads to its roast batch, and the roast batch to the green coffee it was made from.",
+  },
+  {
+    id: "STEP-014",
+    at: "2026-11-17",
+    actor: REVIEWER,
+    summary: "Tax clearance certificate is current.",
+    detail: "The Ministry of Revenues certificate is in date.",
+    references: { tax_clearance: "SIM-TAX-0048" },
+  },
+  {
+    id: "STEP-015",
+    at: "2026-11-17",
+    actor: EXPORTER,
+    summary: "Bank account for export proceeds confirmed.",
+    detail: "The exporter's bank confirmed the account that export proceeds are paid into.",
+  },
+  {
+    id: "STEP-016",
+    at: "2026-11-17",
+    actor: CLEAR,
+    summary: "Permanent exporter and product IDs issued.",
+    detail: "CLEAR issued exporter ID SIM-SME-0048 and product ID SIM-PRD-0048. Later orders for the same product reuse the checks made so far.",
+  },
+  {
+    id: "STEP-017",
+    at: "2026-11-17",
+    actor: REVIEWER,
+    summary: "First risk check: a packaged food bound for the US, no bar found.",
+    detail: "Roasted coffee is a shelf-stable packaged food. The full destination checks follow in Phase 3.",
+  },
+  {
+    id: "STEP-018",
+    at: "2026-11-18",
+    actor: ENTRUST,
+    summary: "Phase 1 signed off: product identity locked.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 2: buyer and commercial terms
+  {
+    id: "STEP-019",
+    at: "2026-11-18",
+    actor: EXPORTER,
+    summary: "Buyer recorded: Atlantic Specialty Foods LLC, Miami, United States.",
+    detail: "The buyer's legal name, address and contact are recorded as they appear on the order.",
+  },
+  {
+    id: "STEP-020",
+    at: "2026-11-18",
+    actor: EXPORTER,
+    summary: "Purchase order US-2026-0048 uploaded.",
+    detail: "The order is dated 12 November 2026. Momentous confirmed it to the buyer on 16 November, inside the three business days it allows.",
+    references: { sales_contract: "US-2026-0048" },
+  },
+  {
+    id: "STEP-021",
+    at: "2026-11-18",
+    actor: EXPORTER,
+    summary: "Proforma invoice issued: 2,000 bags at USD 3.50, USD 7,000.",
+    detail: "The proforma repeats the order's quantity, price and payment split, and is locked so later documents can be checked against it.",
+    references: { proforma_invoice: "SIM-PI-0048" },
+  },
+  {
+    id: "STEP-022",
+    at: "2026-11-19",
+    actor: ENTRUST,
+    summary: (a) => `Incoterm audited: FCA ${place(a)}, Incoterms 2020.`,
+    detail: (a) =>
+      `The order named no handover point. CLEAR stopped and asked, and the parties agreed ${place(a)}. ${
+        atRoastery(a)
+          ? "Risk passes when the goods are loaded on the buyer's carrier's truck."
+          : "Risk passes when the exporter's truck arrives there with the goods ready for unloading."
+      }`,
+    sets: { incoterm: "FCA" },
+  },
+  {
+    id: "STEP-023",
+    at: "2026-11-19",
+    actor: ENTRUST,
+    summary: "Currency and price verified: USD 3.50 a bag, USD 14.00 a kg.",
+    detail: "The order and the proforma agree on the currency, the unit price and the total.",
+  },
+  {
+    id: "STEP-024",
+    at: "2026-11-19",
+    actor: CLEAR,
+    summary: "Price is above the minimum export price for the week.",
+    detail: "CLEAR compared USD 14.00 a kg with the minimum on ECTA's weekly list. The list figure used here is simulated.",
+  },
+  {
+    id: "STEP-025",
+    at: "2026-11-19",
+    actor: EXPORTER,
+    summary: "Payment recorded: 30% advance by transfer, 70% cash against documents.",
+    detail: "USD 2,100 is paid in advance and USD 4,900 against documents through the banks.",
+    sets: { paymentTerms: ["advance_tt", "cad"] },
+    settles: ["fx-procedure"],
+  },
+  {
+    id: "STEP-027",
+    at: "2026-11-20",
+    actor: EXPORTER,
+    summary: "Collection agreed: the buyer's bank in Miami collects the 70%.",
+    detail: "The buyer named its bank as the collecting bank, and both sides agreed which documents release the balance.",
+    advice:
+      "An air waybill is not a document of title, so a buyer named as consignee could collect the goods without paying. CLEAR advised consigning the air waybill to the collecting bank. The parties agreed: the airline releases the cargo only on the bank's release order.",
+    settles: ["documents", "collecting-bank"],
+    references: { collection_instruction: "SIM-COL-0048" },
+  },
+  {
+    id: "STEP-028",
+    at: "2026-11-23",
+    actor: REVIEWER,
+    summary: "Advance of USD 2,100 received and verified.",
+    detail: "The bank's credit advice shows USD 2,100 received from the buyer on 23 November. The order's 21 days for production run from this date.",
+    references: { advance_credit_advice: "SIM-ADV-0048" },
+  },
+  {
+    id: "STEP-030",
+    at: "2026-11-23",
+    actor: EXPORTER,
+    summary: "Schedule agreed: production by 14 December, dispatch by 16 December.",
+    detail: "Production is due 21 days after the advance, and dispatch 30 days after the order was confirmed on 16 November.",
+  },
+  {
+    id: "STEP-031",
+    at: "2026-11-23",
+    actor: EXPORTER,
+    summary: "Buyer's quality requirements recorded.",
+    detail: "Ethiopian origin, a consistent medium roast, and no foreign matter, insect damage or contamination.",
+    settles: ["sample"],
+  },
+  {
+    id: "STEP-032",
+    at: "2026-11-24",
+    actor: EXPORTER,
+    summary: "Buyer's packaging and marking instructions recorded.",
+    detail: "Each bag shows the product name, origin, roast level, net weight, lot code, and production and best-before dates. The final artwork is settled at STEP-043.",
+  },
+  {
+    id: "STEP-033",
+    at: "2026-11-24",
+    actor: ENTRUST,
+    summary: "Commercial terms reconciled: order, proforma, Incoterm, payment and schedule agree.",
+    detail: "Entrust read the five together and found no contradiction between them.",
+  },
+  {
+    id: "STEP-034",
+    at: "2026-11-25",
+    actor: EXPORTER,
+    summary: "Sales contract registration prepared for ECTA.",
+    detail: "The order, the proforma and the buyer's details are assembled for the coffee authority's contract registration.",
+    references: { contract_registration: "SIM-CR-0048" },
+  },
+  {
+    id: "STEP-035",
+    at: "2026-11-26",
+    actor: ENTRUST,
+    summary: "Phase 2 signed off: commercial readiness locked.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 3: destination rules and licences
+  {
+    id: "STEP-036",
+    at: "2026-11-26",
+    actor: CLEAR,
+    summary: "US tariff line for roasted coffee recorded; no quota applies.",
+    detail: "CLEAR recorded the US tariff line for 0901.21 and that coffee has no import quota.",
+  },
+  {
+    id: "STEP-037",
+    at: "2026-11-26",
+    actor: ENTRUST,
+    summary: "No US import ban or restriction found for roasted coffee.",
+    detail: "As a food, the shipment needs a registered facility and a Prior Notice. Both are handled at their own steps.",
+  },
+  {
+    id: "STEP-038",
+    at: "2026-11-27",
+    actor: ENTRUST,
+    summary: "The roastery's FDA food facility registration is current.",
+    detail: "The registration is on file and inside its renewal period.",
+    references: { fda_facility_registration: "SIM-FFR-0048" },
+  },
+  {
+    id: "STEP-039",
+    at: "2026-11-27",
+    actor: EXPORTER,
+    summary: "US agent confirmed.",
+    detail: "The roastery's US agent for FDA matters confirmed the appointment in writing.",
+  },
+  {
+    id: "STEP-042",
+    at: "2026-11-27",
+    actor: ENTRUST,
+    summary: "No phytosanitary or health certificate is required.",
+    detail: "Entrust found no US requirement for either certificate on roasted coffee, and the buyer confirmed it needs none.",
+    sets: { phytoCertificateRequired: "no", healthCertificateRequired: "no" },
+    settles: ["certificates"],
+  },
+  {
+    id: "STEP-043",
+    at: "2026-11-30",
+    actor: ENTRUST,
+    summary: "Bag label reviewed for US retail sale and approved by the buyer.",
+    detail: "The label is in English and gives the product's name, the net quantity in ounces and grams, the packer's name and address, and “Product of Ethiopia”.",
+    settles: ["labelling"],
+  },
+  {
+    id: "STEP-044",
+    at: "2026-11-30",
+    actor: EXPORTER,
+    summary: "ECTA export permit applied for and on file.",
+    detail: "Momentous applied to the coffee authority to export this lot.",
+    references: { sectoral_export_permit: "SIM-ECTA-0048" },
+  },
+  {
+    id: "STEP-045",
+    at: "2026-11-30",
+    actor: EXPORTER,
+    summary: "ECTA inspection of the finished lot booked for 10 December.",
+    detail: "The inspection is set for the day after packing is due to finish.",
+  },
+  {
+    id: "STEP-046",
+    at: "2026-12-01",
+    actor: EXPORTER,
+    summary: "Bank export permit applied for through the single window.",
+    detail: "The application carries the registered contract, the proforma invoice and the advance payment advice.",
+  },
+  {
+    id: "STEP-047",
+    at: "2026-12-01",
+    actor: EXPORTER_BANK,
+    summary: "The bank reviewed the permit application.",
+    detail: "The bank checked the price, the buyer and the payment terms against the contract.",
+  },
+  {
+    id: "STEP-048",
+    at: "2026-12-02",
+    actor: EXPORTER_BANK,
+    summary: "Bank export permit issued for USD 7,000.",
+    detail: "The permit is valid for 30 days, to 1 January 2027. Two clocks start today: the customs declaration within 30 days, and the export proceeds within 90.",
+    references: { bank_export_permit: "SIM-BEP-0048" },
+  },
+  {
+    id: "STEP-050",
+    at: "2026-12-02",
+    actor: EXPORTER,
+    summary: "Certificate of origin applied for at the Chamber of Commerce.",
+    detail: "The certificate is issued once the final invoice is known, and joins the document set at STEP-102.",
+  },
+  {
+    id: "STEP-052",
+    at: "2026-12-02",
+    actor: CLEAR,
+    summary: "Expiry reminder set on the bank export permit.",
+    detail: "CLEAR will warn seven days before the permit lapses on 1 January 2027.",
+  },
+  {
+    id: "STEP-054",
+    at: "2026-12-03",
+    actor: ENTRUST,
+    summary: "Phase 3 signed off: regulatory and market pathway approved.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 4: sourcing, roasting and quality
+  {
+    id: "STEP-055",
+    at: "2026-12-03",
+    actor: EXPORTER,
+    summary: "Sourcing plan: 600 kg of washed Sidama green coffee, bought directly.",
+    detail: "600 kg of green coffee allows for the weight lost in roasting and leaves a little over the 500 kg ordered.",
+    sets: { sourcingChannel: "direct" },
+  },
+  {
+    id: "STEP-057",
+    at: "2026-12-03",
+    actor: ENTRUST,
+    summary: "Direct purchase contract with the supplier audited.",
+    detail: "The contract names the supplier, the lot, the quantity and the price.",
+    references: { direct_purchase_contract: "SIM-DPC-0048" },
+  },
+  {
+    id: "STEP-058",
+    at: "2026-12-04",
+    actor: EXPORTER,
+    summary: "600 kg of green coffee received and sampled.",
+    detail: "Ten 60 kg bags came into the roastery's store, and a sample from each was logged.",
+  },
+  {
+    id: "STEP-059",
+    at: "2026-12-04",
+    actor: EXPORTER,
+    summary: "Green coffee moisture measured at 10.8%.",
+    detail: "The reading is inside the range the roastery accepts for storage and roasting.",
+  },
+  {
+    id: "STEP-060",
+    at: "2026-12-07",
+    actor: EXPORTER,
+    summary: "Lab report: pesticide residues and aflatoxin within limits.",
+    detail: "An outside laboratory tested a sample of the lot. The report came back three days after intake.",
+    references: { residue_lab_report: "SIM-LAB-0048" },
+  },
+  {
+    id: "STEP-062",
+    at: "2026-12-07",
+    actor: EXPORTER,
+    summary: "Roasting record opened: 12 batches of 50 kg, medium roast.",
+    detail: "Each batch record carries the green coffee lot, the roast profile and the time.",
+  },
+  {
+    id: "STEP-063",
+    at: "2026-12-08",
+    actor: EXPORTER,
+    summary: "Yield recorded: 600 kg green gave 510 kg roasted, a 15% loss.",
+    detail: "A 15% loss is usual for a medium roast. 510 kg covers the 500 kg ordered.",
+  },
+  {
+    id: "STEP-064",
+    at: "2026-12-08",
+    actor: EXPORTER,
+    summary: "Export lot SIM-LOT-0048 allocated: 500 kg.",
+    detail: "500 kg goes to the order and 10 kg is kept as retained samples.",
+  },
+  {
+    id: "STEP-065",
+    at: "2026-12-09",
+    actor: EXPORTER,
+    summary: "2,000 bags of 250 g packed into 50 cartons.",
+    detail: "The bags were filled, flushed with nitrogen and sealed, then packed 40 to a carton. Production finished five days inside the order's limit.",
+  },
+  {
+    id: "STEP-066",
+    at: "2026-12-09",
+    actor: ENTRUST,
+    summary: "Carton marks and lot codes verified.",
+    detail: "The marks on the cartons and the codes on the bags match the buyer's instructions and the approved label.",
+  },
+  {
+    id: "STEP-067",
+    at: "2026-12-09",
+    actor: EXPORTER,
+    summary: "Photographs of the bags, cartons and marks uploaded.",
+    detail: "The photographs show a bag front and back, an open carton, and the marks on a closed one.",
+  },
+  {
+    id: "STEP-068",
+    at: "2026-12-10",
+    actor: "Ethiopian Coffee and Tea Authority",
+    summary: "ECTA inspected the lot and issued the quality certificate.",
+    detail: "The inspection booked at STEP-045 took place at the roastery.",
+    references: { quality_certificate: "SIM-QC-0048" },
+  },
+  {
+    id: "STEP-072",
+    at: "2026-12-11",
+    actor: ENTRUST,
+    summary: "Phase 4 signed off: cargo packed and quality certified.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 5: logistics and customs
+  {
+    id: "STEP-073",
+    at: "2026-12-11",
+    actor: EXPORTER,
+    summary: (a) => `Logistics set: air freight to Miami, handover at ${place(a)}.`,
+    detail: (a) =>
+      `The cargo flies from Addis Ababa to Miami. It changes hands at ${place(a)}, as agreed at STEP-022. Under FCA the buyer arranges and pays for the flight.`,
+  },
+  {
+    id: "STEP-074",
+    at: "2026-12-11",
+    actor: "Buyer's forwarder, recorded by Momentous",
+    summary: "Flight booked: leaves Addis Ababa 16 December, lands Miami 17 December.",
+    detail: "The buyer's forwarder booked the space and sent the confirmation. Dispatch on 16 December is the last day the order allows.",
+    clockInputs: { plannedLoading: "2026-12-16", estimatedArrival: "2026-12-17T07:30:00-05:00", priorNoticeSystem: "ace" },
+    settles: ["delivery"],
+    references: { booking_confirmation: "SIM-BKG-0048" },
+  },
+  {
+    id: "STEP-078",
+    at: "2026-12-14",
+    actor: EXPORTER,
+    summary: (a) =>
+      atRoastery(a) ? "The forwarder's truck collected the 50 cartons at the roastery." : "Momentous trucked the 50 cartons to the forwarder's warehouse at the airport.",
+    detail: (a) =>
+      atRoastery(a)
+        ? "Momentous loaded the cartons and the driver signed the waybill. Risk passed to the buyer at that moment."
+        : "The warehouse signed the waybill on arrival. Risk passed to the buyer when the truck arrived, before unloading.",
+    references: { inland_waybill: "SIM-WB-0048" },
+  },
+  {
+    id: "STEP-080",
+    at: "2026-12-14",
+    actor: EXPORTER,
+    summary: "Customs export declaration lodged under HS 0901.21.00 for USD 7,000.",
+    detail: "The declaration went in 12 days after the bank permit was issued, inside its 30 days.",
+    references: { customs_declaration: "SIM-CD-0048", commercial_invoice: "SIM-INV-0048", packing_list: "SIM-PL-0048" },
+  },
+  {
+    id: "STEP-081",
+    at: "2026-12-14",
+    actor: EXPORTER,
+    summary: "Supporting documents attached to the declaration.",
+    detail: "The bank export permit, the ECTA permit, the quality certificate, the invoice and the packing list.",
+  },
+  {
+    id: "STEP-082",
+    at: "2026-12-14",
+    actor: "Ethiopian Customs Commission",
+    summary: "Customs assigned the Green Channel.",
+    detail: "The declaration is released on its documents, with no physical inspection.",
+    sets: { customsChannel: "green" },
+  },
+  {
+    id: "STEP-084",
+    at: "2026-12-15",
+    actor: "Ethiopian Customs Commission",
+    summary: "Declared value matches the bank export permit.",
+    detail: "Customs compared the USD 7,000 declared with the value on the permit.",
+  },
+  {
+    id: "STEP-087",
+    at: "2026-12-15",
+    actor: "Ethiopian Customs Commission",
+    summary: "Export clearance granted and release note issued.",
+    detail: "The release note is the proof of export clearance the order asks for.",
+    references: { customs_release_note: "SIM-REL-0048" },
+  },
+  {
+    id: "STEP-088",
+    at: "2026-12-15",
+    actor: "Ethiopian Customs Commission",
+    summary: "Exit permit issued for the airport.",
+    detail: "The cargo may leave through the Bole airport cargo terminal.",
+  },
+  {
+    id: "STEP-091",
+    at: "2026-12-15",
+    actor: ENTRUST,
+    summary: "Phase 5 signed off: cargo cleared and released for export.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 6 and the bank's part of phase 7. The documents reach the bank before the goods reach
+  // the buyer, because the buyer cannot collect the cargo until the collecting bank releases it.
+  {
+    id: "STEP-092",
+    at: "2026-12-15",
+    actor: EXPORTER,
+    summary: "Air waybill drafted, consigned to the collecting bank.",
+    detail: "The draft names the buyer's bank as consignee and Atlantic Specialty Foods as the party to notify, as agreed at STEP-027.",
+  },
+  {
+    id: "STEP-093",
+    at: "2026-12-15",
+    actor: ENTRUST,
+    summary: "Air waybill draft agrees with the proforma and the customs release.",
+    detail: "Parties, goods, cartons and weights are the same on all three.",
+  },
+  {
+    id: "STEP-095",
+    at: "2026-12-15T22:00:00+03:00",
+    actor: "Buyer's customs broker",
+    summary: "FDA Prior Notice filed, more than 41 hours before arrival.",
+    detail: "The broker filed at 14:00 Miami time on 15 December. By air, Prior Notice must be confirmed at least 4 hours before the flight lands.",
+  },
+  {
+    id: "STEP-096",
+    at: "2026-12-15T22:10:00+03:00",
+    actor: "Buyer's customs broker",
+    summary: "Prior Notice confirmation number received.",
+    detail: "The confirmation travels with the shipment's documents.",
+    references: { fda_prior_notice_confirmation: "SIM-PN-0048" },
+  },
+  {
+    id: "STEP-100",
+    at: "2026-12-16",
+    actor: EXPORTER,
+    summary: "Final invoice: USD 7,000, advance credited, USD 4,900 due.",
+    detail: "The final invoice repeats the proforma and shows the USD 2,100 already paid.",
+    references: { final_commercial_invoice: "SIM-INV-0048" },
+  },
+  {
+    id: "STEP-101",
+    at: "2026-12-16",
+    actor: EXPORTER,
+    summary: "Final packing list: 50 cartons, 500 kg net, 560 kg gross.",
+    detail: "Each carton holds 40 bags and weighs 10 kg net and 11.2 kg gross.",
+    references: { final_packing_list: "SIM-PL-0048" },
+  },
+  {
+    id: "STEP-104",
+    at: "2026-12-16T23:40:00+03:00",
+    actor: "Air carrier, recorded by Momentous",
+    summary: "The flight left Addis Ababa on 16 December.",
+    detail: "The carrier confirmed all 50 cartons were loaded and the flight departed.",
+  },
+  {
+    id: "STEP-094",
+    at: "2026-12-16T23:50:00+03:00",
+    actor: "Air carrier, recorded by Momentous",
+    summary: "Final air waybill issued.",
+    detail: "The carrier's air waybill names the collecting bank as consignee.",
+    references: { transport_document: "SIM-AWB-0048" },
+  },
+  {
+    id: "STEP-099",
+    at: "2026-12-17",
+    actor: CLEAR,
+    summary: "Document check: no discrepancy across the shipping documents.",
+    detail: "CLEAR compared parties, goods, quantities, weights and values on the invoice, the packing list, the air waybill and the quality certificate.",
+  },
+  {
+    id: "STEP-102",
+    at: "2026-12-17",
+    actor: EXPORTER,
+    summary: "Document set assembled: air waybill, invoice, packing list, quality certificate, certificate of origin.",
+    detail: "These are the five documents agreed at STEP-027. The Chamber of Commerce issued the certificate of origin against the final invoice.",
+    references: { certificate_of_origin: "SIM-COO-0048" },
+  },
+  {
+    id: "STEP-103",
+    at: "2026-12-17",
+    actor: EXPORTER,
+    summary: "Courier booked to carry the originals to the collecting bank.",
+    detail: "The tracking number is recorded so both banks can follow the envelope.",
+  },
+  {
+    id: "STEP-105",
+    at: "2026-12-17T15:30:00+03:00",
+    actor: CLEAR,
+    summary: "The flight landed in Miami on 17 December. The cargo waits for the bank's release.",
+    detail: "The cartons are held in the airline's warehouse. The buyer cannot collect them until the collecting bank releases them.",
+  },
+  {
+    id: "STEP-109",
+    at: "2026-12-18",
+    actor: EXPORTER,
+    summary: "Cover letter for the bank prepared.",
+    detail: "The letter lists the five documents and asks the bank to collect USD 4,900 from the buyer.",
+  },
+  {
+    id: "STEP-110",
+    at: "2026-12-18",
+    actor: EXPORTER,
+    summary: "Documents handed to the exporter's bank.",
+    detail: "The bank gave a receipt for the set.",
+  },
+  {
+    id: "STEP-113",
+    at: "2026-12-18",
+    actor: EXPORTER_BANK,
+    summary: "The bank sent the collection to the buyer's bank.",
+    detail: "The bank's SWIFT advice of the collection is on file.",
+  },
+  {
+    id: "STEP-114",
+    at: "2026-12-21",
+    actor: BUYER_BANK,
+    summary: "The collecting bank received the documents and notified the buyer.",
+    detail: "The bank holds the documents, and the cargo, until the buyer pays.",
+  },
+  {
+    id: "STEP-115",
+    at: "2026-12-21",
+    actor: BUYER,
+    summary: "The buyer accepted the documents and paid USD 4,900.",
+    detail: "On payment the collecting bank issued its release order for the cargo.",
+  },
+  {
+    id: "STEP-116",
+    at: "2026-12-22",
+    actor: EXPORTER_BANK,
+    summary: "USD 4,900 received by the exporter's bank.",
+    detail: "With the advance, the full USD 7,000 has now reached Ethiopia.",
+    references: { proceeds_remittance_advice: "SIM-REM-0048" },
+  },
+  {
+    id: "STEP-106",
+    at: "2026-12-22",
+    actor: "Buyer's customs broker",
+    summary: "US import clearance complete: FDA and customs released the cargo.",
+    detail: "The broker filed the entry at Miami International Airport with the bank's release order.",
+  },
+  {
+    id: "STEP-107",
+    at: "2026-12-23",
+    actor: BUYER,
+    summary: "50 cartons delivered to the buyer's warehouse and signed for.",
+    detail: "The buyer's receiving note shows all 50 cartons, with no damage recorded.",
+  },
+  {
+    id: "STEP-108",
+    at: "2026-12-23",
+    actor: ENTRUST,
+    summary: "Phase 6 signed off: cargo shipped and delivered.",
+    detail: "Every step in the phase that applies is done and its evidence approved.",
+  },
+
+  // Phase 7: settlement and closure
+  {
+    id: "STEP-117",
+    at: "2026-12-23",
+    actor: REVIEWER,
+    summary: "Credit advice verified: USD 7,000 received in full.",
+    detail: "USD 2,100 in advance and USD 4,900 against documents, 21 days after the permit was issued.",
+    references: { swift_mt103: "SIM-MT103-0048" },
+  },
+  {
+    id: "STEP-118",
+    at: "2026-12-24",
+    actor: EXPORTER,
+    summary: "Bank charges and commission settled.",
+    detail: "The bank's advice of its collection charges is on file.",
+  },
+  {
+    id: "STEP-119",
+    at: "2026-12-24",
+    actor: EXPORTER_BANK,
+    summary: "Proceeds reconciled against the export permit.",
+    detail: "The USD 7,000 received equals the value on the permit.",
+  },
+  {
+    id: "STEP-120",
+    at: "2026-12-24",
+    actor: CLEAR,
+    summary: "Repatriation deadline met on day 21 of 90.",
+    detail: "The proceeds had to be back within 90 days of the permit's issue on 2 December.",
+  },
+  {
+    id: "STEP-121",
+    at: "2026-12-28",
+    actor: EXPORTER_BANK,
+    summary: "Export permit discharged.",
+    detail: "The bank closed the permit with nothing outstanding against it.",
+    references: { permit_discharge: "SIM-DIS-0048" },
+  },
+  {
+    id: "STEP-123",
+    at: "2026-12-28",
+    actor: CLEAR,
+    summary: "Export record updated for Momentous.",
+    detail: "The record shows this export with every deadline met and no flag raised.",
+  },
+  {
+    id: "STEP-124",
+    at: "2026-12-28",
+    actor: CLEAR,
+    summary: "Audit trail archived.",
+    detail: "Every step, document and decision on the case is kept as it was recorded.",
+  },
+  {
+    id: "STEP-125",
+    at: "2026-12-29",
+    actor: ENTRUST,
+    summary: "Phase 7 signed off: payment reconciled and case closed.",
+    detail: "Every step that applies is done. The case is closed.",
+  },
+];
+
+export const SCENARIO: Scenario = {
+  title: "Roasted coffee to Miami by air",
+  order: ORDER,
+  opened: "2026-11-12",
+  // Known from the order itself. It asks for an air waybill, so the cargo flies.
+  facts: { product: "roasted_coffee", destinationCountry: "US", transportMode: "air", coldChain: "no" },
+  story: STORY,
+  asks: [HS_CODE, HANDOVER],
+  openItems: OPEN_ITEMS,
 };
-
-/** Narrative execution details tailored specifically to PO US-2026-0048 */
-const STEP_NARRATIVES: Record<string, { summary: string; detail: string; actor: string }> = {
-  "STEP-001": {
-    summary: "Momentous Trading PLC account authenticated and verified.",
-    detail: "Momentous Trading PLC (YAD Coffee) logged into CLEAR; verified exporter profile and corporate credentials.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-002": {
-    summary: "MoTRI TIN & Business Registration 0048192837 verified.",
-    detail: "Tax Identification Number (TIN 0048192837) and active commercial register status confirmed with Ministry of Revenues.",
-    actor: "Entrust Compliance / MoTRI",
-  },
-  "STEP-003": {
-    summary: "Active coffee export trade license confirmed.",
-    detail: "MoTRI commercial register confirms current, unrestricted export license for agricultural commodities and roasted coffee.",
-    actor: "Entrust Compliance / MoTRI",
-  },
-  "STEP-004": {
-    summary: "ECTA coffee processing & export competence certificate validated.",
-    detail: "Ethiopian Coffee & Tea Authority (ECTA) roastery competence certificate #ECTA-RC-2026-441 validated in good standing.",
-    actor: "Ethiopian Coffee & Tea Authority",
-  },
-  "STEP-005": {
-    summary: "Product Profile: Ethiopian Roasted Coffee (250g retail pouches).",
-    detail: "Captured product profile: Medium roast Arabica, roasted whole bean, packed in 250 g retail foil pouches with degassing valves.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-006": {
-    summary: "Roast specification, moisture target & cupping profile logged.",
-    detail: "Target roast Agtron 55-60, finished moisture <= 2.5%, defect count zero, roast batch sizing 50 kg/batch logged.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-007": {
-    summary: "Barrier packaging & labeling specifications recorded.",
-    detail: "Food-grade triple-laminated foil pouches, one-way degassing valve, nitrogen flushing target <1% residual O2 logged.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-008": {
-    summary: "Proposed HS Code assignment evaluated against PO.",
-    detail: "PO US-2026-0048 leaves HS Code 'To be confirmed'. CLEAR identifies gap and requires exporter classification.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-009": {
-    summary: "Customs Tariff Schedule lookup for 0901.21.00 completed.",
-    detail: "Automated lookup against Ethiopian Customs Tariff matches 0901.21.00 with 0% export tariff and valid export schedule.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-010": {
-    summary: "ECC HS Code classification sign-off verified.",
-    detail: "Ethiopian Customs Commission customs tariff verifier code matched and signed off for roasted coffee whole beans.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-011": {
-    summary: "Momentous roastery physical facility profile locked.",
-    detail: "Facility: Bole Lemi Industrial Park Roastery, Addis Ababa. Capacity: 15,000 kg/month. Clean room packaging verified.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-012": {
-    summary: "Food safety & QMS management system audit passed.",
-    detail: "HACCP & ISO 22000 compliant roasting procedures and clean storage audited and approved on record.",
-    actor: "Entrust Reviewer",
-  },
-  "STEP-013": {
-    summary: "Lot tracking & green bean origin traceability verified.",
-    detail: "Batch numbering LOT-2026-RC048 links forward to individual 250g pouches and backward to Sidama washing station green lots.",
-    actor: "Entrust Reviewer",
-  },
-  "STEP-014": {
-    summary: "Ministry of Revenues Tax Clearance Certificate verified.",
-    detail: "Ministry of Revenues electronic tax clearance #TAX-2026-9011 verified active through Q4 2026.",
-    actor: "Ministry of Revenues",
-  },
-  "STEP-015": {
-    summary: "Commercial Bank FX registration verified (Awash Bank).",
-    detail: "Awash Bank corporate FX account #01349028148 verified for international trade proceeds repatriation.",
-    actor: "Awash Bank",
-  },
-  "STEP-016": {
-    summary: "Permanent SME ID ETH-EXP-048 & Product ID PRD-COF-001 issued.",
-    detail: "CLEAR permanently registers Momentous Trading PLC and Ethiopian Roasted Coffee in central registry.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-017": {
-    summary: "Initial US admissibility & FDA food safety pre-check passed.",
-    detail: "Roasted whole coffee beans identified as admissible to the US under 21 CFR Part 117 without raw quarantine restrictions.",
-    actor: "Entrust Admissibility Reviewer",
-  },
-  "STEP-018": {
-    summary: "Phase 1 Milestone Signed: Product Identity Locked.",
-    detail: "Exporter identity, roastery credentials, product specs, and HS classification officially verified and sealed.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-019": {
-    summary: "Buyer captured: Atlantic Specialty Foods LLC (Miami, FL, USA).",
-    detail: "Buyer Atlantic Specialty Foods LLC, 1250 NW 23rd Ave, Miami, FL 33125 USA registered; contact Daniel Morgan verified.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-020": {
-    summary: "Purchase Order US-2026-0048 uploaded and parsed.",
-    detail: "PO US-2026-0048 ($7,000.00 USD, 2,000 bags @ $3.50, FCA delivery terms, 30% advance) ingested and indexed.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-021": {
-    summary: "Proforma Invoice PI-2026-048 generated & locked.",
-    detail: "Proforma Invoice generated exactly matching PO specifications, unit price, quantity, and payment terms.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-022": {
-    summary: "Incoterms 2020 selection and named place audit.",
-    detail: "PO specifies FCA Addis Ababa with unconfirmed handover location. CLEAR identifies gap and requires exact facility address.",
-    actor: "Entrust Compliance",
-  },
-  "STEP-023": {
-    summary: "Currency (USD) and unit price ($3.50/bag = $14.00/kg) verified.",
-    detail: "Unit price of $14.00/kg well exceeds green coffee benchmark and reflects specialty roasted value addition.",
-    actor: "Entrust Compliance",
-  },
-  "STEP-024": {
-    summary: "ECTA Minimum Export Price floor check validated.",
-    detail: "Weekly ECTA minimum export price check validated for roasted value-added coffee export corridor.",
-    actor: "Ethiopian Coffee & Tea Authority",
-  },
-  "STEP-025": {
-    summary: "Payment terms verified: 30% advance T/T, 70% CAD balance.",
-    detail: "Payment split of $2,100.00 USD advance and $4,900.00 USD cash against documents approved under FX Directive FXD/01/2024.",
-    actor: "Entrust Compliance / Bank",
-  },
-  "STEP-026": {
-    summary: "Commercial contract signed by Momentous & Atlantic Specialty Foods.",
-    detail: "Contract executed by Daniel Morgan (Atlantic Specialty Foods) and Export Sales Manager (Momentous Trading PLC).",
-    actor: "Momentous & Atlantic Specialty",
-  },
-  "STEP-027": {
-    summary: "Advance payment ($2,100.00 USD) SWIFT MT103 advice recorded.",
-    detail: "Awash Bank confirms receipt of 30% advance deposit from Atlantic Specialty Foods LLC via correspondent bank.",
-    actor: "Awash Bank",
-  },
-  "STEP-028": {
-    summary: "Bank advance retention and FX account credit registered.",
-    detail: "30% advance credited into exporter retention account according to NBE foreign exchange allocation rules.",
-    actor: "Awash Bank",
-  },
-  "STEP-029": {
-    summary: "Sales contract registration submitted to ECTA.",
-    detail: "Sales contract, proforma invoice, and buyer profile submitted to Ethiopian Coffee & Tea Authority portal.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-030": {
-    summary: "ECTA contract approval and validation certificate issued.",
-    detail: "ECTA issues contract registration approval #ECTA-CR-2026-8802 confirming compliant commercial terms.",
-    actor: "Ethiopian Coffee & Tea Authority",
-  },
-  "STEP-031": {
-    summary: "Electronic commercial contract registered on NBE e-Trade.",
-    detail: "Contract registered in National Bank of Ethiopia foreign trade database for subsequent export permit issuance.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-032": {
-    summary: "Buyer import broker & cargo consignee instructions confirmed.",
-    detail: "Atlantic Specialty Foods nominates US customs broker (Miami Logistics Services) and forwarder contact.",
-    actor: "Atlantic Specialty Foods LLC",
-  },
-  "STEP-033": {
-    summary: "Commercial terms alignment & risk assessment sign-off.",
-    detail: "Entrust facilitator conducts final audit of incoterm, payment structure, currency, and counterparty sanctions checks.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-034": {
-    summary: "Pre-shipment insurance terms review.",
-    detail: "Under FCA terms, buyer's transit insurance confirmed effective upon carrier handover at Addis Ababa roastery.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-035": {
-    summary: "Phase 2 Milestone Signed: Commercial Readiness Locked.",
-    detail: "Contract, proforma invoice, 30% advance receipt, and Incoterms 2020 FCA terms officially locked.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-036": {
-    summary: "US FDA Food Safety Modernization Act (FSMA) scope confirmed.",
-    detail: "Applicable US regulatory regime confirmed: 21 CFR Part 117 (Current Good Manufacturing Practice and Preventive Controls).",
-    actor: "Entrust Regulatory Specialist",
-  },
-  "STEP-037": {
-    summary: "US Admissibility verification based on HS 0901.21.00.",
-    detail: "Admissibility verified: Roasted coffee whole beans are free from USDA-APHIS quarantine restrictions; FDA regulated.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-038": {
-    summary: "US FDA Food Facility Registration (FFR) verified.",
-    detail: "Momentous Roastery facility registered with US FDA (#19482019482) with valid US Agent on file.",
-    actor: "US Food & Drug Administration",
-  },
-  "STEP-039": {
-    summary: "US Foreign Supplier Verification Program (FSVP) packet validated.",
-    detail: "Atlantic Specialty Foods LLC FSVP documentation packet verified: hazard analysis, allergen controls, sanitation SOPs.",
-    actor: "Atlantic Specialty Foods LLC",
-  },
-  "STEP-040": {
-    summary: "Hazard Analysis & Preventive Controls (HARPC) food safety plan verified.",
-    detail: "Roasting critical control point (thermal process kill step for pathogen reduction) validated by food scientist.",
-    actor: "Entrust Quality Specialist",
-  },
-  "STEP-041": {
-    summary: "FDA 21 CFR Part 101 retail labeling compliance verified.",
-    detail: "Retail bags verified for English text, net weight in metric (250g) and US customary (8.8 oz), and origin declaration.",
-    actor: "Entrust Regulatory Specialist",
-  },
-  "STEP-042": {
-    summary: "Labeling artwork sign-off for US distribution.",
-    detail: "Atlantic Specialty Foods and Momentous sign off on finalized 250g packaging bag print proof.",
-    actor: "Momentous & Atlantic Specialty",
-  },
-  "STEP-043": {
-    summary: "Commercial Bank export permit dossier prepared.",
-    detail: "Application dossier assembled: ECTA contract approval, Proforma Invoice, Tax Clearance, and 30% advance advice.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-044": {
-    summary: "Electronic Export Permit Application lodged with Awash Bank.",
-    detail: "Application submitted through commercial bank trade portal under NBE FX Directive FXD/01/2024.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-045": {
-    summary: "Commercial Bank trade compliance & anti-money laundering check passed.",
-    detail: "Awash Bank AML & trade compliance unit clears Atlantic Specialty Foods LLC and payment channel.",
-    actor: "Awash Bank",
-  },
-  "STEP-046": {
-    summary: "Commercial Bank foreign exchange commitment recorded.",
-    detail: "Awash Bank commits to 70% balance document handling under CAD instructions.",
-    actor: "Awash Bank",
-  },
-  "STEP-047": {
-    summary: "Commercial Bank review of export permit terms.",
-    detail: "Senior trade officer confirms compliance with NBE repatriation guidelines and validates unit pricing.",
-    actor: "Awash Bank",
-  },
-  "STEP-048": {
-    summary: "Electronic Export Permit #EXP-2026-8812 issued.",
-    detail: "Awash Bank issues electronic export permit #EXP-2026-8812 approved in the central customs database.",
-    actor: "Awash Bank",
-  },
-  "STEP-049": {
-    summary: "Ministry of Agriculture plant health inspection notice lodged.",
-    detail: "Inspection request lodged with MoA Plant Health Regulatory Directorate for roasted commodity certification.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-050": {
-    summary: "MoA Phytosanitary inspection conducted at roastery.",
-    detail: "Inspector verifies roasted beans free from living insects, storage pests, or foreign botanical matter.",
-    actor: "Ministry of Agriculture",
-  },
-  "STEP-051": {
-    summary: "MoA Plant Health Export Clearance memo issued.",
-    detail: "MoA issues official plant health clearance confirming roasted product meets US destination sanitary standards.",
-    actor: "Ministry of Agriculture",
-  },
-  "STEP-052": {
-    summary: "Ethiopian Chamber of Commerce Certificate of Origin application.",
-    detail: "Certificate of Origin application lodged confirming 100% Ethiopian harvested and processed Arabica coffee.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-053": {
-    summary: "Certificate of Origin #COO-ET-2026-3091 issued.",
-    detail: "Ethiopian Chamber of Commerce issues certified Certificate of Origin for US customs duty assessment.",
-    actor: "Ethiopian Chamber of Commerce",
-  },
-  "STEP-054": {
-    summary: "Phase 3 Milestone Signed: Regulatory & Market Pathway Approved.",
-    detail: "US FDA admissibility, export permit #EXP-2026-8812, MoA health clearance, and COO officially approved.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-055": {
-    summary: "Green coffee bean batch sourcing validation.",
-    detail: "550 kg Grade 1 Sidama specialty green coffee allocated from certified farm washing station lot #SID-2026-10.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-056": {
-    summary: "Green coffee moisture (<11.0%) & water activity verified.",
-    detail: "Benchtop moisture analyzer reads 10.4% moisture, water activity 0.58 aw. Free from mould or off-odour.",
-    actor: "Momentous Quality Lab",
-  },
-  "STEP-057": {
-    summary: "ECTA green bean export grading certificate verified.",
-    detail: "National Coffee Liquoring Unit confirms Grade 1 Specialty cup profile: jasmine aroma, citrus acidity, 86.5 SCA.",
-    actor: "Ethiopian Coffee & Tea Authority",
-  },
-  "STEP-058": {
-    summary: "Roasting schedule & temperature profile locked.",
-    detail: "11 roast batches (50 kg green input per batch), medium roast curve, drop temp 208°C, roast duration 11.5 minutes.",
-    actor: "Momentous Master Roaster",
-  },
-  "STEP-059": {
-    summary: "Roasting run executed & cooling cycle completed.",
-    detail: "Total roasted output: 504.2 kg net roasted whole coffee beans. Agtron color test reading: 57.2 (Medium Roast).",
-    actor: "Momentous Production Team",
-  },
-  "STEP-060": {
-    summary: "Destoning, magnetic separation & optical sorting completed.",
-    detail: "Gravity destoner and rare-earth magnetic separator clear 100% of physical impurities; optical sorter removes quakers.",
-    actor: "Momentous Production Team",
-  },
-  "STEP-061": {
-    summary: "Degassing bin storage & volatile aroma preservation.",
-    detail: "Roasted whole beans rested for 24 hours under nitrogen blanket to reach optimal packaging equilibrium.",
-    actor: "Momentous Production Team",
-  },
-  "STEP-062": {
-    summary: "Roasted coffee moisture test: 2.1% (Compliant).",
-    detail: "Moisture content verified at 2.1% (well below the maximum 5.0% threshold mandated by food safety specs).",
-    actor: "Momentous Quality Lab",
-  },
-  "STEP-063": {
-    summary: "Pesticide residue & ochratoxin A lab test passed.",
-    detail: "Accredited third-party lab testing confirms zero detectable ochratoxin A and no pesticide residues above US EPA MRLs.",
-    actor: "Accredited Food Safety Lab",
-  },
-  "STEP-064": {
-    summary: "Export Batch Allocation & Lot Numbering (LOT-2026-RC048).",
-    detail: "Official export lot #LOT-2026-RC048 assigned to the 500 kg shipment (2,000 bags x 250 g).",
-    actor: "Momentous Quality Lab",
-  },
-  "STEP-065": {
-    summary: "Automated bagging & nitrogen flush sealing run.",
-    detail: "2,000 bags hermetically sealed with one-way degassing valves. Residual oxygen verified <0.8%.",
-    actor: "Momentous Packaging Line",
-  },
-  "STEP-066": {
-    summary: "Checkweigher verification of individual 250g bags.",
-    detail: "100% checkweigher audit confirms each pouch is within 250.5g - 252.0g net weight; no underfilled bags.",
-    actor: "Momentous Packaging Line",
-  },
-  "STEP-067": {
-    summary: "Master export carton packing (50 cartons x 40 bags = 2,000 bags).",
-    detail: "Packaged into 50 heavy-duty 5-ply corrugated export cartons; 10 kg net weight per carton; strapped and sealed.",
-    actor: "Momentous Packaging Line",
-  },
-  "STEP-068": {
-    summary: "Carton labeling & shipping marks applied.",
-    detail: "Marks: ATLANTIC SPECIALTY FOODS / MIAMI / PO US-2026-0048 / CARTON 1-50 / ETHIOPIAN ROASTED COFFEE / NET 10KG.",
-    actor: "Momentous Packaging Line",
-  },
-  "STEP-069": {
-    summary: "Palletization & shrink-wrapping completed.",
-    detail: "2 Euro-pallets stacked 25 cartons per pallet, corner board protected, stretch-wrapped with security seals.",
-    actor: "Momentous Warehouse",
-  },
-  "STEP-070": {
-    summary: "Certificate of Analysis & Quality Certificate issued.",
-    detail: "Momentous Quality Assurance issues Certificate of Quality verifying full compliance with PO specifications.",
-    actor: "Momentous Quality Director",
-  },
-  "STEP-071": {
-    summary: "Pre-Shipment Inspection (PSI) conducted by Entrust inspector.",
-    detail: "Physical count: exactly 50 cartons / 2,000 bags / 500 kg net / 540 kg gross. Packaging integrity certified intact.",
-    actor: "Entrust Quality Inspector",
-  },
-  "STEP-072": {
-    summary: "Phase 4 Milestone Signed: Cargo Packed & Quality Certified.",
-    detail: "Roasting, packaging, lab analysis, and final PSI successfully completed. Cargo staged for carrier handover.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-073": {
-    summary: "Air freight transport mode confirmed (Bole ADD to Miami MIA).",
-    detail: "High-value roasted coffee allocated for expedited international air freight to preserve roast freshness.",
-    actor: "Momentous & Atlantic Specialty",
-  },
-  "STEP-074": {
-    summary: "Air cargo booking confirmed with Ethiopian Airlines Cargo.",
-    detail: "Booking confirmed on flight ET-500 (Addis Ababa to Miami via Washington Dulles); space reserved for 540 kg gross.",
-    actor: "Ethiopian Airlines Cargo",
-  },
-  "STEP-075": {
-    summary: "Air cargo ULD container allocation.",
-    detail: "Cargo booked as loose palletized freight within temperature-controlled aircraft lower deck hold.",
-    actor: "Ethiopian Airlines Cargo",
-  },
-  "STEP-076": {
-    summary: "Pick-up transport dispatched to Momentous roastery.",
-    detail: "Licensed secure cargo truck dispatched to Bole Lemi Industrial Zone roastery facility (confirmed handover point).",
-    actor: "Expeditors International Forwarder",
-  },
-  "STEP-077": {
-    summary: "Handover executed & Cargo Transfer Receipt issued.",
-    detail: "Goods transferred to carrier at confirmed handover location. Risk transferred under Incoterms 2020 FCA.",
-    actor: "Momentous & Carrier",
-  },
-  "STEP-078": {
-    summary: "Airport cargo terminal intake & security screening at ADD.",
-    detail: "Cargo arrives at Bole International Airport Cargo Terminal; X-ray security screening passed; intake receipt issued.",
-    actor: "Bole Airport Cargo Terminal",
-  },
-  "STEP-079": {
-    summary: "Ethiopian Customs Commission ASYCUDA e-declaration filed.",
-    detail: "Electronic Export Customs Declaration submitted under Export Permit #EXP-2026-8812, HS 0901.21.00.",
-    actor: "Licensed Customs Broker",
-  },
-  "STEP-080": {
-    summary: "Commercial Invoice & Packing List submitted to ECC.",
-    detail: "Documents uploaded into Ethiopian Customs single window matching declaration particulars.",
-    actor: "Licensed Customs Broker",
-  },
-  "STEP-081": {
-    summary: "Customs valuation verification against ECTA contract approval.",
-    detail: "Customs valuation officer validates declared value of $7,000.00 USD against approved proforma & contract.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-082": {
-    summary: "ASYCUDA automated risk profiling: Green Channel Assigned.",
-    detail: "Authorized Economic Operator / compliant record awards Green Channel status (immediate documentary release).",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-083": {
-    summary: "Customs export assessment notice issued.",
-    detail: "Assessment notice confirmed with zero export duty, zero export surcharge, and nil customs withholding.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-084": {
-    summary: "Customs electronic release order generated.",
-    detail: "Customs system transmits electronic release authorization to Bole Airport air cargo terminal dispatch.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-085": {
-    summary: "Customs stamp & export declaration clearance signed off.",
-    detail: "Declaration #CD-2026-90214 endorsed with official export release seal.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-086": {
-    summary: "Terminal handling charges & air freight airway bill fees settled.",
-    detail: "Airport ground handling and terminal documentation fees paid by nominated freight forwarder.",
-    actor: "Freight Forwarder",
-  },
-  "STEP-087": {
-    summary: "Cargo pallet build-up and air net securing.",
-    detail: "50 cartons securely strapped on air cargo skid, weather-proof protective tarped, ready for aircraft loading.",
-    actor: "Ethiopian Airlines Ground Handling",
-  },
-  "STEP-088": {
-    summary: "Carrier flight manifest insertion.",
-    detail: "Shipment manifest entry #ET-500-MIA-048 added to aircraft master load plan.",
-    actor: "Ethiopian Airlines Cargo",
-  },
-  "STEP-089": {
-    summary: "Final pre-boarding customs gate check at tarmac.",
-    detail: "Customs apron officer verifies pallet security seal numbers before cargo hold loading.",
-    actor: "Ethiopian Customs Apron Unit",
-  },
-  "STEP-090": {
-    summary: "Ramp loading completed aboard flight ET-500.",
-    detail: "Cargo loaded into forward hold position 21R; weight and balance sheet signed by aircraft captain.",
-    actor: "Ethiopian Airlines Flight Ops",
-  },
-  "STEP-091": {
-    summary: "Phase 5 Milestone Signed: Cargo Cleared & Released for Export.",
-    detail: "Export customs clearance granted, air cargo manifest locked, cargo aboard aircraft awaiting departure.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-092": {
-    summary: "Original Air Waybill AWB #071-84920184 issued.",
-    detail: "Ethiopian Airlines Cargo issues Master Air Waybill AWB #071-84920184 showing consignee Atlantic Specialty Foods LLC.",
-    actor: "Ethiopian Airlines Cargo",
-  },
-  "STEP-093": {
-    summary: "Final Commercial Invoice issued with flight & AWB details.",
-    detail: "Final Commercial Invoice #INV-2026-048 reflects shipped weight (500 kg net / 540 kg gross) and AWB reference.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-094": {
-    summary: "Final Packing List signed and certified.",
-    detail: "Detailed packing breakdown confirmed against cargo intake manifest.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-095": {
-    summary: "Electronic shipping dossier transmitted to US buyer & broker.",
-    detail: "Complete digital document set (Invoice, Packing List, AWB, COO, Health Clearance) dispatched to Atlantic Specialty.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-096": {
-    summary: "US FDA Prior Notice prepared under 21 CFR §1.279.",
-    detail: "Prior Notice data compiled: FFR #19482019482, HS 0901.21.00, flight ET-500, scheduled arrival Miami International.",
-    actor: "US Customs Broker",
-  },
-  "STEP-097": {
-    summary: "US FDA Prior Notice confirmation #PN-8910482910 issued.",
-    detail: "FDA electronic system issues Prior Notice Confirmation Number; cargo cleared for US border entry.",
-    actor: "US Food & Drug Administration",
-  },
-  "STEP-098": {
-    summary: "US Customs & Border Protection (CBP) Entry 7501 filed.",
-    detail: "Broker submits electronic formal consumption entry with US CBP at Port of Miami (Port Code 5201).",
-    actor: "US Customs Broker",
-  },
-  "STEP-099": {
-    summary: "Automated CLEAR Document Reconciliation executed.",
-    detail: "CLEAR cross-checks PO, Commercial Invoice, Packing List, AWB, and COO: 100% data consistency confirmed.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-100": {
-    summary: "Flight departure from Addis Ababa (Bole International Airport).",
-    detail: "Flight ET-500 departs ADD en route to MIA. Real-time air cargo tracking activated.",
-    actor: "Ethiopian Airlines Cargo",
-  },
-  "STEP-101": {
-    summary: "In-flight tracking & transit monitoring.",
-    detail: "Shipment transit status monitored; temperature-controlled environment maintained throughout transit.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-102": {
-    summary: "Pre-arrival clearance notification received from US CBP.",
-    detail: "CBP automated targeting system issues preliminary release order subject to physical cargo arrival.",
-    actor: "US Customs & Border Protection",
-  },
-  "STEP-103": {
-    summary: "Flight touchdown at Miami International Airport (MIA).",
-    detail: "Flight ET-500 lands at MIA. Cargo offloaded to cargo handling warehouse.",
-    actor: "MIA Airport Cargo Operations",
-  },
-  "STEP-104": {
-    summary: "Cargo warehouse intake & breakdown at Miami.",
-    detail: "Pallet seals inspected intact; all 50 cartons accounted for without damage or discrepancy.",
-    actor: "MIA Ground Handling",
-  },
-  "STEP-105": {
-    summary: "US FDA electronic hold release confirmed.",
-    detail: "FDA reviews Prior Notice confirmation #PN-8910482910 and issues 21 CFR 801 May Proceed notice.",
-    actor: "US Food & Drug Administration",
-  },
-  "STEP-106": {
-    summary: "US CBP official customs release granted (1C Green Release).",
-    detail: "US Customs issues Entry Summary release authorization; goods released into US commerce.",
-    actor: "US Customs & Border Protection",
-  },
-  "STEP-107": {
-    summary: "Delivery to Atlantic Specialty Foods LLC Miami facility.",
-    detail: "Local drayage carrier delivers 50 cartons to 1250 NW 23rd Ave, Miami; receiving report signed by Daniel Morgan.",
-    actor: "Atlantic Specialty Foods LLC",
-  },
-  "STEP-108": {
-    summary: "Phase 6 Milestone Signed: Cargo Shipped & Delivered.",
-    detail: "Goods received in full and flawless condition by buyer in Miami, USA. Delivery milestone closed.",
-    actor: "Entrust Facilitator",
-  },
-  "STEP-109": {
-    summary: "CAD banking document package assembled.",
-    detail: "Original Commercial Invoice, Packing List, Original Air Waybill, Certificate of Origin, and Bank Collection Order prepared.",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-110": {
-    summary: "Presentation of shipping documents to Awash Bank.",
-    detail: "Dossier presented to Awash Bank International Banking Department for 70% balance collection ($4,900.00 USD).",
-    actor: "Momentous Trading PLC",
-  },
-  "STEP-111": {
-    summary: "Awash Bank document examination under UCP / URC rules.",
-    detail: "Awash Bank documentary trade specialists verify clean presentation against Export Permit #EXP-2026-8812.",
-    actor: "Awash Bank",
-  },
-  "STEP-112": {
-    summary: "Bank schedule and collection instruction dispatched to US bank.",
-    detail: "Awash Bank dispatches electronic CAD collection advice to buyer's bank (Bank of America Miami).",
-    actor: "Awash Bank",
-  },
-  "STEP-113": {
-    summary: "Buyer bank presents documents to Atlantic Specialty Foods.",
-    detail: "Bank of America notifies Atlantic Specialty Foods of clean document presentation for $4,900.00 USD balance.",
-    actor: "Bank of America Miami",
-  },
-  "STEP-114": {
-    summary: "Atlantic Specialty Foods approves document release & payment.",
-    detail: "Buyer Daniel Morgan authorizes immediate debit of $4,900.00 USD to settle final contract balance.",
-    actor: "Atlantic Specialty Foods LLC",
-  },
-  "STEP-115": {
-    summary: "International SWIFT payment wire generated (MT202).",
-    detail: "Bank of America initiates SWIFT wire for $4,900.00 USD to Awash Bank Addis Ababa reference PO US-2026-0048.",
-    actor: "Bank of America Miami",
-  },
-  "STEP-116": {
-    summary: "SWIFT wire receipt & Nostro account credit confirmed.",
-    detail: "Awash Bank Treasury Department confirms incoming credit of $4,900.00 USD in international Nostro account.",
-    actor: "Awash Bank Treasury",
-  },
-  "STEP-117": {
-    summary: "Foreign exchange repatriation credited to Momentous account.",
-    detail: "Awash Bank credits 70% balance to Momentous Trading PLC corporate retention account (100% payment achieved: $7,000 USD).",
-    actor: "Awash Bank",
-  },
-  "STEP-118": {
-    summary: "Bank FX purchase & transaction advice issued.",
-    detail: "Bank issues official Foreign Exchange Purchase Ticket and confirmation of full export proceeds received.",
-    actor: "Awash Bank",
-  },
-  "STEP-119": {
-    summary: "National Bank of Ethiopia export permit reconciliation.",
-    detail: "NBE electronic platform links Export Permit #EXP-2026-8812 with incoming SWIFT credits ($2,100 advance + $4,900 CAD).",
-    actor: "National Bank of Ethiopia",
-  },
-  "STEP-120": {
-    summary: "Customs declaration export acquittal recorded.",
-    detail: "Ethiopian Customs Commission ASYCUDA marks Declaration #CD-2026-90214 as fully reconciled with bank repatriation.",
-    actor: "Ethiopian Customs Commission",
-  },
-  "STEP-121": {
-    summary: "Official NBE Export Permit Discharge Certificate issued.",
-    detail: "Export permit closed with zero outstanding liability; exporter compliance record updated with honors.",
-    actor: "National Bank of Ethiopia",
-  },
-  "STEP-122": {
-    summary: "Comprehensive CLEAR compliance audit report generated.",
-    detail: "Audit engine verifies all 125 steps executed with zero unresolved flags, zero defects, and 100% evidence compliance.",
-    actor: "CLEAR Gate Engine",
-  },
-  "STEP-123": {
-    summary: "Exporter & Buyer performance ratings recorded.",
-    detail: "Momentous Trading PLC awarded 5-star export fulfillment rating on CLEAR and AfriConnect platforms.",
-    actor: "CLEAR Platform Registry",
-  },
-  "STEP-124": {
-    summary: "AfriConnect trade passport and case history archived.",
-    detail: "Verified proof-of-trade digital credential added to Momentous Trading's permanent export passport.",
-    actor: "AfriConnect Trade Network",
-  },
-  "STEP-125": {
-    summary: "Phase 7 Milestone Signed: Payment Reconciled & Case Closed.",
-    detail: "Case US-2026-0048 officially marked CLOSED. All commercial, regulatory, logistics, and banking obligations satisfied.",
-    actor: "Entrust Facilitator",
-  },
-};
-
-export function buildSimulationSteps(): SimulationStepDefinition[] {
-  return STEPS.map((s) => {
-    const narrative = STEP_NARRATIVES[s.id];
-    let gapId: "gap-hs-code" | "gap-handover-location" | undefined;
-    if (s.id === "STEP-008") gapId = "gap-hs-code";
-    if (s.id === "STEP-022") gapId = "gap-handover-location";
-
-    return {
-      id: s.id,
-      phase: s.phase,
-      name: s.name,
-      owner: s.owner,
-      authority: s.authority,
-      prerequisites: [...s.prerequisites],
-      masterControl: s.masterControl,
-      milestone: Boolean(s.milestone),
-      evidenceType: s.evidence?.[0]?.type,
-      summary: narrative?.summary ?? `${s.name} processed and verified.`,
-      executionDetail: narrative?.detail ?? `${s.name} completed under canonical CLEAR protocol.`,
-      gapId,
-    };
-  });
-}
-
-export function buildPhaseSummaries() {
-  return PHASES.map((p) => {
-    return {
-      id: p.id,
-      name: p.name,
-      milestone: p.milestone,
-      firstStep: p.firstStep,
-      lastStep: p.lastStep,
-    };
-  });
-}
