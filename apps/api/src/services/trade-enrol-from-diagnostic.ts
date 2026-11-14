@@ -5,7 +5,7 @@ import { enqueue, JOB_NAMES } from "@entrust/jobs";
 import { organizationKind, requireStaff, type Ctx } from "./access";
 import type { Executor } from "./db";
 import { ServiceError } from "./errors";
-import { checkSmeDuplicates } from "./sme-registry";
+import { checkSmeDuplicates, legalNameIndex, normalizeLegalName, type LegalNameMatch } from "./sme-registry";
 import { enrolSme } from "./trade-cohorts";
 
 // Most people who fill in the public onboarding diagnostic never make a business on TRADE: the form needs no account, and
@@ -49,8 +49,10 @@ async function emailsWithABusiness(db: Executor, emails: string[]): Promise<Set<
  */
 export async function listWaitingDiagnostics(ctx: Ctx, limit = 200): Promise<WaitingDiagnostic[]> {
   requireStaff(ctx.principal, ["admin", "facilitator"], "see the businesses waiting to be enrolled");
+  // One row per person, their latest submitted form, done in the database: only people none of whose forms is linked yet.
+  const emailKey = sql<string>`lower(${schema.publicDiagnostic.email})`;
   const rows = await ctx.db
-    .select({
+    .selectDistinctOn([emailKey], {
       id: schema.publicDiagnostic.id,
       email: schema.publicDiagnostic.email,
       businessName: schema.publicDiagnostic.businessName,
@@ -58,37 +60,40 @@ export async function listWaitingDiagnostics(ctx: Ctx, limit = 200): Promise<Wai
       submittedAt: schema.publicDiagnostic.submittedAt,
       pathway: schema.publicDiagnostic.pathway,
       emailVerifiedAt: schema.publicDiagnostic.emailVerifiedAt,
-      linkedEnrollmentId: schema.publicDiagnostic.linkedEnrollmentId,
     })
     .from(schema.publicDiagnostic)
-    .where(and(eq(schema.publicDiagnostic.status, "submitted"), isNotNull(schema.publicDiagnostic.submittedAt)))
-    .orderBy(desc(schema.publicDiagnostic.submittedAt));
+    .where(
+      and(
+        eq(schema.publicDiagnostic.status, "submitted"),
+        isNotNull(schema.publicDiagnostic.submittedAt),
+        sql`not exists (select 1 from ${schema.publicDiagnostic} as linked
+          where lower(linked.email) = lower(${schema.publicDiagnostic.email}) and linked.linked_enrollment_id is not null)`,
+      ),
+    )
+    .orderBy(emailKey, desc(schema.publicDiagnostic.submittedAt));
 
-  const linked = new Set(rows.filter((r) => r.linkedEnrollmentId).map((r) => r.email.toLowerCase()));
-  const latest = new Map<string, (typeof rows)[number]>();
-  for (const row of rows) {
-    const key = row.email.toLowerCase();
-    if (!linked.has(key) && !latest.has(key)) latest.set(key, row);
-  }
+  const latest = new Map(rows.map((row) => [row.email.toLowerCase(), row]));
   const owners = await emailsWithABusiness(ctx.db, [...latest.keys()]);
-  const people = [...latest.entries()].filter(([email]) => !owners.has(email)).slice(0, limit);
+  const people = [...latest.entries()]
+    .filter(([email]) => !owners.has(email))
+    .sort(([, a], [, b]) => b.submittedAt!.getTime() - a.submittedAt!.getTime())
+    .slice(0, limit);
 
-  return Promise.all(
-    people.map(async ([, row]) => {
-      const duplicates = row.businessName ? await checkSmeDuplicates(ctx.db, { legalName: row.businessName, country: "ET" }) : {};
-      const similar = duplicates.legalNameWarning;
-      return {
-        publicDiagnosticId: row.id,
-        businessName: row.businessName,
-        email: row.email,
-        phone: row.phone,
-        submittedAt: row.submittedAt!.toISOString(),
-        pathway: row.pathway,
-        emailVerified: Boolean(row.emailVerifiedAt),
-        similarSme: similar ? { smeId: similar.smeId, legalName: similar.legalName } : null,
-      };
-    }),
-  );
+  // The registry is read once for every name, not once per name: per name it ran past the API's CPU limit.
+  const registered = people.some(([, row]) => row.businessName) ? await legalNameIndex(ctx.db, "ET") : new Map<string, LegalNameMatch>();
+  return people.map(([, row]) => {
+    const similar = row.businessName ? registered.get(normalizeLegalName(row.businessName)) : undefined;
+    return {
+      publicDiagnosticId: row.id,
+      businessName: row.businessName,
+      email: row.email,
+      phone: row.phone,
+      submittedAt: row.submittedAt!.toISOString(),
+      pathway: row.pathway,
+      emailVerified: Boolean(row.emailVerifiedAt),
+      similarSme: similar ? { smeId: similar.smeId, legalName: similar.legalName } : null,
+    };
+  });
 }
 
 export interface EnrolFromDiagnosticInput {

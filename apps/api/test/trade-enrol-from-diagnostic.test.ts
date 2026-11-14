@@ -107,6 +107,9 @@ describe("Enrolling from a submitted public diagnostic", () => {
     // Done once: the person is off the list and the form can't make a second business.
     expect((await waiting(w.admin)).body.diagnostics.some((d: { email: string }) => d.email === address)).toBe(false);
     expect((await enrol(w.admin, { publicDiagnosticId: form.id })).status).toBe(409);
+    // A later form from the same address, typed in another case, doesn't put them back on the list.
+    await submitted({ email: address.toUpperCase(), businessName: `${PREFIX}Unproven Roasters Again` });
+    expect((await waiting(w.admin)).body.diagnostics.some((d: { email: string }) => d.email.toLowerCase() === address)).toBe(false);
   });
 
   it("makes a proven email's account the owner, with a confirmed avenue", async () => {
