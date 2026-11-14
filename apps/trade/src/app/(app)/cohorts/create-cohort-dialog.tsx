@@ -85,7 +85,7 @@ export function CreateCohortDialog({
                     name="name"
                     required
                     placeholder="e.g. Export Readiness Pilot"
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -129,7 +129,7 @@ export function CreateCohortDialog({
                   <select id="cohorts-create-cohort-dialog-3"
                     name="programId"
                     required
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {programs.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -146,7 +146,7 @@ export function CreateCohortDialog({
                     name="name"
                     required
                     placeholder="e.g. Cohort 2026-A (Oromia Agro-processors)"
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
 
@@ -156,7 +156,7 @@ export function CreateCohortDialog({
                     <select id="cohorts-create-cohort-dialog-5"
                       name="deliveryMode"
                       defaultValue="self_paced"
-                      className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                     >
                       <option value="self_paced">Self-paced</option>
                       <option value="live">Live</option>
@@ -170,7 +170,7 @@ export function CreateCohortDialog({
                       name="country"
                       defaultValue="ET"
                       maxLength={2}
-                      className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </div>
@@ -181,7 +181,7 @@ export function CreateCohortDialog({
                     <input id="cohorts-create-cohort-dialog-7"
                       type="date"
                       name="startDate"
-                      className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                   <div>
@@ -189,7 +189,7 @@ export function CreateCohortDialog({
                     <input id="cohorts-create-cohort-dialog-8"
                       type="date"
                       name="endDate"
-                      className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </div>
@@ -199,7 +199,7 @@ export function CreateCohortDialog({
                   <select id="cohorts-create-cohort-dialog-9"
                     name="sponsorOrganizationId"
                     defaultValue=""
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="mt-1 w-full rounded-md border border-line-strong bg-surface px-3 h-10 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="">None (Entrust Direct)</option>
                     {sponsors.map((s) => (

@@ -9,6 +9,7 @@ import type {
   TradeCohortDetail,
   TradeEnrollmentSummary,
   WaitingSme,
+  WaitingDiagnostic,
   StaffAssessmentRow,
   TradeSessionSummary,
   TradeSessionDetail,
@@ -105,10 +106,13 @@ export async function listEnrollments(filter?: {
   return data.enrollments;
 }
 
-/** Businesses that signed up to TRADE and are in no cohort yet (Entrust staff only). */
-export async function listWaitingSmes(): Promise<WaitingSme[]> {
-  const result = await tradeGet<{ smes: WaitingSme[] }>("/enrollments/waiting");
-  return result.data?.smes ?? [];
+/**
+ * Who is waiting to be enrolled (Entrust staff only): businesses that signed up to TRADE and are in no cohort, and people
+ * who submitted the public diagnostic but have no business yet.
+ */
+export async function listWaitingForEnrolment(): Promise<{ smes: WaitingSme[]; diagnostics: WaitingDiagnostic[] }> {
+  const result = await tradeGet<{ smes: WaitingSme[]; diagnostics?: WaitingDiagnostic[] }>("/enrollments/waiting");
+  return { smes: result.data?.smes ?? [], diagnostics: result.data?.diagnostics ?? [] };
 }
 
 /** Onboarding diagnostics with their status and avenue, newest first (Entrust staff only): one cohort's, all of them, or the newest 200. */

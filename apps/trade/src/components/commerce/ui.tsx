@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button, Card, StatusBadge, cn } from "@entrust/ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 import { errorText } from "@/lib/summit-api";
 import type { Look } from "@/lib/commerce";
 
@@ -148,7 +148,7 @@ export function TextBox({ id, label, hint, value, onChange, placeholder, type = 
 }) {
   return (
     <Labeled label={label} hint={hint} htmlFor={id}>
-      <input id={id} type={type} value={value} required={required} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={textInput(false)} />
+      <input id={id} type={type} value={value} required={required} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={staffInput(false)} />
     </Labeled>
   );
 }
@@ -238,11 +238,11 @@ export function FilterBar({ selects, search = true, placeholder = "Search" }: { 
       }}
     >
       {search && (
-        <div className="flex gap-2 sm:w-72">
+        <div className="flex gap-2 sm:w-96">
           <label htmlFor="filter-q" className="sr-only">
             {placeholder}
           </label>
-          <input id="filter-q" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className={cn(textInput(false), "h-10")} />
+          <input id="filter-q" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className={cn(staffInput(false), "min-w-0 flex-1")} />
           <Button type="submit" variant="secondary">
             Search
           </Button>

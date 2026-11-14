@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Card, StatusBadge } from "@entrust/ui";
-import { textInput } from "@/components/form-runner/styles";
+import { staffInput } from "@/components/form-runner/styles";
 import { browserApi, ok } from "@/lib/summit-api";
 import { BENEFIT_AREAS, COMPARISON_ROWS, KIND_LABELS, KIND_PLURALS, PRODUCT_STATUS_LOOK, centsToInput, toCents, usd, type AdminProduct, type EditionDetail } from "@/lib/commerce";
 import { AreaBox, Feedback, Labeled, TextBox, useRun } from "./ui";
@@ -31,7 +31,7 @@ export function NewEditionForm({ editions, hasEditions }: { editions: { id: stri
         <TextBox id="e-slug" label="Address" hint="Lower-case letters, numbers and hyphens." value={slug} onChange={setSlug} placeholder="adtis-2027" />
       </div>
       <Labeled label="Start from" htmlFor="e-from">
-        <select id="e-from" value={from} onChange={(e) => setFrom(e.target.value)} className={textInput(false)}>
+        <select id="e-from" value={from} onChange={(e) => setFrom(e.target.value)} className={staffInput(false)}>
           <option value="standard">The standard ADTIS catalogue</option>
           {editions.map((e) => (
             <option key={e.id} value={e.id}>
@@ -135,7 +135,7 @@ export function EditionForm({ edition, periods }: { edition: EditionDetail; peri
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Labeled label="Do the prices include taxes?" htmlFor="s-tax" hint="Shown on every price page. Leave it unconfirmed until the team has decided.">
-          <select id="s-tax" value={f.tax} onChange={(e) => set("tax")(e.target.value)} className={textInput(false)}>
+          <select id="s-tax" value={f.tax} onChange={(e) => set("tax")(e.target.value)} className={staffInput(false)}>
             <option value="unknown">Not confirmed yet</option>
             <option value="included">Prices include taxes</option>
             <option value="excluded">Prices exclude taxes</option>
@@ -146,7 +146,7 @@ export function EditionForm({ edition, periods }: { edition: EditionDetail; peri
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Labeled label="Assessment period for free SME places" htmlFor="s-period" hint="Selected SMEs of this period register free, and get directory profiles.">
-          <select id="s-period" value={f.period} onChange={(e) => set("period")(e.target.value)} className={textInput(false)}>
+          <select id="s-period" value={f.period} onChange={(e) => set("period")(e.target.value)} className={staffInput(false)}>
             <option value="">None chosen</option>
             {periods.map((p) => (
               <option key={p.id} value={p.id}>
@@ -241,7 +241,7 @@ export function ProductEditor({ edition, product, onDone }: { edition: EditionDe
       {!product && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Labeled label="What kind is it?" htmlFor="pr-kind">
-            <select id="pr-kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={textInput(false)}>
+            <select id="pr-kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={staffInput(false)}>
               {Object.entries(KIND_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -257,7 +257,7 @@ export function ProductEditor({ edition, product, onDone }: { edition: EditionDe
         <TextBox id="pr-price" label="Price (USD)" hint="0 is complimentary." value={f.price} onChange={set("price")} />
         <TextBox id="pr-capacity" label="Number available" hint="Booths or passes. Empty means no limit has been set." value={f.capacity} onChange={set("capacity")} />
         <Labeled label="Status" htmlFor="pr-status" hint="Only published products are shown and can be applied for.">
-          <select id="pr-status" value={f.status} onChange={(e) => set("status")(e.target.value as typeof f.status)} className={textInput(false)}>
+          <select id="pr-status" value={f.status} onChange={(e) => set("status")(e.target.value as typeof f.status)} className={staffInput(false)}>
             <option value="draft">Draft</option>
             <option value="published">Published</option>
             <option value="archived">Archived</option>

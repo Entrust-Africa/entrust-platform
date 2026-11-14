@@ -47,6 +47,8 @@ export default async function ModulesPage() {
     me.organizations?.find((o) => o.id === me.activeOrganizationId) ?? me.organizations?.[0];
 
   const isStaff = Boolean(me.staffRole);
+  // Administrators and facilitators have the course studio, which lists the same modules and opens each as a learner sees it.
+  if (me.staffRole === "admin" || me.staffRole === "facilitator") redirect("/admin/modules");
 
   const [modulesRes, enrollments] = await Promise.all([
     tradeGet<{ items: ModuleItemSummary[] }>("/modules"),

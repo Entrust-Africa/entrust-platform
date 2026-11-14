@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import AnalyticsWrapper from "./AnalyticsWrapper";
 import { MOTION_FALLBACK_SCRIPT } from "./components/motion/fallbackScript";
 import { MotionProvider } from "./components/motion/MotionProvider";
@@ -9,9 +9,11 @@ import { CONTACT, SITE_URL } from "./lib/site";
 import "./globals.css";
 
 
-const inter = Inter({
+// The font files are in the repo (packages/ui/fonts), not fetched from Google at build time: that fetch failed builds.
+const inter = localFont({
+  src: "../../../packages/ui/fonts/inter-latin-wght-normal.woff2",
+  weight: "100 900",
   variable: "--font-inter",
-  subsets: ["latin"],
   display: "swap",
 });
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Button, Card, StatusBadge } from "@entrust/ui";
 import { tradeGet } from "@/lib/trade-api";
-import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingSmes } from "@/lib/api";
+import { getCohort, getCohortStaff, getMe, listDiagnostics, listPlacements, listSessions, listSponsors, listWaitingForEnrolment } from "@/lib/api";
 import type { EnrollmentStatus, StaffAssessmentRow } from "@/lib/types";
 import { CohortStaffPanel } from "./cohort-staff-panel";
 import { EnrollSmeDialog } from "./enroll-sme-dialog";
@@ -124,7 +124,7 @@ export default async function CohortDetailPage(props: {
   const sponsors = me.staffRole === "admin" ? await listSponsors() : [];
   const [cohort, waiting, diagnostics, placements, sessions, reviews] = await Promise.all([
     getCohort(id),
-    listWaitingSmes(),
+    listWaitingForEnrolment(),
     listDiagnostics(id),
     listPlacements(id),
     listSessions(id),
@@ -168,7 +168,7 @@ export default async function CohortDetailPage(props: {
           <div className="flex items-center gap-2">
             {canEnrol && <EditCohortDialog cohort={cohort} sponsors={sponsors} isAdmin={me.staffRole === "admin"} />}
             {canEnrol && <ScheduleSessionDialog cohortId={cohort.id} />}
-            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
+            {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting.smes} diagnostics={waiting.diagnostics} enrolledOrganizationIds={enrolledOrganizationIds} />}
           </div>
         </div>
       </div>
@@ -224,7 +224,7 @@ export default async function CohortDetailPage(props: {
         </div>
 
         {sessions.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-ink-2 max-w-lg mx-auto">
+          <Card className="p-6 text-center text-sm text-ink-2">
             No live workshops scheduled for this cohort yet. Click &quot;Schedule Session&quot; to plan a session.
           </Card>
         ) : (
@@ -296,13 +296,13 @@ export default async function CohortDetailPage(props: {
         </div>
 
         {cohort.enrolments.length === 0 ? (
-          <Card className="p-8 text-center max-w-xl mx-auto">
+          <Card className="p-8 text-center">
             <h3 className="font-display font-bold text-ink">No SMEs enrolled yet</h3>
             <p className="mt-1 text-sm text-ink-2">
               Add SMEs to this cohort to grant them TRADE platform access and begin tracking their training milestones.
             </p>
             <div className="mt-4">
-              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting} enrolledOrganizationIds={enrolledOrganizationIds} />}
+              {canEnrol && <EnrollSmeDialog cohortId={cohort.id} waiting={waiting.smes} diagnostics={waiting.diagnostics} enrolledOrganizationIds={enrolledOrganizationIds} />}
             </div>
           </Card>
         ) : (

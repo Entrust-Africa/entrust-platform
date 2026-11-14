@@ -11,6 +11,9 @@ export const inputBorder = (invalid: boolean) => (invalid ? "border-danger" : "b
 
 export const textInput = (invalid: boolean) => `${inputBase} w-full h-12 ${inputBorder(invalid)}`;
 
+/** The same box at 40px, the height of the staff screens' buttons and the shared Field. The 48px one is for forms people fill in on a phone. */
+export const staffInput = (invalid: boolean) => `${inputBase} w-full h-10 sm:text-sm ${inputBorder(invalid)}`;
+
 export const textArea = (invalid: boolean) => `${inputBase} w-full min-h-32 py-3 leading-relaxed ${inputBorder(invalid)}`;
 
 /** A tappable choice row: at least 48px tall. */

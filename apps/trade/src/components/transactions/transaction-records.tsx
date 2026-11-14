@@ -33,7 +33,7 @@ interface Costs {
   totals: { basis: string; currency: string; total: string }[];
 }
 
-const select = "h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink";
+const select = "h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
 const CATEGORIES = ["production", "materials", "packaging", "inspection", "inland_transport", "freight", "insurance", "customs", "finance", "other"];
 const DOCUMENT_KINDS = ["purchase_order", "proforma_invoice", "commercial_invoice", "packing_list", "transport_document", "insurance", "certificate", "payment_proof", "other"];
 const words = (value: string) => value.replaceAll("_", " ");

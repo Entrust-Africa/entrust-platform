@@ -48,7 +48,7 @@ export function EditCohortDialog({ cohort, sponsors, isAdmin }: { cohort: Cohort
     router.refresh();
   }
 
-  const select = "mt-1 block h-10 w-full rounded-md border border-line bg-surface px-2 text-sm text-ink";
+  const select = "mt-1 block h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>

@@ -70,7 +70,7 @@ const EVIDENCE: Record<Shipment["evidenceStatus"], { label: string; tone: "idle"
   document_supported: { label: "Supported by documents", tone: "info" },
   independently_verified: { label: "Independently verified", tone: "ok" },
 };
-const select = "h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink";
+const select = "h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-sm text-ink";
 
 /** The business's own record: its profile and the history of changes to it, its products and its completed shipments. */
 export function BusinessRecord({ initial, readOnly, isStaff }: { initial: BusinessRecordData; readOnly: boolean; isStaff: boolean }) {

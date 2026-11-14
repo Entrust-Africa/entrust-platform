@@ -81,7 +81,7 @@ export default async function ReviewQueuePage({ searchParams }: ReviewQueuePageP
       </div>
 
       {items.length === 0 ? (
-        <Card className="p-12 text-center max-w-xl mx-auto space-y-3">
+        <Card className="p-12 text-center space-y-3">
           <Inbox className="size-10 text-ink-3 mx-auto" />
           <h2 className="font-display text-lg font-bold text-ink">Queue is clear</h2>
           <p className="text-xs text-ink-2">

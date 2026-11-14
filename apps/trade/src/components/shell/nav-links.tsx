@@ -97,9 +97,11 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
           { href: "/review-queue", label: "Review queue", icon: CheckSquare, match: (path) => path.startsWith("/review-queue") },
           { href: "/referrals", label: "Referrals", icon: Handshake, match: (path) => path.startsWith("/referrals") },
           { href: "/reports", label: "Programme reports", icon: TrendingUp, match: (path) => path.startsWith("/reports") },
-          // Staff read the course content here. The pages are read-only for staff; changing a module means publishing a new version.
-          { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") },
-          { href: "/admin/modules", label: "Course studio", icon: FileEdit, match: (path) => path.startsWith("/admin/modules") },
+          // One place for the course: the studio lists the modules, opens each as a learner sees it, and edits drafts. A
+          // reviewer can't use the studio, so they read the modules through the learner pages instead.
+          user?.staffRole === "reviewer"
+            ? { href: "/modules", label: "Modules", icon: GraduationCap, match: (path) => path.startsWith("/modules") }
+            : { href: "/admin/modules", label: "Course studio", icon: FileEdit, match: (path) => path.startsWith("/admin/modules") || path.startsWith("/modules") },
           simulator,
         ],
       },
@@ -111,7 +113,7 @@ function baseGroupsFor(user: UserProfile | undefined): NavGroup[] {
     // The register and the diagnostics hold every business's answers. A reviewer works from the cohorts they're on.
     if (user?.staffRole === "reviewer") {
       groups[0]!.items = groups[0]!.items.filter(
-        (item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/passports" && item.href !== "/admin/modules",
+        (item) => item.href !== "/register" && item.href !== "/diagnostics" && item.href !== "/passports",
       );
     }
     // The Summit is one event with two sides: the businesses that apply to take part, and the commercial side (exhibitors,
