@@ -1472,7 +1472,8 @@ export const smePassport = trade.table(
     founder: text("founder"),
     headline: text("headline"),
     overview: text("overview"),
-    products: jsonb("products").$type<{ name: string; detail: string | null; code: string | null }[]>().notNull().default([]),
+    // Each product can link to its listing on AfriConnect, where buyers order it (the passport shows no contact details).
+    products: jsonb("products").$type<{ name: string; detail: string | null; code: string | null; africonnectUrl?: string | null }[]>().notNull().default([]),
     womenInTrade: jsonb("women_in_trade").$type<string[]>().notNull().default([]),
     targetMarkets: jsonb("target_markets").$type<{ label: string; places: string[] }[]>().notNull().default([]),
     seeking: text("seeking"),
@@ -1481,6 +1482,9 @@ export const smePassport = trade.table(
     email: text("email"),
     phones: jsonb("phones").$type<string[]>().notNull().default([]),
     address: text("address"),
+    // The business's store on AfriConnect. The public page sends buyers there instead of showing the contact lines above,
+    // which only staff see.
+    africonnectUrl: text("africonnect_url"),
     createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),

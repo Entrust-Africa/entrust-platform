@@ -32,7 +32,7 @@ export interface PassportContent {
   founder: string | null;
   headline: string | null;
   overview: string | null;
-  products: Row["products"];
+  products: { name: string; detail: string | null; code: string | null; africonnectUrl: string | null }[];
   womenInTrade: string[];
   targetMarkets: Row["targetMarkets"];
   seeking: string | null;
@@ -41,6 +41,7 @@ export interface PassportContent {
   email: string | null;
   phones: string[];
   address: string | null;
+  africonnectUrl: string | null;
 }
 
 const contentOf = (row: Row): PassportContent => ({
@@ -61,7 +62,8 @@ const contentOf = (row: Row): PassportContent => ({
   founder: row.founder,
   headline: row.headline,
   overview: row.overview,
-  products: row.products,
+  // Passports saved before products could link to AfriConnect have no link.
+  products: row.products.map((p) => ({ name: p.name, detail: p.detail, code: p.code, africonnectUrl: p.africonnectUrl ?? null })),
   womenInTrade: row.womenInTrade,
   targetMarkets: row.targetMarkets,
   seeking: row.seeking,
@@ -70,6 +72,7 @@ const contentOf = (row: Row): PassportContent => ({
   email: row.email,
   phones: row.phones,
   address: row.address,
+  africonnectUrl: row.africonnectUrl,
 });
 
 // ---- What anyone who scans the code sees ----
@@ -81,16 +84,35 @@ export interface PublicPassport {
   tier: Row["tier"];
   verifiedOn: string;
   validUntil: string;
-  /** Left out for a suspended or revoked passport: the page says only that it is no longer valid. */
-  details: Omit<PassportContent, "passportId" | "tier" | "status" | "statusReason" | "verifiedOn" | "validUntil" | "displayName"> | null;
+  /**
+   * Left out for a suspended or revoked passport: the page says only that it is no longer valid. Never holds the business's
+   * website, email, telephone numbers or address: buyers are sent to the business's store on AfriConnect instead.
+   */
+  details: Omit<PassportContent, PrivateLine | "passportId" | "tier" | "status" | "statusReason" | "verifiedOn" | "validUntil" | "displayName"> | null;
 }
+
+/** The contact lines staff keep on a passport. They stay off the public page so buyers deal with the business through AfriConnect. */
+type PrivateLine = "website" | "email" | "phones" | "address";
 
 export async function publicPassport(db: Executor, input: string, now: Date = new Date()): Promise<PublicPassport> {
   const passportId = normalisePassportId(input);
   const [row] = await db.select().from(schema.smePassport).where(eq(schema.smePassport.passportId, passportId));
   if (!row) throw new ServiceError("not_found", `No passport ${passportId} was found.`);
   const standing = passportStanding(row.status, row.validUntil, now);
-  const { passportId: _id, tier: _tier, status: _status, statusReason: _reason, verifiedOn: _v, validUntil: _u, displayName: _n, ...details } = contentOf(row);
+  const {
+    passportId: _id,
+    tier: _tier,
+    status: _status,
+    statusReason: _reason,
+    verifiedOn: _v,
+    validUntil: _u,
+    displayName: _n,
+    website: _w,
+    email: _e,
+    phones: _p,
+    address: _a,
+    ...details
+  } = contentOf(row);
   return {
     passportId: row.passportId,
     standing,

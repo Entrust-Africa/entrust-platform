@@ -186,4 +186,32 @@ describe("what a person scanning the code sees", () => {
       expect((await save(w.admin, { logoUrl: bad })).status).toBe(400);
     }
   });
+
+  it("never shows the business's website, email, telephone numbers or address", async () => {
+    const res = await publicGet(ID);
+    for (const key of ["website", "email", "phones", "address"]) expect(Object.keys(res.body.details)).not.toContain(key);
+    for (const line of ["www.example.com", "info@example.com", "+251 900 000 000", "Addis Ababa"]) expect(JSON.stringify(res.body)).not.toContain(line);
+    // Staff still see them.
+    expect((await callV1(w.facilitator, "GET", `/trade/passports/${ID}`)).body.passport).toMatchObject({ email: "info@example.com", phones: ["+251 900 000 000"] });
+  });
+
+  it("links the store and each product to AfriConnect, and only to AfriConnect", async () => {
+    const store = "https://www.africonnect.africa.com/businesses/abc123";
+    const product = "https://www.africonnect.africa.com/explore/prod456";
+    const res = await save(w.admin, { africonnectUrl: store, products: [{ name: "Roasted coffee", detail: null, code: null, africonnectUrl: product }, { name: "Café", detail: null, code: null }] });
+    expect(res.status).toBe(200);
+    const details = (await publicGet(ID)).body.details;
+    expect(details.africonnectUrl).toBe(store);
+    expect(details.products).toEqual([
+      { name: "Roasted coffee", detail: null, code: null, africonnectUrl: product },
+      { name: "Café", detail: null, code: null, africonnectUrl: null },
+    ]);
+    for (const bad of ["http://www.africonnect.africa.com/businesses/abc", "https://africonnect.africa.com.evil.test/x", "https://evil.test/?africonnect.africa.com", "javascript:alert(1)"]) {
+      expect((await save(w.admin, { africonnectUrl: bad })).status).toBe(400);
+      expect((await save(w.admin, { products: [{ name: "X", detail: null, code: null, africonnectUrl: bad }] })).status).toBe(400);
+    }
+    // Leaving the link out of a save clears it.
+    await save(w.admin);
+    expect((await publicGet(ID)).body.details.africonnectUrl).toBeNull();
+  });
 });
